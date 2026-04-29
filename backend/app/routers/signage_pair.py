@@ -31,6 +31,8 @@ Design notes:
   - We do NOT write to the devices-table hash column under the JWT format
     (RESEARCH anti-pattern — that column is only for an opaque-token variant
     we deliberately did not pick).
+
+Compute-justified: clause 2 (pairing-token Fernet encrypt).
 """
 from __future__ import annotations
 

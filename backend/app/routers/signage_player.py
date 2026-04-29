@@ -17,6 +17,8 @@ Decisions enforced here:
     frames with 15s server pings, uses last-writer-wins semantics on
     reconnect, and re-raises ``asyncio.CancelledError`` in the generator's
     finally so the per-device queue is always cleaned up.
+
+Compute-justified: clause 1 (SSE stream + resolver compute).
 """
 from __future__ import annotations
 
