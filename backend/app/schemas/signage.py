@@ -32,10 +32,6 @@ class SignageMediaBase(BaseModel):
     html_content: str | None = None
 
 
-class SignageMediaCreate(SignageMediaBase):
-    pass
-
-
 class SignageMediaRead(SignageMediaBase):
     id: uuid.UUID
     conversion_status: Literal["pending", "processing", "done", "failed"] | None = None

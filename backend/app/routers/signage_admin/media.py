@@ -1,4 +1,7 @@
-"""Signage media CRUD (D-16 hard delete with 409 on RESTRICT, D-21 option b).
+"""Signage media write surface — PATCH (SSE fanout), DELETE (structured 409
++ slide cleanup, D-16 hard delete with 409 on RESTRICT, D-21 option b),
+POST /pptx (BackgroundTasks conversion), POST /{id}/reconvert
+(BackgroundTasks). List/Get/Create live in Directus per ADR-0001.
 
 All endpoints inherit the admin gate from the parent router. Do NOT add
 the admin-role check or current-user dep here (see __init__.py).

@@ -8,7 +8,6 @@ from app.schemas.signage import (  # noqa: F401
     SignageDeviceBase,
     SignageDeviceRead,
     SignageMediaBase,
-    SignageMediaCreate,
     SignageMediaRead,
     SignagePairingClaimRequest,
     SignagePairingRequestResponse,

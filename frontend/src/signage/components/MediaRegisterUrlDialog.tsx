@@ -24,14 +24,15 @@ import type { SignageMedia } from "@/signage/lib/signageTypes";
 /**
  * MediaRegisterUrlDialog — small URL/HTML registration form (D-03).
  *
- * Posts a SignageMedia create payload to /api/signage/media. Two kinds:
- *   - kind=url  → body { kind: "url", title, url: <content>, tags: [] }
- *   - kind=html → body { kind: "html", title, metadata: { html: <content> },
- *                        tags: [] }
+ * Creates a `signage_media` row directly in Directus via
+ * `directus.request(createItem('signage_media', ...))` (see
+ * `signageApi.createUrlOrHtmlMedia`). Per ADR-0001 the create surface
+ * lives in Directus, not FastAPI. Two kinds:
+ *   - kind=url  → { kind: "url",  title, uri: <content> }
+ *   - kind=html → { kind: "html", title, html_content: <content> }
  *
- * The backend's SignageMediaCreate has Pydantic v2 default extra="ignore" so
- * unknown fields like `tags` and `metadata` are dropped server-side; that's
- * fine — they are documented per UI-SPEC for forward compatibility.
+ * The user-supplied content maps to `uri` for url kind and `html_content`
+ * for html kind; the dialog never POSTs to a FastAPI route.
  */
 
 const formSchema = z.object({

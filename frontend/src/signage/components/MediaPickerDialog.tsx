@@ -54,8 +54,10 @@ export interface MediaPickerDialogProps {
 /**
  * Phase 46 Plan 46-05 — picker grid for adding a media row to a playlist.
  *
- * Fetches the same /api/signage/media list the Media tab uses (cached
- * under signageKeys.media()) and lets the admin filter by title client-side.
+ * Fetches the same media list the Media tab uses via
+ * `signageApi.listMedia()` (Directus `readItems('signage_media')` per
+ * ADR-0001), cached under signageKeys.media(), and lets the admin filter
+ * by title client-side.
  * Clicking a card fires `onPick(media)` and closes the dialog.
  */
 export function MediaPickerDialog({
