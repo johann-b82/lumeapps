@@ -135,3 +135,14 @@ Rationale:
 ### Why no ADR?
 
 ADR-0001 already defines the Directus/FastAPI split that motivates the namespace separation; Phase 73 is the cache-key cleanup that ADR-0001 implied but didn't fully specify. A subsection here is the right weight — full ADR ceremony would be over-engineered for a refactor with a one-shot flag-retention decision.
+
+## How to choose: Directus vs FastAPI?
+
+Default: Directus. A new endpoint that reads or writes a Postgres table goes through Directus unless it meets the **Compute-Justified Rubric** in [ADR-0001](./adr/0001-directus-fastapi-split.md):
+
+1. Side effect outside Postgres (file I/O, SSE fanout, external API call, scheduler reschedule, BackgroundTask)
+2. Cryptographic operation (Fernet on a column Directus must not see in plaintext)
+3. Multi-row atomic compute (e.g. bulk DELETE+INSERT in one transaction)
+4. Custom error contract the FE depends on
+
+If a new compute endpoint lands in FastAPI, declare the clause in the module docstring (`Compute-justified: clause N (reason).`). The CI guard `backend/tests/test_compute_justified_rubric.py` enforces this.
