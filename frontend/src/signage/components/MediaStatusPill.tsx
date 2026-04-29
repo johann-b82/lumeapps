@@ -13,7 +13,7 @@ export interface MediaStatusPillProps {
 }
 
 /**
- * Live PPTX conversion status pill. Polls /api/signage/media/{id} every 3s
+ * Live PPTX conversion status pill. Polls signage_media via Directus every 3s
  * until the status reaches a terminal state (`done` or `failed`), then stops
  * (D-02 + Pattern 9). Renders nothing for media without a conversion status
  * (i.e. non-PPTX kinds).

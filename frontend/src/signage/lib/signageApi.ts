@@ -2,6 +2,7 @@ import { apiClient, getAccessToken } from "@/lib/apiClient";
 import { directus } from "@/lib/directusClient";
 import { toApiError } from "@/lib/toApiError";
 import {
+  readItem,
   readItems,
   createItem,
   createItems,
@@ -205,9 +206,16 @@ export const signageApi = {
       )) as SignageMedia[];
     } catch (e) { throw toApiError(e); }
   },
+  // Phase v1.23 C-3 (D-07): per-row media read swapped from FastAPI to
+  // Directus SDK (`readItem`). Same admin-only permission model as listMedia
+  // (Viewer FORBIDDEN at the Directus layer). Field allowlist mirrors
+  // SignageMediaRead so the polled MediaStatusPill keeps surfacing
+  // conversion_status / conversion_error.
   getMedia: async (id: string): Promise<SignageMedia> => {
     try {
-      return await apiClient<SignageMedia>(`/api/signage/media/${id}`);
+      return (await directus.request(
+        readItem("signage_media", id, { fields: [...MEDIA_FIELDS] }),
+      )) as SignageMedia;
     } catch (e) { throw toApiError(e); }
   },
   deleteMedia: async (id: string): Promise<null> => {
