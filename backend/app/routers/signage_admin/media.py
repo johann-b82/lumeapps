@@ -82,12 +82,11 @@ async def create_media(
     return row
 
 
-@router.get("", response_model=list[SignageMediaRead])
-async def list_media(
-    db: AsyncSession = Depends(get_async_db_session),
-) -> list[SignageMedia]:
-    result = await db.execute(select(SignageMedia).order_by(SignageMedia.created_at))
-    return list(result.scalars().all())
+# v1.23 C-2: GET /api/signage/media (list) removed — migrated to Directus
+# `signage_media` collection (admin-only). Frontend calls
+# directus.request(readItems('signage_media', ...)) via signageApi.listMedia.
+# Item GET, PATCH, DELETE, POST /pptx, POST /{id}/reconvert remain here
+# (D-21: PPTX uploads need backend conversion side-effects).
 
 
 @router.get("/{media_id}", response_model=SignageMediaRead)
