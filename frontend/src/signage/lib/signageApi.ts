@@ -112,6 +112,27 @@ const DEVICE_FIELDS = [
   "audio_enabled",
 ] as const;
 
+// Phase v1.23 C-2: field allowlist mirroring SignageMediaRead
+// (backend/app/schemas/signage.py SignageMediaBase + SignageMediaRead).
+// Applied to every Directus signage_media GET to keep payload shape stable.
+// `tags` and `metadata` are not column-backed and are intentionally omitted
+// — SignageMedia in signageTypes.ts marks them optional for forward-compat.
+const MEDIA_FIELDS = [
+  "id",
+  "kind",
+  "title",
+  "mime_type",
+  "size_bytes",
+  "uri",
+  "duration_ms",
+  "html_content",
+  "conversion_status",
+  "conversion_error",
+  "slide_paths",
+  "created_at",
+  "updated_at",
+] as const;
+
 // Phase 68-04 (D-07): field allowlist mirroring SignageSchedule (signageTypes.ts)
 // — applied to every Directus schedule request to keep payload shape stable.
 const SCHEDULE_FIELDS = [
@@ -169,9 +190,19 @@ export const signageApi = {
       )) as null;
     } catch (e) { throw toApiError(e); }
   },
+  // Phase v1.23 C-2 (D-07): media list swapped from FastAPI to Directus SDK.
+  // Sort by created_at to match the prior FastAPI ordering. Admin-only:
+  // Viewer hits FORBIDDEN at the Directus permission layer (no row for
+  // signage_media on the Viewer policy — AUTHZ-02 convention).
   listMedia: async (): Promise<SignageMedia[]> => {
     try {
-      return await apiClient<SignageMedia[]>("/api/signage/media");
+      return (await directus.request(
+        readItems("signage_media", {
+          fields: [...MEDIA_FIELDS],
+          sort: ["created_at"],
+          limit: -1,
+        }),
+      )) as SignageMedia[];
     } catch (e) { throw toApiError(e); }
   },
   getMedia: async (id: string): Promise<SignageMedia> => {
