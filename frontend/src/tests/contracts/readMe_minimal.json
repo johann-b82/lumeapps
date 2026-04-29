@@ -1,0 +1,7 @@
+{
+  "id": "user-uuid-0001",
+  "email": "viewer@example.com",
+  "role": {
+    "name": "Viewer"
+  }
+}

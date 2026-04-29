@@ -1,0 +1,10 @@
+target-version = "py311"
+line-length = 88
+
+[lint]
+extend-select = ["I", "B", "UP", "SIM"]
+ignore = ["ISC001"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

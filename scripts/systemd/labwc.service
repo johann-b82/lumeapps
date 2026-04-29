@@ -1,0 +1,17 @@
+# ~/.config/systemd/user/labwc.service
+[Unit]
+Description=labwc Wayland compositor
+# Do NOT add After=default.target — default.target also WantedBy=s this unit,
+# which creates a circular dependency and prevents boot-time auto-start
+# (manual `systemctl start` still works, masking the issue during provisioning).
+# The user manager satisfies basic.target before processing WantedBy, which is
+# all labwc needs.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/labwc
+Restart=on-failure
+Environment=XDG_RUNTIME_DIR=/run/user/__SIGNAGE_UID__
+
+[Install]
+WantedBy=default.target

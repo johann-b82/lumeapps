@@ -1,0 +1,30 @@
+[
+  {
+    "id": 101,
+    "first_name": "Ada",
+    "last_name": "Lovelace",
+    "status": "active",
+    "department": "Engineering",
+    "position": "Engineer",
+    "hire_date": "2024-01-15",
+    "termination_date": null,
+    "weekly_working_hours": 40,
+    "total_hours": 0,
+    "overtime_hours": 0,
+    "overtime_ratio": null
+  },
+  {
+    "id": 102,
+    "first_name": "Grace",
+    "last_name": "Hopper",
+    "status": "active",
+    "department": "Engineering",
+    "position": "Architect",
+    "hire_date": "2023-09-01",
+    "termination_date": null,
+    "weekly_working_hours": 32,
+    "total_hours": 0,
+    "overtime_hours": 0,
+    "overtime_ratio": null
+  }
+]

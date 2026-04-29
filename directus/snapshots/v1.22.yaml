@@ -1,0 +1,1492 @@
+version: 1
+directus: 11.17.2
+vendor: postgres
+
+# v1.22 snapshot — collections + fields + relations only (per D-02).
+# Policies, roles, and permissions stay in bootstrap-roles.sh.
+# System settings are NOT captured here (env-specific).
+#
+# CRITICAL: schema: null per collection (not schema: {...} with a name).
+# Using schema: {...} on existing Alembic-owned tables triggers Directus
+# bug #25760 ("relation already exists"). With schema: null, Directus
+# registers metadata-only and never tries to CREATE TABLE.
+#
+# Table names confirmed against backend/alembic/versions/v1_16_signage_schema.py:
+# - signage_device_tags (NOT signage_tags)
+# - signage_devices has NO tags column (tags live in signage_device_tag_map only)
+
+collections:
+  - collection: signage_devices
+    meta:
+      collection: signage_devices
+      note: "Registered Pi kiosk devices. Calibration columns excluded from SSE WHEN clause — those use the FastAPI calibration-changed path."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_playlists
+    meta:
+      collection: signage_playlists
+      note: "Ordered media playlists. Admin-only write access."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_playlist_items
+    meta:
+      collection: signage_playlist_items
+      note: "Ordered items within a playlist. FK: playlist_id -> signage_playlists (CASCADE), media_id -> signage_media (RESTRICT)."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_device_tags
+    meta:
+      collection: signage_device_tags
+      note: "Tag labels for tag-based playlist routing (e.g., lobby, production)."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_playlist_tag_map
+    meta:
+      collection: signage_playlist_tag_map
+      note: "Join table: which tags a playlist targets. Composite PK (playlist_id, tag_id)."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_device_tag_map
+    meta:
+      collection: signage_device_tag_map
+      note: "Join table: which tags apply to which devices. Composite PK (device_id, tag_id)."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: signage_schedules
+    meta:
+      collection: signage_schedules
+      note: "Time-based playlist schedules. Weekday bitmask + HHMM time window + priority."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: sales_records
+    meta:
+      collection: sales_records
+      note: "ERP sales records uploaded by admins. 38-column fixed schema. Read-only for Viewers."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: personio_employees
+    meta:
+      collection: personio_employees
+      note: "Personio employee roster synced by APScheduler. Read-only for Viewers."
+      hidden: false
+      singleton: false
+    schema: null
+
+  - collection: upload_batches
+    meta:
+      collection: upload_batches
+      note: "ERP upload batch metadata. Written by FastAPI POST /api/upload (file parsing). Read by Admin + Viewer via Directus (v1.23 C-1)."
+      hidden: false
+      singleton: false
+    schema: null
+
+fields:
+  # --- signage_devices ---
+  - collection: signage_devices
+    field: id
+    type: uuid
+    meta:
+      collection: signage_devices
+      field: id
+      special:
+        - uuid
+      readonly: true
+    schema:
+      data_type: uuid
+      is_nullable: false
+      has_auto_increment: false
+
+  - collection: signage_devices
+    field: name
+    type: string
+    meta:
+      collection: signage_devices
+      field: name
+    schema:
+      data_type: character varying
+      max_length: 128
+      is_nullable: false
+
+  - collection: signage_devices
+    field: device_token_hash
+    type: text
+    meta:
+      collection: signage_devices
+      field: device_token_hash
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: signage_devices
+    field: last_seen_at
+    type: timestamp
+    meta:
+      collection: signage_devices
+      field: last_seen_at
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: true
+
+  - collection: signage_devices
+    field: revoked_at
+    type: timestamp
+    meta:
+      collection: signage_devices
+      field: revoked_at
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: true
+
+  - collection: signage_devices
+    field: current_item_id
+    type: uuid
+    meta:
+      collection: signage_devices
+      field: current_item_id
+    schema:
+      data_type: uuid
+      is_nullable: true
+
+  - collection: signage_devices
+    field: status
+    type: string
+    meta:
+      collection: signage_devices
+      field: status
+    schema:
+      data_type: character varying
+      max_length: 16
+      is_nullable: false
+      default_value: offline
+
+  - collection: signage_devices
+    field: current_playlist_etag
+    type: text
+    meta:
+      collection: signage_devices
+      field: current_playlist_etag
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: signage_devices
+    field: rotation
+    type: integer
+    meta:
+      collection: signage_devices
+      field: rotation
+    schema:
+      data_type: integer
+      is_nullable: false
+      default_value: 0
+
+  - collection: signage_devices
+    field: hdmi_mode
+    type: string
+    meta:
+      collection: signage_devices
+      field: hdmi_mode
+    schema:
+      data_type: character varying
+      max_length: 64
+      is_nullable: true
+
+  - collection: signage_devices
+    field: audio_enabled
+    type: boolean
+    meta:
+      collection: signage_devices
+      field: audio_enabled
+    schema:
+      data_type: boolean
+      is_nullable: false
+      default_value: false
+
+  - collection: signage_devices
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_devices
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_devices
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_devices
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_playlists ---
+  - collection: signage_playlists
+    field: id
+    type: uuid
+    meta:
+      collection: signage_playlists
+      field: id
+      special:
+        - uuid
+      readonly: true
+    schema:
+      data_type: uuid
+      is_nullable: false
+
+  - collection: signage_playlists
+    field: name
+    type: string
+    meta:
+      collection: signage_playlists
+      field: name
+    schema:
+      data_type: character varying
+      max_length: 128
+      is_nullable: false
+
+  - collection: signage_playlists
+    field: description
+    type: text
+    meta:
+      collection: signage_playlists
+      field: description
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: signage_playlists
+    field: priority
+    type: integer
+    meta:
+      collection: signage_playlists
+      field: priority
+    schema:
+      data_type: integer
+      is_nullable: false
+      default_value: 0
+
+  - collection: signage_playlists
+    field: enabled
+    type: boolean
+    meta:
+      collection: signage_playlists
+      field: enabled
+    schema:
+      data_type: boolean
+      is_nullable: false
+      default_value: true
+
+  - collection: signage_playlists
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_playlists
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_playlists
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_playlists
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_playlist_items ---
+  - collection: signage_playlist_items
+    field: id
+    type: uuid
+    meta:
+      collection: signage_playlist_items
+      field: id
+      special:
+        - uuid
+      readonly: true
+    schema:
+      data_type: uuid
+      is_nullable: false
+
+  - collection: signage_playlist_items
+    field: playlist_id
+    type: uuid
+    meta:
+      collection: signage_playlist_items
+      field: playlist_id
+    schema:
+      data_type: uuid
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_playlists
+
+  - collection: signage_playlist_items
+    field: media_id
+    type: uuid
+    meta:
+      collection: signage_playlist_items
+      field: media_id
+    schema:
+      data_type: uuid
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_media
+
+  - collection: signage_playlist_items
+    field: position
+    type: integer
+    meta:
+      collection: signage_playlist_items
+      field: position
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: signage_playlist_items
+    field: duration_s
+    type: integer
+    meta:
+      collection: signage_playlist_items
+      field: duration_s
+    schema:
+      data_type: integer
+      is_nullable: false
+      default_value: 10
+
+  - collection: signage_playlist_items
+    field: transition
+    type: string
+    meta:
+      collection: signage_playlist_items
+      field: transition
+    schema:
+      data_type: character varying
+      max_length: 32
+      is_nullable: true
+
+  - collection: signage_playlist_items
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_playlist_items
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_playlist_items
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_playlist_items
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_device_tags ---
+  - collection: signage_device_tags
+    field: id
+    type: integer
+    meta:
+      collection: signage_device_tags
+      field: id
+      special:
+        - autogenerated
+      readonly: true
+    schema:
+      data_type: integer
+      is_nullable: false
+      has_auto_increment: true
+
+  - collection: signage_device_tags
+    field: name
+    type: string
+    meta:
+      collection: signage_device_tags
+      field: name
+    schema:
+      data_type: character varying
+      max_length: 64
+      is_nullable: false
+
+  - collection: signage_device_tags
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_device_tags
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_device_tags
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_device_tags
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_playlist_tag_map ---
+  - collection: signage_playlist_tag_map
+    field: playlist_id
+    type: uuid
+    meta:
+      collection: signage_playlist_tag_map
+      field: playlist_id
+    schema:
+      data_type: uuid
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_playlists
+
+  - collection: signage_playlist_tag_map
+    field: tag_id
+    type: integer
+    meta:
+      collection: signage_playlist_tag_map
+      field: tag_id
+    schema:
+      data_type: integer
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_device_tags
+
+  - collection: signage_playlist_tag_map
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_playlist_tag_map
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_playlist_tag_map
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_playlist_tag_map
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_device_tag_map ---
+  - collection: signage_device_tag_map
+    field: device_id
+    type: uuid
+    meta:
+      collection: signage_device_tag_map
+      field: device_id
+    schema:
+      data_type: uuid
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_devices
+
+  - collection: signage_device_tag_map
+    field: tag_id
+    type: integer
+    meta:
+      collection: signage_device_tag_map
+      field: tag_id
+    schema:
+      data_type: integer
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_device_tags
+
+  - collection: signage_device_tag_map
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_device_tag_map
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_device_tag_map
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_device_tag_map
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- signage_schedules ---
+  - collection: signage_schedules
+    field: id
+    type: uuid
+    meta:
+      collection: signage_schedules
+      field: id
+      special:
+        - uuid
+      readonly: true
+    schema:
+      data_type: uuid
+      is_nullable: false
+
+  - collection: signage_schedules
+    field: playlist_id
+    type: uuid
+    meta:
+      collection: signage_schedules
+      field: playlist_id
+    schema:
+      data_type: uuid
+      is_nullable: false
+      foreign_key_column: id
+      foreign_key_table: signage_playlists
+
+  - collection: signage_schedules
+    field: weekday_mask
+    type: integer
+    meta:
+      collection: signage_schedules
+      field: weekday_mask
+      note: "7-bit bitmask: bit 0=Monday..bit 6=Sunday. Range 0-127."
+    schema:
+      data_type: smallint
+      is_nullable: false
+
+  - collection: signage_schedules
+    field: start_hhmm
+    type: integer
+    meta:
+      collection: signage_schedules
+      field: start_hhmm
+      note: "Start time as packed HHMM integer (e.g., 730 = 07:30). Must be < end_hhmm."
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: signage_schedules
+    field: end_hhmm
+    type: integer
+    meta:
+      collection: signage_schedules
+      field: end_hhmm
+      note: "End time as packed HHMM integer (e.g., 1800 = 18:00). Must be > start_hhmm."
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: signage_schedules
+    field: priority
+    type: integer
+    meta:
+      collection: signage_schedules
+      field: priority
+    schema:
+      data_type: integer
+      is_nullable: false
+      default_value: 0
+
+  - collection: signage_schedules
+    field: enabled
+    type: boolean
+    meta:
+      collection: signage_schedules
+      field: enabled
+    schema:
+      data_type: boolean
+      is_nullable: false
+      default_value: true
+
+  - collection: signage_schedules
+    field: created_at
+    type: timestamp
+    meta:
+      collection: signage_schedules
+      field: created_at
+      special:
+        - date-created
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  - collection: signage_schedules
+    field: updated_at
+    type: timestamp
+    meta:
+      collection: signage_schedules
+      field: updated_at
+      special:
+        - date-updated
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+      default_value: now()
+
+  # --- sales_records ---
+  - collection: sales_records
+    field: id
+    type: integer
+    meta:
+      collection: sales_records
+      field: id
+      special:
+        - autogenerated
+      readonly: true
+    schema:
+      data_type: integer
+      is_nullable: false
+      has_auto_increment: true
+
+  - collection: sales_records
+    field: upload_batch_id
+    type: integer
+    meta:
+      collection: sales_records
+      field: upload_batch_id
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: sales_records
+    field: order_number
+    type: string
+    meta:
+      collection: sales_records
+      field: order_number
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: false
+
+  - collection: sales_records
+    field: erp_status_flag
+    type: string
+    meta:
+      collection: sales_records
+      field: erp_status_flag
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: sales_records
+    field: customer_id
+    type: string
+    meta:
+      collection: sales_records
+      field: customer_id
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: sales_records
+    field: customer_name
+    type: string
+    meta:
+      collection: sales_records
+      field: customer_name
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: city
+    type: string
+    meta:
+      collection: sales_records
+      field: city
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: order_type
+    type: string
+    meta:
+      collection: sales_records
+      field: order_type
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: sales_records
+    field: order_subtype
+    type: string
+    meta:
+      collection: sales_records
+      field: order_subtype
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: sales_records
+    field: complexity_group
+    type: string
+    meta:
+      collection: sales_records
+      field: complexity_group
+    schema:
+      data_type: character varying
+      max_length: 100
+      is_nullable: true
+
+  - collection: sales_records
+    field: comment
+    type: text
+    meta:
+      collection: sales_records
+      field: comment
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: vv_number
+    type: string
+    meta:
+      collection: sales_records
+      field: vv_number
+    schema:
+      data_type: character varying
+      max_length: 100
+      is_nullable: true
+
+  - collection: sales_records
+    field: business_area
+    type: integer
+    meta:
+      collection: sales_records
+      field: business_area
+    schema:
+      data_type: integer
+      is_nullable: true
+
+  - collection: sales_records
+    field: project_reference
+    type: text
+    meta:
+      collection: sales_records
+      field: project_reference
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: delivery_address
+    type: string
+    meta:
+      collection: sales_records
+      field: delivery_address
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: delivery_city
+    type: string
+    meta:
+      collection: sales_records
+      field: delivery_city
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: manual_lock
+    type: string
+    meta:
+      collection: sales_records
+      field: manual_lock
+    schema:
+      data_type: character varying
+      max_length: 10
+      is_nullable: true
+
+  - collection: sales_records
+    field: responsible_person
+    type: string
+    meta:
+      collection: sales_records
+      field: responsible_person
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: free_field_1
+    type: string
+    meta:
+      collection: sales_records
+      field: free_field_1
+    schema:
+      data_type: character varying
+      max_length: 10
+      is_nullable: true
+
+  - collection: sales_records
+    field: free_field_2
+    type: string
+    meta:
+      collection: sales_records
+      field: free_field_2
+    schema:
+      data_type: character varying
+      max_length: 10
+      is_nullable: true
+
+  - collection: sales_records
+    field: remark
+    type: text
+    meta:
+      collection: sales_records
+      field: remark
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: project_number
+    type: string
+    meta:
+      collection: sales_records
+      field: project_number
+    schema:
+      data_type: character varying
+      max_length: 100
+      is_nullable: true
+
+  - collection: sales_records
+    field: project_name
+    type: string
+    meta:
+      collection: sales_records
+      field: project_name
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: manual_status
+    type: integer
+    meta:
+      collection: sales_records
+      field: manual_status
+    schema:
+      data_type: integer
+      is_nullable: true
+
+  - collection: sales_records
+    field: customer_lock
+    type: integer
+    meta:
+      collection: sales_records
+      field: customer_lock
+    schema:
+      data_type: integer
+      is_nullable: true
+
+  - collection: sales_records
+    field: material_flag
+    type: string
+    meta:
+      collection: sales_records
+      field: material_flag
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: sales_records
+    field: end_customer_comment
+    type: text
+    meta:
+      collection: sales_records
+      field: end_customer_comment
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: internal_processor_1
+    type: string
+    meta:
+      collection: sales_records
+      field: internal_processor_1
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: internal_processor_2
+    type: string
+    meta:
+      collection: sales_records
+      field: internal_processor_2
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: sales_records
+    field: approval_comment_1
+    type: text
+    meta:
+      collection: sales_records
+      field: approval_comment_1
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: status_code
+    type: integer
+    meta:
+      collection: sales_records
+      field: status_code
+    schema:
+      data_type: integer
+      is_nullable: true
+
+  - collection: sales_records
+    field: technical_check
+    type: string
+    meta:
+      collection: sales_records
+      field: technical_check
+    schema:
+      data_type: character varying
+      max_length: 10
+      is_nullable: true
+
+  - collection: sales_records
+    field: purchase_check
+    type: string
+    meta:
+      collection: sales_records
+      field: purchase_check
+    schema:
+      data_type: character varying
+      max_length: 10
+      is_nullable: true
+
+  - collection: sales_records
+    field: approval_comment_2
+    type: text
+    meta:
+      collection: sales_records
+      field: approval_comment_2
+    schema:
+      data_type: text
+      is_nullable: true
+
+  - collection: sales_records
+    field: order_date
+    type: date
+    meta:
+      collection: sales_records
+      field: order_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: sales_records
+    field: delivery_date
+    type: date
+    meta:
+      collection: sales_records
+      field: delivery_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: sales_records
+    field: requested_date
+    type: date
+    meta:
+      collection: sales_records
+      field: requested_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: sales_records
+    field: arrival_date
+    type: date
+    meta:
+      collection: sales_records
+      field: arrival_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: sales_records
+    field: remaining_value
+    type: decimal
+    meta:
+      collection: sales_records
+      field: remaining_value
+    schema:
+      data_type: numeric
+      numeric_precision: 15
+      numeric_scale: 2
+      is_nullable: true
+
+  - collection: sales_records
+    field: total_value
+    type: decimal
+    meta:
+      collection: sales_records
+      field: total_value
+    schema:
+      data_type: numeric
+      numeric_precision: 15
+      numeric_scale: 2
+      is_nullable: true
+
+  # --- personio_employees ---
+  - collection: personio_employees
+    field: id
+    type: integer
+    meta:
+      collection: personio_employees
+      field: id
+      readonly: true
+    schema:
+      data_type: integer
+      is_nullable: false
+      has_auto_increment: false
+
+  - collection: personio_employees
+    field: first_name
+    type: string
+    meta:
+      collection: personio_employees
+      field: first_name
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: personio_employees
+    field: last_name
+    type: string
+    meta:
+      collection: personio_employees
+      field: last_name
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: personio_employees
+    field: status
+    type: string
+    meta:
+      collection: personio_employees
+      field: status
+    schema:
+      data_type: character varying
+      max_length: 50
+      is_nullable: true
+
+  - collection: personio_employees
+    field: department
+    type: string
+    meta:
+      collection: personio_employees
+      field: department
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: personio_employees
+    field: position
+    type: string
+    meta:
+      collection: personio_employees
+      field: position
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: true
+
+  - collection: personio_employees
+    field: hire_date
+    type: date
+    meta:
+      collection: personio_employees
+      field: hire_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: personio_employees
+    field: termination_date
+    type: date
+    meta:
+      collection: personio_employees
+      field: termination_date
+    schema:
+      data_type: date
+      is_nullable: true
+
+  - collection: personio_employees
+    field: weekly_working_hours
+    type: decimal
+    meta:
+      collection: personio_employees
+      field: weekly_working_hours
+    schema:
+      data_type: numeric
+      numeric_precision: 5
+      numeric_scale: 2
+      is_nullable: true
+
+  - collection: personio_employees
+    field: synced_at
+    type: timestamp
+    meta:
+      collection: personio_employees
+      field: synced_at
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+
+  - collection: personio_employees
+    field: raw_json
+    type: json
+    meta:
+      collection: personio_employees
+      field: raw_json
+      special:
+        - json
+    schema:
+      data_type: jsonb
+      is_nullable: true
+
+  # --- upload_batches (v1.23 C-1) ---
+  - collection: upload_batches
+    field: id
+    type: integer
+    meta:
+      collection: upload_batches
+      field: id
+      readonly: true
+    schema:
+      data_type: integer
+      is_nullable: false
+      has_auto_increment: true
+
+  - collection: upload_batches
+    field: filename
+    type: string
+    meta:
+      collection: upload_batches
+      field: filename
+    schema:
+      data_type: character varying
+      max_length: 255
+      is_nullable: false
+
+  - collection: upload_batches
+    field: uploaded_at
+    type: timestamp
+    meta:
+      collection: upload_batches
+      field: uploaded_at
+    schema:
+      data_type: timestamp with time zone
+      is_nullable: false
+
+  - collection: upload_batches
+    field: row_count
+    type: integer
+    meta:
+      collection: upload_batches
+      field: row_count
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: upload_batches
+    field: error_count
+    type: integer
+    meta:
+      collection: upload_batches
+      field: error_count
+    schema:
+      data_type: integer
+      is_nullable: false
+
+  - collection: upload_batches
+    field: status
+    type: string
+    meta:
+      collection: upload_batches
+      field: status
+    schema:
+      data_type: character varying
+      max_length: 20
+      is_nullable: false
+
+relations:
+  # signage_playlist_items -> signage_playlists (CASCADE)
+  - collection: signage_playlist_items
+    field: playlist_id
+    related_collection: signage_playlists
+    meta:
+      junction_field: null
+      many_collection: signage_playlist_items
+      many_field: playlist_id
+      one_collection: signage_playlists
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: CASCADE
+      table: signage_playlist_items
+      column: playlist_id
+      foreign_key_table: signage_playlists
+      foreign_key_column: id
+      constraint_name: fk_signage_playlist_items_playlist_id
+
+  # signage_playlist_tag_map -> signage_playlists (CASCADE)
+  - collection: signage_playlist_tag_map
+    field: playlist_id
+    related_collection: signage_playlists
+    meta:
+      junction_field: null
+      many_collection: signage_playlist_tag_map
+      many_field: playlist_id
+      one_collection: signage_playlists
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: CASCADE
+      table: signage_playlist_tag_map
+      column: playlist_id
+      foreign_key_table: signage_playlists
+      foreign_key_column: id
+      constraint_name: fk_signage_playlist_tag_map_playlist_id
+
+  # signage_playlist_tag_map -> signage_device_tags (CASCADE)
+  - collection: signage_playlist_tag_map
+    field: tag_id
+    related_collection: signage_device_tags
+    meta:
+      junction_field: null
+      many_collection: signage_playlist_tag_map
+      many_field: tag_id
+      one_collection: signage_device_tags
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: CASCADE
+      table: signage_playlist_tag_map
+      column: tag_id
+      foreign_key_table: signage_device_tags
+      foreign_key_column: id
+      constraint_name: fk_signage_playlist_tag_map_tag_id
+
+  # signage_device_tag_map -> signage_devices (CASCADE)
+  - collection: signage_device_tag_map
+    field: device_id
+    related_collection: signage_devices
+    meta:
+      junction_field: null
+      many_collection: signage_device_tag_map
+      many_field: device_id
+      one_collection: signage_devices
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: CASCADE
+      table: signage_device_tag_map
+      column: device_id
+      foreign_key_table: signage_devices
+      foreign_key_column: id
+      constraint_name: fk_signage_device_tag_map_device_id
+
+  # signage_device_tag_map -> signage_device_tags (CASCADE)
+  - collection: signage_device_tag_map
+    field: tag_id
+    related_collection: signage_device_tags
+    meta:
+      junction_field: null
+      many_collection: signage_device_tag_map
+      many_field: tag_id
+      one_collection: signage_device_tags
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: CASCADE
+      table: signage_device_tag_map
+      column: tag_id
+      foreign_key_table: signage_device_tags
+      foreign_key_column: id
+      constraint_name: fk_signage_device_tag_map_tag_id
+
+  # signage_schedules -> signage_playlists (RESTRICT)
+  - collection: signage_schedules
+    field: playlist_id
+    related_collection: signage_playlists
+    meta:
+      junction_field: null
+      many_collection: signage_schedules
+      many_field: playlist_id
+      one_collection: signage_playlists
+      one_field: null
+      one_deselect_action: nullify
+    schema:
+      on_delete: RESTRICT
+      table: signage_schedules
+      column: playlist_id
+      foreign_key_table: signage_playlists
+      foreign_key_column: id
+      constraint_name: fk_signage_schedules_playlist_id
+
+# ---------------------------------------------------------------------------
+# Phase 68 MIG-SIGN-02: Directus Flow for friendly schedule validation error
+# ---------------------------------------------------------------------------
+# Source-of-truth deployment path: directus/bootstrap-roles.sh section 6 issues
+# the corresponding `POST /flows` and `POST /operations` REST calls (idempotent
+# GET-before-POST). Phase 65 established that mutation of policies/roles/
+# permissions/flows lives in the imperative bootstrap script — `directus
+# schema apply` is collections+fields+relations only.
+#
+# This declarative block is documentation: it lets grep + reviewers see the
+# Flow shape in one place, mirrors the fixed UUIDs used by the bootstrap
+# script, and keeps the snapshot YAML idempotent (Directus 11 schema apply
+# ignores unknown top-level keys; if a future Directus version begins
+# capturing flows in snapshots, switch this to a real `flows:` /
+# `operations:` section.)
+#
+# Trigger: items.create + items.update on signage_schedules.
+# Operation: Run-Script in sandbox throws JSON {code: "schedule_end_before_start"}
+# when start_hhmm >= end_hhmm. Frontend (Plan 05) maps the code to an i18n key.
+
+# flows:
+#   - id: 68aaaaaa-0000-4000-8000-000000000001
+#     name: signage_schedules validate start<end
+#     icon: fact_check
+#     color: "#E35169"
+#     description: >-
+#       Reject signage_schedules writes where start_hhmm >= end_hhmm with a
+#       stable error code "schedule_end_before_start" before they reach the
+#       Postgres CHECK ck_signage_schedules_start_before_end.
+#     status: active
+#     trigger: event
+#     accountability: all
+#     options:
+#       type: filter
+#       scope:
+#         - items.create
+#         - items.update
+#       collections:
+#         - signage_schedules
+#     operation: 68aaaaaa-0000-4000-8000-000000000002
+#
+# operations:
+#   - id: 68aaaaaa-0000-4000-8000-000000000002
+#     flow: 68aaaaaa-0000-4000-8000-000000000001
+#     name: throw schedule_end_before_start
+#     key: validate_start_before_end
+#     type: exec
+#     position_x: 19
+#     position_y: 17
+#     options:
+#       code: |
+#         module.exports = async function ({ $trigger }) {
+#           // $trigger.payload is the incoming write; $trigger.keys is the
+#           // updated row id list on update events. On items.update where
+#           // only one of (start_hhmm, end_hhmm) is in the payload, fetch
+#           // the existing values via $trigger.keys + accountability.
+#           const payload = ($trigger && $trigger.payload) || {};
+#           let start = payload.start_hhmm;
+#           let end = payload.end_hhmm;
+#           if ((typeof start !== 'number' || typeof end !== 'number')
+#               && Array.isArray($trigger.keys) && $trigger.keys.length) {
+#             // partial update: defer to DB CHECK as last line of defence;
+#             // this Flow can only enforce the friendly path when both
+#             // values are present in the payload merge.
+#             return;
+#           }
+#           if (typeof start === 'number' && typeof end === 'number'
+#               && start >= end) {
+#             throw new Error(
+#               JSON.stringify({ code: 'schedule_end_before_start' })
+#             );
+#           }
+#         };

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KPI Dashboard</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var isDark;
+          if (stored === 'dark') {
+            isDark = true;
+          } else if (stored === 'light') {
+            isDark = false;
+          } else {
+            // No explicit choice OR invalid value (D-10, D-11) — fall back to OS
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          var splashBg = isDark ? '#1a1a1a' : '#ffffff';
+          var splashDot = isDark ? '#94a3b8' : '#64748b';
+          document.documentElement.style.setProperty('--splash-bg', splashBg);
+          document.documentElement.style.setProperty('--splash-dot', splashDot);
+        } catch (e) {
+          // localStorage access can throw in privacy mode / sandboxed iframes — fail silent, default light
+        }
+      })();
+    </script>
+    <style>
+      #root > .bootstrap-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 0.875rem;
+        color: var(--splash-dot, #64748b);
+        background: var(--splash-bg, #ffffff);
+      }
+      .bootstrap-splash__dot {
+        width: 8px;
+        height: 8px;
+        margin: 0 2px;
+        background: currentColor;
+        border-radius: 50%;
+        display: inline-block;
+        animation: bootstrap-splash-pulse 1.4s infinite ease-in-out both;
+      }
+      .bootstrap-splash__dot:nth-child(1) { animation-delay: -0.32s; }
+      .bootstrap-splash__dot:nth-child(2) { animation-delay: -0.16s; }
+      @keyframes bootstrap-splash-pulse {
+        0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="bootstrap-splash" aria-hidden="true">
+        <span class="bootstrap-splash__dot"></span>
+        <span class="bootstrap-splash__dot"></span>
+        <span class="bootstrap-splash__dot"></span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

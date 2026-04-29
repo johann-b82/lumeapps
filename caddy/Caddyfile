@@ -1,0 +1,57 @@
+{
+	# Phase 64 — HTTP only (D-02). No auto-HTTPS, no cert management.
+	auto_https off
+	admin off
+}
+
+:80 {
+	# --- /api/* → FastAPI (D-06: SSE must survive) -----------------------------
+	# flush_interval -1 disables response buffering so text/event-stream chunks
+	# reach the client immediately. The transport's read_timeout is set high
+	# so SSE connections (held open indefinitely by design) aren't closed at
+	# Caddy's default ~30s idle cutoff. See 64-CONTEXT.md D-06.
+	#
+	# Prefix PRESERVED (FastAPI routes live at /api/...), so we use `handle`
+	# (not `handle_path`, which would strip).
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 24h
+				write_timeout 24h
+				dial_timeout 10s
+			}
+		}
+	}
+
+	# --- /directus/* → Directus (D-03: STRIP prefix) ---------------------------
+	# Directus doesn't know it's behind a subpath; it expects bare /auth,
+	# /items, /assets, /server. `handle_path` strips the matched prefix
+	# before forwarding.
+	handle_path /directus/* {
+		reverse_proxy directus:8055
+	}
+
+	# --- /player/* → FastAPI (kiosk bundle) ------------------------------------
+	# The player bundle is built into frontend/dist/player/ and mounted by
+	# FastAPI as a StaticFiles handler (see backend/app/main.py:44-62). Vite
+	# dev mode does NOT serve the player entry — single-instance Vite resolves
+	# /player/ to the admin index.html, which would boot the Pi into a login
+	# screen. Route through FastAPI so the Pi always gets the built player
+	# bundle regardless of dev/prod mode. Rebuild with `npm run build:player`
+	# when the player source changes. Prefix preserved.
+	handle /player/* {
+		reverse_proxy api:8000
+	}
+
+	# --- / (catch-all) → admin SPA --------------------------------------------
+	handle {
+		reverse_proxy frontend:5173
+	}
+
+	# Basic access log to stdout for `docker compose logs caddy`.
+	log {
+		output stdout
+		format console
+	}
+}

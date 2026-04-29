@@ -1,0 +1,39 @@
+[Unit]
+Description=Signage sidecar proxy cache
+Documentation=https://github.com/<org>/<repo>/blob/main/docs/operator-runbook.md
+After=network-online.target
+After=labwc.service
+Requires=labwc.service
+Wants=network-online.target
+# Sidecar must be up before the kiosk so the player can probe /health on first load.
+Before=signage-player.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+
+# Sidecar runs from the venv; single worker — serves exactly one device.
+ExecStart=/opt/signage/pi-sidecar/.venv/bin/uvicorn sidecar:app \
+    --host 127.0.0.1 \
+    --port 8080 \
+    --workers 1
+
+WorkingDirectory=/opt/signage/pi-sidecar
+
+# Hardening (D-6)
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/signage
+
+# Environment
+Environment=SIGNAGE_API_BASE=__SIGNAGE_API_URL__
+Environment=SIGNAGE_CACHE_DIR=/var/lib/signage
+# Phase 62-03: wlr-randr + wpctl need to reach the user's labwc compositor and wireplumber.
+# __SIGNAGE_UID__ is substituted at install time by scripts/lib/signage-install.sh.
+Environment=XDG_RUNTIME_DIR=/run/user/__SIGNAGE_UID__
+Environment=WAYLAND_DISPLAY=wayland-0
+
+[Install]
+WantedBy=default.target

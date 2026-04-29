@@ -1,0 +1,55 @@
+[Unit]
+Description=Signage kiosk (Chromium)
+Documentation=https://github.com/<org>/<repo>/blob/main/docs/operator-runbook.md
+# labwc alone does not emit graphical-session.target, so we bind to labwc
+# directly: player starts after labwc is up, stops when labwc goes down.
+After=labwc.service signage-sidecar.service
+Requires=signage-sidecar.service labwc.service
+BindsTo=labwc.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+
+# Wayland environment — labwc compositor must be running.
+# XDG_RUNTIME_DIR is set to the signage user's runtime dir.
+# Replace 1001 with the actual UID of the signage user (set by provision script).
+# WAYLAND_DISPLAY: labwc (standalone, no display manager) creates wayland-0.
+# In a compositor-stack with a prior session it can shift to wayland-1; confirm
+# with `ls /run/user/<uid>/wayland-*` if the player can't find its socket.
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/__SIGNAGE_UID__
+Environment=XDG_SESSION_TYPE=wayland
+
+# Chromium profile dir — writable, outside ProtectSystem strictness
+Environment=CHROMIUM_PROFILE_DIR=/home/signage/.config/chromium
+
+# Guard: only start if Wayland socket exists (prevents crash-loop if labwc is not up).
+ExecStartPre=/bin/bash -c 'while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; do sleep 1; done'
+
+ExecStart=/usr/bin/chromium-browser \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --autoplay-policy=no-user-gesture-required \
+    --disable-session-crashed-bubble \
+    --ozone-platform=wayland \
+    --app=__SIGNAGE_API_URL__/player/ \
+    --user-data-dir=${CHROMIUM_PROFILE_DIR} \
+    --no-first-run \
+    --disable-component-update \
+    --check-for-update-interval=31536000
+
+# Clean up crashed-session state so Chromium doesn't show recovery dialog.
+ExecStartPost=/bin/bash -c 'sleep 5; find ${CHROMIUM_PROFILE_DIR}/Default -name "Crash Reports" -type d -exec rm -rf {} + 2>/dev/null || true'
+
+# Hardening
+NoNewPrivileges=yes
+# Do NOT add ProtectSystem=strict — Chromium writes profile data to /home/signage.
+
+[Install]
+# default.target is what the user manager reaches at login/boot. labwc is
+# also WantedBy=default.target; BindsTo= handles the ordering so player
+# waits for labwc's Wayland socket.
+WantedBy=default.target

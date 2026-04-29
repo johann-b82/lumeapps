@@ -1,0 +1,224 @@
+services:
+  db:
+    image: postgres:17-alpine
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  migrate:
+    build: ./backend
+    command: alembic upgrade head
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    # APScheduler runs in-process with an in-memory jobstore — `--workers 1`
+    # is mandatory. N workers would run every scheduled job N times (duplicate
+    # Personio sync, duplicate sensor_poll ⇒ duplicate UDP/161 traffic + DB
+    # constraint contention on UNIQUE(sensor_id, recorded_at)). See SEN-SCH-05
+    # and PITFALLS C-7. If horizontal scaling is ever required, extract the
+    # scheduler into its own container first (see ops runbook).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload
+    env_file: .env
+    environment:
+      # D-04: HS256 signing key for signage device JWTs. Separate trust domain
+      # from DIRECTUS_SECRET. Generate with:
+      #   python -c "import secrets; print(secrets.token_urlsafe(64))"
+      SIGNAGE_DEVICE_JWT_SECRET: ${SIGNAGE_DEVICE_JWT_SECRET}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # Player bundle (Phase 47-04): FastAPI mounts /player/* from the built
+      # Vite player entry. Read-only so container can't mutate build output.
+      - ./frontend/dist:/app/frontend/dist:ro
+      # Directus owns the uploads volume (rw on directus service, ro here).
+      # FastAPI reads media files by path resolved from signage_media.uri (Directus asset UUID) — SGN-INF-02.
+      - directus_uploads:/directus/uploads:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      directus-bootstrap-roles:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
+  directus:
+    image: directus/directus:11.17.2
+    env_file: .env
+    ports:
+      - "127.0.0.1:8055:8055"
+    volumes:
+      - directus_uploads:/directus/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      # --- Core secrets (from .env) ---
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+
+      # --- Database connection — reuse existing `db` service ---
+      DB_CLIENT: pg
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # --- Hide Alembic-managed app tables from Directus Data Model UI ---
+      # v1.22 D-04 / SCHEMA-04: Minimal "never expose" superset.
+      # Removed: sales_records, personio_employees, signage_devices and other
+      # signage tables — these are now registered as v1.22 Directus collections
+      # and must be visible to Directus metadata. Added: signage_heartbeat_event
+      # (append-only analytics log, not an admin-editable collection).
+      # upload_batches exposed as of v1.23 C-1 (read-only Admin + Viewer via Directus).
+      # Comma-separated, no spaces (per Directus docs).
+      # IMPORTANT: changing this env requires `docker compose up -d directus`
+      # (not `docker compose restart directus`) to take effect.
+      # See docs/operator-runbook.md section "DB_EXCLUDE_TABLES requires up -d".
+      DB_EXCLUDE_TABLES: alembic_version,app_settings,personio_attendance,personio_absences,personio_sync_meta,sensors,sensor_readings,sensor_poll_log,signage_pairing_sessions,signage_heartbeat_event
+
+      # --- First-Admin bootstrap (D-01); ignored on subsequent boots ---
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+
+      # --- Public URL for email/oauth redirects (operator-only for v1.11) ---
+      PUBLIC_URL: http://127.0.0.1:8055
+
+      # Phase 64 D-04: CORS env removed entirely. The admin SPA reaches Directus
+      # same-origin via Caddy's /directus/* route (prefix stripped), so no
+      # cross-origin preflight happens on normal flows. If a direct-to-Directus
+      # call ever reappears, CORS will fail loudly rather than silently allowing
+      # an arbitrary origin.
+      TELEMETRY: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8055/server/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  directus-schema-apply:
+    # v1.22 D-04: One-shot service that registers the 9 v1.22 collections as
+    # Directus metadata via `npx directus schema apply`. Runs AFTER directus is
+    # healthy and BEFORE directus-bootstrap-roles so permission rows can
+    # reference the registered collections (Pitfall 5). Uses schema: null per
+    # collection to avoid Directus bug #25760 ("relation already exists").
+    # Fallback for #25760 is documented in docs/operator-runbook.md.
+    image: directus/directus:11.17.2
+    env_file: .env
+    environment:
+      DB_CLIENT: pg
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+    volumes:
+      - ./directus/snapshots:/snapshots:ro
+    depends_on:
+      directus:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "npx directus schema apply --yes /snapshots/v1.22.yaml"]
+    restart: "no"
+
+  directus-bootstrap-roles:
+    # Roles-as-code sidecar. Replaces the v10-style snapshot.yml approach
+    # (rejected by Directus 11 — policies/access model). Runs a REST-API
+    # bootstrap script that is idempotent (GET-before-POST).
+    image: curlimages/curl:8.10.1
+    env_file: .env
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      DIRECTUS_ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+    volumes:
+      - ./directus/bootstrap-roles.sh:/bootstrap-roles.sh:ro
+    depends_on:
+      directus:
+        condition: service_healthy
+      directus-schema-apply:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "/bootstrap-roles.sh"]
+    restart: "no"
+
+  caddy:
+    # Phase 64 D-01: Caddy 2 alpine — reverse proxy fronting the full stack on :80.
+    # HTTP only (D-02). TLS + external domain handling is out of scope.
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      directus:
+        condition: service_healthy
+    healthcheck:
+      # Caddy returns 200 on / (proxied to frontend). If frontend is up, Caddy is serving.
+      test: ["CMD", "wget", "-qO-", "--tries=1", "--timeout=3", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  backup:
+    image: postgres:17-alpine
+    container_name: kpi-backup
+    env_file: .env
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      TZ: Europe/Berlin
+    volumes:
+      - ./backups:/backups
+      - ./backup/entrypoint.sh:/entrypoint.sh:ro
+      - ./backup/dump.sh:/usr/local/bin/dump.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  directus_uploads:
+  caddy_data:
+  caddy_config:

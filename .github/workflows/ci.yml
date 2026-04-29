@@ -1,0 +1,397 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 1: Set up Python (for pure-python pre-stack tests)
+      # -----------------------------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # -----------------------------------------------------------------------
+      # Step 2: Install backend Python deps (for pure-python allowlist test)
+      # The allowlist parity test imports app.schemas._base — needs requirements.
+      # -----------------------------------------------------------------------
+      - name: Install backend Python deps (for pure-python tests)
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      # -----------------------------------------------------------------------
+      # Step 3: Pydantic-vs-shell allowlist parity test (PRE-STACK FAST FAIL)
+      # Runs before docker compose up — catches drift in <1s vs ~2 min for stack.
+      # This test is pure-Python; it only reads directus/bootstrap-roles.sh.
+      # Rationale: D-17 requires drift to fail fast. Shell-vs-Pydantic drift is
+      # a AUTHZ risk (Viewer over/under-exposure). Catching it here costs 0 stack
+      # time.
+      # -----------------------------------------------------------------------
+      - name: "Pydantic-vs-shell allowlist parity (pre-stack, <1s)"
+        run: cd backend && pytest tests/signage/test_permission_field_allowlists.py -v
+
+      # -----------------------------------------------------------------------
+      # Step 4: Write test .env
+      # -----------------------------------------------------------------------
+      - name: Write test .env
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=kpi
+          POSTGRES_PASSWORD=kpi_test_pw
+          POSTGRES_DB=kpi
+          DIRECTUS_KEY=${{ secrets.DIRECTUS_KEY || 'ci-fake-key-00000000-0000-0000-0000-000000000000' }}
+          DIRECTUS_SECRET=${{ secrets.DIRECTUS_SECRET || 'ci-fake-secret-00000000-0000-0000-0000-000000000000' }}
+          DIRECTUS_ADMIN_EMAIL=admin@example.com
+          DIRECTUS_ADMIN_PASSWORD=admin_test_pw
+          VIEWER_EMAIL=viewer@example.com
+          VIEWER_PASSWORD=viewer_test_pw
+          API_BASE_URL=http://localhost:8000
+          DIRECTUS_BASE_URL=http://localhost:8055
+          EOF
+
+      # -----------------------------------------------------------------------
+      # Phase 66 MIG-AUTH-03: CI guard — fail on any `"/api/me"` reference in
+      # frontend/src/. `me.py` was deleted; AuthContext reads identity via
+      # directus.request(readMe(...)). D-12 defines the exact literal-string
+      # grep. Runs pre-stack so regressions fail in <1s.
+      # -----------------------------------------------------------------------
+      - name: "Guard — no /api/me in frontend (MIG-AUTH-03)"
+        run: |
+          if grep -rn '"/api/me"' frontend/src/; then
+            echo "ERROR: /api/me reference found in frontend/src/ (Phase 66 MIG-AUTH-03 — use directus.request(readMe(...)) instead)"
+            exit 1
+          fi
+          echo "OK: no /api/me references in frontend/src/"
+
+      # -----------------------------------------------------------------------
+      # Phase 67 MIG-DATA-04 + CLEAN-04(b): CI guard — fail on any literal
+      # `"/api/data/sales"` or `"/api/data/employees"` (with trailing quote or
+      # non-slash character, so `"/api/data/employees/overtime"` is ALLOWED)
+      # under backend/app/. data.py was deleted; row-data is served by
+      # Directus (sales_records + personio_employees). The overtime compute
+      # endpoint lives at `/api/data/employees/overtime` and MUST remain.
+      # Pre-stack grep — fails in <1s on regression.
+      # -----------------------------------------------------------------------
+      - name: "Guard — no /api/data/sales or /api/data/employees in backend (MIG-DATA-04)"
+        run: |
+          # Pattern 1: "/api/data/sales" literal.
+          # Pattern 2: "/api/data/employees" followed by a quote or any char
+          #   that is NOT `/` (so /overtime is allowed). Use extended regex.
+          if grep -rnE '"/api/data/sales"|"/api/data/employees"|"/api/data/employees[^/"]' backend/app/; then
+            echo "ERROR: /api/data/sales or /api/data/employees reference found in backend/app/ (Phase 67 MIG-DATA-04 — data.py deleted; row-data is served by Directus. /api/data/employees/overtime is allowed.)"
+            exit 1
+          fi
+          echo "OK: no /api/data/sales or /api/data/employees references in backend/app/ (overtime endpoint permitted)"
+
+      # -----------------------------------------------------------------------
+      # Phase 68 MIG-SIGN-01 + MIG-SIGN-02: CI guard — fail on any literal
+      # `/api/signage/tags` or `/api/signage/schedules` reappearing under
+      # backend/app/. Both routers were deleted in Phase 68; tags + schedules
+      # CRUD now go through the Directus collections `signage_device_tags`
+      # and `signage_schedules`. Tag-map writes for playlists / devices use
+      # `/api/signage/playlists/{id}/tags` and `/api/signage/devices/{id}/tags`
+      # (different prefix); they remain in FastAPI per Phase 69 / 70 scope.
+      # Pre-stack grep — fails in <1s on regression.
+      # -----------------------------------------------------------------------
+      - name: "Guard — no /api/signage/tags or /api/signage/schedules in backend (MIG-SIGN-01/02)"
+        run: |
+          if grep -rnE '"/api/signage/tags"|"/api/signage/tags/|"/api/signage/schedules"|"/api/signage/schedules/' backend/app/; then
+            echo "ERROR: /api/signage/tags or /api/signage/schedules reference found in backend/app/ (Phase 68 — these routers were deleted; CRUD goes through Directus collections signage_device_tags + signage_schedules)."
+            exit 1
+          fi
+          echo "OK: no /api/signage/tags or /api/signage/schedules references in backend/app/"
+
+      # -----------------------------------------------------------------------
+      # Phase 69 MIG-SIGN-03: CI guard — fail on any backend/app/ file
+      # reintroducing the migrated playlist routes. Two complementary checks:
+      #   (a) literal path string `"/api/signage/playlists"` reappearing
+      #       anywhere in backend/app/ (catches client-style URLs, docs,
+      #       accidental pastes); does NOT match surviving DELETE +
+      #       bulk-PUT decorators which use the relative `"/{playlist_id}"`
+      #       form on the sub-router.
+      #   (b) method-anchored decorator regex on backend/app/routers/signage_admin/
+      #       blocking POST/GET/PATCH reintroductions while
+      #       allowing the surviving DELETE on /{playlist_id} (D-04 allow).
+      #   (c) /tags PUT discriminator scoped to playlists.py + playlist_items.py
+      #       (NOT devices.py — its surviving @router.put("/{device_id}/tags")
+      #       is the Phase 70 device-tags endpoint and must not trip this guard).
+      # _notify_playlist_changed helper is INTENTIONALLY NOT guarded
+      # against (D-04b — surviving DELETE + bulk-PUT still use it).
+      # Pre-stack grep — fails in <1s on regression.
+      # -----------------------------------------------------------------------
+      - name: "Guard — no migrated playlist routes in backend (MIG-SIGN-03)"
+        run: |
+          # (a) Literal path string check — block reappearance under backend/app/.
+          if grep -rnE '"/api/signage/playlists"|"/api/signage/playlists/' backend/app/; then
+            echo "ERROR: '/api/signage/playlists' literal found in backend/app/ (Phase 69 — playlist metadata + tags + items GET migrated to Directus collections signage_playlists / signage_playlist_items / signage_playlist_tag_map)."
+            exit 1
+          fi
+          # (b) Method-anchored decorator regex — block POST/GET/PATCH on the
+          # playlists sub-router file. The surviving file's only decorator is
+          # @router.delete which the (post|get|patch) alternation cannot match.
+          if grep -rnE '@router\.(post|get|patch)\b' backend/app/routers/signage_admin/playlists.py; then
+            echo "ERROR: forbidden decorator (POST/GET/PATCH) found in backend/app/routers/signage_admin/playlists.py (Phase 69 — only @router.delete survives in this file; CRUD goes through Directus)."
+            exit 1
+          fi
+          # (c) Block @router.put on /{...}/tags inside playlists.py +
+          # playlist_items.py. The /tags-suffix is the precise discriminator
+          # vs the surviving bulk-PUT on /{...}/items in playlist_items.py.
+          # Scope deliberately EXCLUDES devices.py — its
+          # @router.put("/{device_id}/tags") is the Phase 70 device-tags
+          # endpoint and is allowed.
+          if grep -nE '@router\.put\b[^@]*"/?\{[^}]+\}/tags"?' \
+              backend/app/routers/signage_admin/playlists.py \
+              backend/app/routers/signage_admin/playlist_items.py 2>/dev/null; then
+            echo "ERROR: @router.put on /{...}/tags found in playlists.py or playlist_items.py (Phase 69 — playlist tags PUT migrated to Directus signage_playlist_tag_map FE-driven diff)."
+            exit 1
+          fi
+          echo "OK: no migrated playlist routes in backend/app/"
+
+      # -----------------------------------------------------------------------
+      # Phase 70 MIG-SIGN-04: CI guard — fail on any reintroduction of the
+      # five migrated FastAPI device routes (list, by-id GET, name PATCH,
+      # DELETE, tags PUT) inside backend/app/routers/signage_admin/devices.py.
+      # Method-anchored, file-scoped (D-06b lesson re-applied from Phase 69
+      # D-04). The surviving calibration PATCH on /{device_id}/calibration is
+      # explicitly allowed via the suffix-based negative filter. The new
+      # GET /api/signage/resolved/{device_id} lives in resolved.py (a
+      # different file) and is not in scope of this grep.
+      # _notify_device_self helper is INTENTIONALLY NOT guarded against
+      # (D-06c — surviving calibration PATCH may use it after consolidation).
+      # Pre-stack grep — fails in <1s on regression.
+      # -----------------------------------------------------------------------
+      - name: "Phase 70 — block reintroduced device CRUD routes (MIG-SIGN-04)"
+        run: |
+          set -euo pipefail
+          FILE="backend/app/routers/signage_admin/devices.py"
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: $FILE not found — Phase 70 trim must have left calibration route in place"
+            exit 1
+          fi
+          # Block: GET (list + by-id), PATCH name, DELETE on /api/signage/devices.
+          # The regex captures `@router.<method>("/...")` decorators where the
+          # path is "" or "/{device_id}" — i.e. lands under /api/signage/devices
+          # via the package router's /devices prefix.
+          # ALLOWS: @router.patch("/{device_id}/calibration", ...) via the
+          # suffix-anchored `grep -v '/calibration"'` belt-and-suspenders filter.
+          if grep -nE '@router\.(get|patch|delete)\(\s*"(/?\{?device_id\}?)?"\s*[,)]' "$FILE" \
+            | grep -v '/calibration"' ; then
+            echo "ERROR: Phase 70 (MIG-SIGN-04): forbidden FastAPI device route in $FILE."
+            echo "       List/get/patch-name/delete moved to Directus signage_devices collection."
+            echo "       Only PATCH /{device_id}/calibration is allowed to remain."
+            echo "       See .planning/phases/70-mig-sign-devices/70-02-backend-devices-router-trim-PLAN.md"
+            exit 1
+          fi
+          # Block: PUT /{device_id}/tags
+          if grep -nE '@router\.put\(\s*"/\{device_id\}/tags"' "$FILE" ; then
+            echo "ERROR: Phase 70 (MIG-SIGN-04): forbidden PUT /tags in $FILE."
+            echo "       Tag-map writes moved to Directus signage_device_tag_map via FE-driven diff."
+            echo "       See signageApi.replaceDeviceTags."
+            exit 1
+          fi
+          echo "Phase 70 device-route guard: clean"
+
+      # -----------------------------------------------------------------------
+      # Phase 71 guard: DB_EXCLUDE_TABLES does not hide migrated Directus
+      # collections (CLEAN-04 / D-08). Pure-python pytest reads
+      # docker-compose.yml and asserts the migrated v1.22 collections set is
+      # disjoint from DB_EXCLUDE_TABLES — i.e. none of the 9 Directus-served
+      # collections may be re-added to the deny-list. Complementary to the
+      # post-stack `check_db_exclude_tables_superset.sh` (Guard C, never-expose
+      # superset). Pre-stack — runs in <1s alongside the other Phase 7x guards.
+      # NOT consolidated with the existing per-phase grep guards (D-09a).
+      # -----------------------------------------------------------------------
+      - name: 'Phase 71 guard: DB_EXCLUDE_TABLES does not hide migrated Directus collections (D-08)'
+        run: |
+          cd backend
+          pytest tests/test_db_exclude_tables_directus_collections.py -x -v
+
+      # -----------------------------------------------------------------------
+      # Phase 71 guard: SSE --workers 1 invariant comment preserved (CLEAN-04).
+      # Existing scripts/ci/check_workers_one_invariant.sh (Guard D, post-stack)
+      # asserts the literal `--workers 1` flag and a specific INVARIANT comment
+      # marker live in three locations. THIS step adds belt-and-suspenders
+      # rationale-comment preservation: a future PR that strips the explanatory
+      # prose around `--workers 1` (without removing the flag itself) would
+      # otherwise still pass Guard D's marker check. Here we re-verify, in the
+      # same per-phase shape as Phases 66–70 grep guards (no consolidation per
+      # D-09a), that EACH flag site retains an explanatory comment within 3
+      # lines of the `--workers 1` literal.
+      # -----------------------------------------------------------------------
+      - name: 'Phase 71 guard: SSE --workers 1 invariant comment preserved (CLEAN-04)'
+        run: |
+          set -euo pipefail
+          # Three flag-bearing sites — must mirror scripts/ci/check_workers_one_invariant.sh.
+          FILES=(
+            "docker-compose.yml"
+            "backend/app/services/signage_pg_listen.py"
+            "backend/app/services/signage_broadcast.py"
+          )
+          fail=0
+          for f in "${FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "FAIL: $f not found"
+              fail=1
+              continue
+            fi
+            if ! grep -qE "workers 1" "$f"; then
+              echo "FAIL: $f — '--workers 1' literal missing"
+              fail=1
+              continue
+            fi
+            # Look for any explanatory comment within 3 lines of the flag.
+            # Accepts asyncpg / LISTEN / INVARIANT / single / SSE / scheduler /
+            # APScheduler / hazard rationale phrasing — all current sites match.
+            if ! grep -B3 -A3 "workers 1" "$f" \
+                | grep -qiE "(asyncpg|listen|invariant|single|SSE|scheduler|APScheduler|hazard)"; then
+              echo "FAIL: $f — '--workers 1' present but no explanatory comment within 3 lines"
+              echo "Add a comment near --workers 1 explaining the asyncpg/SSE/scheduler invariant."
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "OK: --workers 1 explanatory comment preserved in all 3 sites"
+
+      # -----------------------------------------------------------------------
+      # Phase 73 CACHE-02: CI guard — fail on any literal `['signage'` TanStack
+      # query key under frontend/src/signage/. After Phase 73 Plan 01 the
+      # signageKeys factory returns ['directus', 'signage_<collection>', ...]
+      # for Directus reads and ['fastapi', 'analytics', 'devices'] for the
+      # surviving FastAPI analytics surface. Any literal `['signage'` array
+      # head re-introduces the legacy namespace.
+      #
+      # Allowlist mechanism (D-04a): lines tagged with the marker
+      # `// signage-key-allowed: <reason>` are excluded. Expected count today
+      # is ZERO; the marker exists for future flexibility.
+      #
+      # Scope (D-04b): frontend/src/signage/ recursive ONLY. bootstrap.ts at
+      # frontend/src/bootstrap.ts is OUTSIDE this scope so the
+      # kpi.cache_purge_v22 one-shot legacy purge can persist through v1.24.
+      #
+      # Tests (D-04c): *.test.ts / *.test.tsx under frontend/src/signage/ ARE
+      # in scope — stale literal keys in test fixtures are how silent
+      # regressions creep in.
+      #
+      # Pre-stack grep — fails in <1s on regression.
+      # -----------------------------------------------------------------------
+      - name: "Guard — no ['signage' query keys in frontend/src/signage/ (CACHE-02)"
+        run: |
+          MATCHES=$(grep -rnE "\[\s*['\"]signage['\"]" frontend/src/signage/ \
+              | grep -v 'signage-key-allowed' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "ERROR: literal ['signage', ...] TanStack query key found in frontend/src/signage/ (Phase 73 CACHE-02 — use signageKeys.X() from @/lib/queryKeys; the factory returns ['directus', 'signage_<collection>', ...] or ['fastapi', ...]. If a surviving FastAPI-backed read genuinely needs the 'signage' literal, append '// signage-key-allowed: <rationale>' to the offending line.)"
+            exit 1
+          fi
+          echo "OK: no literal ['signage', ...] query keys in frontend/src/signage/"
+
+      # -----------------------------------------------------------------------
+      # Step 5: Bring up full stack and wait for healthchecks
+      # --wait blocks until all services report healthy (or timeout).
+      # -----------------------------------------------------------------------
+      - name: Bring up stack
+        run: docker compose up -d --wait
+        timeout-minutes: 5
+
+      # -----------------------------------------------------------------------
+      # Step 6: Run Alembic migrations (explicit, even if startup command runs them)
+      # -----------------------------------------------------------------------
+      - name: Run migrations
+        run: docker compose run --rm migrate alembic upgrade head
+
+      # -----------------------------------------------------------------------
+      # Step 7: Apply Directus schema snapshot (v1.22)
+      # -----------------------------------------------------------------------
+      - name: Apply Directus schema
+        run: docker compose run --rm directus-schema-apply || true
+        # `|| true` — schema-apply is idempotent; if service exits 0 it's fine.
+        # If no directus-schema-apply service, guard B will catch drift.
+
+      # -----------------------------------------------------------------------
+      # Step 8: Bootstrap Directus roles and permissions
+      # -----------------------------------------------------------------------
+      - name: Bootstrap Directus roles
+        run: |
+          docker compose run --rm \
+            -e DIRECTUS_URL=http://directus:8055 \
+            -e DIRECTUS_ADMIN_EMAIL=admin@example.com \
+            -e DIRECTUS_ADMIN_PASSWORD=admin_test_pw \
+            directus sh /directus/bootstrap-roles.sh || \
+          bash -c '
+            DIRECTUS_URL=http://localhost:8055 \
+            DIRECTUS_ADMIN_EMAIL=admin@example.com \
+            DIRECTUS_ADMIN_PASSWORD=admin_test_pw \
+            bash directus/bootstrap-roles.sh
+          '
+
+      # -----------------------------------------------------------------------
+      # Step 9: Guard A — DDL hash (SCHEMA-03)
+      # -----------------------------------------------------------------------
+      - name: "Guard A — DDL hash (SCHEMA-03)"
+        run: |
+          export POSTGRES_USER=kpi
+          export POSTGRES_DB=kpi
+          bash scripts/ci/check_schema_hash.sh
+
+      # -----------------------------------------------------------------------
+      # Step 10: Guard B — Directus snapshot diff (SCHEMA-03)
+      # -----------------------------------------------------------------------
+      - name: "Guard B — Directus snapshot diff (SCHEMA-03)"
+        run: bash scripts/ci/check_directus_snapshot_diff.sh
+
+      # -----------------------------------------------------------------------
+      # Step 11: Guard C — DB_EXCLUDE_TABLES superset (SCHEMA-04)
+      # -----------------------------------------------------------------------
+      - name: "Guard C — DB_EXCLUDE_TABLES superset (SCHEMA-04)"
+        run: bash scripts/ci/check_db_exclude_tables_superset.sh
+
+      # -----------------------------------------------------------------------
+      # Step 12: Guard D — --workers 1 invariant (SSE-05)
+      # -----------------------------------------------------------------------
+      - name: "Guard D — --workers 1 invariant (SSE-05)"
+        run: bash scripts/ci/check_workers_one_invariant.sh
+
+      # -----------------------------------------------------------------------
+      # Step 13: SSE integration tests — 500 ms hard ceiling (SSE-04)
+      # Runs inside the api container so it can reach all compose services.
+      # Flakes on the 500 ms SLA are real signal — do NOT retry or soften.
+      # -----------------------------------------------------------------------
+      - name: "SSE integration tests (500 ms ceiling, SSE-04)"
+        run: |
+          docker compose exec -T api pytest \
+            tests/signage/test_pg_listen_sse.py -v \
+            -m "not slow" \
+            --tb=short
+
+      # -----------------------------------------------------------------------
+      # Step 14: AUTHZ tests — Viewer field-leak + mutation denial (AUTHZ-05)
+      # -----------------------------------------------------------------------
+      - name: "AUTHZ tests — Viewer field-leak + mutation denial (AUTHZ-05)"
+        run: |
+          docker compose exec -T \
+            -e DIRECTUS_BASE_URL=http://directus:8055 \
+            -e VIEWER_EMAIL=viewer@example.com \
+            -e VIEWER_PASSWORD=viewer_test_pw \
+            api pytest \
+            tests/signage/test_viewer_authz.py -v \
+            --tb=short
+
+      # -----------------------------------------------------------------------
+      # Teardown — always runs, even on failure
+      # -----------------------------------------------------------------------
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

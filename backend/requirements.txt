@@ -1,0 +1,17 @@
+fastapi==0.135.3
+uvicorn==0.44.0
+python-multipart==0.0.26
+sqlalchemy==2.0.49
+asyncpg==0.31.0
+alembic==1.18.4
+pandas==3.0.2
+nh3==0.3.4
+cryptography==46.0.7
+httpx==0.28.1
+APScheduler==3.11.2
+pyjwt==2.10.1
+pydantic-settings==2.9.1
+email-validator==2.2.0
+pysnmp>=7.1.23,<8.0
+sse-starlette==3.2.0
+tzdata>=2024.1

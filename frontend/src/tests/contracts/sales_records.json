@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "order_number": "ORD-1001",
+    "customer_name": "Acme GmbH",
+    "city": "Berlin",
+    "order_date": "2026-03-15",
+    "total_value": 12500.5,
+    "remaining_value": 0,
+    "responsible_person": "Ada Lovelace",
+    "project_name": "Project Alpha",
+    "status_code": 10
+  },
+  {
+    "id": 2,
+    "order_number": "ORD-1002",
+    "customer_name": null,
+    "city": null,
+    "order_date": null,
+    "total_value": null,
+    "remaining_value": null,
+    "responsible_person": null,
+    "project_name": null,
+    "status_code": null
+  }
+]
