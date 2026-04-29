@@ -5,6 +5,8 @@ Both /kpis and /kpis/history now accept date_from + date_to query params;
 when both are omitted, endpoints fall back to current-month (/kpis) or
 last-12-months (/kpis/history) for backward compatibility with the
 thisYear landing experience.
+
+Compute-justified: clause 3 (multi-row HR KPI aggregation).
 """
 
 from datetime import date, timedelta

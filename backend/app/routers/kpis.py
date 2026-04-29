@@ -1,3 +1,7 @@
+"""KPI summary + chart endpoints for the sales dashboard.
+
+Compute-justified: clause 3 (multi-row KPI aggregation across periods).
+"""
 from datetime import date
 from decimal import Decimal
 from typing import Literal

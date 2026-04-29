@@ -8,6 +8,8 @@ over a required [date_from, date_to] window.
 
 Response: flat array — only employees WITH attendance in the window
 appear (D-04). Frontend zero-fills missing entries (D-05).
+
+Compute-justified: clause 3 (overtime compute across overlapping intervals).
 """
 from datetime import date
 
