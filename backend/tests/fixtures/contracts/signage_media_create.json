@@ -1,0 +1,18 @@
+{
+    "data": {
+        "id": "42065a6f-d784-4164-a0c1-d0d29bd3d9c7",
+        "kind": "image",
+        "title": "smoke-c3",
+        "mime_type": "image/png",
+        "size_bytes": null,
+        "uri": "https://example.com/x.png",
+        "duration_ms": null,
+        "conversion_status": null,
+        "slide_paths": null,
+        "conversion_error": null,
+        "conversion_started_at": null,
+        "html_content": null,
+        "created_at": "2026-04-29T09:10:12.129Z",
+        "updated_at": "2026-04-29T09:10:12.129Z"
+    }
+}
