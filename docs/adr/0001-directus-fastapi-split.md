@@ -93,3 +93,14 @@ Specifically:
 - `.planning/ROADMAP.md` — milestone phasing
 - `docs/architecture.md` — current architecture diagram + boundary section
 - `docs/operator-runbook.md` `## v1.22 Rollback Procedure` — rollback steps
+
+## Compute-Justified Rubric (added v0.1, originally drafted as v1.23 cleanup)
+
+A FastAPI write endpoint may read or mutate a table that Directus also exposes only if it satisfies at least one of:
+
+1. **Side effect outside Postgres** — file I/O, SSE fanout, external API call, scheduler reschedule, BackgroundTask.
+2. **Cryptographic operation** — Fernet encrypt/decrypt of a column Directus must not see in plaintext.
+3. **Multi-row atomic compute** — e.g. bulk DELETE+INSERT in one transaction.
+4. **Custom error contract the FE depends on** — e.g. structured `409 {detail, schedule_ids}`.
+
+Endpoints meeting none of these MUST move to Directus. New compute endpoints declare which clause justifies them in the module docstring with a `Compute-justified:` tag. Enforced by `backend/tests/test_compute_justified_rubric.py`.
