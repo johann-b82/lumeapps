@@ -85,21 +85,12 @@ async def create_media(
 # v1.23 C-2: GET /api/signage/media (list) removed — migrated to Directus
 # `signage_media` collection (admin-only). Frontend calls
 # directus.request(readItems('signage_media', ...)) via signageApi.listMedia.
-# Item GET, PATCH, DELETE, POST /pptx, POST /{id}/reconvert remain here
-# (D-21: PPTX uploads need backend conversion side-effects).
-
-
-@router.get("/{media_id}", response_model=SignageMediaRead)
-async def get_media(
-    media_id: uuid.UUID,
-    db: AsyncSession = Depends(get_async_db_session),
-) -> SignageMedia:
-    row = (
-        await db.execute(select(SignageMedia).where(SignageMedia.id == media_id))
-    ).scalar_one_or_none()
-    if row is None:
-        raise HTTPException(404, "media not found")
-    return row
+# v1.23 C-3: GET /api/signage/media/{id} (item) removed — migrated to Directus
+# (admin-only via admin_access:true; Viewer FORBIDDEN). FE uses
+# directus.request(readItem('signage_media', id)) via signageApi.getMedia.
+# PATCH, DELETE, POST /pptx, POST /{id}/reconvert remain here (D-21: PPTX
+# uploads need backend conversion side-effects; DELETE returns the structured
+# 409 {detail, playlist_ids} contract).
 
 
 @router.patch("/{media_id}", response_model=SignageMediaRead)
