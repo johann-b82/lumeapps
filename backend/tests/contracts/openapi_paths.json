@@ -18,7 +18,6 @@
   "/api/settings/personio-options",
   "/api/signage/analytics/devices",
   "/api/signage/devices/{device_id}/calibration",
-  "/api/signage/media",
   "/api/signage/media/pptx",
   "/api/signage/media/{media_id}",
   "/api/signage/media/{media_id}/reconvert",

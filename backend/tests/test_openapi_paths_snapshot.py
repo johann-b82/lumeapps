@@ -24,6 +24,9 @@ DISALLOWED_METHODS: set[tuple[str, str]] = {
     # C-3: GET item migrated to Directus signage_media collection.
     # PATCH/DELETE on /api/signage/media/{media_id} remain on FastAPI.
     ("/api/signage/media/{media_id}", "get"),
+    # C-4: POST /api/signage/media (non-PPTX kinds) migrated to Directus.
+    # POST /pptx remains on FastAPI (BackgroundTasks PPTX conversion).
+    ("/api/signage/media", "post"),
 }
 
 
