@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import SignageMedia, SignagePlaylistItem
-from app.schemas.signage import SignageMediaCreate, SignageMediaRead
+from app.schemas.signage import SignageMediaRead
 from app.services import signage_broadcast
 from app.services.directus_uploads import MAX_UPLOAD_BYTES, upload_pptx_to_directus
 from app.services.signage_pptx import convert_pptx, delete_slides_dir
@@ -39,17 +39,6 @@ PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presen
 _PPTX_FALLBACK_MIMES = {"application/octet-stream", "application/zip"}
 
 router = APIRouter(prefix="/media", tags=["signage-admin-media"])
-
-
-class SignageMediaAdminCreate(SignageMediaCreate):
-    """Extends base create schema with optional directus_file_id (D-21 opt b).
-
-    The directus_file_id is stored into the `uri` field as-is when `uri` is
-    not provided explicitly — keeps the ORM model stable (no new column) while
-    honoring D-21 registration-by-UUID.
-    """
-
-    directus_file_id: str | None = None
 
 
 class SignageMediaUpdate(BaseModel):
@@ -66,20 +55,11 @@ class SignageMediaUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=SignageMediaRead, status_code=201)
-async def create_media(
-    payload: SignageMediaAdminCreate,
-    db: AsyncSession = Depends(get_async_db_session),
-) -> SignageMedia:
-    data = payload.model_dump(exclude={"directus_file_id"})
-    # D-21 option (b): if uri is not provided and directus_file_id is, use it as uri.
-    if not data.get("uri") and payload.directus_file_id:
-        data["uri"] = payload.directus_file_id
-    row = SignageMedia(**data)
-    db.add(row)
-    await db.commit()
-    await db.refresh(row)
-    return row
+# v1.23 C-4: POST /api/signage/media (non-PPTX) removed — migrated to Directus
+# `signage_media` collection (admin-only via admin_access:true). Non-PPTX
+# kinds (image/video/pdf/url/html) are now inserted through the Directus SDK
+# from signageApi.createMedia. PPTX uploads remain on FastAPI POST /pptx
+# (BackgroundTasks PPTX-to-PNG conversion is compute-justified — clause 1).
 
 
 # v1.23 C-2: GET /api/signage/media (list) removed — migrated to Directus
