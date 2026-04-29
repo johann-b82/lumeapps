@@ -27,6 +27,7 @@ MIGRATED_COLLECTIONS = {
     "signage_device_tag_map",
     "signage_schedules",
     "upload_batches",  # v1.23 C-1: GET /api/uploads migrated to Directus
+    "signage_media",  # v1.23 C-2: GET /api/signage/media migrated to Directus
 }
 
 COMPOSE = Path(__file__).resolve().parents[2] / "docker-compose.yml"
