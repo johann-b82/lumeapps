@@ -194,44 +194,27 @@ SCHEDULE_VALIDATE_OP_ID="68aaaaaa-0000-4000-8000-000000000002"
 
 log "section 6: signage_schedules validation Flow"
 
-# 6a. Ensure the Run-Script operation exists.
-status=$(api GET "/operations/${SCHEDULE_VALIDATE_OP_ID}")
-if [ "$status" = "200" ]; then
-  log "schedule-validate operation exists (${SCHEDULE_VALIDATE_OP_ID}) — skipping"
-elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
-  log "creating schedule-validate operation (${SCHEDULE_VALIDATE_OP_ID})"
-  # Heredoc-escape backticks and \\n via base64 to dodge JSON-in-JSON quoting.
-  SCHEDULE_VALIDATE_CODE='module.exports = async function ({ $trigger }) {\n  const payload = ($trigger && $trigger.payload) || {};\n  let start = payload.start_hhmm;\n  let end = payload.end_hhmm;\n  if ((typeof start !== "number" || typeof end !== "number") && Array.isArray($trigger.keys) && $trigger.keys.length) {\n    return;\n  }\n  if (typeof start === "number" && typeof end === "number" && start >= end) {\n    throw new Error(JSON.stringify({ code: "schedule_end_before_start" }));\n  }\n};'
-  status=$(api POST "/operations" "{
-    \"id\":\"${SCHEDULE_VALIDATE_OP_ID}\",
-    \"flow\":\"${SCHEDULE_VALIDATE_FLOW_ID}\",
-    \"name\":\"throw schedule_end_before_start\",
-    \"key\":\"validate_start_before_end\",
-    \"type\":\"exec\",
-    \"position_x\":19,
-    \"position_y\":17,
-    \"options\":{\"code\":\"${SCHEDULE_VALIDATE_CODE}\"}
-  }")
-  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
-    log "WARN: creating schedule-validate operation returned HTTP ${status}; skipping section 6 (Flow is a friendly-error layer; DB CHECK is source of truth)"
-    cat /tmp/api.body
-    log "Bootstrap complete (section 6 skipped)."
-    exit 0
-  fi
-  log "schedule-validate operation created"
-else
-  log "WARN: unexpected GET /operations status ${status}; skipping section 6"
-  cat /tmp/api.body
-  log "Bootstrap complete (section 6 skipped)."
-  exit 0
-fi
+# Two bugs in the original script (D-04 v0.2.1 fix):
+#   1. JSON-string-in-bash-string: every \" inside SCHEDULE_VALIDATE_CODE must
+#      be pre-escaped so the JSON parser doesn't see a closing quote in the
+#      middle of the JS code. Single-quoted bash literal preserves \" as two
+#      characters, which JSON unescapes into a literal " inside the string.
+#   2. Circular FK: directus_operations.flow → directus_flows.id and
+#      directus_flows.operation → directus_operations.id. Original script
+#      created the operation first, which violated the operations.flow FK.
+#      Correct order is: (a) create flow with operation=null, (b) create
+#      operation pointing at flow, (c) PATCH flow.operation to close the loop.
+#
+# Section 6 stays "warn-and-continue" on unexpected status codes — the Flow
+# is a friendly-error layer; the DB CHECK ck_signage_schedules_start_before_end
+# is the source of truth.
 
-# 6b. Ensure the Flow exists.
-# Trigger options: filter type, scope items.create + items.update,
-# collections [signage_schedules]. The operation field links to the op above.
+# 6a. Ensure the Flow exists with operation=null (chicken-and-egg breaker).
 status=$(api GET "/flows/${SCHEDULE_VALIDATE_FLOW_ID}")
+flow_exists=0
 if [ "$status" = "200" ]; then
-  log "schedule-validate flow exists (${SCHEDULE_VALIDATE_FLOW_ID}) — skipping"
+  log "schedule-validate flow exists (${SCHEDULE_VALIDATE_FLOW_ID}) — skipping create"
+  flow_exists=1
 elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
   log "creating schedule-validate flow (${SCHEDULE_VALIDATE_FLOW_ID})"
   status=$(api POST "/flows" "{
@@ -248,16 +231,70 @@ elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
       \"scope\":[\"items.create\",\"items.update\"],
       \"collections\":[\"signage_schedules\"]
     },
-    \"operation\":\"${SCHEDULE_VALIDATE_OP_ID}\"
+    \"operation\":null
   }")
   if [ "$status" != "200" ] && [ "$status" != "204" ]; then
-    log "ERROR: creating schedule-validate flow returned HTTP ${status}"
-    cat /tmp/api.body; exit 1
+    log "WARN: creating schedule-validate flow returned HTTP ${status}; skipping section 6"
+    cat /tmp/api.body
+    log "Bootstrap complete (section 6 skipped)."
+    exit 0
   fi
   log "schedule-validate flow created"
 else
-  log "ERROR: unexpected GET /flows status ${status}"
-  cat /tmp/api.body; exit 1
+  log "WARN: unexpected GET /flows status ${status}; skipping section 6"
+  cat /tmp/api.body
+  log "Bootstrap complete (section 6 skipped)."
+  exit 0
+fi
+
+# 6b. Ensure the Run-Script operation exists. JSON-escape rules: every double
+# quote inside the JS source is written as \" in the bash literal, so the
+# surrounding JSON gets a properly escaped string field.
+status=$(api GET "/operations/${SCHEDULE_VALIDATE_OP_ID}")
+op_exists=0
+if [ "$status" = "200" ]; then
+  log "schedule-validate operation exists (${SCHEDULE_VALIDATE_OP_ID}) — skipping create"
+  op_exists=1
+elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
+  log "creating schedule-validate operation (${SCHEDULE_VALIDATE_OP_ID})"
+  SCHEDULE_VALIDATE_CODE='module.exports = async function ({ $trigger }) {\n  const payload = ($trigger && $trigger.payload) || {};\n  let start = payload.start_hhmm;\n  let end = payload.end_hhmm;\n  if ((typeof start !== \"number\" || typeof end !== \"number\") && Array.isArray($trigger.keys) && $trigger.keys.length) {\n    return;\n  }\n  if (typeof start === \"number\" && typeof end === \"number\" && start >= end) {\n    throw new Error(JSON.stringify({ code: \"schedule_end_before_start\" }));\n  }\n};'
+  status=$(api POST "/operations" "{
+    \"id\":\"${SCHEDULE_VALIDATE_OP_ID}\",
+    \"flow\":\"${SCHEDULE_VALIDATE_FLOW_ID}\",
+    \"name\":\"throw schedule_end_before_start\",
+    \"key\":\"validate_start_before_end\",
+    \"type\":\"exec\",
+    \"position_x\":19,
+    \"position_y\":17,
+    \"options\":{\"code\":\"${SCHEDULE_VALIDATE_CODE}\"}
+  }")
+  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
+    log "WARN: creating schedule-validate operation returned HTTP ${status}; skipping section 6 close-loop"
+    cat /tmp/api.body
+    log "Bootstrap complete (section 6 partial — flow exists but operation create failed)."
+    exit 0
+  fi
+  log "schedule-validate operation created"
+else
+  log "WARN: unexpected GET /operations status ${status}; skipping section 6 close-loop"
+  cat /tmp/api.body
+  log "Bootstrap complete (section 6 partial)."
+  exit 0
+fi
+
+# 6c. Close the loop: PATCH the flow to point at the operation as its entry
+# point. PATCH is idempotent; if flow.operation already matches, this is a
+# no-op delta. We only PATCH when we created at least one of the rows in
+# this run — re-running with both already-present skips the round-trip.
+if [ "$flow_exists" = "0" ] || [ "$op_exists" = "0" ]; then
+  log "linking flow.operation -> ${SCHEDULE_VALIDATE_OP_ID}"
+  status=$(api PATCH "/flows/${SCHEDULE_VALIDATE_FLOW_ID}" "{\"operation\":\"${SCHEDULE_VALIDATE_OP_ID}\"}")
+  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
+    log "WARN: PATCH /flows/${SCHEDULE_VALIDATE_FLOW_ID} returned HTTP ${status}; flow may not have an entry point"
+    cat /tmp/api.body
+  else
+    log "flow.operation linked"
+  fi
 fi
 
 log "section 6 complete: signage_schedules Flow active — items.create / items.update guarded by schedule_end_before_start"
