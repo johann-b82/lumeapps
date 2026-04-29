@@ -96,6 +96,14 @@ collections:
       singleton: false
     schema: null
 
+  - collection: signage_media
+    meta:
+      collection: signage_media
+      note: "Signage media library (image/video/pdf/pptx/url/html). Admin-only read via Directus (v1.23 C-2) — Admin policy admin_access:true grants read; Viewer has NO permission on this collection. Writes still go through FastAPI: PATCH /{id}, DELETE /{id}, POST /pptx, POST /{id}/reconvert."
+      hidden: false
+      singleton: false
+    schema: null
+
 fields:
   # --- signage_devices ---
   - collection: signage_devices
