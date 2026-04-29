@@ -9,6 +9,8 @@ helper — the surviving DELETE still fans out playlist-changed events
 explicitly alongside the Phase 65 LISTEN/NOTIFY bridge.
 
 All endpoints inherit the admin gate from the parent router.
+
+Compute-justified: clause 1 (SSE fanout) + clause 4 (structured 409 schedule_ids).
 """
 from __future__ import annotations
 

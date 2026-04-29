@@ -15,6 +15,8 @@ misleading 100 % over 24 h.
 Admin gate inherited from the parent signage_admin router (do NOT add a
 local ``dependencies=`` kwarg — that would double-apply and is a style
 violation per signage_admin/__init__.py module docstring).
+
+Compute-justified: clause 3 (multi-row aggregation compute).
 """
 from __future__ import annotations
 

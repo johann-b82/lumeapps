@@ -4,6 +4,8 @@ Phase 70 (v1.22 MIG-SIGN-04): list/get/patch-name/delete/put-tags migrated to
 Directus. Only the calibration PATCH survives here. Device row CRUD lives at
 the ``signage_devices`` Directus collection. Per-device resolved playlist
 lives at ``/api/signage/resolved/{device_id}`` (resolved.py).
+
+Compute-justified: clause 1 (SSE fanout).
 """
 from __future__ import annotations
 

@@ -5,6 +5,8 @@ POST /pptx (BackgroundTasks conversion), POST /{id}/reconvert
 
 All endpoints inherit the admin gate from the parent router. Do NOT add
 the admin-role check or current-user dep here (see __init__.py).
+
+Compute-justified: clause 1 (SSE fanout) + clause 4 (structured 409 playlist_ids) + clause 1 (BackgroundTasks for PPTX).
 """
 from __future__ import annotations
 

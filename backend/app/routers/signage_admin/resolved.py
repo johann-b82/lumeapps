@@ -8,6 +8,8 @@ zero rename (D-01).
 
 Admin gate inherited from signage_admin package router (D-01c / cross-cutting
 hazard #5) — do NOT add a second gate here.
+
+Compute-justified: clause 1 (real-time resolver compute, not a stored shape).
 """
 from __future__ import annotations
 

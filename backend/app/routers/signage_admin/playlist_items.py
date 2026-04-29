@@ -1,4 +1,7 @@
-"""Phase 69 MIG-SIGN-03: surviving bulk PUT /{id}/items only (atomic DELETE+INSERT). GET moved to Directus collection `signage_playlist_items`."""
+"""Phase 69 MIG-SIGN-03: surviving bulk PUT /{id}/items only (atomic DELETE+INSERT). GET moved to Directus collection `signage_playlist_items`.
+
+Compute-justified: clause 1 (SSE fanout).
+"""
 from __future__ import annotations
 
 import uuid
