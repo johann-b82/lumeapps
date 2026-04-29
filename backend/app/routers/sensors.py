@@ -17,6 +17,8 @@ Endpoints:
 Scheduler integration lives in Plan 38-03 — this plan does NOT touch scheduler.py.
 The router reads `request.app.state.snmp_engine`; 38-03 populates that attribute
 in the lifespan hook.
+
+Compute-justified: clause 2 (Fernet community write-side) + clause 1 (SNMP polling).
 """
 from __future__ import annotations
 

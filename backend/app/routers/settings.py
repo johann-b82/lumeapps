@@ -14,6 +14,8 @@ Mixed gate (Phase B convention):
     Per-route ``Depends(require_admin)`` is used here because viewer reads
     and admin writes coexist on the same prefix (CLAUDE.md Conventions §
     "Auth dependencies live at the router level except mixed-gate routers").
+
+Compute-justified: clause 1 (APScheduler reschedule + logo MIME sniff/SVG sanitize).
 """
 from datetime import datetime, timezone
 

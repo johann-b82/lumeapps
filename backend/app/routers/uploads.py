@@ -6,6 +6,8 @@ only ``admin_router`` remains, holding the compute-justified write paths
 (file parsing, cascade delete).
 
 Admin-only:      POST /api/upload, DELETE /api/uploads/{batch_id}
+
+Compute-justified: clause 1 (file parsing) + clause 3 (cascade delete).
 """
 from datetime import datetime, timezone
 
