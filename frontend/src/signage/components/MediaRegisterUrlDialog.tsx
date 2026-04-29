@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiClient } from "@/lib/apiClient";
+import { signageApi } from "@/signage/lib/signageApi";
 import { signageKeys } from "@/lib/queryKeys";
 import type { SignageMedia } from "@/signage/lib/signageTypes";
 
@@ -74,23 +74,20 @@ export function MediaRegisterUrlDialog({
 
   const createMutation = useMutation<SignageMedia, Error, FormValues>({
     mutationFn: async (values) => {
-      const body =
-        values.kind === "url"
-          ? {
-              kind: "url" as const,
-              title: values.title,
-              url: values.content,
-              tags: [] as number[],
-            }
-          : {
-              kind: "html" as const,
-              title: values.title,
-              metadata: { html: values.content },
-              tags: [] as number[],
-            };
-      return await apiClient<SignageMedia>("/api/signage/media", {
-        method: "POST",
-        body: JSON.stringify(body),
+      // v1.23 C-4: createMedia routes non-PPTX kinds to Directus.
+      //   url  → uri = values.content
+      //   html → html_content = values.content
+      if (values.kind === "url") {
+        return await signageApi.createMedia({
+          kind: "url",
+          title: values.title,
+          uri: values.content,
+        });
+      }
+      return await signageApi.createMedia({
+        kind: "html",
+        title: values.title,
+        html_content: values.content,
       });
     },
     onSuccess: () => {

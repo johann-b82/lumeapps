@@ -9,6 +9,7 @@ import { uploadFiles } from "@directus/sdk";
 
 import { directus } from "@/lib/directusClient";
 import { apiClient } from "@/lib/apiClient";
+import { signageApi } from "@/signage/lib/signageApi";
 import { signageKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import type {
@@ -22,8 +23,9 @@ import type {
  * Routing rules (D-04 in 46-CONTEXT):
  *   - .pptx → multipart POST to /api/signage/media/pptx (backend converts).
  *   - All other accepted kinds → upload to Directus first via the SDK
- *     (`uploadFiles`), then POST JSON to /api/signage/media with the returned
- *     file UUID stored in `directus_file_id`.
+ *     (`uploadFiles`), then signageApi.createMedia({ directus_file_id }) which
+ *     inserts the row directly into the Directus `signage_media` collection
+ *     (v1.23 C-4 — non-PPTX FastAPI handler removed).
  *
  * Pitfall 8 (46-RESEARCH): the Directus SDK's `uploadFiles` may return either
  * an array (one entry per file) or a single object — normalize both shapes
@@ -78,22 +80,18 @@ export function MediaUploadDropZone() {
         });
       }
 
-      // Non-PPTX path — Directus SDK upload first, then JSON register.
+      // Non-PPTX path — Directus SDK upload first, then Directus row insert
+      // via signageApi.createMedia (v1.23 C-4).
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", file.name);
       const uploadRes = await directus.request(uploadFiles(formData));
       const fileId = normalizeDirectusUploadId(uploadRes);
 
-      const body = {
-        kind,
+      return await signageApi.createMedia({
+        kind: kind as "image" | "video" | "pdf",
         title: file.name,
         directus_file_id: fileId,
-        tags: [] as number[],
-      };
-      return await apiClient<SignageMedia>("/api/signage/media", {
-        method: "POST",
-        body: JSON.stringify(body),
       });
     },
     onSuccess: () => {

@@ -1,3 +1,19 @@
+/**
+ * Signage admin API adapter.
+ *
+ * v1.23 C-4 (createMedia branching):
+ *   - kind === "pptx"  → multipart upload to FastAPI POST /api/signage/media/pptx
+ *     (compute-justified: BackgroundTasks PPTX-to-PNG conversion). Owned by
+ *     MediaUploadDropZone (kept inline there — see uploadPptxMedia path).
+ *   - kind === "image"|"video"|"pdf" → caller uploads file via Directus SDK
+ *     (`uploadFiles`) first, then calls createMedia({ kind, title,
+ *     directus_file_id, ... }) — the SDK insert maps directus_file_id → uri
+ *     (D-21 option b parity with the deleted FastAPI handler).
+ *   - kind === "url"|"html" → direct createMedia call (no prior file upload).
+ *
+ * All non-PPTX kinds insert into Directus `signage_media`. Admin-only via
+ * admin_access:true (Viewer FORBIDDEN at the Directus permission layer).
+ */
 import { apiClient, getAccessToken } from "@/lib/apiClient";
 import { directus } from "@/lib/directusClient";
 import { toApiError } from "@/lib/toApiError";
@@ -215,6 +231,50 @@ export const signageApi = {
     try {
       return (await directus.request(
         readItem("signage_media", id, { fields: [...MEDIA_FIELDS] }),
+      )) as SignageMedia;
+    } catch (e) { throw toApiError(e); }
+  },
+  // Phase v1.23 C-4 (D-07): non-PPTX media create swapped from FastAPI
+  // POST /api/signage/media to Directus `createItem('signage_media', ...)`.
+  // PPTX kinds STAY on FastAPI (POST /api/signage/media/pptx) for the
+  // BackgroundTasks PPTX-to-PNG conversion side-effect — callers route
+  // .pptx uploads through MediaUploadDropZone's inline multipart path
+  // and DO NOT call createMedia. See module docstring for the branch.
+  //
+  // Input shape mirrors what the deleted FastAPI handler accepted:
+  //   - directus_file_id is mapped to `uri` (D-21 option b parity) so
+  //     image/video/pdf rows continue to point at the Directus file UUID.
+  //   - `url` (legacy MediaRegisterUrlDialog field) is mapped to `uri`.
+  //   - `metadata` is dropped: backend SignageMediaCreate doesn't model it
+  //     and the prior FastAPI handler ignored it via Pydantic v2 default.
+  //   - `tags` is dropped: not a column on signage_media.
+  createMedia: async (input: {
+    kind: "image" | "video" | "pdf" | "url" | "html";
+    title: string;
+    mime_type?: string | null;
+    size_bytes?: number | null;
+    uri?: string | null;
+    duration_ms?: number | null;
+    html_content?: string | null;
+    directus_file_id?: string | null;
+    url?: string | null;
+  }): Promise<SignageMedia> => {
+    try {
+      const body: Record<string, unknown> = {
+        kind: input.kind,
+        title: input.title,
+      };
+      if (input.mime_type !== undefined) body.mime_type = input.mime_type;
+      if (input.size_bytes !== undefined) body.size_bytes = input.size_bytes;
+      if (input.duration_ms !== undefined) body.duration_ms = input.duration_ms;
+      if (input.html_content !== undefined)
+        body.html_content = input.html_content;
+      // Map legacy fields onto the column-backed `uri`.
+      const uri =
+        input.uri ?? input.directus_file_id ?? input.url ?? undefined;
+      if (uri !== undefined) body.uri = uri;
+      return (await directus.request(
+        createItem("signage_media", body, { fields: [...MEDIA_FIELDS] }),
       )) as SignageMedia;
     } catch (e) { throw toApiError(e); }
   },
