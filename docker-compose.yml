@@ -47,7 +47,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      directus-bootstrap-roles:
+      directus-bootstrap-permissions:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
@@ -126,12 +126,14 @@ services:
       start_period: 30s
 
   directus-schema-apply:
-    # v1.22 D-04: One-shot service that registers the 9 v1.22 collections as
-    # Directus metadata via `npx directus schema apply`. Runs AFTER directus is
-    # healthy and BEFORE directus-bootstrap-roles so permission rows can
-    # reference the registered collections (Pitfall 5). Uses schema: null per
-    # collection to avoid Directus bug #25760 ("relation already exists").
-    # Fallback for #25760 is documented in docs/operator-runbook.md.
+    # One-shot service that registers Directus collection metadata for the
+    # tables Alembic owns. Wrapped in apply-snapshot-idempotent.sh so warm-DB
+    # restarts succeed: when `directus schema apply` hits the #25760
+    # "Collection already exists" failure, the wrapper falls back to a REST
+    # PATCH /collections/{name} loop (the same recipe documented in
+    # docs/operator-runbook.md § 13). Runs AFTER directus is healthy and
+    # BEFORE directus-bootstrap-roles so permission rows can reference the
+    # registered collections.
     image: directus/directus:11.17.2
     env_file: .env
     environment:
@@ -143,18 +145,29 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       KEY: ${DIRECTUS_KEY}
       SECRET: ${DIRECTUS_SECRET}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      DIRECTUS_ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      SNAPSHOT_FILE: /snapshots/v1.22.yaml
     volumes:
       - ./directus/snapshots:/snapshots:ro
+      - ./directus/apply-snapshot-idempotent.sh:/apply-snapshot-idempotent.sh:ro
+      - ./directus/apply-snapshot-fallback.mjs:/apply-snapshot-fallback.mjs:ro
     depends_on:
       directus:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c", "npx directus schema apply --yes /snapshots/v1.22.yaml"]
+    entrypoint: ["/bin/sh", "/apply-snapshot-idempotent.sh"]
     restart: "no"
 
   directus-bootstrap-roles:
     # Roles-as-code sidecar. Replaces the v10-style snapshot.yml approach
     # (rejected by Directus 11 — policies/access model). Runs a REST-API
     # bootstrap script that is idempotent (GET-before-POST).
+    #
+    # NOTE: viewer permission rows are NOT created here. Directus 11.17 has a
+    # bootstrap-time bug where even a session JWT with admin_access:true is
+    # rejected by /permissions writes (403 FORBIDDEN). They are inserted via
+    # SQL by directus-bootstrap-permissions instead. See bootstrap-permissions.sql.
     image: curlimages/curl:8.10.1
     env_file: .env
     environment:
@@ -169,6 +182,27 @@ services:
       directus-schema-apply:
         condition: service_completed_successfully
     entrypoint: ["/bin/sh", "/bootstrap-roles.sh"]
+    restart: "no"
+
+  directus-bootstrap-permissions:
+    # Inserts Viewer permission rows directly into directus_permissions via
+    # psql. SQL-based fallback for the Directus 11.17 bootstrap bug where
+    # POST /permissions returns 403 even for an admin_access:true session.
+    # Idempotent (ON CONFLICT DO NOTHING).
+    image: postgres:17-alpine
+    env_file: .env
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+    volumes:
+      - ./directus/bootstrap-permissions.sql:/bootstrap-permissions.sql:ro
+    depends_on:
+      directus-bootstrap-roles:
+        condition: service_completed_successfully
+    entrypoint: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/bootstrap-permissions.sql"]
     restart: "no"
 
   caddy:

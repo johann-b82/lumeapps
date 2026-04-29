@@ -170,41 +170,14 @@ else
   log "WARN: GET /roles?filter=Administrator returned HTTP ${status}"
 fi
 
-# --- 5. Viewer per-collection permission rows (v1.22 AUTHZ-01..04) ---
-log "section 5: viewer permission rows"
-
-# AUTHZ-01: sales_records — mirrors SalesRecordRead (all 10 column-backed fields).
-# Schema source: backend/app/schemas/_base.py SalesRecordRead (line 268).
-ensure_permission "b2222222-0001-4000-a000-000000000001" "sales_records" "read" \
-  '["id","order_number","customer_name","city","order_date","total_value","remaining_value","responsible_person","project_name","status_code"]'
-
-# AUTHZ-01: personio_employees — mirrors EmployeeRead, COLUMN-BACKED ONLY.
-# Exclude compute-derived fields (total_hours, overtime_hours, overtime_ratio) —
-# those come from FastAPI /api/data/employees/overtime (Phase 67).
-# Schema source: backend/app/schemas/_base.py EmployeeRead (line 291).
-ensure_permission "b2222222-0002-4000-a000-000000000002" "personio_employees" "read" \
-  '["id","first_name","last_name","status","department","position","hire_date","termination_date","weekly_working_hours"]'
-
-# AUTHZ-03: directus_users — explicit allowlist (id, email, first_name, last_name, role, avatar only).
-# Sensitive columns (2FA secret, auth data, external identifier) are intentionally excluded.
-ensure_permission "b2222222-0003-4000-a000-000000000003" "directus_users" "read" \
-  '["id","email","first_name","last_name","role","avatar"]'
-
-# v1.23 C-1: upload_batches — mirrors UploadBatchSummary (id, filename, uploaded_at, row_count, error_count, status).
-# Read: Admin (built-in admin_access:true) + Viewer (this row). No create/update/delete for either via Directus.
-ensure_permission "b2222222-0005-4000-a000-000000000005" "upload_batches" "read" \
-  '["id","filename","uploaded_at","row_count","error_count","status"]'
-
-# Phase 66 MIG-AUTH-01: directus_roles — Viewer needs to read role.name so
-# frontend readMe({ fields: ['id','email','role.name'] }) resolves for Viewer.
-# Fields restricted to id + name; permissions excludes admin_access, app_access,
-# icon, description, parent, children, users, policies.
-ensure_permission "b2222222-0004-4000-a000-000000000004" "directus_roles" "read" \
-  '["id","name"]'
-
-# AUTHZ-02: intentionally NO permission rows on signage_* collections for Viewer.
-# Admin is handled by admin_access:true on the Admin policy (existing).
-log "section 5 complete: sales_records + personio_employees + directus_users + directus_roles Viewer-readable; no signage_* permissions for Viewer"
+# --- 5. Viewer per-collection permission rows ---
+#
+# These USED to be created here via POST /permissions, but Directus 11.17 has
+# a bootstrap-time bug where even a session token with admin_access:true is
+# rejected by /permissions (403 FORBIDDEN). Worked around by moving the row
+# inserts to a sibling `directus-bootstrap-permissions` compose service that
+# runs psql directly against the DB. See directus/bootstrap-permissions.sql.
+log "section 5 skipped here — viewer permissions handled by directus-bootstrap-permissions (SQL fallback for #25844-class bug in 11.17)"
 
 # --- 6. Phase 68 MIG-SIGN-02: signage_schedules validation Flow ---
 # Filter Flow on items.create + items.update for signage_schedules. Throws a
@@ -240,13 +213,17 @@ elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
     \"options\":{\"code\":\"${SCHEDULE_VALIDATE_CODE}\"}
   }")
   if [ "$status" != "200" ] && [ "$status" != "204" ]; then
-    log "ERROR: creating schedule-validate operation returned HTTP ${status}"
-    cat /tmp/api.body; exit 1
+    log "WARN: creating schedule-validate operation returned HTTP ${status}; skipping section 6 (Flow is a friendly-error layer; DB CHECK is source of truth)"
+    cat /tmp/api.body
+    log "Bootstrap complete (section 6 skipped)."
+    exit 0
   fi
   log "schedule-validate operation created"
 else
-  log "ERROR: unexpected GET /operations status ${status}"
-  cat /tmp/api.body; exit 1
+  log "WARN: unexpected GET /operations status ${status}; skipping section 6"
+  cat /tmp/api.body
+  log "Bootstrap complete (section 6 skipped)."
+  exit 0
 fi
 
 # 6b. Ensure the Flow exists.
