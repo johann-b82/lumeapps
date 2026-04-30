@@ -390,6 +390,35 @@ jobs:
             --tb=short
 
       # -----------------------------------------------------------------------
+      # Step 15 (v1.24): Full backend test suite (-m "not integration")
+      # -----------------------------------------------------------------------
+      # Catches drift in any test file the targeted steps above don't cover.
+      # `not integration` excludes tests that need real docker/Directus.
+      # -----------------------------------------------------------------------
+      - name: "Full backend pytest -q"
+        run: |
+          docker compose exec -T api pytest -q --tb=short
+
+      # -----------------------------------------------------------------------
+      # Step 16 (v1.24): Frontend production build
+      # -----------------------------------------------------------------------
+      # Catches TS errors and Vite/PWA build regressions. Equivalent to
+      # `cd frontend && npm run build` on a clean Node toolchain.
+      # -----------------------------------------------------------------------
+      - name: "Set up Node"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: "Frontend npm run build"
+        run: |
+          cd frontend
+          npm install --silent --legacy-peer-deps
+          npm run build
+
+      # -----------------------------------------------------------------------
       # Teardown — always runs, even on failure
       # -----------------------------------------------------------------------
       - name: Teardown
