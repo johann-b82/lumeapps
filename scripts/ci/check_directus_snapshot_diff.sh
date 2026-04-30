@@ -26,8 +26,15 @@ if [ ! -f "$COMMITTED_SNAPSHOT" ]; then
   exit 1
 fi
 
-# Capture the current Directus schema snapshot to a temp file
-docker compose exec -T directus npx directus schema snapshot - > "$CURRENT_SNAPSHOT" 2>/dev/null
+# Capture the current Directus schema snapshot to a temp file.
+# `npx directus schema snapshot -` interprets `-` as a literal filename in
+# Directus 11.17+ (creates a file named `-` and prompts to overwrite),
+# which breaks the previous stdout-capture pattern. Write to a path inside
+# the container, cat it out, and strip the leading INFO log lines that
+# Directus writes to stdout (yes — stdout, not stderr).
+docker compose exec -T directus sh -c '
+  npx directus schema snapshot -y /tmp/snap.yaml 2>/dev/null >/dev/null && cat /tmp/snap.yaml
+' | awk '/^version:/{p=1} p' > "$CURRENT_SNAPSHOT"
 
 # Compare
 if ! diff -u "$COMMITTED_SNAPSHOT" "$CURRENT_SNAPSHOT"; then

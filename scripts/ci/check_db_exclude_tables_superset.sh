@@ -5,11 +5,18 @@
 # These tables must NEVER be exposed through Directus:
 #   alembic_version, app_settings, personio_attendance, personio_absences,
 #   personio_sync_meta, sensors, sensor_readings, sensor_poll_log,
-#   signage_pairing_sessions, signage_heartbeat_event, upload_batches
+#   signage_pairing_sessions, signage_heartbeat_event
 #
-# If any of these tables are removed from DB_EXCLUDE_TABLES, this guard fails.
-# This prevents accidental exposure of internal/sensitive tables through the
-# Directus admin UI or API.
+# v1.23 C-1 carve-out: `upload_batches` was intentionally moved out of the
+# never-expose set so the SPA can `readItems('upload_batches')` directly via
+# Directus (the FastAPI `GET /api/uploads` route was deleted). The v1.23 spec
+# requires upload_batches NOT to appear in DB_EXCLUDE_TABLES — the
+# complementary disjoint check lives in
+# `backend/tests/test_db_exclude_tables_directus_collections.py`.
+#
+# If any of the never-expose tables are removed from DB_EXCLUDE_TABLES, this
+# guard fails. This prevents accidental exposure of internal/sensitive tables
+# through the Directus admin UI or API.
 #
 # Usage: bash scripts/ci/check_db_exclude_tables_superset.sh
 #   (Does not require docker compose — reads docker-compose.yml directly)
@@ -19,6 +26,7 @@ COMPOSE_FILE="docker-compose.yml"
 
 # Hard-coded never-expose allowlist (SCHEMA-04).
 # Source: 65-PLAN.md interfaces section + STATE.md cross-cutting hazard #10.
+# v1.23 C-1: upload_batches removed (intentionally exposed via Directus).
 NEVER_EXPOSE=(
   alembic_version
   app_settings
@@ -30,7 +38,6 @@ NEVER_EXPOSE=(
   sensor_poll_log
   signage_pairing_sessions
   signage_heartbeat_event
-  upload_batches
 )
 
 if [ ! -f "$COMPOSE_FILE" ]; then
