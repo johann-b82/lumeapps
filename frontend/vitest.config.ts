@@ -15,6 +15,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Exclude Playwright e2e specs — they live under `tests/e2e/` and are
+    // run by `npx playwright test`, not by vitest.
+    exclude: ["**/node_modules/**", "**/dist/**", "tests/e2e/**"],
     environmentMatchGlobs: [
       // Pure-logic tests (no DOM) can stay in node env for speed — vitest
       // picks jsdom by default because of `environment` above; override for
