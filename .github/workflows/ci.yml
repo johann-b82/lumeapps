@@ -28,7 +28,7 @@ jobs:
       - name: Install backend Python deps (for pure-python tests)
         run: |
           cd backend
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       # -----------------------------------------------------------------------
       # Step 3: Pydantic-vs-shell allowlist parity test (PRE-STACK FAST FAIL)
