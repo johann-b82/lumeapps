@@ -19,31 +19,24 @@ function renderTable() {
   );
 }
 
-describe("EmployeeTable filter pill", () => {
+describe("EmployeeTable filter", () => {
   beforeEach(() => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("[]", { status: 200 }),
     );
   });
 
-  it("mounts both desktop and mobile renderers", () => {
+  it("renders a single Select trigger (same control on desktop + mobile)", () => {
     renderTable();
-    expect(screen.getByTestId("employee-filter-desktop")).toBeInTheDocument();
-    expect(screen.getByTestId("employee-filter-mobile")).toBeInTheDocument();
+    expect(screen.getByTestId("employee-filter-trigger")).toBeInTheDocument();
   });
 
-  it("desktop renderer is hidden below md", () => {
+  it("trigger shows the translated label for the active filter (not the raw key)", () => {
     renderTable();
-    expect(screen.getByTestId("employee-filter-desktop")).toHaveClass(
-      "hidden",
-      "md:block",
-    );
-  });
-
-  it("mobile renderer is hidden at md+", () => {
-    renderTable();
-    expect(screen.getByTestId("employee-filter-mobile")).toHaveClass(
-      "md:hidden",
-    );
+    const trigger = screen.getByTestId("employee-filter-trigger");
+    // Default filter is "overtime" — assert the raw value isn't shown
+    // verbatim and the translated label is.
+    expect(trigger.textContent ?? "").not.toBe("overtime");
+    expect(trigger.textContent ?? "").toContain(i18n.t("hr.table.showOvertime"));
   });
 });

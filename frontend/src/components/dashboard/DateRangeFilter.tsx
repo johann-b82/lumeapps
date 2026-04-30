@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -39,33 +38,29 @@ export function DateRangeFilter({
     label: t(`dashboard.filter.${p}`),
   }));
 
+  // base-ui Select.Value falls back to the raw value when its render-prop
+  // isn't supplied — items inside Portal/Popup may not be mounted before
+  // first open, which prevents auto-label-tracking. Map value→label
+  // explicitly so the trigger always shows the translated text.
+  const renderLabel = (v: Preset) =>
+    segments.find((s) => s.value === v)?.label ?? v;
+
   return (
-    <>
-      <div data-testid="date-range-filter-desktop" className="hidden md:block">
-        <SegmentedControl<Preset>
-          segments={segments}
-          value={preset}
-          onChange={selectPreset}
-          aria-label="Date range"
-        />
-      </div>
-      <div data-testid="date-range-filter-mobile" className="md:hidden">
-        <Select<Preset>
-          value={preset}
-          onValueChange={selectPreset}
-        >
-          <SelectTrigger className="w-44" aria-label="Date range">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {segments.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </>
+    <Select<Preset> value={preset} onValueChange={selectPreset}>
+      <SelectTrigger
+        data-testid="date-range-filter-trigger"
+        className="w-44"
+        aria-label="Date range"
+      >
+        <SelectValue>{renderLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {segments.map((s) => (
+          <SelectItem key={s.value} value={s.value}>
+            {s.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

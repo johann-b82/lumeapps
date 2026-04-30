@@ -19,38 +19,33 @@ function renderFilter(onChange: (...args: unknown[]) => void) {
 }
 
 describe("DateRangeFilter", () => {
-  it("mounts both desktop and mobile renderers", () => {
+  it("renders a single Select trigger (same control on desktop + mobile)", () => {
     renderFilter(vi.fn());
-    expect(screen.getByTestId("date-range-filter-desktop")).toBeInTheDocument();
-    expect(screen.getByTestId("date-range-filter-mobile")).toBeInTheDocument();
+    const trigger = screen.getByTestId("date-range-filter-trigger");
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("data-slot", "select-trigger");
   });
 
-  it("desktop renderer is hidden below md (className contract)", () => {
+  it("trigger shows the translated label for the active preset (not the raw key)", () => {
     renderFilter(vi.fn());
-    expect(screen.getByTestId("date-range-filter-desktop")).toHaveClass(
-      "hidden",
-      "md:block",
-    );
+    const trigger = screen.getByTestId("date-range-filter-trigger");
+    // i18n at test time is "en" → "This Month"; assert that the raw key
+    // "thisMonth" is NOT shown verbatim.
+    expect(trigger.textContent ?? "").not.toContain("thisMonth");
+    expect(trigger.textContent ?? "").toContain(i18n.t("dashboard.filter.thisMonth"));
   });
 
-  it("mobile renderer is hidden at md+ (className contract)", () => {
-    renderFilter(vi.fn());
-    expect(screen.getByTestId("date-range-filter-mobile")).toHaveClass(
-      "md:hidden",
-    );
-  });
-
-  it("desktop pill exposes a radiogroup with 4 segments", () => {
-    renderFilter(vi.fn());
-    const desktop = screen.getByTestId("date-range-filter-desktop");
-    const radiogroup = desktop.querySelector('[role="radiogroup"]');
-    expect(radiogroup).not.toBeNull();
-    expect(radiogroup!.querySelectorAll('[role="radio"]')).toHaveLength(4);
-  });
-
-  it("mobile renderer exposes a Select trigger", () => {
-    renderFilter(vi.fn());
-    const mobile = screen.getByTestId("date-range-filter-mobile");
-    expect(mobile.querySelector('[data-slot="select-trigger"]')).not.toBeNull();
+  it("trigger renders the German label after i18n.changeLanguage('de')", async () => {
+    await i18n.changeLanguage("de");
+    try {
+      renderFilter(vi.fn());
+      const trigger = screen.getByTestId("date-range-filter-trigger");
+      // Regression guard for the screenshot the user filed: dropdown was
+      // showing the raw key "thisMonth" instead of "Dieser Monat".
+      expect(trigger.textContent ?? "").not.toContain("thisMonth");
+      expect(trigger.textContent ?? "").toContain(i18n.t("dashboard.filter.thisMonth"));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });

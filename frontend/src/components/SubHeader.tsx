@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { Upload as UploadIcon } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { Toggle } from "@/components/ui/toggle";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -151,39 +150,34 @@ export function SubHeader() {
           )}
           {location === "/sensors" && <SensorTimeWindowPicker />}
           {showSignageTabs && (
-            <>
-              <div data-testid="signage-tabs-desktop" className="hidden md:block">
-                <SegmentedControl
-                  segments={signageTabs.map((tab) => ({ value: tab.id, label: t(tab.labelKey) }))}
-                  value={signageActive}
-                  onChange={(id) => {
-                    const target = signageTabs.find((tab) => tab.id === id);
-                    if (target) navigate(target.path);
-                  }}
-                  aria-label={t("signage.admin.page_title")}
-                />
-              </div>
-              <div data-testid="signage-tabs-mobile" className="md:hidden">
-                <Select
-                  value={signageActive}
-                  onValueChange={(id) => {
-                    const target = signageTabs.find((tab) => tab.id === id);
-                    if (target) navigate(target.path);
-                  }}
-                >
-                  <SelectTrigger className="w-40" aria-label={t("signage.admin.page_title")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {signageTabs.map((tab) => (
-                      <SelectItem key={tab.id} value={tab.id}>
-                        {t(tab.labelKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
+            <Select
+              value={signageActive}
+              onValueChange={(id) => {
+                const target = signageTabs.find((tab) => tab.id === id);
+                if (target) navigate(target.path);
+              }}
+            >
+              <SelectTrigger
+                data-testid="signage-tabs-trigger"
+                className="w-40"
+                aria-label={t("signage.admin.page_title")}
+              >
+                <SelectValue>
+                  {(id) =>
+                    signageTabs.find((tab) => tab.id === id)
+                      ? t(signageTabs.find((tab) => tab.id === id)!.labelKey)
+                      : id
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {signageTabs.map((tab) => (
+                  <SelectItem key={tab.id} value={tab.id}>
+                    {t(tab.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
         <div className="flex items-center gap-3">

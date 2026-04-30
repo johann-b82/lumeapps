@@ -24,3 +24,4 @@ postgres_data/
 .idea/
 *.swp
 *.swo
+.superpowers/

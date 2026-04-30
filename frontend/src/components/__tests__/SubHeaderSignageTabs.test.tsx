@@ -35,23 +35,28 @@ describe("SubHeader signage tabs", () => {
     );
   });
 
-  it("mounts both desktop and mobile renderers when on a signage admin tab route", () => {
+  it("renders a Select trigger on a signage admin tab route", () => {
     renderAt("/signage/playlists");
-    expect(screen.getByTestId("signage-tabs-desktop")).toBeInTheDocument();
-    expect(screen.getByTestId("signage-tabs-mobile")).toBeInTheDocument();
+    expect(screen.getByTestId("signage-tabs-trigger")).toBeInTheDocument();
   });
 
   it("does not render signage tabs on /signage/pair", () => {
     renderAt("/signage/pair");
-    expect(screen.queryByTestId("signage-tabs-desktop")).toBeNull();
-    expect(screen.queryByTestId("signage-tabs-mobile")).toBeNull();
+    expect(screen.queryByTestId("signage-tabs-trigger")).toBeNull();
   });
 
-  it("mobile Select navigates via wouter on change", async () => {
+  it("trigger shows the translated label for the active tab (not the raw id)", () => {
+    renderAt("/signage/playlists");
+    const trigger = screen.getByTestId("signage-tabs-trigger");
+    expect(trigger.textContent ?? "").not.toContain("playlists");
+    expect(trigger.textContent ?? "").toContain(
+      i18n.t("signage.admin.nav.playlists"),
+    );
+  });
+
+  it("Select navigates via wouter on change", async () => {
     const { memory } = renderAt("/signage/playlists");
-    const trigger = screen
-      .getByTestId("signage-tabs-mobile")
-      .querySelector('[data-slot="select-trigger"]') as HTMLElement;
+    const trigger = screen.getByTestId("signage-tabs-trigger");
     await userEvent.click(trigger);
     await userEvent.click(screen.getByRole("option", { name: /devices/i }));
     expect(memory.history).toContain("/signage/devices");

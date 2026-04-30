@@ -4,7 +4,6 @@ import { Search, ArrowUp, ArrowDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -89,33 +88,24 @@ export function EmployeeTable() {
               { value: "active" as const, label: t("hr.table.showActive") },
               { value: "all" as const, label: t("hr.table.showAll") },
             ];
+            const renderLabel = (v: "overtime" | "active" | "all") =>
+              segments.find((s) => s.value === v)?.label ?? v;
             return (
-              <>
-                <div data-testid="employee-filter-desktop" className="hidden md:block">
-                  <SegmentedControl<"overtime" | "active" | "all">
-                    segments={segments}
-                    value={filter}
-                    onChange={setFilter}
-                  />
-                </div>
-                <div data-testid="employee-filter-mobile" className="md:hidden">
-                  <Select<"overtime" | "active" | "all">
-                    value={filter}
-                    onValueChange={setFilter}
-                  >
-                    <SelectTrigger className="w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {segments.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <Select<"overtime" | "active" | "all">
+                value={filter}
+                onValueChange={setFilter}
+              >
+                <SelectTrigger data-testid="employee-filter-trigger" className="w-36">
+                  <SelectValue>{renderLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {segments.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             );
           })()}
         </div>
