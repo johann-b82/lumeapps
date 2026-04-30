@@ -7,7 +7,8 @@ import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 
-from app.schemas import SettingsUpdate, _validate_oklch
+from app.schemas import SettingsUpdate
+from app.schemas._base import _validate_oklch
 
 
 # Override the autouse `reset_settings` fixture from conftest.py for this module.
