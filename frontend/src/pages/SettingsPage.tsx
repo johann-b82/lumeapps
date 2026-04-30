@@ -198,7 +198,7 @@ export function SettingsPage() {
             <h3 className="text-base font-semibold">
               {t("settings.colors.title")}
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <ColorPicker
               label={t("settings.colors.primary")}
               value={draft.color_primary}
