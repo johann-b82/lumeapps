@@ -55,7 +55,7 @@ async def _cleanup(batch_id: int) -> None:
         await session.commit()
 
 
-async def test_chart_no_comparison_returns_previous_null(client):
+async def test_chart_no_comparison_returns_previous_null(viewer_client):
     """Baseline: no comparison params -> {current: [...], previous: null}."""
     bid = await _seed(
         "chart-baseline",
@@ -66,7 +66,7 @@ async def test_chart_no_comparison_returns_previous_null(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis/chart",
             params={
                 "start_date": "2099-04-01",
@@ -90,7 +90,7 @@ async def test_chart_no_comparison_returns_previous_null(client):
         await _cleanup(bid)
 
 
-async def test_chart_with_previous_period_returns_aligned_series(client):
+async def test_chart_with_previous_period_returns_aligned_series(viewer_client):
     """comparison=previous_period with matching bucket counts.
 
     Current April 2099 (3 daily rows) + prior March 2099 (3 daily rows).
@@ -111,7 +111,7 @@ async def test_chart_with_previous_period_returns_aligned_series(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis/chart",
             params={
                 "start_date": "2099-04-01",
@@ -138,7 +138,7 @@ async def test_chart_with_previous_period_returns_aligned_series(client):
         await _cleanup(bid)
 
 
-async def test_chart_partial_prior_data_emits_nulls(client):
+async def test_chart_partial_prior_data_emits_nulls(viewer_client):
     """CHART-03: trailing prior buckets beyond prior data emit revenue=None."""
     # Seed current window with 5 daily rows and prior with only 2 rows.
     bid = await _seed(
@@ -156,7 +156,7 @@ async def test_chart_partial_prior_data_emits_nulls(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis/chart",
             params={
                 "start_date": "2099-04-01",
@@ -188,7 +188,7 @@ async def test_chart_partial_prior_data_emits_nulls(client):
         await _cleanup(bid)
 
 
-async def test_chart_prior_sum_equals_summary_previous_period(client):
+async def test_chart_prior_sum_equals_summary_previous_period(viewer_client):
     """Phase 8 SC5 contract test: sum(chart.previous) == summary.previous_period.total_revenue.
 
     Proves "SQL reuse, no drift" (CHART-02) by running both endpoints against
@@ -226,7 +226,7 @@ async def test_chart_prior_sum_equals_summary_previous_period(client):
         }
 
         # Summary endpoint — carries the canonical previous_period total.
-        summary_res = await client.get(
+        summary_res = await viewer_client.get(
             "/api/kpis",
             params={
                 **common,
@@ -243,7 +243,7 @@ async def test_chart_prior_sum_equals_summary_previous_period(client):
 
         # Chart endpoint — same bounds, daily granularity so every prior row
         # becomes its own bucket and nothing rolls up lossily.
-        chart_res = await client.get(
+        chart_res = await viewer_client.get(
             "/api/kpis/chart",
             params={
                 **common,

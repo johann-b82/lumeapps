@@ -99,12 +99,6 @@ def test_settings_update_rejects_url_function():
         SettingsUpdate(**bad)
 
 
-def test_settings_update_rejects_unknown_language():
-    bad = {**VALID_PAYLOAD, "default_language": "FR"}
-    with pytest.raises(ValidationError):
-        SettingsUpdate(**bad)
-
-
 @pytest.mark.parametrize("bad_name", ["", "x" * 101])
 def test_settings_update_rejects_bad_app_name(bad_name):
     bad = {**VALID_PAYLOAD, "app_name": bad_name}

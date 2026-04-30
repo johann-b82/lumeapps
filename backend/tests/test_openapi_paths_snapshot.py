@@ -38,10 +38,18 @@ def test_openapi_paths_match_snapshot():
     data_router) and accidental new-route additions that bypass the planning
     workflow.
 
+    Excludes ``/player*`` paths because those are conditionally registered
+    only when the frontend dist exists on disk — the snapshot must remain
+    stable across host (built) and CI (pre-build) environments.
+
     Regenerate with:
         UPDATE_SNAPSHOTS=1 pytest backend/tests/test_openapi_paths_snapshot.py
     """
-    actual = sorted(app.openapi()["paths"].keys())
+    PLAYER_SPA_PATHS = {"/player", "/player/", "/player/{path}"}
+    actual = sorted(
+        p for p in app.openapi()["paths"].keys()
+        if p not in PLAYER_SPA_PATHS and not p.startswith("/_test/")
+    )
     if os.environ.get("UPDATE_SNAPSHOTS") == "1":
         CONTRACT_PATH.parent.mkdir(parents=True, exist_ok=True)
         CONTRACT_PATH.write_text(json.dumps(actual, indent=2) + "\n")

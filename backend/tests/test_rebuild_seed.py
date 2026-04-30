@@ -32,8 +32,8 @@ RED_1X1_PNG_B64 = (
 RED_1X1_PNG: bytes = base64.b64decode(RED_1X1_PNG_B64)
 assert RED_1X1_PNG[:8] == b"\x89PNG\r\n\x1a\n", "RED_1X1_PNG is not a valid PNG"
 
-# D-specifics: 6 distinct oklch colors at 54° hue intervals for obvious diffs,
-# plus app_name + default_language. Matches the backend oklch regex.
+# 6 distinct oklch colors at 54° hue intervals for obvious diffs, plus app_name.
+# `default_language` was removed from the schema in v1.6 (moved to localStorage).
 REBUILD_SEED_PAYLOAD = {
     "color_primary":     "oklch(0.5 0.2 30)",
     "color_accent":      "oklch(0.5 0.2 84)",
@@ -42,22 +42,21 @@ REBUILD_SEED_PAYLOAD = {
     "color_muted":       "oklch(0.5 0.2 246)",
     "color_destructive": "oklch(0.5 0.2 300)",
     "app_name":          "Rebuild Test Corp",
-    "default_language":  "DE",
 }
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_seed_all_fields(client):
-    r = await client.put("/api/settings", json=REBUILD_SEED_PAYLOAD)
+async def test_seed_all_fields(admin_client):
+    r = await admin_client.put("/api/settings", json=REBUILD_SEED_PAYLOAD)
     assert r.status_code == 200, r.text
     body = r.json()
     for k, v in REBUILD_SEED_PAYLOAD.items():
         assert body[k] == v, f"{k}: expected {v!r}, got {body[k]!r}"
 
 
-async def test_seed_logo(client):
+async def test_seed_logo(admin_client):
     files = {"file": ("seed.png", RED_1X1_PNG, "image/png")}
-    r = await client.post("/api/settings/logo", files=files)
+    r = await admin_client.post("/api/settings/logo", files=files)
     assert r.status_code == 200, r.text
     assert r.json().get("logo_url") is not None

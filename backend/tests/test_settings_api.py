@@ -28,14 +28,14 @@ FAKE_PNG = PNG_SIGNATURE + b"\x00" * 100
 
 # --- Success Criterion 1 -------------------------------------------------
 
-async def test_get_settings_returns_shape(client):
-    r = await client.get("/api/settings")
+async def test_get_settings_returns_shape(admin_client):
+    r = await admin_client.get("/api/settings")
     assert r.status_code == 200
     body = r.json()
     for key in (
         "color_primary", "color_accent", "color_background",
         "color_foreground", "color_muted", "color_destructive",
-        "app_name", "default_language", "logo_url", "logo_updated_at",
+        "app_name", "logo_url", "logo_updated_at",
     ):
         assert key in body, f"missing key: {key}"
     assert body["logo_url"] is None
@@ -45,20 +45,20 @@ async def test_get_settings_returns_shape(client):
 
 # --- Success Criterion 2 -------------------------------------------------
 
-async def test_put_rejects_semicolon_in_color(client):
+async def test_put_rejects_semicolon_in_color(admin_client):
     bad = {**VALID_PAYLOAD, "color_primary": "oklch(0.5 0.15 250); background: red"}
-    r = await client.put("/api/settings", json=bad)
+    r = await admin_client.put("/api/settings", json=bad)
     assert r.status_code == 422
 
 
-async def test_put_rejects_url_function_in_color(client):
+async def test_put_rejects_url_function_in_color(admin_client):
     bad = {**VALID_PAYLOAD, "color_primary": "oklch(0.5 0.15 url(evil))"}
-    r = await client.put("/api/settings", json=bad)
+    r = await admin_client.put("/api/settings", json=bad)
     assert r.status_code == 422
 
 
-async def test_put_valid_payload_updates_row(client):
-    r = await client.put("/api/settings", json=VALID_PAYLOAD)
+async def test_put_valid_payload_updates_row(admin_client):
+    r = await admin_client.put("/api/settings", json=VALID_PAYLOAD)
     assert r.status_code == 200
     body = r.json()
     assert body["app_name"] == "My Brand"
@@ -67,23 +67,23 @@ async def test_put_valid_payload_updates_row(client):
 
 # --- Success Criterion 3 -------------------------------------------------
 
-async def test_logo_svg_with_script_rejected(client):
+async def test_logo_svg_with_script_rejected(admin_client):
     evil = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
-    r = await client.post(
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("evil.svg", evil, "image/svg+xml")},
     )
     assert r.status_code == 422
     # Confirm nothing was stored
-    r2 = await client.get("/api/settings")
+    r2 = await admin_client.get("/api/settings")
     assert r2.json()["logo_url"] is None
 
 
 # --- Success Criterion 4 -------------------------------------------------
 
-async def test_put_defaults_resets_logo(client):
+async def test_put_defaults_resets_logo(admin_client):
     # 1. Upload a valid SVG logo
-    up = await client.post(
+    up = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.svg", MINIMAL_SVG, "image/svg+xml")},
     )
@@ -91,7 +91,7 @@ async def test_put_defaults_resets_logo(client):
     assert up.json()["logo_url"] is not None
 
     # 2. PUT canonical defaults -> logo should be cleared (D-07 full reset)
-    r = await client.put("/api/settings", json=DEFAULT_SETTINGS)
+    r = await admin_client.put("/api/settings", json=DEFAULT_SETTINGS)
     assert r.status_code == 200
     body = r.json()
     assert body["logo_url"] is None
@@ -101,19 +101,19 @@ async def test_put_defaults_resets_logo(client):
 
 # --- Logo upload: happy paths and edge cases ----------------------------
 
-async def test_post_logo_png_happy_path(client):
-    r = await client.post(
+async def test_post_logo_png_happy_path(admin_client):
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.png", FAKE_PNG, "image/png")},
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["logo_url"] is not None
-    assert body["logo_url"].startswith("/api/settings/logo?v=")
+    assert body["logo_url"].startswith("/api/settings/logo/public?v=")
 
 
-async def test_post_logo_svg_happy_path(client):
-    r = await client.post(
+async def test_post_logo_svg_happy_path(admin_client):
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.svg", MINIMAL_SVG, "image/svg+xml")},
     )
@@ -121,26 +121,26 @@ async def test_post_logo_svg_happy_path(client):
     assert r.json()["logo_url"] is not None
 
 
-async def test_post_logo_wrong_extension_rejected(client):
-    r = await client.post(
+async def test_post_logo_wrong_extension_rejected(admin_client):
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.gif", b"GIF89a...", "image/gif")},
     )
     assert r.status_code == 422
 
 
-async def test_post_logo_oversize_rejected(client):
+async def test_post_logo_oversize_rejected(admin_client):
     oversize = PNG_SIGNATURE + b"\x00" * (1024 * 1024)  # 1 MB + 8 signature bytes
-    r = await client.post(
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("big.png", oversize, "image/png")},
     )
     assert r.status_code == 422
 
 
-async def test_post_logo_svg_extension_but_png_bytes_rejected(client):
+async def test_post_logo_svg_extension_but_png_bytes_rejected(admin_client):
     # sniff_mime detects the mismatch
-    r = await client.post(
+    r = await admin_client.post(
         "/api/settings/logo",
         files={"file": ("fake.svg", FAKE_PNG, "image/svg+xml")},
     )
@@ -149,17 +149,17 @@ async def test_post_logo_svg_extension_but_png_bytes_rejected(client):
 
 # --- GET /api/settings/logo ---------------------------------------------
 
-async def test_get_logo_404_when_unset(client):
-    r = await client.get("/api/settings/logo")
+async def test_get_logo_404_when_unset(admin_client):
+    r = await admin_client.get("/api/settings/logo")
     assert r.status_code == 404
 
 
-async def test_get_logo_returns_bytes_and_etag(client):
-    await client.post(
+async def test_get_logo_returns_bytes_and_etag(admin_client):
+    await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.png", FAKE_PNG, "image/png")},
     )
-    r = await client.get("/api/settings/logo")
+    r = await admin_client.get("/api/settings/logo")
     assert r.status_code == 200
     assert r.content == FAKE_PNG
     assert r.headers["content-type"].startswith("image/png")
@@ -167,14 +167,14 @@ async def test_get_logo_returns_bytes_and_etag(client):
     assert "cache-control" in r.headers
 
 
-async def test_get_logo_304_on_matching_if_none_match(client):
-    await client.post(
+async def test_get_logo_304_on_matching_if_none_match(admin_client):
+    await admin_client.post(
         "/api/settings/logo",
         files={"file": ("logo.png", FAKE_PNG, "image/png")},
     )
-    first = await client.get("/api/settings/logo")
+    first = await admin_client.get("/api/settings/logo")
     etag = first.headers["etag"]
-    second = await client.get(
+    second = await admin_client.get(
         "/api/settings/logo",
         headers={"If-None-Match": etag},
     )

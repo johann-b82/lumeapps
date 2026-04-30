@@ -41,6 +41,8 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
+pytestmark = pytest.mark.integration
+
 # Repo layout: backend/tests/test_signage_schema_roundtrip.py -> backend/
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

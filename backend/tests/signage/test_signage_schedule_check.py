@@ -19,6 +19,8 @@ from pathlib import Path
 import asyncpg
 import pytest
 
+pytestmark = pytest.mark.integration
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 CONSTRAINT_NAME = "ck_signage_schedules_start_before_end"
 PHASE_REVISION = "v1_23_signage_schedule_check"

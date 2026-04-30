@@ -38,8 +38,5 @@
   "/api/sync/test",
   "/api/upload",
   "/api/uploads/{batch_id}",
-  "/health",
-  "/player",
-  "/player/",
-  "/player/{path}"
+  "/health"
 ]

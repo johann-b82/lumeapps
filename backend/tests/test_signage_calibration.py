@@ -25,6 +25,8 @@ from tests.test_directus_auth import (
     _mint as _mint_user_jwt,
 )
 
+pytestmark = pytest.mark.integration
+
 
 # --------------------------------------------------------------------------
 # DSN / skip helpers (mirrors test_signage_player_router.py)

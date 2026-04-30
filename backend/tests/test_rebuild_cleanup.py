@@ -23,7 +23,7 @@ async def reset_settings():
 pytestmark = pytest.mark.asyncio
 
 
-async def test_reset_to_defaults(client):
+async def test_reset_to_defaults(admin_client):
     payload = dict(DEFAULT_SETTINGS)
-    r = await client.put("/api/settings", json=payload)
+    r = await admin_client.put("/api/settings", json=payload)
     assert r.status_code == 200, r.text

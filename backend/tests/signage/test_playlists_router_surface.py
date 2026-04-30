@@ -2,12 +2,14 @@
 
 After Plan 69-01, only ``DELETE /{playlist_id}`` survives in
 ``backend/app/routers/signage_admin/playlists.py``. POST/GET/PATCH/PUT-tags
-have moved to Directus collections. ``_notify_playlist_changed`` MUST stay
-defined and is still invoked by the surviving DELETE.
+have moved to Directus collections. v1.23 Phase A-2 deduplicated the
+local ``_notify_playlist_changed`` helper — the DELETE handler now uses
+``signage_broadcast.notify_playlist_changed`` directly.
 """
 from __future__ import annotations
 
 from app.routers.signage_admin import playlists
+from app.services import signage_broadcast
 
 
 def test_only_delete_route_remains() -> None:
@@ -39,6 +41,7 @@ def test_delete_route_present() -> None:
 
 
 def test_notify_helper_retained() -> None:
-    """``_notify_playlist_changed`` must remain importable for the DELETE handler."""
-    assert hasattr(playlists, "_notify_playlist_changed")
-    assert callable(playlists._notify_playlist_changed)
+    """The shared notify helper from signage_broadcast must remain callable —
+    the surviving DELETE handler still depends on it (v1.23 Phase A-2)."""
+    assert hasattr(signage_broadcast, "notify_playlist_changed")
+    assert callable(signage_broadcast.notify_playlist_changed)

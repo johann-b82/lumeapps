@@ -15,6 +15,8 @@ and is intentionally separate.
 import re
 from pathlib import Path
 
+import pytest
+
 
 MIGRATED_COLLECTIONS = {
     "sales_records",
@@ -42,6 +44,11 @@ def _read_db_exclude_tables() -> set[str]:
 
 
 def test_migrated_collections_absent_from_db_exclude_tables():
+    if not COMPOSE.is_file():
+        pytest.skip(
+            f"docker-compose.yml not reachable from {__file__} (parents[2]={COMPOSE}); "
+            "this test runs from the host, not inside the api container."
+        )
     excluded = _read_db_exclude_tables()
     # User decision D-08 (planning context): absent-from semantics
     assert MIGRATED_COLLECTIONS.isdisjoint(excluded), (

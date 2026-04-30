@@ -59,7 +59,7 @@ async def _cleanup(batch_id: int) -> None:
         await session.commit()
 
 
-async def test_summary_baseline_no_prev_params(client):
+async def test_summary_baseline_no_prev_params(viewer_client):
     """No prev_* query params -> previous_period and previous_year both None (DELTA-04)."""
     bid = await _seed(
         "summary-baseline",
@@ -69,7 +69,7 @@ async def test_summary_baseline_no_prev_params(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis",
             params={"start_date": "2099-04-01", "end_date": "2099-04-30"},
         )
@@ -84,7 +84,7 @@ async def test_summary_baseline_no_prev_params(client):
         await _cleanup(bid)
 
 
-async def test_summary_with_both_prev_periods_populated(client):
+async def test_summary_with_both_prev_periods_populated(viewer_client):
     """prev_period + prev_year windows both hit rows -> all three objects populated."""
     bid = await _seed(
         "summary-both",
@@ -101,7 +101,7 @@ async def test_summary_with_both_prev_periods_populated(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis",
             params={
                 "start_date": "2099-04-01",
@@ -135,7 +135,7 @@ async def test_summary_with_both_prev_periods_populated(client):
         await _cleanup(bid)
 
 
-async def test_summary_with_half_prev_period_params_returns_null(client):
+async def test_summary_with_half_prev_period_params_returns_null(viewer_client):
     """Only one of prev_period_start/prev_period_end -> previous_period is None.
 
     Half-specified windows are invalid; endpoint must not try to aggregate with
@@ -149,7 +149,7 @@ async def test_summary_with_half_prev_period_params_returns_null(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis",
             params={
                 "start_date": "2099-04-01",
@@ -166,7 +166,7 @@ async def test_summary_with_half_prev_period_params_returns_null(client):
         await _cleanup(bid)
 
 
-async def test_summary_prev_window_with_zero_rows_returns_null_not_zero_object(client):
+async def test_summary_prev_window_with_zero_rows_returns_null_not_zero_object(viewer_client):
     """DELTA-05 invariant: a prev window with zero matching rows returns None.
 
     Specifically NOT a zero-filled object like {"total_revenue": 0, ...} —
@@ -181,7 +181,7 @@ async def test_summary_prev_window_with_zero_rows_returns_null_not_zero_object(c
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis",
             params={
                 "start_date": "2099-04-01",
@@ -201,7 +201,7 @@ async def test_summary_prev_window_with_zero_rows_returns_null_not_zero_object(c
         await _cleanup(bid)
 
 
-async def test_summary_ignores_zero_or_negative_rows_in_comparison(client):
+async def test_summary_ignores_zero_or_negative_rows_in_comparison(viewer_client):
     """Prev window with only total_value <= 0 rows -> filter drops all, None.
 
     The WHERE total_value > 0 filter from the helper applies uniformly to
@@ -220,7 +220,7 @@ async def test_summary_ignores_zero_or_negative_rows_in_comparison(client):
         ],
     )
     try:
-        res = await client.get(
+        res = await viewer_client.get(
             "/api/kpis",
             params={
                 "start_date": "2099-04-01",

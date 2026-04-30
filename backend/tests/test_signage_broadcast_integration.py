@@ -39,6 +39,8 @@ from app.services import signage_broadcast
 from app.services.signage_pairing import mint_device_jwt
 from tests.test_directus_auth import _mint as _mint_user_jwt, ADMIN_UUID
 
+pytestmark = pytest.mark.integration
+
 
 # ---------------------------------------------------------------------------
 # DSN / skip helpers (same pattern as test_signage_player_router.py).

@@ -17,6 +17,8 @@ os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
 os.environ.setdefault("POSTGRES_DB", "test")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
+# In-container default for Directus integration tests; host runs override via .env.
+os.environ.setdefault("DIRECTUS_BASE_URL", "http://directus:8055")
 
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
@@ -39,6 +41,27 @@ async def client():
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def admin_client(client):
+    """`client` pre-authenticated as an Admin via a freshly-minted Directus JWT.
+
+    Use for tests that need to hit admin-gated routes. v1.24 A-1.
+    """
+    from tests._auth import ADMIN_UUID, mint
+
+    client.headers["Authorization"] = f"Bearer {mint(ADMIN_UUID)}"
+    yield client
+
+
+@pytest_asyncio.fixture
+async def viewer_client(client):
+    """`client` pre-authenticated as a Viewer."""
+    from tests._auth import VIEWER_UUID, mint
+
+    client.headers["Authorization"] = f"Bearer {mint(VIEWER_UUID)}"
+    yield client
 
 
 @pytest_asyncio.fixture(autouse=True)
