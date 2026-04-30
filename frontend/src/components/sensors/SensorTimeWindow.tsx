@@ -6,7 +6,13 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /**
  * SensorTimeWindow — Phase 39 local time-window state for the Sensors page.
@@ -66,12 +72,24 @@ export function SensorTimeWindowPicker() {
     value: w,
     label: t(`sensors.window.${w}`),
   }));
+  const renderLabel = (v: SensorWindow) =>
+    segments.find((s) => s.value === v)?.label ?? v;
   return (
-    <SegmentedControl<SensorWindow>
-      segments={segments}
-      value={window}
-      onChange={setWindow}
-      aria-label={t("sensors.window.aria")}
-    />
+    <Select<SensorWindow> value={window} onValueChange={setWindow}>
+      <SelectTrigger
+        data-testid="sensor-time-window-trigger"
+        className="w-32"
+        aria-label={t("sensors.window.aria")}
+      >
+        <SelectValue>{renderLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {segments.map((s) => (
+          <SelectItem key={s.value} value={s.value}>
+            {s.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
