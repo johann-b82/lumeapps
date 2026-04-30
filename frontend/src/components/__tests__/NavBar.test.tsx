@@ -60,4 +60,18 @@ describe("NavBar", () => {
     const wrapper = screen.getByTestId("navbar-breadcrumb-wrapper");
     expect(wrapper).toHaveClass("hidden", "md:block");
   });
+
+  it("ThemeToggle wrapper has hidden md:flex", () => {
+    renderAt("/sales");
+    const themeRadiogroup = screen.getByLabelText(i18n.t("theme.toggle.aria_label"));
+    const wrapper = themeRadiogroup.closest("div.hidden.md\\:flex");
+    expect(wrapper).not.toBeNull();
+  });
+
+  it("LanguageToggle wrapper has hidden md:flex", () => {
+    renderAt("/sales");
+    const langRadiogroup = screen.getByLabelText(/language/i);
+    const wrapper = langRadiogroup.closest("div.hidden.md\\:flex");
+    expect(wrapper).not.toBeNull();
+  });
 });

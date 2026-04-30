@@ -35,8 +35,12 @@ export function NavBar() {
           </div>
         )}
         <div className="ml-auto flex items-center gap-4">
-          <ThemeToggle />
-          <LanguageToggle />
+          <div className="hidden md:flex">
+            <ThemeToggle />
+          </div>
+          <div className="hidden md:flex">
+            <LanguageToggle />
+          </div>
           <Link
             href="/docs"
             aria-label={t("docs.nav.docsLabel")}
