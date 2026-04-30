@@ -5,6 +5,13 @@ import { Upload as UploadIcon } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { Toggle } from "@/components/ui/toggle";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { SensorTimeWindowPicker } from "@/components/sensors/SensorTimeWindow";
@@ -144,15 +151,39 @@ export function SubHeader() {
           )}
           {location === "/sensors" && <SensorTimeWindowPicker />}
           {showSignageTabs && (
-            <SegmentedControl
-              segments={signageTabs.map((tab) => ({ value: tab.id, label: t(tab.labelKey) }))}
-              value={signageActive}
-              onChange={(id) => {
-                const target = signageTabs.find((tab) => tab.id === id);
-                if (target) navigate(target.path);
-              }}
-              aria-label={t("signage.admin.page_title")}
-            />
+            <>
+              <div data-testid="signage-tabs-desktop" className="hidden md:block">
+                <SegmentedControl
+                  segments={signageTabs.map((tab) => ({ value: tab.id, label: t(tab.labelKey) }))}
+                  value={signageActive}
+                  onChange={(id) => {
+                    const target = signageTabs.find((tab) => tab.id === id);
+                    if (target) navigate(target.path);
+                  }}
+                  aria-label={t("signage.admin.page_title")}
+                />
+              </div>
+              <div data-testid="signage-tabs-mobile" className="md:hidden">
+                <Select
+                  value={signageActive}
+                  onValueChange={(id) => {
+                    const target = signageTabs.find((tab) => tab.id === id);
+                    if (target) navigate(target.path);
+                  }}
+                >
+                  <SelectTrigger className="w-40" aria-label={t("signage.admin.page_title")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {signageTabs.map((tab) => (
+                      <SelectItem key={tab.id} value={tab.id}>
+                        {t(tab.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
         </div>
         <div className="flex items-center gap-3">
