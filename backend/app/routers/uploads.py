@@ -73,17 +73,27 @@ async def upload_file(
     db.add(batch)
     await db.flush()  # Get batch.id without committing
 
-    # Insert valid rows with ON CONFLICT DO NOTHING for idempotent re-uploads
+    # Insert valid rows with ON CONFLICT DO NOTHING for idempotent re-uploads.
+    # asyncpg caps a single statement at 32767 query parameters, so chunk by
+    # rows-per-statement = floor(32767 / cols_per_row). cols_per_row is read
+    # from the first row at runtime so the chunk size adapts if the column
+    # mapping is widened later. v1.26: ~21 cols → 1560 rows/chunk.
     if valid_rows:
         for row in valid_rows:
             row["upload_batch_id"] = batch.id
 
-        stmt = pg_insert(SalesRecord).values(valid_rows).on_conflict_do_nothing(
-            index_elements=["order_number"]
-        )
-        result = await db.execute(stmt)
+        cols_per_row = max(1, len(valid_rows[0]))
+        chunk_size = max(1, 32767 // cols_per_row)
+        inserted_total = 0
+        for start in range(0, len(valid_rows), chunk_size):
+            chunk = valid_rows[start : start + chunk_size]
+            stmt = pg_insert(SalesRecord).values(chunk).on_conflict_do_nothing(
+                index_elements=["order_number"]
+            )
+            chunk_result = await db.execute(stmt)
+            inserted_total += chunk_result.rowcount or 0
         # Update row_count to reflect actual insertions (skips deduped rows)
-        batch.row_count = result.rowcount
+        batch.row_count = inserted_total
 
     await db.commit()
     await db.refresh(batch)

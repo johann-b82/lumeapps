@@ -25,7 +25,7 @@ from app.parsing.column_mapping import (
     REQUIRED_COLUMNS,
 )
 
-EXPECTED_COLUMN_COUNT = 38
+EXPECTED_COLUMN_COUNT = 60
 
 
 def strip_eq_quotes(value: str) -> str:
@@ -209,14 +209,18 @@ def parse_erp_file(
     # Strip ="..." from column headers too (they also use this pattern)
     df.columns = [strip_eq_quotes(col) for col in df.columns]
 
-    # Step 4: Rename columns German -> English
-    # Build reverse mapping for any unmapped headers (keep as-is with warning)
-    rename_map = {}
-    for german_col in df.columns:
-        english_col = GERMAN_TO_ENGLISH.get(german_col)
-        if english_col is not None:
-            rename_map[german_col] = english_col
+    # Step 4: Rename columns German -> English and drop unmapped columns.
+    # The v1.26 export contains many headers that don't map to SalesRecord
+    # (Land, EDI, Anteil 1-5, ...). Keeping them around would push German
+    # column names into row_to_dict and on into pg_insert, which raises
+    # "Unconsumed column names" because SalesRecord has no matching attribute.
+    rename_map = {
+        german_col: english_col
+        for german_col in df.columns
+        if (english_col := GERMAN_TO_ENGLISH.get(german_col)) is not None
+    }
     df = df.rename(columns=rename_map)
+    df = df[list(rename_map.values())]
 
     # Step 5: Iterate rows, validate, collect errors and valid rows
     valid_rows: list[dict] = []

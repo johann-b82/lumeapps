@@ -1,71 +1,61 @@
-# German-to-English column name mapping for ERP tab-delimited export files.
-# Source: 38-column ERP export with German headers, confirmed from sample_export.csv.
-# Column 2 has an empty German header — mapped to erp_status_flag.
+# German-to-English column name mapping for the ERP tab-delimited export.
+#
+# v1.26 (2026-04-30): swapped to the 60-column "Aufträge" export format.
+# Headers from the new export are listed below in source order; only the
+# subset that maps to a column on `SalesRecord` is kept — unmapped headers
+# (Land, EDI, MS, M Sperre, ES, Beleg Nr, LS / RG, Sperrkz, Benutzer,
+# Erfolg %, GS, Ihr Datum, Ihre Zeichen, Telefonnummer, Telefaxnummer, TZ,
+# Basis, Anteil 1..5, Vers.Nw., Vers.Nw. Datum, Anz.Druck, Kopfrabatt %,
+# Zoll-Status, Zoll-MRN, MRN-Datum, STR-Status, User1, User2, Aktion, GBst,
+# GBst-St, GBst-Art, Name 2, Name 3, Wert, brutto, Versand per Mail) are
+# dropped at parse time.
+#
+# Schema columns that the new format does NOT populate stay NULL:
+# remaining_value, complexity_group, comment, business_area, delivery_date,
+# requested_date, arrival_date, manual_lock, responsible_person, project_name,
+# manual_status, material_flag, internal_processor_1/2, approval_comment_1/2,
+# technical_check, purchase_check.
 
 GERMAN_TO_ENGLISH: dict[str, str] = {
-    "Auftrag": "order_number",
-    "": "erp_status_flag",
+    "VRG": "erp_status_flag",       # "AUF" / "ANG" marker
+    "Nummer": "order_number",        # Required
     "Datum": "order_date",
-    "Kunde": "customer_id",
+    "Adresse": "customer_id",
     "Name": "customer_name",
     "Ort": "city",
-    "Restwert": "remaining_value",
+    "Wert": "total_value",
+    "Status": "status_code",
     "Art": "order_type",
     "Typ": "order_subtype",
-    "Kompl. Grp": "complexity_group",
-    "Kommentar": "comment",
-    "VV-Nr.": "vv_number",
-    "Lieferdatum": "delivery_date",
-    "GS Bereich": "business_area",
+    "Frei1": "free_field_1",
+    "Frei2": "free_field_2",
+    "K Sperre": "customer_lock",
     "Projekt": "project_reference",
+    "Bemerkung": "remark",
+    "Komm. Endkunde": "end_customer_comment",
     "Lieferadresse": "delivery_address",
     "Lieferort": "delivery_city",
-    "Gesamtwert": "total_value",
-    "Sperre manuell": "manual_lock",
-    "Verantwortlich": "responsible_person",
-    "Frei 1": "free_field_1",
-    "Frei 2": "free_field_2",
-    "Bemerkung": "remark",
-    "Projekt Nr.": "project_number",
-    "Projektname": "project_name",
-    "man.Status": "manual_status",
-    "K Sperre": "customer_lock",
-    "Mat": "material_flag",
-    "Kom. Endkunde": "end_customer_comment",
-    "1. Bearbeiter, intern": "internal_processor_1",
-    "2. Bearbeiter, intern": "internal_processor_2",
-    "Kommentar zu Freigabe 1": "approval_comment_1",
-    "Status": "status_code",
-    "Wunschdatum": "requested_date",
-    "Tech Pr\u00fcf": "technical_check",
-    "Kauf Pr\u00fcf": "purchase_check",
-    "Kommentar zu Freigabe 2": "approval_comment_2",
-    "Eintreffdatum": "arrival_date",
+    "Bestellnummer": "vv_number",
+    "Proj.Nr.": "project_number",
 }
 
-# English column names that contain DD.MM.YYYY dates (per D-10)
+# English column names that contain DD.MM.YYYY dates.
 DATE_COLUMNS: set[str] = {
     "order_date",
-    "delivery_date",
-    "requested_date",
-    "arrival_date",
 }
 
-# English column names that contain German decimal numbers (per D-04, D-06)
+# English column names that contain German decimal numbers (. thousands, , decimal).
 DECIMAL_COLUMNS: set[str] = {
-    "remaining_value",
     "total_value",
 }
 
-# English column names that map to Integer DB columns
+# English column names that map to Integer DB columns.
 INTEGER_COLUMNS: set[str] = {
-    "business_area",
-    "manual_status",
-    "customer_lock",
     "status_code",
+    "customer_lock",
 }
 
-# English column names that must be non-empty per D-12 check 4
+# English column names that must be non-empty.
 REQUIRED_COLUMNS: set[str] = {
     "order_number",
 }
