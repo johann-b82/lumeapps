@@ -561,17 +561,19 @@ export async function fetchEmployeesOvertime(
  */
 export function useEmployeesWithOvertime(params: {
   search?: string;
-  date_from: string;
-  date_to: string;
+  date_from: string | undefined;
+  date_to: string | undefined;
 }): { data: EmployeeRow[] | undefined; isLoading: boolean } {
   const rowsQ = useQuery({
     queryKey: ["directus", "personio_employees", { search: params.search }] as const,
     queryFn: () => fetchEmployees({ search: params.search }),
   });
 
+  const datesReady = !!params.date_from && !!params.date_to;
   const otQ = useQuery({
     queryKey: ["employeesOvertime", params.date_from, params.date_to] as const,
-    queryFn: () => fetchEmployeesOvertime(params.date_from, params.date_to),
+    queryFn: () => fetchEmployeesOvertime(params.date_from!, params.date_to!),
+    enabled: datesReady,
   });
 
   const data = useMemo<EmployeeRow[] | undefined>(() => {

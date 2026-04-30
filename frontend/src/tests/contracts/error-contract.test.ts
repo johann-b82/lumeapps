@@ -98,7 +98,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.login as Mock)({ email: "x", password: "y" });
+            await directus.login({ email: "x", password: "y" });
           } catch (e) { throw toApiError(e); }
         },
         { status: 401, detail: "Invalid user credentials.", code: "INVALID_CREDENTIALS" },
@@ -113,7 +113,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.login as Mock)({ email: "x", password: "y" });
+            await directus.login({ email: "x", password: "y" });
           } catch (e) { throw toApiError(e); }
         },
         { status: 500, detail: "Network request failed" },
@@ -137,7 +137,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.request as Mock)({});
+            await directus.request({} as never);
           } catch (e) { throw toApiError(e); }
         },
         { status: 403, detail: "Forbidden", code: "FORBIDDEN" },
@@ -152,7 +152,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.request as Mock)({});
+            await directus.request({} as never);
           } catch (e) { throw toApiError(e); }
         },
         { status: 500, detail: "readMe failed" },
@@ -216,7 +216,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.request as Mock)({});
+            await directus.request({} as never);
           } catch (e) { throw toApiError(e); }
         },
         { status: 404, detail: "User not found", code: "USER_NOT_FOUND" },
@@ -231,7 +231,7 @@ describe("ERR-05: error-contract regression", () => {
       await expectApiError(
         async () => {
           try {
-            await (directus.request as Mock)({});
+            await directus.request({} as never);
           } catch (e) { throw toApiError(e); }
         },
         { status: 500, detail: "Profile fetch failed" },

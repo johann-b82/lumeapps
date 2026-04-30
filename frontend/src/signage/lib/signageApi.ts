@@ -202,9 +202,8 @@ export const signageApi = {
   },
   deleteTag: async (id: number): Promise<null> => {
     try {
-      return (await directus.request(
-        deleteItem("signage_device_tags", id),
-      )) as null;
+      await directus.request(deleteItem("signage_device_tags", id));
+      return null;
     } catch (e) { throw toApiError(e); }
   },
   // Phase v1.23 C-2 (D-07): media list swapped from FastAPI to Directus SDK.
@@ -607,9 +606,8 @@ export const signageApi = {
   // migrated route surface and for any future hard-delete UI.
   deleteDevice: async (id: string): Promise<null> => {
     try {
-      return (await directus.request(
-        deleteItem("signage_devices", id),
-      )) as null;
+      await directus.request(deleteItem("signage_devices", id));
+      return null;
     } catch (e) { throw toApiError(e); }
   },
   // Phase 62 — CAL-UI-03. PATCH /api/signage/devices/{id}/calibration. Body is
@@ -695,9 +693,8 @@ export const signageApi = {
   },
   deleteSchedule: async (id: string): Promise<null> => {
     try {
-      return (await directus.request(
-        deleteItem("signage_schedules", id),
-      )) as null;
+      await directus.request(deleteItem("signage_schedules", id));
+      return null;
     } catch (e) { throw toApiError(e); }
   },
 };
