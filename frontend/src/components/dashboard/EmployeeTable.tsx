@@ -5,6 +5,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEmployeesWithOvertime } from "@/lib/api";
 import { useSettings } from "@/hooks/useSettings";
 import { useTableState } from "@/hooks/useTableState";
@@ -76,15 +83,41 @@ export function EmployeeTable() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <p className="text-xl font-semibold">{t("hr.table.title")}</p>
-          <SegmentedControl<"overtime" | "active" | "all">
-            segments={[
-              { value: "overtime", label: t("hr.table.showOvertime") },
-              { value: "active", label: t("hr.table.showActive") },
-              { value: "all", label: t("hr.table.showAll") },
-            ]}
-            value={filter}
-            onChange={setFilter}
-          />
+          {(() => {
+            const segments = [
+              { value: "overtime" as const, label: t("hr.table.showOvertime") },
+              { value: "active" as const, label: t("hr.table.showActive") },
+              { value: "all" as const, label: t("hr.table.showAll") },
+            ];
+            return (
+              <>
+                <div data-testid="employee-filter-desktop" className="hidden md:block">
+                  <SegmentedControl<"overtime" | "active" | "all">
+                    segments={segments}
+                    value={filter}
+                    onChange={setFilter}
+                  />
+                </div>
+                <div data-testid="employee-filter-mobile" className="md:hidden">
+                  <Select<"overtime" | "active" | "all">
+                    value={filter}
+                    onValueChange={setFilter}
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {segments.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            );
+          })()}
         </div>
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
