@@ -29,7 +29,11 @@ export function NavBar() {
           )}
           <span className="text-sm font-medium">{settings.app_name}</span>
         </Link>
-        {!isLauncher && <Breadcrumb />}
+        {!isLauncher && (
+          <div data-testid="navbar-breadcrumb-wrapper" className="hidden md:block">
+            <Breadcrumb />
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-4">
           <ThemeToggle />
           <LanguageToggle />
