@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
@@ -72,5 +72,17 @@ describe("UserMenu", () => {
     // Sign out is the LAST menuitem (identity header is NOT a menuitem per D-12)
     await userEvent.click(items[items.length - 1]);
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("UserMenu mobile-only theme + language items", () => {
+  it("renders theme + language menu items wrapped with md:hidden", async () => {
+    withAuth({ email: "a.b@c.d" });
+    const trigger = document.querySelector("[aria-label]") as HTMLElement;
+    fireEvent.click(trigger);
+    const theme = await screen.findByTestId("usermenu-theme-item");
+    const lang = await screen.findByTestId("usermenu-language-item");
+    expect(theme).toHaveClass("md:hidden");
+    expect(lang).toHaveClass("md:hidden");
   });
 });

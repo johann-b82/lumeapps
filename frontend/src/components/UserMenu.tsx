@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { LogOut, User as UserIcon } from "lucide-react";
+import i18n from "@/i18n";
 import { Link as WouterLink } from "wouter";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 
@@ -93,6 +94,30 @@ export function UserMenu() {
         >
           {t("userMenu.settings")}
         </MenuPrimitive.LinkItem>
+        <DropdownSeparator className="md:hidden" />
+        <DropdownItem
+          data-testid="usermenu-theme-item"
+          className="md:hidden"
+          onClick={() => {
+            const root = document.documentElement;
+            const next = root.classList.contains("dark") ? "light" : "dark";
+            if (next === "dark") root.classList.add("dark");
+            else root.classList.remove("dark");
+            localStorage.setItem("theme", next);
+          }}
+        >
+          {t("userMenu.theme")}
+        </DropdownItem>
+        <DropdownItem
+          data-testid="usermenu-language-item"
+          className="md:hidden"
+          onClick={() => {
+            const next = i18n.language === "de" ? "en" : "de";
+            void i18n.changeLanguage(next);
+          }}
+        >
+          {t("userMenu.language")}
+        </DropdownItem>
         <DropdownSeparator />
         <DropdownItem
           onClick={() => void signOut()}

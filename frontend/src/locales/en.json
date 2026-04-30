@@ -38,6 +38,8 @@
   "userMenu.docs": "Documentation",
   "userMenu.settings": "Settings",
   "userMenu.signOut": "Sign out",
+  "userMenu.theme": "Theme",
+  "userMenu.language": "Language",
   "hr.sync.lastSynced": "Last sync:",
   "hr.sync.never": "Not yet synced",
   "hr.sync.configureHint": "Configure Personio credentials in Settings",

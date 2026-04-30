@@ -38,6 +38,8 @@
   "userMenu.docs": "Dokumentation",
   "userMenu.settings": "Einstellungen",
   "userMenu.signOut": "Abmelden",
+  "userMenu.theme": "Erscheinungsbild",
+  "userMenu.language": "Sprache",
   "hr.sync.lastSynced": "Letzte Synchronisierung:",
   "hr.sync.never": "Noch nicht synchronisiert",
   "hr.sync.configureHint": "Personio-Zugangsdaten in den Einstellungen konfigurieren",
