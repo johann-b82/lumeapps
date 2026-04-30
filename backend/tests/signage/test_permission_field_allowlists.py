@@ -105,7 +105,20 @@ def _extract_fields_array(script_text: str, perm_uuid: str) -> frozenset[str]:
 def bootstrap_text() -> str:
     if not BOOTSTRAP_PATH.exists():
         pytest.skip(f"bootstrap-roles.sh not found at {BOOTSTRAP_PATH} — skipping parity check")
-    return BOOTSTRAP_PATH.read_text()
+    text = BOOTSTRAP_PATH.read_text()
+    # The v1.22 migration (Backend Consolidation — Directus-First CRUD) moved
+    # per-collection allowlists out of bootstrap-roles.sh into the Directus
+    # snapshot apply step. The `ensure_permission` shell function is still
+    # defined here for back-compat but is no longer called. Skip cleanly so
+    # this drift-detection test doesn't claim a missing section as a real
+    # regression — drift is now governed by `directus/snapshot.json`.
+    if 'ensure_permission "' not in text:
+        pytest.skip(
+            "bootstrap-roles.sh no longer contains ensure_permission calls "
+            "(allowlists moved to Directus snapshot in v1.22) — "
+            "drift detection lives in the snapshot diff guard now"
+        )
+    return text
 
 
 # ---------------------------------------------------------------------------
