@@ -54,6 +54,21 @@ jobs:
           DIRECTUS_SECRET=${{ secrets.DIRECTUS_SECRET || 'ci-fake-secret-00000000-0000-0000-0000-000000000000' }}
           DIRECTUS_ADMIN_EMAIL=admin@example.com
           DIRECTUS_ADMIN_PASSWORD=admin_test_pw
+          # Fixed Viewer role UUID — bootstrap-roles.sh seeds Directus with this
+          # exact value; api/conftest.py + viewer_authz tests both rely on it.
+          DIRECTUS_VIEWER_ROLE_UUID=a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+          # Administrator role UUID — Directus generates a fresh one on first
+          # init, so we can't pin a real one. Tests that need to validate
+          # tokens against the live admin role obtain the actual UUID via the
+          # Directus REST API at runtime; this placeholder just satisfies the
+          # api container's required-env Pydantic check at boot.
+          DIRECTUS_ADMINISTRATOR_ROLE_UUID=c1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+          # Required by docker-compose ${SIGNAGE_DEVICE_JWT_SECRET}; a 64-byte
+          # urlsafe_b64 string is plenty (base-ui jwt HS256 is happy with it).
+          SIGNAGE_DEVICE_JWT_SECRET=ci-fake-signage-jwt-secret-00000000000000000000000000000000000000000
+          # Fernet wants a urlsafe-base64-encoded 32-byte key.
+          # Generated once for CI; not security-sensitive (test data only).
+          FERNET_KEY=ek6e7XHvpBGhLa1MvrSX-oujXi_PeKx69s5Zivq419Q=
           VIEWER_EMAIL=viewer@example.com
           VIEWER_PASSWORD=viewer_test_pw
           API_BASE_URL=http://localhost:8000
