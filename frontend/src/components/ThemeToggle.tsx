@@ -2,29 +2,23 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sun, Moon } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
+import { applyTheme, getTheme, type ThemeMode } from "@/lib/theme";
 
 /**
  * Theme switch — 2-segment Toggle with sun (light) and moon (dark) icons.
  * Persists to localStorage.theme and toggles the .dark class on <html>.
  * Live-tracks OS prefers-color-scheme until the user picks a theme (D-06, D-07).
  * Phase 54 D-11: visual layer migrated to Toggle; all persistence/OS logic preserved.
+ * v1.25: persistence + class-flip extracted to `@/lib/theme` so the mobile
+ * `UserMenu` item can share it without duplicating logic.
  */
-type ThemeMode = "light" | "dark";
 
 export function ThemeToggle() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<ThemeMode>(() =>
-    document.documentElement.classList.contains("dark") ? "dark" : "light",
-  );
+  const [mode, setMode] = useState<ThemeMode>(getTheme);
 
   const applyMode = (next: ThemeMode, persist: boolean) => {
-    const root = document.documentElement;
-    if (next === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    if (persist) localStorage.setItem("theme", next);
+    applyTheme(next, persist);
     setMode(next);
   };
 

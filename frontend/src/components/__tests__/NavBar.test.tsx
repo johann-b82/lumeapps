@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -7,31 +7,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n";
 import { NavBar } from "@/components/NavBar";
 
-// Stub browser APIs not available in jsdom
-beforeAll(() => {
-  if (!("ResizeObserver" in globalThis)) {
-    globalThis.ResizeObserver = class ResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-  }
-  if (!window.matchMedia) {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: (query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }),
-    });
-  }
-});
+// `ResizeObserver` and `window.matchMedia` shims live in
+// `src/test/setup.ts` (added v1.25 C-1) — both are read at mount by
+// `Toggle` (and any component using its indicator-position effect).
 
 vi.mock("@/auth/useAuth", () => ({
   useAuth: () => ({

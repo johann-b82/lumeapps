@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown";
 import { useAuth } from "@/auth/useAuth";
 import { cn } from "@/lib/utils";
+import { toggleTheme } from "@/lib/theme";
 
 /**
  * Derive avatar initials from an email local-part.
@@ -98,13 +99,7 @@ export function UserMenu() {
         <DropdownItem
           data-testid="usermenu-theme-item"
           className="md:hidden"
-          onClick={() => {
-            const root = document.documentElement;
-            const next = root.classList.contains("dark") ? "light" : "dark";
-            if (next === "dark") root.classList.add("dark");
-            else root.classList.remove("dark");
-            localStorage.setItem("theme", next);
-          }}
+          onClick={toggleTheme}
         >
           {t("userMenu.theme")}
         </DropdownItem>
