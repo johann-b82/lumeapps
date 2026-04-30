@@ -1,5 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getPresetRange, type Preset } from "@/lib/dateUtils";
 
 export interface DateRangeValue {
@@ -27,15 +34,38 @@ export function DateRangeFilter({
     onChange({ from: range.from, to: range.to }, p);
   };
 
+  const segments = PRESETS.map((p) => ({
+    value: p,
+    label: t(`dashboard.filter.${p}`),
+  }));
+
   return (
-    <SegmentedControl<Preset>
-      segments={PRESETS.map((p) => ({
-        value: p,
-        label: t(`dashboard.filter.${p}`),
-      }))}
-      value={preset}
-      onChange={(p) => selectPreset(p)}
-      aria-label="Date range"
-    />
+    <>
+      <div data-testid="date-range-filter-desktop" className="hidden md:block">
+        <SegmentedControl<Preset>
+          segments={segments}
+          value={preset}
+          onChange={selectPreset}
+          aria-label="Date range"
+        />
+      </div>
+      <div data-testid="date-range-filter-mobile" className="md:hidden">
+        <Select<Preset>
+          value={preset}
+          onValueChange={selectPreset}
+        >
+          <SelectTrigger className="w-44" aria-label="Date range">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {segments.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </>
   );
 }
