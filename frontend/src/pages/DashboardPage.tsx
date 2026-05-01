@@ -1,5 +1,7 @@
 import { KpiCardGrid } from "@/components/dashboard/KpiCardGrid";
+import { OrdersDistributionCard } from "@/components/dashboard/OrdersDistributionCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
+import { SalesActivityCard } from "@/components/dashboard/SalesActivityCard";
 import { SalesTable } from "@/components/dashboard/SalesTable";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { toApiDate } from "@/lib/dateUtils";
@@ -23,6 +25,8 @@ export function DashboardPage() {
         preset={preset}
         range={range}
       />
+      <SalesActivityCard startDate={startDate} endDate={endDate} />
+      <OrdersDistributionCard startDate={startDate} endDate={endDate} />
       <SalesTable startDate={startDate} endDate={endDate} />
     </div>
   );

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Separator } from "@/components/ui/separator";
 import { DropZone } from "@/components/DropZone";
+import { ContactsDropZone } from "@/components/ContactsDropZone";
 import { ErrorList } from "@/components/ErrorList";
 import { UploadHistory } from "@/components/UploadHistory";
 import type { ValidationErrorDetail } from "@/lib/api";
@@ -34,15 +35,21 @@ export function UploadPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-4">
+          <h2 className="text-xl font-semibold">{t("upload.orders_title")}</h2>
           <DropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(data) => setErrors(data.errors)}
           />
         </div>
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">{t("history_title")}</h2>
-          <UploadHistory />
+          <h2 className="text-xl font-semibold">{t("upload.contacts_title")}</h2>
+          <ContactsDropZone />
         </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">{t("history_title")}</h2>
+        <UploadHistory />
       </div>
     </div>
   );

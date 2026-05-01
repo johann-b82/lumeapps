@@ -84,3 +84,13 @@ export const signageKeys = {
   schedules: () => ["directus", "signage_schedules"] as const,
   scheduleItem: (id: string) => ["directus", "signage_schedules", id] as const,
 };
+
+// v1.41 — Sales activity / orders distribution.
+export const salesKeys = {
+  all: ["sales"] as const,
+  contactsWeekly: (from: string, to: string) =>
+    ["sales", "contacts-weekly", from, to] as const,
+  ordersDistribution: (from: string, to: string) =>
+    ["sales", "orders-distribution", from, to] as const,
+  aliases: () => ["sales", "aliases"] as const,
+};

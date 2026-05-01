@@ -277,6 +277,23 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
           hint={noCredentialsHint ?? optionsError}
         />
 
+        {/* v1.41: Vertriebs-Abteilung — drives sales-rep attribution
+            for the four sales-activity charts and the orders-distribution
+            card on the dashboard. */}
+        <CheckboxList
+          id="personio-sales-dept"
+          label={t("settings.personio.sales_dept.label")}
+          options={(options?.departments ?? []).map((dept): CheckboxOption => ({
+            value: dept,
+            label: dept,
+          }))}
+          selected={draft.personio_sales_dept}
+          onChange={(vals) => setField("personio_sales_dept", vals)}
+          disabled={dropdownsDisabled}
+          loading={hasCredentials && optionsLoading}
+          hint={noCredentialsHint ?? optionsError}
+        />
+
         {/* Skill-Attribut-Key — multi-select checkbox list per UI-01, D-01 */}
         <CheckboxList
           id="personio-skill-key"

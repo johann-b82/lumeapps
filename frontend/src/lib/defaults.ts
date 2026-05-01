@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   personio_sync_interval_h: 1,
   personio_sick_leave_type_id: [],
   personio_production_dept: [],
+  personio_sales_dept: [],
   personio_skill_attr_key: [],
   target_overtime_ratio: null,
   target_sick_leave_ratio: null,
