@@ -22,7 +22,7 @@ export interface DraftFields {
   // Phase 13 Personio fields
   personio_client_id: string;           // local-only, write-only (not in Settings response)
   personio_client_secret: string;       // local-only, write-only
-  personio_sync_interval_h: 0 | 1 | 6 | 24;
+  personio_sync_interval_h: 0 | 1 | 6 | 24 | 168;
   personio_sick_leave_type_id: number[];
   personio_production_dept: string[];
   personio_skill_attr_key: string[];
@@ -68,7 +68,7 @@ function settingsToDraft(s: Settings): DraftFields {
     // Personio: credentials are write-only, always start empty
     personio_client_id: "",
     personio_client_secret: "",
-    personio_sync_interval_h: ((s.personio_sync_interval_h ?? 1) as 0 | 1 | 6 | 24),
+    personio_sync_interval_h: ((s.personio_sync_interval_h ?? 1) as 0 | 1 | 6 | 24 | 168),
     personio_sick_leave_type_id: s.personio_sick_leave_type_id ?? [],
     personio_production_dept: s.personio_production_dept ?? [],
     personio_skill_attr_key: s.personio_skill_attr_key ?? [],

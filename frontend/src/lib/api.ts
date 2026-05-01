@@ -212,7 +212,7 @@ export interface SettingsUpdatePayload {
   // Phase 13 Personio fields — undefined means "don't change"
   personio_client_id?: string;
   personio_client_secret?: string;
-  personio_sync_interval_h?: 0 | 1 | 6 | 24;
+  personio_sync_interval_h?: 0 | 1 | 6 | 24 | 168;
   personio_sick_leave_type_id?: number[];
   personio_production_dept?: string[];
   personio_skill_attr_key?: string[];

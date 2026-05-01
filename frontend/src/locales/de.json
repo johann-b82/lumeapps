@@ -193,6 +193,7 @@
   "settings.personio.sync_interval.hourly": "Stündlich",
   "settings.personio.sync_interval.every6h": "Alle 6 Stunden",
   "settings.personio.sync_interval.daily": "Täglich",
+  "settings.personio.sync_interval.weekly": "Wöchentlich",
   "settings.personio.sick_leave_type.label": "Krankheitstyp",
   "settings.personio.sick_leave_type.placeholder": "Keine Abwesenheitstypen ausgewählt",
   "settings.personio.production_dept.label": "Produktions-Abteilung",

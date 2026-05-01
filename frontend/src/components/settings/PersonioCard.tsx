@@ -43,11 +43,12 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const INTERVAL_OPTIONS: Array<{ value: 0 | 1 | 6 | 24; label: string }> = [
+  const INTERVAL_OPTIONS: Array<{ value: 0 | 1 | 6 | 24 | 168; label: string }> = [
     { value: 0, label: t("settings.personio.sync_interval.manual") },
     { value: 1, label: t("settings.personio.sync_interval.hourly") },
     { value: 6, label: t("settings.personio.sync_interval.every6h") },
     { value: 24, label: t("settings.personio.sync_interval.daily") },
+    { value: 168, label: t("settings.personio.sync_interval.weekly") },
   ];
 
   const [testing, setTesting] = useState(false);
@@ -154,7 +155,7 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
               onValueChange={(v: string) =>
                 setField(
                   "personio_sync_interval_h",
-                  Number(v) as 0 | 1 | 6 | 24,
+                  Number(v) as 0 | 1 | 6 | 24 | 168,
                 )
               }
             >

@@ -135,7 +135,7 @@ class SettingsUpdate(BaseModel):
     personio_client_id: str | None = None
     personio_client_secret: str | None = None
     # Personio KPI configuration — arrays (Phase 19, D-03)
-    personio_sync_interval_h: Literal[0, 1, 6, 24] | None = None
+    personio_sync_interval_h: Literal[0, 1, 6, 24, 168] | None = None
     personio_sick_leave_type_id: list[int] | None = None
     personio_production_dept: list[str] | None = None
     personio_skill_attr_key: list[str] | None = None
