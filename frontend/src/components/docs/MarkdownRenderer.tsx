@@ -52,7 +52,7 @@ function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre"> & { n
       <pre
         ref={ref}
         {...rest}
-        className="overflow-x-auto rounded-md border border-border bg-muted px-4 py-3 text-sm leading-relaxed"
+        className="overflow-x-auto rounded-md bg-muted px-4 py-3 text-sm leading-relaxed"
       >
         {children as ReactNode}
       </pre>
