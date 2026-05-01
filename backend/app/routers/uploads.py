@@ -11,15 +11,22 @@ Compute-justified: clause 1 (file parsing) + clause 3 (cascade delete).
 """
 from datetime import datetime, timezone
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
-from app.models import SalesRecord, UploadBatch
+from app.models import SalesContact, SalesEmployeeAlias, SalesRecord, UploadBatch
 from app.parsing.erp_parser import parse_erp_file
-from app.schemas import UploadResponse, ValidationErrorDetail
+from app.parsing.kontakte_parser import parse_kontakte_file
+from app.schemas import (
+    ContactsUploadResponse,
+    UnmappedTokenSample,
+    UploadResponse,
+    ValidationErrorDetail,
+)
 
 admin_router = APIRouter(
     prefix="/api",
@@ -122,3 +129,99 @@ async def delete_upload(
     await db.commit()
 
     return {"detail": "deleted", "id": batch_id}
+
+
+# ── v1.41 — Kontakte (sales contact log) ────────────────────────────────
+
+
+@admin_router.post("/upload-contacts", response_model=ContactsUploadResponse)
+async def upload_contacts(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ContactsUploadResponse:
+    """Replace-by-date-range insert of a Kontakte (.txt) tab-separated dump.
+
+    Idempotent: any existing ``sales_contacts`` row whose ``contact_date``
+    falls inside the uploaded file's date range is deleted first, so
+    re-uploading the same file is a no-op.
+
+    The response surfaces ``unmapped_tokens`` — ``Wer`` values that have
+    no row in ``sales_employee_aliases``. The frontend uses this to show
+    a "Manage aliases" link to /settings/hr.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Kontakte uploads.",
+        )
+    contents = await file.read()
+    rows, _errors = parse_kontakte_file(contents, filename)
+    if not rows:
+        return ContactsUploadResponse(
+            rows_inserted=0,
+            rows_replaced=0,
+            date_range_from=None,
+            date_range_to=None,
+            unmapped_tokens=[],
+        )
+
+    date_from = min(r["contact_date"] for r in rows)
+    date_to = max(r["contact_date"] for r in rows)
+
+    deleted = await db.execute(
+        sa.delete(SalesContact).where(
+            SalesContact.contact_date >= date_from,
+            SalesContact.contact_date <= date_to,
+        )
+    )
+    rows_replaced = deleted.rowcount or 0
+
+    now = datetime.now(timezone.utc)
+    for r in rows:
+        r["imported_at"] = now
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    inserted_total = 0
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        result = await db.execute(pg_insert(SalesContact).values(chunk))
+        inserted_total += result.rowcount or 0
+    await db.commit()
+
+    # Unmapped tokens = Wer values seen in the file with no alias row.
+    tokens_seen = {r["employee_token"] for r in rows}
+    known_rows = (
+        await db.execute(
+            sa.select(SalesEmployeeAlias.employee_token).where(
+                SalesEmployeeAlias.employee_token.in_(list(tokens_seen))
+            )
+        )
+    ).all()
+    known = {row[0] for row in known_rows}
+    unmapped = tokens_seen - known
+    counts: dict[str, dict] = {}
+    for r in rows:
+        if r["employee_token"] in unmapped:
+            entry = counts.setdefault(
+                r["employee_token"],
+                {"count": 0, "last_seen": r["contact_date"]},
+            )
+            entry["count"] += 1
+            if r["contact_date"] > entry["last_seen"]:
+                entry["last_seen"] = r["contact_date"]
+    samples = sorted(
+        (
+            UnmappedTokenSample(token=t, count=v["count"], last_seen=v["last_seen"])
+            for t, v in counts.items()
+        ),
+        key=lambda s: (-s.count, s.token),
+    )
+
+    return ContactsUploadResponse(
+        rows_inserted=inserted_total,
+        rows_replaced=rows_replaced,
+        date_range_from=date_from,
+        date_range_to=date_to,
+        unmapped_tokens=samples,
+    )
