@@ -98,12 +98,7 @@ export function HrSettingsPage() {
       {(isLoading || !draft) && !isError && <div className="p-6">…</div>}
       {!isLoading && !isError && draft && (
         <>
-          <header className="mb-12">
-            <h1 className="text-3xl font-semibold leading-tight">
-              {t("settings.section.hr")}
-            </h1>
-          </header>
-
+          {/* v1.29: redundant H1 removed — the SubHeader dropdown shows the active section. */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl font-semibold">{t("settings.hr.title")}</CardTitle>

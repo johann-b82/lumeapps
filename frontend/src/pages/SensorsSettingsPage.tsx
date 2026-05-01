@@ -10,7 +10,6 @@ import { useSensorDraft } from "@/hooks/useSensorDraft";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useSensorDraftStatus } from "@/contexts/SensorDraftContext";
 import { useRole } from "@/auth/useAuth";
-import { SectionHeader } from "@/components/ui/section-header";
 import { SensorRowList } from "@/components/settings/sensors/SensorRowList";
 import { PollIntervalCard } from "@/components/settings/sensors/PollIntervalCard";
 import { ThresholdCard } from "@/components/settings/sensors/ThresholdCard";
@@ -135,12 +134,7 @@ export function SensorsSettingsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-8">
-      <SectionHeader
-        title={t("section.settings.sensors.title")}
-        description={t("section.settings.sensors.description")}
-        className="mt-8"
-      />
-
+      {/* v1.29: redundant SectionHeader removed — the SubHeader dropdown shows the active section. */}
       <Card>
         <CardHeader>
           <CardTitle className="text-xl font-semibold">
