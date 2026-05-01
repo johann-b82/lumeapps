@@ -27,15 +27,19 @@ def test_sensor_read_omits_community():
     assert "community" not in SensorRead.model_fields
 
 
-def test_sensor_create_rejects_empty_community():
-    # PITFALLS N-7: no default, min_length=1 — admin must type it.
-    with pytest.raises(ValidationError):
-        SensorCreate(name="t", host="h", community=SecretStr(""))
+def test_sensor_create_accepts_empty_community():
+    # v1.27: community is now optional. Some SNMP devices accept
+    # unauthenticated reads; empty string passes through to pysnmp.
+    sensor = SensorCreate(name="t", host="h", community=SecretStr(""))
+    assert sensor.community.get_secret_value() == ""
 
 
 def test_sensor_create_no_public_default():
+    # v1.27: still no "public" default — empty SecretStr is the only fallback.
+    # PITFALLS N-7's disclosure-risk concern applied to "public" specifically;
+    # an empty community sends no useful auth secret over the wire.
     field = SensorCreate.model_fields["community"]
-    assert field.is_required(), (
-        "community must be required with no default — 'public' default is a "
-        "disclosure bug (PITFALLS N-7)."
+    default = field.default
+    assert default is not None and default.get_secret_value() == "", (
+        "community default must remain SecretStr('') — never 'public' (PITFALLS N-7)."
     )

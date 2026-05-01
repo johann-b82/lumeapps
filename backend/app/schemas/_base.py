@@ -343,11 +343,12 @@ class SensorRead(BaseModel):
 
 
 class SensorCreate(BaseModel):
-    """Admin creates a sensor. community is SecretStr (no default, min_length=1)."""
+    """Admin creates a sensor. community accepts empty string for devices that
+    don't require SNMP community auth (v1.27 — relaxed from min_length=1)."""
     name: str = Field(..., min_length=1, max_length=100)
     host: str = Field(..., min_length=1, max_length=255)
     port: int = Field(default=161, ge=1, le=65535)
-    community: SecretStr = Field(..., min_length=1)  # PITFALLS N-7: no "public" default
+    community: SecretStr = Field(default=SecretStr(""))
     temperature_oid: str | None = Field(default=None, max_length=255)
     humidity_oid: str | None = Field(default=None, max_length=255)
     temperature_scale: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0"))
@@ -356,11 +357,11 @@ class SensorCreate(BaseModel):
 
 
 class SensorUpdate(BaseModel):
-    """Partial sensor edit. All fields optional; community still SecretStr."""
+    """Partial sensor edit. All fields optional; community accepts empty string."""
     name: str | None = Field(default=None, min_length=1, max_length=100)
     host: str | None = Field(default=None, min_length=1, max_length=255)
     port: int | None = Field(default=None, ge=1, le=65535)
-    community: SecretStr | None = Field(default=None, min_length=1)
+    community: SecretStr | None = Field(default=None)
     temperature_oid: str | None = Field(default=None, max_length=255)
     humidity_oid: str | None = Field(default=None, max_length=255)
     temperature_scale: Decimal | None = Field(default=None, gt=Decimal("0"))
@@ -390,7 +391,7 @@ class SnmpProbeRequest(BaseModel):
     """Probe an uncommitted sensor draft config for live temp+humidity."""
     host: str = Field(..., min_length=1, max_length=255)
     port: int = Field(default=161, ge=1, le=65535)
-    community: SecretStr = Field(..., min_length=1)
+    community: SecretStr = Field(default=SecretStr(""))
     temperature_oid: str | None = Field(default=None, max_length=255)
     humidity_oid: str | None = Field(default=None, max_length=255)
     temperature_scale: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0"))
@@ -401,7 +402,7 @@ class SnmpWalkRequest(BaseModel):
     """Walk an OID tree for the OID-Finder admin UI."""
     host: str = Field(..., min_length=1, max_length=255)
     port: int = Field(default=161, ge=1, le=65535)
-    community: SecretStr = Field(..., min_length=1)
+    community: SecretStr = Field(default=SecretStr(""))
     base_oid: str = Field(..., min_length=1, max_length=255)
     max_results: int = Field(default=200, ge=1, le=500)
 

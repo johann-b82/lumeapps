@@ -263,11 +263,12 @@ export function validateSensorDraft(
     if (!(ts > 0) || !(hs > 0)) {
       throw new SensorDraftValidationError("sensors.admin.validation.positive_number");
     }
-    if (r.id === null && !r.community) {
-      throw new SensorDraftValidationError(
-        "sensors.admin.validation.community_required",
-      );
-    }
+    // v1.27: SNMP community is optional. Some devices accept unauthenticated
+    // SNMPv2c reads; the empty string passes through to pysnmp which sends
+    // an empty community in the GET PDU. Validation here used to require a
+    // non-empty community on new sensors, but that prevented configuring
+    // those devices at all. The "Test connection" button still surfaces a
+    // real auth-failure response if the device DOES require a community.
   }
   if (
     globals.sensor_poll_interval_s < 5 ||

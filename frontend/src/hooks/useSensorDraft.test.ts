@@ -113,11 +113,11 @@ describe("validateSensorDraft", () => {
     ).toThrowError(/positive_number/);
   });
 
-  it("throws community_required when a NEW (id===null) row has blank community", () => {
+  it("accepts empty community on a NEW (id===null) row (v1.27 — optional SNMP auth)", () => {
     const newRow = baseRow({ id: null, _localId: "new", community: "" });
-    expect(() => validateSensorDraft([newRow], baseGlobals())).toThrowError(
-      /community_required/,
-    );
+    expect(() =>
+      validateSensorDraft([newRow], baseGlobals()),
+    ).not.toThrow();
   });
 
   it("throws poll_interval out-of-bounds at 4 and 86401", () => {
