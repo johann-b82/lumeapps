@@ -65,6 +65,33 @@ Table columns:
 | Total | Total order value (EUR) |
 | Remaining | Outstanding balance (EUR) |
 
+## Sales Activity
+
+Below the revenue chart, the **Sales activity** card shows four weekly line charts — one per KPI, with one line per sales rep:
+
+| KPI | What it counts |
+|-----|----------------|
+| First contacts | New leads (Typ = ERS in the Kontakte file) |
+| Prospects | Inquiries that look like an early sales conversation (Typ ∈ {ANFR, EPA}) |
+| Visits | On-site customer visits (Typ = ORT) |
+| Quotes | Quotes recorded against a contact (any row whose comment starts with "Angebot") |
+
+Sales reps come from the configured Sales department in **Settings → HR** (Personio). Reps that do not yet have a mapping show up under "Sales-rep aliases" on the same page so an administrator can add a manual mapping.
+
+All four charts respect the dashboard's date-range filter and use the same color per rep so a person reads as the same line across the four charts.
+
+## Order Distribution
+
+Below the activity charts, the **Order distribution** card shows three numbers for the selected date range:
+
+| Metric | What it shows |
+|--------|---------------|
+| Orders / week / rep | Mean number of orders per Personio sales rep per week. Orders are attributed to a rep when a Kontakte row mentions that order's number ("Angebot 5000000"). |
+| Top-3 customer share | Percentage of total order value coming from the top-3 customers. The subtitle lists those customers. |
+| Remaining customers | 100 % minus the top-3 share — the long-tail share of revenue. |
+
+Both the activity charts and the distribution card stay empty until at least one Kontakte file has been uploaded and at least one Sales department is configured in Personio.
+
 ## Related Articles
 
 - [Filters & Date Ranges](/docs/user-guide/filters) — Full walkthrough of date presets, custom ranges, and chart controls.

@@ -65,6 +65,33 @@ Tabellenspalten:
 | Gesamt | Gesamter Auftragswert (EUR) |
 | Restwert | Offener Restbetrag (EUR) |
 
+## Vertriebsaktivität
+
+Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentliche Liniendiagramme — eines pro KPI, mit einer Linie pro Vertriebler:
+
+| KPI | Was gezählt wird |
+|-----|------------------|
+| Erstkontakte | Neue Leads (Typ = ERS in der Kontakte-Datei) |
+| Interessenten | Frühe Vertriebsgespräche (Typ ∈ {ANFR, EPA}) |
+| Besuche | Vor-Ort-Termine beim Kunden (Typ = ORT) |
+| Angebote | Im Kontakt erfasste Angebote (Kommentar beginnt mit „Angebot") |
+
+Die Vertriebler kommen aus der konfigurierten Vertriebsabteilung in **Einstellungen → HR** (Personio). Tokens, die noch keiner Person zugeordnet sind, erscheinen dort unter „Vertriebler-Zuordnungen", damit ein Administrator eine manuelle Zuordnung hinzufügen kann.
+
+Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards und verwenden pro Vertriebler dieselbe Farbe — eine Person liest sich also auf allen vier Diagrammen als dieselbe Linie.
+
+## Auftragsverteilung
+
+Unter den Aktivitäts-Diagrammen zeigt die Karte **Auftragsverteilung** drei Zahlen für den gewählten Zeitraum:
+
+| Kennzahl | Bedeutung |
+|----------|-----------|
+| Aufträge / Woche / Vertriebler | Durchschnittliche Auftragsanzahl pro Personio-Vertriebler pro Woche. Aufträge werden über Kontakte-Zeilen einem Vertriebler zugeordnet, deren Kommentar die Auftragsnummer nennt („Angebot 5000000"). |
+| Top-3-Kunden-Anteil | Anteil des Auftragsvolumens, der auf die drei umsatzstärksten Kunden entfällt. Der Untertitel listet diese Kunden auf. |
+| Restkunden | 100 % minus Top-3-Anteil — der Long-Tail-Anteil am Umsatz. |
+
+Beide Karten bleiben leer, solange keine Kontakte-Datei hochgeladen und keine Vertriebsabteilung in Personio konfiguriert ist.
+
 ## Verwandte Artikel
 
 - [Filter & Zeiträume](/docs/user-guide/filters) — Vollständige Erklärung der Zeitraumvoreinstellungen, benutzerdefinierten Zeiträume und Diagrammsteuerung.

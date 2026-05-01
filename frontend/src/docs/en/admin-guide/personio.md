@@ -51,7 +51,16 @@ Select one or more custom attributes from Personio that represent employee skill
 
 On the [HR Dashboard](/docs/user-guide/hr-dashboard), click the **Refresh data** button to trigger an immediate sync outside the scheduled interval. This fetches the latest data from Personio regardless of the configured sync schedule.
 
+## Sales Department (sales-rep KPI attribution)
+
+A second department picker — **Sales department** — sits below the Production-department picker. This drives the four sales-activity charts and the Order-distribution card on the Sales Dashboard. Every Personio sync rebuilds a canonical alias row per employee in the configured sales department(s), mapping their last name (uppercased + umlaut-folded — `Müller → MUELLER`) to the `Wer` token used in the Kontakte file.
+
+If a sales rep's `Wer` token cannot be derived from their last name (e.g. nicknames like `GUENNI`), an administrator can add a manual alias under **Sales-rep aliases** on the same page. Manual aliases survive sync ticks; canonical aliases are managed by the sync and shown read-only with a padlock icon.
+
+The Sales Dashboard charts and the Order-distribution card stay empty until at least one Kontakte file has been uploaded **and** at least one sales department is configured here.
+
 ## Related Articles
 
 - [HR Dashboard](/docs/user-guide/hr-dashboard) -- view the KPIs powered by Personio data
+- [Sales Dashboard](/docs/user-guide/sales-dashboard) -- the four sales-activity charts and the Order-distribution card driven by the configuration above
 - [Architecture](/docs/admin-guide/architecture) -- understand how the sync service fits into the system
