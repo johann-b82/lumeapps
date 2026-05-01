@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
 import { useSettings } from "@/hooks/useSettings";
 import { useSettingsDraft } from "@/hooks/useSettingsDraft";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
@@ -90,7 +89,7 @@ export function HrSettingsPage() {
   return (
     <div
       data-testid="settings-page-hr"
-      className="max-w-7xl mx-auto px-6 pt-2 pb-32 space-y-4"
+      className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-8"
     >
       {isError && (
         <div className="p-6 text-destructive">{t("theme.error_toast")}</div>
@@ -99,19 +98,13 @@ export function HrSettingsPage() {
       {!isLoading && !isError && draft && (
         <>
           {/* v1.29: redundant H1 removed — the SubHeader dropdown shows the active section. */}
-          {/* v1.30: outer "HR" Card wrapper dropped — Personio + Sollwerte stand on their own. */}
-          <Card>
-            <CardContent className="space-y-6">
-              <PersonioCard
-                draft={draft}
-                setField={setField}
-                hasCredentials={settingsData?.personio_has_credentials ?? false}
-                embedded
-              />
-              <hr className="border-border" />
-              <HrTargetsCard draft={draft} setField={setField} embedded />
-            </CardContent>
-          </Card>
+          {/* v1.32: two stacked Cards (Personio + Sollwerte) like the Sensors page. */}
+          <PersonioCard
+            draft={draft}
+            setField={setField}
+            hasCredentials={settingsData?.personio_has_credentials ?? false}
+          />
+          <HrTargetsCard draft={draft} setField={setField} />
 
           <ActionBar
             isDirty={isDirty}

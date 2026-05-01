@@ -309,7 +309,7 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
   }
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle className="text-xl font-semibold">{t("settings.personio.title")}</CardTitle>
       </CardHeader>

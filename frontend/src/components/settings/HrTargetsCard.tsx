@@ -81,7 +81,7 @@ export function HrTargetsCard({ draft, setField, embedded = false }: HrTargetsCa
   }
 
   return (
-    <Card className="mt-6">
+    <Card>
       <CardHeader>
         <CardTitle className="text-xl font-semibold">
           {t("settings.targets.title")}
