@@ -513,32 +513,24 @@
   "settings.sensors_link.cta": "Open sensor configuration",
   "auth.admin_only.title": "Admin only",
   "auth.admin_only.body": "This section is only available to administrators.",
-  "docs": {
-    "toc": {
-      "title": "On this page"
-    },
-    "loading": "Loading documentation",
-    "empty": {
-      "heading": "No content found",
-      "body": "This article could not be loaded. Try refreshing the page."
-    },
-    "nav": {
-      "docsLabel": "Documentation",
-      "userGuide": "User Guide",
-      "adminGuide": "Admin Guide",
-      "userGuideIntro": "Introduction",
-      "adminGuideIntro": "Introduction",
-      "uploadingData": "Uploading Data",
-      "salesDashboard": "Sales Dashboard",
-      "hrDashboard": "HR Dashboard",
-      "filters": "Filters & Date Ranges",
-      "languageAndTheme": "Language & Dark Mode",
-      "adminSystemSetup": "System Setup",
-      "adminArchitecture": "Architecture",
-      "adminDigitalSignage": "Digital Signage",
-      "adminPersonio": "Personio Integration",
-      "adminSensorMonitor": "Sensor Monitor",
-      "adminUserManagement": "User Management"
-    }
-  }
+  "docs.toc.title": "On this page",
+  "docs.loading": "Loading documentation",
+  "docs.empty.heading": "No content found",
+  "docs.empty.body": "This article could not be loaded. Try refreshing the page.",
+  "docs.nav.docsLabel": "Documentation",
+  "docs.nav.userGuide": "User Guide",
+  "docs.nav.adminGuide": "Admin Guide",
+  "docs.nav.userGuideIntro": "Introduction",
+  "docs.nav.adminGuideIntro": "Introduction",
+  "docs.nav.uploadingData": "Uploading Data",
+  "docs.nav.salesDashboard": "Sales Dashboard",
+  "docs.nav.hrDashboard": "HR Dashboard",
+  "docs.nav.filters": "Filters & Date Ranges",
+  "docs.nav.languageAndTheme": "Language & Dark Mode",
+  "docs.nav.adminSystemSetup": "System Setup",
+  "docs.nav.adminArchitecture": "Architecture",
+  "docs.nav.adminDigitalSignage": "Digital Signage",
+  "docs.nav.adminPersonio": "Personio Integration",
+  "docs.nav.adminSensorMonitor": "Sensor Monitor",
+  "docs.nav.adminUserManagement": "User Management"
 }

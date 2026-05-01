@@ -513,32 +513,24 @@
   "settings.sensors_link.cta": "Sensor-Konfiguration öffnen",
   "auth.admin_only.title": "Nur für Admins",
   "auth.admin_only.body": "Dieser Bereich ist nur für Admins.",
-  "docs": {
-    "toc": {
-      "title": "Auf dieser Seite"
-    },
-    "loading": "Dokumentation wird geladen",
-    "empty": {
-      "heading": "Kein Inhalt gefunden",
-      "body": "Dieser Artikel konnte nicht geladen werden. Versuchen Sie, die Seite zu aktualisieren."
-    },
-    "nav": {
-      "docsLabel": "Dokumentation",
-      "userGuide": "Benutzerhandbuch",
-      "adminGuide": "Administratorhandbuch",
-      "userGuideIntro": "Einleitung",
-      "adminGuideIntro": "Einleitung",
-      "uploadingData": "Daten hochladen",
-      "salesDashboard": "Umsatz-Dashboard",
-      "hrDashboard": "HR-Dashboard",
-      "filters": "Filter & Zeiträume",
-      "languageAndTheme": "Sprache & Dunkelmodus",
-      "adminSystemSetup": "Systemeinrichtung",
-      "adminArchitecture": "Architektur",
-      "adminDigitalSignage": "Digital Signage",
-      "adminPersonio": "Personio-Integration",
-      "adminSensorMonitor": "Sensor Monitor",
-      "adminUserManagement": "Benutzerverwaltung"
-    }
-  }
+  "docs.toc.title": "Auf dieser Seite",
+  "docs.loading": "Dokumentation wird geladen",
+  "docs.empty.heading": "Kein Inhalt gefunden",
+  "docs.empty.body": "Dieser Artikel konnte nicht geladen werden. Versuchen Sie, die Seite zu aktualisieren.",
+  "docs.nav.docsLabel": "Dokumentation",
+  "docs.nav.userGuide": "Benutzerhandbuch",
+  "docs.nav.adminGuide": "Administratorhandbuch",
+  "docs.nav.userGuideIntro": "Einleitung",
+  "docs.nav.adminGuideIntro": "Einleitung",
+  "docs.nav.uploadingData": "Daten hochladen",
+  "docs.nav.salesDashboard": "Umsatz-Dashboard",
+  "docs.nav.hrDashboard": "HR-Dashboard",
+  "docs.nav.filters": "Filter & Zeiträume",
+  "docs.nav.languageAndTheme": "Sprache & Dunkelmodus",
+  "docs.nav.adminSystemSetup": "Systemeinrichtung",
+  "docs.nav.adminArchitecture": "Architektur",
+  "docs.nav.adminDigitalSignage": "Digital Signage",
+  "docs.nav.adminPersonio": "Personio-Integration",
+  "docs.nav.adminSensorMonitor": "Sensor Monitor",
+  "docs.nav.adminUserManagement": "Benutzerverwaltung"
 }
