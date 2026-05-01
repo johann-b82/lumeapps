@@ -319,6 +319,29 @@ jobs:
           echo "OK: no literal ['signage', ...] query keys in frontend/src/signage/"
 
       # -----------------------------------------------------------------------
+      # Frontend build runs BEFORE the docker stack is up so the runner has
+      # the full 7 GB available to rolldown/vite. Earlier ordering (build
+      # after `docker compose up`) hit exit 243 (OOM) on every run since v1.29
+      # because Postgres + Directus + api containers were holding ~2 GB
+      # while rolldown peaked transforming 4 k modules. The build is
+      # independent of the stack — no Postgres / Directus access needed.
+      # -----------------------------------------------------------------------
+      - name: "Set up Node"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: "Frontend npm run build"
+        run: |
+          cd frontend
+          npm install --silent --legacy-peer-deps
+          npm run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
+
+      # -----------------------------------------------------------------------
       # Step 5: Bring up full stack and wait for healthchecks
       # --wait blocks until all services report healthy (or timeout).
       # -----------------------------------------------------------------------
@@ -414,25 +437,6 @@ jobs:
       - name: "Full backend pytest -q"
         run: |
           docker compose exec -T api pytest -q --tb=short
-
-      # -----------------------------------------------------------------------
-      # Step 16 (v1.24): Frontend production build
-      # -----------------------------------------------------------------------
-      # Catches TS errors and Vite/PWA build regressions. Equivalent to
-      # `cd frontend && npm run build` on a clean Node toolchain.
-      # -----------------------------------------------------------------------
-      - name: "Set up Node"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: "Frontend npm run build"
-        run: |
-          cd frontend
-          npm install --silent --legacy-peer-deps
-          npm run build
 
       # -----------------------------------------------------------------------
       # Teardown — always runs, even on failure
