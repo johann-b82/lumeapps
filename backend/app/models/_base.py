@@ -157,7 +157,6 @@ class AppSettings(Base):
     # Personio KPI configuration columns — JSONB arrays (Phase 19)
     personio_sick_leave_type_id: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     personio_production_dept: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    personio_sales_dept: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     personio_skill_attr_key: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # HR KPI target values — nullable (no target = no reference line)
@@ -417,28 +416,7 @@ class SalesContact(Base):
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class SalesEmployeeAlias(Base):
-    """Token → Personio employee mapping for sales-rep attribution.
-
-    The Kontakte file's ``Wer`` column is an uppercase surname token
-    (KARRER, GUENDEL). Canonical rows (``is_canonical = True``) are
-    derived from Personio employees in the configured sales departments
-    on every Personio sync; manual rows survive sync ticks and exist so
-    nicknames (``GUENNI``) can be hand-mapped.
-    """
-
-    __tablename__ = "sales_employee_aliases"
-    __table_args__ = (
-        Index("ix_sales_employee_aliases_employee", "personio_employee_id"),
-    )
-
-    id: Mapped[int] = mapped_column(sa_BigInteger, primary_key=True, autoincrement=True)
-    personio_employee_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("personio_employees.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    employee_token: Mapped[str] = mapped_column(
-        String(128), nullable=False, unique=True
-    )
-    is_canonical: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+# v1.41 introduced a SalesEmployeeAlias model that bound the Kontakte
+# file's ``Wer`` token to a Personio employee. v1.42 removes the
+# binding entirely — sales reps are identified directly by the token —
+# so the model has been deleted along with the Alembic table drop.

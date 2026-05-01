@@ -16,7 +16,6 @@ from app.routers.hr_overtime import router as hr_overtime_router
 from app.routers.signage_pair import router as signage_pair_router
 from app.routers.signage_player import router as signage_player_router
 from app.routers.signage_admin import router as signage_admin_router
-from app.routers.sales_aliases import router as sales_aliases_router
 from app.routers.sales_kpis import router as sales_kpis_router
 from app.scheduler import lifespan
 
@@ -33,7 +32,6 @@ app.include_router(hr_overtime_router)
 app.include_router(signage_pair_router)
 app.include_router(signage_player_router)
 app.include_router(signage_admin_router)
-app.include_router(sales_aliases_router)
 app.include_router(sales_kpis_router)
 
 

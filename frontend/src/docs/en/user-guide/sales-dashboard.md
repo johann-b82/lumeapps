@@ -76,7 +76,7 @@ Below the revenue chart, the **Sales activity** card shows four weekly line char
 | Visits | On-site customer visits (Typ = ORT) |
 | Quotes | Quotes recorded against a contact (any row whose comment starts with "Angebot") |
 
-Sales reps come from the configured Sales department in **Settings → HR** (Personio). Reps that do not yet have a mapping show up under "Sales-rep aliases" on the same page so an administrator can add a manual mapping.
+Sales reps are taken straight from the `Wer` column in the uploaded Kontakte file (e.g. `KARRER`, `GUENDEL`). No Personio mapping is involved.
 
 All four charts respect the dashboard's date-range filter and use the same color per rep so a person reads as the same line across the four charts.
 
@@ -86,11 +86,11 @@ Below the activity charts, the **Order distribution** card shows three numbers f
 
 | Metric | What it shows |
 |--------|---------------|
-| Orders / week / rep | Mean number of orders per Personio sales rep per week. Orders are attributed to a rep when a Kontakte row mentions that order's number ("Angebot 5000000"). |
+| Orders / week / rep | Mean number of orders per sales rep per week. Orders are attributed to a rep when a Kontakte row mentions that order's number ("Angebot 5000000"). |
 | Top-3 customer share | Percentage of total order value coming from the top-3 customers. The subtitle lists those customers. |
 | Remaining customers | 100 % minus the top-3 share — the long-tail share of revenue. |
 
-Both the activity charts and the distribution card stay empty until at least one Kontakte file has been uploaded and at least one Sales department is configured in Personio.
+Both the activity charts and the distribution card stay empty until at least one Kontakte file has been uploaded.
 
 ## Related Articles
 

@@ -1,15 +1,9 @@
-"""POST /api/upload-contacts — Kontakte ingestion + unmapped-token report."""
-from datetime import datetime, timezone
-
+"""POST /api/upload-contacts — Kontakte ingestion."""
 import pytest
 from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal
-from app.models import (
-    PersonioEmployee,
-    SalesContact,
-    SalesEmployeeAlias,
-)
+from app.models import SalesContact
 
 pytestmark = pytest.mark.asyncio
 
@@ -22,40 +16,17 @@ def _hdr() -> bytes:
 
 
 async def _wipe() -> None:
-    """Reset only the v1.41 tables; leave production personio_employees alone."""
     async with AsyncSessionLocal() as s:
         await s.execute(delete(SalesContact))
-        await s.execute(delete(SalesEmployeeAlias))
-        # Drop the synthetic test employee (id=9001) if a previous run left it.
-        await s.execute(
-            delete(PersonioEmployee).where(PersonioEmployee.id == 9001)
-        )
         await s.commit()
 
 
-async def test_kontakte_upload_inserts_and_reports_unmapped(admin_client):
+async def test_kontakte_upload_inserts_rows(admin_client):
     await _wipe()
-    async with AsyncSessionLocal() as s:
-        s.add(
-            PersonioEmployee(
-                id=9001,
-                last_name="Karrer",
-                synced_at=datetime.now(timezone.utc),
-            )
-        )
-        s.add(
-            SalesEmployeeAlias(
-                personio_employee_id=9001,
-                employee_token="KARRER",
-                is_canonical=True,
-            )
-        )
-        await s.commit()
-
     body = _hdr() + (
         b'08.02.2012\t="KARRER"\t="ERS"\t="L"\t1\t="Sonatech"\t='
         b'"Angebot 5000000"\t1\r\n'
-        b'09.02.2012\t="UNKNOWN"\t="ORT"\t="L"\t1\t="ACME"\t="Visit"\t2\r\n'
+        b'09.02.2012\t="GUENDEL"\t="ORT"\t="L"\t1\t="ACME"\t="Visit"\t2\r\n'
     )
     r = await admin_client.post(
         "/api/upload-contacts",
@@ -64,8 +35,6 @@ async def test_kontakte_upload_inserts_and_reports_unmapped(admin_client):
     assert r.status_code == 200, r.text
     payload = r.json()
     assert payload["rows_inserted"] == 2
-    assert any(t["token"] == "UNKNOWN" for t in payload["unmapped_tokens"])
-    assert all(t["token"] != "KARRER" for t in payload["unmapped_tokens"])
 
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(select(SalesContact))).scalars().all()

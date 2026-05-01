@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { Link as WouterLink } from "wouter";
 import { useState } from "react";
 
 import { uploadContactsFile } from "@/lib/api";
@@ -16,11 +15,7 @@ import { AdminOnly } from "@/auth/AdminOnly";
 
 /**
  * ContactsDropZone — admin-only dropzone for Kontakte (.txt) ingestion.
- *
- * Mirrors DropZone for orders, but POSTs to /api/upload-contacts and
- * surfaces the unmapped-token report on success. If any tokens were
- * unmapped the toast renders a "Manage aliases" deep-link to
- * /settings/hr#sales-aliases so the admin can curate the mapping.
+ * Mirrors DropZone for orders, but POSTs to /api/upload-contacts.
  */
 export function ContactsDropZone() {
   const { t } = useTranslation();
@@ -30,24 +25,12 @@ export function ContactsDropZone() {
   const mutation = useMutation({
     mutationFn: uploadContactsFile,
     onSuccess: (data: ContactsUploadResponse) => {
-      const unmappedCount = data.unmapped_tokens.length;
-      const description = t("contacts_upload.summary", {
-        inserted: data.rows_inserted,
-        replaced: data.rows_replaced,
+      toast.success(t("contacts_upload.title"), {
+        description: t("contacts_upload.summary", {
+          inserted: data.rows_inserted,
+          replaced: data.rows_replaced,
+        }),
       });
-      if (unmappedCount > 0) {
-        toast.warning(t("contacts_upload.title"), {
-          description,
-          action: {
-            label: t("contacts_upload.manage_aliases"),
-            onClick: () => {
-              window.location.href = "/settings/hr#sales-aliases";
-            },
-          },
-        });
-      } else {
-        toast.success(t("contacts_upload.title"), { description });
-      }
       queryClient.invalidateQueries({ queryKey: salesKeys.all });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -108,12 +91,6 @@ export function ContactsDropZone() {
               <p className="text-xs text-muted-foreground">
                 {t("contacts_upload.accepted_formats")}
               </p>
-              <WouterLink
-                href="/settings/hr#sales-aliases"
-                className="text-xs text-primary hover:underline"
-              >
-                {t("contacts_upload.manage_aliases")}
-              </WouterLink>
             </>
           )}
         </div>

@@ -51,16 +51,8 @@ Waehlen Sie eines oder mehrere benutzerdefinierte Attribute aus Personio, die Mi
 
 Klicken Sie im [HR-Dashboard](/docs/user-guide/hr-dashboard) auf die Schaltflaeche **Daten aktualisieren**, um eine sofortige Synchronisierung ausserhalb des geplanten Intervalls auszuloesen. Dies ruft die neuesten Daten von Personio ab, unabhaengig vom konfigurierten Sync-Zeitplan.
 
-## Vertriebsabteilung (Vertriebler-KPI-Zuordnung)
-
-Unter dem Picker für die Produktionsabteilung steht ein zweiter Picker — **Vertriebsabteilung**. Er steuert die vier Vertriebsaktivitäts-Diagramme und die Karte „Auftragsverteilung" auf dem Sales-Dashboard. Bei jedem Personio-Sync wird pro Mitarbeiter in der konfigurierten Vertriebsabteilung eine automatische Zuordnungszeile erzeugt, die den (großgeschriebenen + umlaut-gefalteten) Nachnamen — `Müller → MUELLER` — auf den `Wer`-Token aus der Kontakte-Datei abbildet.
-
-Lässt sich der `Wer`-Token nicht aus dem Nachnamen ableiten (z. B. Spitznamen wie `GUENNI`), kann ein Administrator unter **Vertriebler-Zuordnungen** auf derselben Seite eine manuelle Zuordnung anlegen. Manuelle Zeilen überleben Sync-Läufe; automatische Zeilen werden vom Sync verwaltet und sind mit einem Schloss-Symbol schreibgeschützt.
-
-Die Vertriebs-Diagramme und die Auftragsverteilungs-Karte bleiben leer, solange keine Kontakte-Datei hochgeladen **und** keine Vertriebsabteilung hier konfiguriert ist.
-
 ## Verwandte Artikel
 
 - [HR-Dashboard](/docs/user-guide/hr-dashboard) -- die von Personio-Daten gespeisten KPIs anzeigen
-- [Umsatz-Dashboard](/docs/user-guide/sales-dashboard) -- die vier Vertriebsaktivitäts-Diagramme und die Auftragsverteilungs-Karte, die aus der obigen Konfiguration gespeist werden
+- [Umsatz-Dashboard](/docs/user-guide/sales-dashboard) -- die vier Vertriebsaktivitäts-Diagramme und die Auftragsverteilungs-Karte (Vertriebler-Namen kommen direkt aus der Spalte `Wer` der Kontakte-Datei — Personio ist nicht involviert)
 - [Architektur](/docs/admin-guide/architecture) -- verstehen, wie der Sync-Dienst ins System passt

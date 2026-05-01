@@ -13,12 +13,12 @@ export interface ContactsWeeklyWeek {
   iso_year: number;
   iso_week: number;
   label: string;
-  per_employee: Record<number, ContactsWeeklyEmployeeBucket>;
+  // Keyed by Wer token (e.g. "GUENDEL"). v1.42: dropped Personio binding.
+  per_employee: Record<string, ContactsWeeklyEmployeeBucket>;
 }
 
 export interface ContactsWeeklyResponse {
   weeks: ContactsWeeklyWeek[];
-  employees: Record<number, string>;
 }
 
 export function useContactsWeekly(from: string, to: string) {

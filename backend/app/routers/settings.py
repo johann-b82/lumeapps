@@ -80,7 +80,6 @@ def _build_read(row: AppSettings) -> SettingsRead:
         personio_sync_interval_h=row.personio_sync_interval_h,
         personio_sick_leave_type_id=row.personio_sick_leave_type_id or [],
         personio_production_dept=row.personio_production_dept or [],
-        personio_sales_dept=row.personio_sales_dept or [],
         personio_skill_attr_key=row.personio_skill_attr_key or [],
         target_overtime_ratio=float(row.target_overtime_ratio) if row.target_overtime_ratio is not None else None,
         target_sick_leave_ratio=float(row.target_sick_leave_ratio) if row.target_sick_leave_ratio is not None else None,
@@ -234,8 +233,6 @@ async def put_settings(
         row.personio_sick_leave_type_id = payload.personio_sick_leave_type_id
     if payload.personio_production_dept is not None:
         row.personio_production_dept = payload.personio_production_dept
-    if payload.personio_sales_dept is not None:
-        row.personio_sales_dept = payload.personio_sales_dept
     if payload.personio_skill_attr_key is not None:
         row.personio_skill_attr_key = payload.personio_skill_attr_key
     if payload.target_overtime_ratio is not None:

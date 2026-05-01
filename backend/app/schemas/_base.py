@@ -138,7 +138,6 @@ class SettingsUpdate(BaseModel):
     personio_sync_interval_h: Literal[0, 1, 6, 24, 168] | None = None
     personio_sick_leave_type_id: list[int] | None = None
     personio_production_dept: list[str] | None = None
-    personio_sales_dept: list[str] | None = None
     personio_skill_attr_key: list[str] | None = None
     # HR KPI targets — None means "don't change"
     target_overtime_ratio: float | None = None
@@ -175,7 +174,6 @@ class SettingsRead(BaseModel):
     personio_sync_interval_h: int = 1
     personio_sick_leave_type_id: list[int] = []
     personio_production_dept: list[str] = []
-    personio_sales_dept: list[str] = []
     personio_skill_attr_key: list[str] = []
     # HR KPI targets
     target_overtime_ratio: float | None = None
@@ -417,12 +415,9 @@ class SnmpWalkRequest(BaseModel):
 
 
 # ── v1.41 — sales contacts ──────────────────────────────────────────────
-
-
-class UnmappedTokenSample(BaseModel):
-    token: str
-    count: int
-    last_seen: date
+# v1.42: removed SalesAlias schemas + UnmappedTokenSample. Reps are
+# identified directly by the Wer token from the Kontakte file; no
+# Personio binding remains.
 
 
 class ContactsUploadResponse(BaseModel):
@@ -430,7 +425,6 @@ class ContactsUploadResponse(BaseModel):
     rows_replaced: int
     date_range_from: date | None
     date_range_to: date | None
-    unmapped_tokens: list[UnmappedTokenSample]
 
 
 class ContactsWeeklyEmployeeBucket(BaseModel):
@@ -444,12 +438,13 @@ class ContactsWeeklyWeek(BaseModel):
     iso_year: int
     iso_week: int
     label: str
-    per_employee: dict[int, ContactsWeeklyEmployeeBucket]
+    # Keyed by the Wer token (e.g. "GUENDEL"). v1.41 used personio_employee_id
+    # int keys; v1.42 dropped the binding.
+    per_employee: dict[str, ContactsWeeklyEmployeeBucket]
 
 
 class ContactsWeeklyResponse(BaseModel):
     weeks: list[ContactsWeeklyWeek]
-    employees: dict[int, str]
 
 
 class OrdersDistributionResponse(BaseModel):
@@ -457,18 +452,6 @@ class OrdersDistributionResponse(BaseModel):
     top3_share_pct: float
     remaining_share_pct: float
     top3_customers: list[str]
-
-
-class SalesAliasRead(BaseModel):
-    id: int
-    personio_employee_id: int
-    employee_token: str
-    is_canonical: bool
-
-
-class SalesAliasCreate(BaseModel):
-    personio_employee_id: int
-    employee_token: str = Field(min_length=1, max_length=128)
 
 
 __all__ = [
@@ -502,12 +485,9 @@ __all__ = [
     "SnmpProbeRequest",
     "SnmpWalkRequest",
     # v1.41 sales contacts
-    "UnmappedTokenSample",
     "ContactsUploadResponse",
     "ContactsWeeklyEmployeeBucket",
     "ContactsWeeklyWeek",
     "ContactsWeeklyResponse",
     "OrdersDistributionResponse",
-    "SalesAliasRead",
-    "SalesAliasCreate",
 ]

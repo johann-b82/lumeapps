@@ -7,7 +7,6 @@ import { useSettingsDraft } from "@/hooks/useSettingsDraft";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { PersonioCard } from "@/components/settings/PersonioCard";
 import { HrTargetsCard } from "@/components/settings/HrTargetsCard";
-import { SalesAliasesSection } from "@/components/settings/SalesAliasesSection";
 import { ActionBar } from "@/components/settings/ActionBar";
 import { ResetDialog } from "@/components/settings/ResetDialog";
 import { UnsavedChangesDialog } from "@/components/settings/UnsavedChangesDialog";
@@ -106,7 +105,6 @@ export function HrSettingsPage() {
             hasCredentials={settingsData?.personio_has_credentials ?? false}
           />
           <HrTargetsCard draft={draft} setField={setField} />
-          <SalesAliasesSection />
 
           <ActionBar
             isDirty={isDirty}

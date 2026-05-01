@@ -1,6 +1,4 @@
 [
-  "/api/admin/sales-aliases",
-  "/api/admin/sales-aliases/{alias_id}",
   "/api/data/employees/overtime",
   "/api/data/sales/contacts-weekly",
   "/api/data/sales/orders-distribution",

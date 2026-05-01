@@ -76,7 +76,7 @@ Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentlic
 | Besuche | Vor-Ort-Termine beim Kunden (Typ = ORT) |
 | Angebote | Im Kontakt erfasste Angebote (Kommentar beginnt mit „Angebot") |
 
-Die Vertriebler kommen aus der konfigurierten Vertriebsabteilung in **Einstellungen → HR** (Personio). Tokens, die noch keiner Person zugeordnet sind, erscheinen dort unter „Vertriebler-Zuordnungen", damit ein Administrator eine manuelle Zuordnung hinzufügen kann.
+Die Vertriebler kommen direkt aus der Spalte `Wer` der hochgeladenen Kontakte-Datei (z. B. `KARRER`, `GUENDEL`). Eine Personio-Zuordnung wird nicht verwendet.
 
 Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards und verwenden pro Vertriebler dieselbe Farbe — eine Person liest sich also auf allen vier Diagrammen als dieselbe Linie.
 
@@ -86,11 +86,11 @@ Unter den Aktivitäts-Diagrammen zeigt die Karte **Auftragsverteilung** drei Zah
 
 | Kennzahl | Bedeutung |
 |----------|-----------|
-| Aufträge / Woche / Vertriebler | Durchschnittliche Auftragsanzahl pro Personio-Vertriebler pro Woche. Aufträge werden über Kontakte-Zeilen einem Vertriebler zugeordnet, deren Kommentar die Auftragsnummer nennt („Angebot 5000000"). |
+| Aufträge / Woche / Vertriebler | Durchschnittliche Auftragsanzahl pro Vertriebler pro Woche. Aufträge werden über Kontakte-Zeilen einem Vertriebler zugeordnet, deren Kommentar die Auftragsnummer nennt („Angebot 5000000"). |
 | Top-3-Kunden-Anteil | Anteil des Auftragsvolumens, der auf die drei umsatzstärksten Kunden entfällt. Der Untertitel listet diese Kunden auf. |
 | Restkunden | 100 % minus Top-3-Anteil — der Long-Tail-Anteil am Umsatz. |
 
-Beide Karten bleiben leer, solange keine Kontakte-Datei hochgeladen und keine Vertriebsabteilung in Personio konfiguriert ist.
+Beide Karten bleiben leer, solange keine Kontakte-Datei hochgeladen wurde.
 
 ## Verwandte Artikel
 

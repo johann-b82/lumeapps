@@ -39,19 +39,14 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   });
 }
 
-// v1.41 — Kontakte (sales contact log) upload
-export interface UnmappedTokenSample {
-  token: string;
-  count: number;
-  last_seen: string;
-}
-
+// v1.41 — Kontakte (sales contact log) upload (v1.42: dropped
+// unmapped_tokens — sales reps are identified by the Wer token directly,
+// no Personio binding remains).
 export interface ContactsUploadResponse {
   rows_inserted: number;
   rows_replaced: number;
   date_range_from: string | null;
   date_range_to: string | null;
-  unmapped_tokens: UnmappedTokenSample[];
 }
 
 export async function uploadContactsFile(file: File): Promise<ContactsUploadResponse> {
@@ -198,7 +193,6 @@ export interface Settings {
   personio_sync_interval_h: number;
   personio_sick_leave_type_id: number[];
   personio_production_dept: string[];
-  personio_sales_dept: string[];
   personio_skill_attr_key: string[];
   // HR KPI targets
   target_overtime_ratio: number | null;
@@ -240,7 +234,6 @@ export interface SettingsUpdatePayload {
   personio_sync_interval_h?: 0 | 1 | 6 | 24 | 168;
   personio_sick_leave_type_id?: number[];
   personio_production_dept?: string[];
-  personio_sales_dept?: string[];
   personio_skill_attr_key?: string[];
   target_overtime_ratio?: number | null;
   target_sick_leave_ratio?: number | null;

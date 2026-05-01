@@ -25,7 +25,6 @@ export interface DraftFields {
   personio_sync_interval_h: 0 | 1 | 6 | 24 | 168;
   personio_sick_leave_type_id: number[];
   personio_production_dept: string[];
-  personio_sales_dept: string[];
   personio_skill_attr_key: string[];
   // HR KPI targets (stored as ratios, e.g. 0.05 = 5%)
   target_overtime_ratio: number | null;
@@ -72,7 +71,6 @@ function settingsToDraft(s: Settings): DraftFields {
     personio_sync_interval_h: ((s.personio_sync_interval_h ?? 1) as 0 | 1 | 6 | 24 | 168),
     personio_sick_leave_type_id: s.personio_sick_leave_type_id ?? [],
     personio_production_dept: s.personio_production_dept ?? [],
-    personio_sales_dept: s.personio_sales_dept ?? [],
     personio_skill_attr_key: s.personio_skill_attr_key ?? [],
     target_overtime_ratio: s.target_overtime_ratio,
     target_sick_leave_ratio: s.target_sick_leave_ratio,
@@ -102,7 +100,6 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     personio_sync_interval_h: draft.personio_sync_interval_h,
     personio_sick_leave_type_id: draft.personio_sick_leave_type_id,
     personio_production_dept: draft.personio_production_dept,
-    personio_sales_dept: draft.personio_sales_dept,
     personio_skill_attr_key: draft.personio_skill_attr_key,
     target_overtime_ratio: draft.target_overtime_ratio,
     target_sick_leave_ratio: draft.target_sick_leave_ratio,
@@ -129,7 +126,6 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     personio_sync_interval_h: draft.personio_sync_interval_h,
     personio_sick_leave_type_id: draft.personio_sick_leave_type_id,
     personio_production_dept: draft.personio_production_dept,
-    personio_sales_dept: draft.personio_sales_dept,
     personio_skill_attr_key: draft.personio_skill_attr_key,
     target_overtime_ratio: draft.target_overtime_ratio,
     target_sick_leave_ratio: draft.target_sick_leave_ratio,
@@ -164,7 +160,6 @@ const HR_FIELDS = [
   "personio_sync_interval_h",
   "personio_sick_leave_type_id",
   "personio_production_dept",
-  "personio_sales_dept",
   "personio_skill_attr_key",
   "target_overtime_ratio",
   "target_sick_leave_ratio",

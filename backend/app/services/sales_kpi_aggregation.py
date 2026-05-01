@@ -1,22 +1,19 @@
-"""Sales KPI aggregation service (v1.41).
+"""Sales KPI aggregation service (v1.42).
 
-Two compute paths:
+Two compute paths, both keyed by the ``Wer`` token from the Kontakte
+file directly — no Personio binding (v1.41 had one; v1.42 dropped it):
 
 1. ``compute_contacts_weekly`` — group ``sales_contacts`` rows by
-   (iso_year, iso_week, personio_employee_id) and emit four counts per
-   bucket: erstkontakte, interessenten, visits, angebote. Rows with an
-   unmapped ``employee_token`` (no row in ``sales_employee_aliases``)
-   are silently dropped.
+   (iso_year, iso_week, employee_token) and emit four counts per
+   bucket: erstkontakte, interessenten, visits, angebote.
 
 2. ``compute_orders_distribution`` — three numbers for the combined
    "Auftragsverteilung" card:
 
    - **orders_per_week_per_rep** — mean orders per rep per week. Rep
      attribution is bridged through the Kontakte file: a SalesRecord is
-     attributed to the rep recorded on a Kontakte row whose ``comment``
-     starts with ``Angebot <order_number>``. Orders without a matching
-     Kontakte row are dropped from the rep-mean (still counted for the
-     customer-share metrics below).
+     attributed to the token recorded on a Kontakte row whose
+     ``comment`` starts with ``Angebot <order_number>``.
    - **top3_share_pct** — sum(top-3 customers' total_value) /
      sum(all total_value), in percent. Always over the FULL set of
      orders in the date range, regardless of rep attribution.
@@ -31,12 +28,7 @@ from datetime import date
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import (
-    PersonioEmployee,
-    SalesContact,
-    SalesEmployeeAlias,
-    SalesRecord,
-)
+from app.models import SalesContact, SalesRecord
 
 _ANGEBOT_RE = re.compile(r"^\s*Angebot\s+(\S+)", re.IGNORECASE)
 
@@ -44,19 +36,7 @@ _ANGEBOT_RE = re.compile(r"^\s*Angebot\s+(\S+)", re.IGNORECASE)
 async def compute_contacts_weekly(
     session: AsyncSession, date_from: date, date_to: date,
 ) -> dict:
-    """Return weekly KPI buckets per Personio sales rep."""
-    aliases = (
-        await session.execute(
-            select(
-                SalesEmployeeAlias.employee_token,
-                SalesEmployeeAlias.personio_employee_id,
-            )
-        )
-    ).all()
-    token_to_emp: dict[str, int] = {row[0]: row[1] for row in aliases}
-    if not token_to_emp:
-        return {"weeks": [], "employees": {}}
-
+    """Return weekly KPI buckets keyed by Wer token."""
     rows = (
         await session.execute(
             select(SalesContact).where(
@@ -64,21 +44,20 @@ async def compute_contacts_weekly(
                     SalesContact.status == 1,
                     SalesContact.contact_date >= date_from,
                     SalesContact.contact_date <= date_to,
-                    SalesContact.employee_token.in_(list(token_to_emp.keys())),
                 )
             )
         )
     ).scalars().all()
 
-    agg: dict[tuple[int, int, int], dict[str, int]] = defaultdict(
+    agg: dict[tuple[int, int, str], dict[str, int]] = defaultdict(
         lambda: {"erstkontakte": 0, "interessenten": 0, "visits": 0, "angebote": 0}
     )
     for r in rows:
-        emp_id = token_to_emp.get(r.employee_token)
-        if emp_id is None:  # defensive — shouldn't happen given the in_() filter
+        token = r.employee_token
+        if not token:
             continue
         iso_year, iso_week, _ = r.contact_date.isocalendar()
-        bucket = agg[(iso_year, iso_week, emp_id)]
+        bucket = agg[(iso_year, iso_week, token)]
         if r.contact_type == "ERS":
             bucket["erstkontakte"] += 1
         if r.contact_type in ("ANFR", "EPA"):
@@ -89,7 +68,7 @@ async def compute_contacts_weekly(
             bucket["angebote"] += 1
 
     weeks: dict[tuple[int, int], dict] = {}
-    for (yr, wk, emp_id), bucket in agg.items():
+    for (yr, wk, token), bucket in agg.items():
         w = weeks.setdefault(
             (yr, wk),
             {
@@ -99,45 +78,22 @@ async def compute_contacts_weekly(
                 "per_employee": {},
             },
         )
-        w["per_employee"][emp_id] = bucket
+        w["per_employee"][token] = bucket
 
-    employees = {
-        e.id: f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
-        for e in (
-            await session.execute(
-                select(PersonioEmployee).where(
-                    PersonioEmployee.id.in_(list(token_to_emp.values()))
-                )
-            )
-        ).scalars().all()
-    }
     sorted_weeks = sorted(weeks.values(), key=lambda w: (w["iso_year"], w["iso_week"]))
-    return {"weeks": sorted_weeks, "employees": employees}
+    return {"weeks": sorted_weeks}
 
 
 async def _build_order_to_rep_bridge(
     session: AsyncSession, date_from: date, date_to: date,
-) -> dict[str, int]:
-    """Map ``order_number`` → personio_employee_id via Kontakte comments.
+) -> dict[str, str]:
+    """Map ``order_number`` → Wer token via Kontakte comments.
 
     A Kontakte row whose ``comment`` starts with ``Angebot <number>``
     associates that order_number with the rep recorded in ``Wer``.
     Multiple Kontakte rows can mention the same order_number; we take
     the most recent contact_date as authoritative.
     """
-    aliases = (
-        await session.execute(
-            select(
-                SalesEmployeeAlias.employee_token,
-                SalesEmployeeAlias.personio_employee_id,
-            )
-        )
-    ).all()
-    token_to_emp: dict[str, int] = {row[0]: row[1] for row in aliases}
-    if not token_to_emp:
-        return {}
-
-    # Look back further than the date range — a quote can predate the order.
     contact_lookback = date_from.replace(year=date_from.year - 5)
     rows = (
         await session.execute(
@@ -145,25 +101,24 @@ async def _build_order_to_rep_bridge(
                 and_(
                     SalesContact.contact_date >= contact_lookback,
                     SalesContact.contact_date <= date_to,
-                    SalesContact.employee_token.in_(list(token_to_emp.keys())),
                 )
             )
         )
     ).scalars().all()
 
-    latest: dict[str, tuple[date, int]] = {}
+    latest: dict[str, tuple[date, str]] = {}
     for r in rows:
         m = _ANGEBOT_RE.match(r.comment or "")
         if not m:
             continue
         order_no = m.group(1)
-        emp_id = token_to_emp.get(r.employee_token)
-        if emp_id is None:
+        token = r.employee_token
+        if not token:
             continue
         existing = latest.get(order_no)
         if existing is None or r.contact_date > existing[0]:
-            latest[order_no] = (r.contact_date, emp_id)
-    return {ord_no: emp_id for ord_no, (_, emp_id) in latest.items()}
+            latest[order_no] = (r.contact_date, token)
+    return {ord_no: token for ord_no, (_, token) in latest.items()}
 
 
 async def compute_orders_distribution(
@@ -192,16 +147,14 @@ async def compute_orders_distribution(
 
     bridge = await _build_order_to_rep_bridge(session, date_from, date_to)
 
-    # Orders attributed to a rep
     attributed = [o for o in orders if o.order_number in bridge]
-    rep_ids = {bridge[o.order_number] for o in attributed}
+    rep_tokens = {bridge[o.order_number] for o in attributed}
     weeks = max(1, ((date_to - date_from).days // 7) + 1)
-    rep_count = max(1, len(rep_ids))
+    rep_count = max(1, len(rep_tokens))
     orders_per_week_per_rep = (
         round(len(attributed) / weeks / rep_count, 2) if rep_count else 0.0
     )
 
-    # Customer concentration over the FULL order set
     by_customer: dict[str, float] = defaultdict(float)
     for o in orders:
         by_customer[o.customer_name or ""] += float(o.total_value or 0)

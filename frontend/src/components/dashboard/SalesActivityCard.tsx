@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Legend,
@@ -31,21 +32,34 @@ const KPIS: { key: keyof ContactsWeeklyEmployeeBucket; titleKey: string }[] = [
 
 function buildSeries(
   data: ContactsWeeklyResponse,
-  empIds: number[],
+  tokens: string[],
   kpi: keyof ContactsWeeklyEmployeeBucket,
 ): Array<Record<string, number | string>> {
   return data.weeks.map((w) => {
     const row: Record<string, number | string> = { label: w.label };
-    for (const id of empIds) {
-      row[String(id)] = w.per_employee[id]?.[kpi] ?? 0;
+    for (const tk of tokens) {
+      row[tk] = w.per_employee[tk]?.[kpi] ?? 0;
     }
     return row;
   });
 }
 
+function collectTokens(weeks: ContactsWeeklyResponse["weeks"]): string[] {
+  const set = new Set<string>();
+  for (const w of weeks) {
+    for (const tk of Object.keys(w.per_employee)) set.add(tk);
+  }
+  return [...set].sort();
+}
+
 export function SalesActivityCard({ startDate, endDate }: Props) {
   const { t } = useTranslation();
   const q = useContactsWeekly(startDate ?? "", endDate ?? "");
+
+  const tokens = useMemo(
+    () => (q.data ? collectTokens(q.data.weeks) : []),
+    [q.data],
+  );
 
   if (q.isLoading) {
     return (
@@ -77,10 +91,6 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
     );
   }
 
-  const empIds = Object.keys(q.data.employees)
-    .map(Number)
-    .sort((a, b) => a - b);
-
   return (
     <Card>
       <CardHeader>
@@ -92,17 +102,17 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
             <div className="text-sm font-medium mb-2">{t(k.titleKey)}</div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={buildSeries(q.data!, empIds, k.key)}>
+                <LineChart data={buildSeries(q.data!, tokens, k.key)}>
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip />
                   {idx === 0 && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                  {empIds.map((id, i) => (
+                  {tokens.map((tk, i) => (
                     <Line
-                      key={id}
+                      key={tk}
                       type="monotone"
-                      dataKey={String(id)}
-                      name={q.data!.employees[id]}
+                      dataKey={tk}
+                      name={tk}
                       stroke={sensorPalette[i % sensorPalette.length]}
                       strokeWidth={2}
                       dot={false}

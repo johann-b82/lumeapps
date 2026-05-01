@@ -18,12 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
-from app.models import SalesContact, SalesEmployeeAlias, SalesRecord, UploadBatch
+from app.models import SalesContact, SalesRecord, UploadBatch
 from app.parsing.erp_parser import parse_erp_file
 from app.parsing.kontakte_parser import parse_kontakte_file
 from app.schemas import (
     ContactsUploadResponse,
-    UnmappedTokenSample,
     UploadResponse,
     ValidationErrorDetail,
 )
@@ -144,10 +143,6 @@ async def upload_contacts(
     Idempotent: any existing ``sales_contacts`` row whose ``contact_date``
     falls inside the uploaded file's date range is deleted first, so
     re-uploading the same file is a no-op.
-
-    The response surfaces ``unmapped_tokens`` — ``Wer`` values that have
-    no row in ``sales_employee_aliases``. The frontend uses this to show
-    a "Manage aliases" link to /settings/hr.
     """
     filename = file.filename or ""
     if not filename.lower().endswith(".txt"):
@@ -163,7 +158,6 @@ async def upload_contacts(
             rows_replaced=0,
             date_range_from=None,
             date_range_to=None,
-            unmapped_tokens=[],
         )
 
     date_from = min(r["contact_date"] for r in rows)
@@ -189,39 +183,9 @@ async def upload_contacts(
         inserted_total += result.rowcount or 0
     await db.commit()
 
-    # Unmapped tokens = Wer values seen in the file with no alias row.
-    tokens_seen = {r["employee_token"] for r in rows}
-    known_rows = (
-        await db.execute(
-            sa.select(SalesEmployeeAlias.employee_token).where(
-                SalesEmployeeAlias.employee_token.in_(list(tokens_seen))
-            )
-        )
-    ).all()
-    known = {row[0] for row in known_rows}
-    unmapped = tokens_seen - known
-    counts: dict[str, dict] = {}
-    for r in rows:
-        if r["employee_token"] in unmapped:
-            entry = counts.setdefault(
-                r["employee_token"],
-                {"count": 0, "last_seen": r["contact_date"]},
-            )
-            entry["count"] += 1
-            if r["contact_date"] > entry["last_seen"]:
-                entry["last_seen"] = r["contact_date"]
-    samples = sorted(
-        (
-            UnmappedTokenSample(token=t, count=v["count"], last_seen=v["last_seen"])
-            for t, v in counts.items()
-        ),
-        key=lambda s: (-s.count, s.token),
-    )
-
     return ContactsUploadResponse(
         rows_inserted=inserted_total,
         rows_replaced=rows_replaced,
         date_range_from=date_from,
         date_range_to=date_to,
-        unmapped_tokens=samples,
     )

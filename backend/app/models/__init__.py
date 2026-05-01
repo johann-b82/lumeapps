@@ -21,7 +21,6 @@ from app.models._base import (  # noqa: F401
     SensorReading,
     SensorPollLog,
     SalesContact,
-    SalesEmployeeAlias,
 )
 
 # Signage models (added in Task 2 of this plan)
@@ -44,7 +43,7 @@ __all__ = [
     "AppSettings", "UploadBatch", "SalesRecord",
     "PersonioEmployee", "PersonioAttendance", "PersonioAbsence", "PersonioSyncMeta",
     "Sensor", "SensorReading", "SensorPollLog",
-    "SalesContact", "SalesEmployeeAlias",
+    "SalesContact",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
     "SignageDevice", "SignageDeviceTag", "SignageDeviceTagMap",
