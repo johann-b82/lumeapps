@@ -196,8 +196,7 @@ DELETE (extracted into the two new pages)
 - `/settings` resolves to `/settings/general` (200 + body matches the new general page).
 - The SubHeader on `/settings/*` shows a `<Select>` with three options. Selecting any option navigates to the corresponding peer page.
 - A dirty draft on one page produces the existing `UnsavedChangesDialog` when the user switches via the picker.
-- Save on `/settings/general` produces a `PUT /api/settings` payload containing only general-slice fields (asserted via vitest fetch spy).
-- Save on `/settings/hr` produces a payload containing only HR-slice fields.
+- Save on `/settings/general` and `/settings/hr` writes the full settings payload via `PUT /api/settings`. The slice scope governs only `isDirty` (and therefore the dialog + ActionBar Save button); the payload itself is unchanged from the v1.27 single-page behavior. Backend `SettingsUpdate` accepts every field as Optional, so re-sending unchanged values is idempotent. (This relaxes an earlier draft of this spec that called for slice-filtered payloads — implementation chose to keep the payload shape so behavior remains identical to v1.27 and no per-slice payload assertion test was added.)
 - Sensors page works exactly as today (no functional change).
 - `cd frontend && npm run build` exits 0.
 - `cd frontend && npx vitest run` is green (existing 255 + new tests).
