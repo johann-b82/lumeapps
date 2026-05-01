@@ -89,7 +89,7 @@ export function HrSettingsPage() {
   return (
     <div
       data-testid="settings-page-hr"
-      className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-8"
+      className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-4"
     >
       {isError && (
         <div className="p-6 text-destructive">{t("theme.error_toast")}</div>

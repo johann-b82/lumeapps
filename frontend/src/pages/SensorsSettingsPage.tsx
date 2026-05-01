@@ -133,7 +133,7 @@ export function SensorsSettingsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-8">
+    <div className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-4">
       {/* v1.29: redundant SectionHeader removed — the SubHeader dropdown shows the active section. */}
       <Card>
         <CardHeader>
