@@ -6,7 +6,7 @@ Personio is the HR data source for absence rates, headcount, and skill tracking 
 
 ## Entering Credentials
 
-1. Navigate to **Settings → HR** in the sub-header dropdown (or go directly to `/settings/hr`). Since v1.28 HR is a peer settings page — the old single-page-with-all-sections layout is gone.
+1. Open **Settings → HR** — pick **HR** from the section dropdown at the top of the Settings page. HR is its own page; you no longer scroll past General to reach it.
 2. In the **Personio** section:
 3. Enter your **Client ID** in the first field.
 4. Enter your **Client Secret** in the second field.
@@ -27,7 +27,7 @@ In the **Sync interval** dropdown next to the credential fields, choose how ofte
 | Hourly        | Automatic sync every hour                     |
 | Every 6 hours | Automatic sync four times a day               |
 | Daily         | Automatic sync once every 24 hours            |
-| Weekly        | Automatic sync every 168 hours (v1.31)        |
+| Weekly        | Automatic sync once a week                    |
 
 Select the interval that matches your reporting needs, then click **Save changes**.
 

@@ -84,7 +84,7 @@ Playlists werden Geräten über **Tags** zugeordnet. Eine Playlist läuft auf ei
 
 ## Medien hochladen
 
-Öffne **Signage → Medien**, um Medien-Assets zu verwalten. Seit v1.40 sind alle Aufnahme-Surfaces (Drop-Zone + URL/HTML-Formular) und das vorhandene Inhaltsraster in **einer einzigen Karte** zusammengeführt — getrennt durch eine horizontale Trennlinie. Die früher modale „Externen Inhalt registrieren"-Dialog wurde in v1.36 als Inline-Formular eingebaut und ist jetzt rechts neben der Drop-Zone immer sichtbar.
+Öffne **Signage → Medien**, um Medien-Assets zu verwalten. Die Seite ist durch eine horizontale Trennlinie zweigeteilt: die obere Hälfte enthält die Eingabe-Bereiche (links die Drop-Zone, rechts ein Inline-Formular zum Registrieren einer URL oder eines HTML-Snippets), die untere Hälfte zeigt die bereits hinzugefügten Medien.
 
 ### Bilder und Videos hochladen
 

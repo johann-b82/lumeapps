@@ -38,9 +38,9 @@ Verwalten Sie Benutzerrollen und Zugriffsrechte ueber Directus, einschliesslich 
 
 [Zur Benutzerverwaltung](/docs/admin-guide/user-management)
 
-## Einstellungen-Layout (seit v1.28)
+## Einstellungen-Layout
 
-Die Einstellungs-Seite ist in eigenständige Unterseiten aufgeteilt — **Allgemein**, **HR** und **Sensoren** — auswählbar über ein Dropdown im Sub-Header. Jede Seite hat einen eigenen Draft- und Speichern/Verwerfen-Balken; das Wechseln des Abschnitts bei ungespeicherten Änderungen wird vorab abgefangen.
+Der Einstellungsbereich ist in drei Seiten aufgeteilt — **Allgemein**, **HR** und **Sensoren** — auswählbar über das Abschnitts-Dropdown oben auf der Seite. Jede Seite hat ihre eigenen Speichern- und Verwerfen-Buttons; ein Wechsel zu einem anderen Abschnitt mit ungespeicherten Änderungen fragt vorab zur Bestätigung nach.
 
 ## Verwandte Artikel
 

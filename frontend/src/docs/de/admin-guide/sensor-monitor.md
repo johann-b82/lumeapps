@@ -4,7 +4,7 @@
 
 Der Sensor Monitor fragt Umgebungs-SNMP-Sensoren (Temperatur + Luftfeuchtigkeit) aus dem gemeinsamen Docker-Netzwerk ab, speichert die Messwerte in PostgreSQL und zeigt sie im admin-exklusiven `/sensors`-Dashboard an. Die Einrichtung erfolgt vollständig über die UI -- du brauchst keinen YAML- oder SQL-Zugriff.
 
-Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensoren** im Sub-Header-Dropdown (oder direkt unter `/settings/sensors`). Seit v1.28 ist Sensoren eine eigenständige Einstellungs-Seite — gleichwertig zu Allgemein und HR — und wird nicht mehr in einem Overlay geöffnet. Nur Administratoren sehen diese Seite.
+Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensoren** — wähle **Sensoren** aus dem Abschnitts-Dropdown oben auf der Einstellungs-Seite. Sensoren ist eine vollwertige eigene Seite, kein Overlay. Nur Administratoren sehen diese Seite.
 
 ## Voraussetzungen
 
@@ -15,14 +15,14 @@ Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensoren**
    ```
 
    Eine numerische Antwort heißt: alles gut. Ein Timeout heißt: die Docker-Bridge kann das Sensor-Subnetz nicht erreichen -- siehe [Fehlerbehebung → Host-Modus-Fallback](#host-mode-fallback) weiter unten.
-2. Admin-Rolle im KPI-Dashboard (Viewer-Konten sehen weder die Launcher-Kachel noch `/settings/sensors`).
+2. Admin-Rolle im KPI-Dashboard. Viewer-Konten können die Sensoren-Einstellungs-Seite nicht öffnen.
 3. Der Sensor-Host muss eingeschaltet sein und auf SNMPv2c über UDP 161 antworten. SNMPv3 mit Auth/Priv wird in diesem Release nicht unterstützt.
 
 > **Hinweis:** Der Smoke-Test nutzt bewusst `snmpget` aus dem `api`-Container heraus -- Erreichbarkeit von deinem Laptop oder dem Docker-Host reicht nicht. Der Scheduler läuft im Container, also muss dort das Routing funktionieren.
 
 ## Einen Sensor einrichten
 
-Öffne **Einstellungen → Sensoren** im Sub-Header-Dropdown (oder gehe direkt zu `/settings/sensors`).
+Öffne **Einstellungen → Sensoren** — wähle **Sensoren** aus dem Abschnitts-Dropdown oben auf der Einstellungs-Seite.
 
 ### Schritt 1: OIDs mit SNMP-Walk finden
 
@@ -42,12 +42,12 @@ Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensoren**
 | Name               | Ja      | Eindeutig über alle Sensoren hinweg                                      |
 | Host               | Ja      | IP oder DNS-Name, erreichbar aus dem `api`-Container                     |
 | Port               | Ja      | Standard 161                                                             |
-| Community          | Nein    | Schreibgeschütztes Secret, verschlüsselt gespeichert. Seit v1.27 optional — leer lassen, wenn das Gerät SNMPv2c ohne Authentifizierung akzeptiert. |
+| Community          | Nein    | Schreibgeschütztes Secret, verschlüsselt gespeichert. Optional — leer lassen, wenn das Gerät SNMPv2c ohne Authentifizierung akzeptiert. |
 | Temperatur-OID     | Nein    | Leer lassen, um Temperatur für diesen Sensor zu überspringen             |
 | Temperatur-Skalierung | Ja   | Positive Zahl; typisch 1.0 oder 10.0                                     |
 | Luftfeuchte-OID    | Nein    | Leer lassen, um Luftfeuchte für diesen Sensor zu überspringen            |
 | Luftfeuchte-Skalierung | Ja  | Positive Zahl; typisch 1.0 oder 10.0                                     |
-| Diagrammfarbe      | Nein    | Hex-Farbe (`#RRGGBB`) für die Linie dieses Sensors auf `/sensors`. Leer = nächste Farbe aus der Standard-Palette (v1.39). |
+| Diagrammfarbe      | Nein    | Hex-Farbe (`#RRGGBB`) für die Linie dieses Sensors im Sensoren-Dashboard. Leer = nächste Farbe aus der Standard-Palette. |
 | Aktiviert          | Ja      | Deaktivieren stoppt die Abfrage, ohne die Zeile zu löschen               |
 
 ### Schritt 3: Prüfen
@@ -68,7 +68,7 @@ Globale Schwellenwerte gelten für alle Sensoren. Setze sie in der Karte **Globa
 
 Fällt ein Messwert außerhalb des Bereichs, zeigt die KPI-Karte den Wert in Destructive-Rot mit der Bildunterschrift "Außerhalb des Bereichs". Diagramme zeichnen gestrichelte Referenzlinien an jedem Schwellenwert.
 
-> **Bekannte Einschränkung (v1.15):** Ein leeres Schwellen-Feld bedeutet "nicht ändern". Um einen bereits gesetzten Schwellwert zu entfernen, wende dich an den Operator, oder warte auf ein zukünftiges Release mit einer expliziten Reset-Aktion.
+> **Bekannte Einschränkung:** Ein leeres Schwellen-Feld bedeutet "nicht ändern". Um einen bereits gesetzten Schwellwert zu entfernen, wende dich an den Operator, oder warte auf ein zukünftiges Release mit einer expliziten Reset-Aktion.
 
 Pro-Sensor-Überschreibungen der Schwellenwerte werden in diesem Release nicht unterstützt.
 
@@ -79,7 +79,7 @@ Die Karte **Abfrage-Kadenz** setzt ein einzelnes Intervall (5–86400 Sekunden) 
 Empfehlungen:
 
 - 60 s (Standard): typisches produktives Umgebungs-Monitoring
-- 30 s: für enges Schwellen-Alerting (Feature in v1.16 geplant)
+- 30 s: für enges Schwellen-Alerting (geplantes zukünftiges Feature)
 - 300+ s: für niederfrequentes Baseline-Monitoring
 
 | Intervall | Abfragen pro Tag & Sensor | Typischer Einsatz                  |
@@ -160,18 +160,18 @@ Suche nach `PollResult`-Einträgen. Leere Ergebnisse ohne Fehler bedeuten meist,
 
 Die Eingabe für das Abfrage-Intervall löst beim Speichern einen In-Prozess-Reschedule aus. Bleibt das alte Intervall aktiv:
 
-1. Lade `/settings/sensors` neu und bestätige, dass der Wert gespeichert wurde.
+1. Lade die Sensoren-Einstellungs-Seite neu und bestätige, dass der Wert gespeichert wurde.
 2. Ist der Wert korrekt, das Verhalten aber nicht: starte den `api`-Container neu: `docker compose restart api`.
 
 ## Sicherheit
 
-> **Community ist seit v1.27 optional.** Manche SNMP-Geräte (z. B. einige Hutermann-Modelle) akzeptieren Anfragen ohne Community-String — lass das Feld dann leer. Wenn dein Gerät einen Community-String erwartet, **verwende in Produktion niemals den Default `public`**: ändere ihn am Gerät auf ein deployment-spezifisches Secret, bevor du den Monitor exponierst.
+> **Community ist optional.** Manche SNMP-Geräte (z. B. einige Hutermann-Modelle) akzeptieren Anfragen ohne Community-String — lass das Feld dann leer. Wenn dein Gerät einen Community-String erwartet, **verwende in Produktion niemals den Default `public`**: ändere ihn am Gerät auf ein deployment-spezifisches Secret, bevor du den Monitor exponierst.
 
 > **Community-Strings werden verschlüsselt gespeichert** mit dem Fernet-Key der Anwendung (derselbe Key wie für Personio-Credentials). Sie werden niemals in API-Antworten entschlüsselt und niemals geloggt. Das Admin-Formular behandelt Community als schreibgeschützt: leer lassen beim Bearbeiten behält den gespeicherten Wert, ein neuer String überschreibt ihn.
 
 Weitere Hinweise:
 
-- Rotiere Community-Strings am Sensor-Gerät, wenn ein Admin das Team verlässt; aktualisiere danach die Zeile in `/settings/sensors` (leer = behalten).
+- Rotiere Community-Strings am Sensor-Gerät, wenn ein Admin das Team verlässt; aktualisiere danach die Zeile auf der Sensoren-Einstellungs-Seite (leer = behalten).
 - Beschränke SNMP auf dem Sensor-Host auf die Quell-IP des Docker-Hosts, falls die Geräte-Firmware das erlaubt.
 - Halte das Sensor-Subnetz aus dem öffentlichen Internet heraus.
 

@@ -59,12 +59,12 @@ docker compose ps
 ```
 
 4. Access the application:
-   - **App (via Caddy reverse proxy, v1.21+):** `http://<host>/` -- this is the primary entry point for everyone on the LAN.
+   - **App (via Caddy reverse proxy):** `http://<host>/` -- this is the primary entry point for everyone on the LAN.
    - **Frontend (direct Vite dev):** `http://localhost:5173`
    - **Directus admin UI:** `http://localhost:8055` (direct) or `http://<host>/directus/admin` (via the proxy)
    - **NPM admin UI:** `http://localhost:81`
 
-> **Reverse proxy note (Phase 64, v1.21+):** The KPI Dashboard is now served at `http://<host>/` through a Caddy reverse proxy. Directus is reachable on the same host at `/directus/*`. The direct ports `:5173`, `:8000`, and `:8055` stay open for development. Normal operator workflows should use `:80`.
+> **Reverse proxy note:** The KPI Dashboard is served at `http://<host>/` through a Caddy reverse proxy. Directus is reachable on the same host at `/directus/*`. The direct ports `:5173`, `:8000`, and `:8055` stay open for development. Normal operator workflows should use `:80`.
 
 ## Fetching the Administrator Role UUID
 

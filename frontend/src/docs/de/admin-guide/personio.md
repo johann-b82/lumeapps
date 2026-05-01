@@ -6,7 +6,7 @@ Personio ist die HR-Datenquelle fuer Abwesenheitsquoten, Mitarbeiterzahlen und S
 
 ## Zugangsdaten eingeben
 
-1. Navigieren Sie zu **Einstellungen → HR** im Sub-Header-Dropdown (oder direkt zu `/settings/hr`). Seit v1.28 ist HR eine eigenständige Einstellungsseite — die alte Lange-Liste mit allen Abschnitten existiert nicht mehr.
+1. Öffnen Sie **Einstellungen → HR** — wählen Sie **HR** aus dem Abschnitts-Dropdown oben auf der Einstellungs-Seite. HR ist eine eigene Seite; Sie scrollen nicht mehr an Allgemein vorbei.
 2. Im Abschnitt **Personio**:
 3. Geben Sie Ihre **Client ID** in das erste Feld ein.
 4. Geben Sie Ihr **Client Secret** in das zweite Feld ein.
@@ -27,7 +27,7 @@ Waehlen Sie im Dropdown **Sync-Intervall** neben den Zugangsdatenfeldern, wie of
 | Stuendlich      | Automatische Synchronisierung jede Stunde          |
 | Alle 6 Stunden  | Automatische Synchronisierung viermal taeglich     |
 | Taeglich        | Automatische Synchronisierung alle 24 Stunden      |
-| Woechentlich    | Automatische Synchronisierung alle 168 Stunden (v1.31) |
+| Woechentlich    | Automatische Synchronisierung einmal pro Woche     |
 
 Waehlen Sie das Intervall, das zu Ihren Reporting-Anforderungen passt, und klicken Sie auf **Aenderungen speichern**.
 

@@ -38,9 +38,9 @@ Manage user roles and access through Directus, including administrator and viewe
 
 [Read the User Management guide](/docs/admin-guide/user-management)
 
-## Settings layout (since v1.28)
+## Settings layout
 
-The Settings page is split into peer pages — **General**, **HR**, and **Sensors** — selectable via a dropdown in the sub-header. Each page has its own draft and Save/Discard bar; switching sections with unsaved changes prompts you before discarding.
+The Settings area is split into three pages — **General**, **HR**, and **Sensors** — picked from the section dropdown at the top of the page. Each page has its own Save and Discard buttons; switching to another section while you have unsaved changes asks for confirmation first.
 
 ## Related Articles
 

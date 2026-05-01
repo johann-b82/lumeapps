@@ -84,7 +84,7 @@ Playlists are matched to devices by **tags**. A playlist plays on a device when 
 
 ## Uploading Media
 
-Navigate to **Signage → Media** to manage media assets. Since v1.40 all intake surfaces (drop zone + URL/HTML form) and the existing-content grid live in **a single Card** separated by a horizontal rule. The previously modal "Register external content" dialog was inlined in v1.36 and now sits permanently to the right of the drop zone.
+Navigate to **Signage → Media** to manage media assets. The page has two halves separated by a horizontal rule: the upper half holds the intake controls (drop zone on the left, an inline form for registering a URL or HTML snippet on the right), and the lower half lists the media you have already added.
 
 ### Uploading Images and Videos
 

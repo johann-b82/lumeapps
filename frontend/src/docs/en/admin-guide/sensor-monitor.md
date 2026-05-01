@@ -4,7 +4,7 @@
 
 The Sensor Monitor polls environmental SNMP sensors (temperature + humidity) from the shared Docker network, stores readings in PostgreSQL, and surfaces them on the admin-only `/sensors` dashboard. Onboarding is entirely UI-driven -- no YAML or SQL access required.
 
-All sensor configuration lives under **Settings → Sensors** in the sub-header dropdown (or navigate directly to `/settings/sensors`). Since v1.28 Sensors is a peer settings page — equal to General and HR — and is no longer opened in an overlay. Only administrators see this page.
+All sensor configuration lives under **Settings → Sensors** — pick **Sensors** from the section dropdown at the top of the Settings page. Sensors is a full page in its own right, not an overlay. Only administrators see it.
 
 ## Prerequisites
 
@@ -15,14 +15,14 @@ All sensor configuration lives under **Settings → Sensors** in the sub-header 
    ```
 
    A numeric response means you are good to go. A timeout means the Docker bridge cannot route to the sensor subnet -- see [Troubleshooting → Host-mode fallback](#host-mode-fallback) below.
-2. Admin role on the KPI Dashboard (Viewer accounts see neither the launcher tile nor `/settings/sensors`).
+2. Admin role on the KPI Dashboard. Viewer accounts cannot open the Sensors settings page.
 3. The sensor host must be powered on and responding to SNMPv2c on UDP 161. SNMPv3 auth/priv is not supported in this release.
 
 > **Note:** The smoke test uses `snmpget` from inside the `api` container on purpose -- reachability from your laptop or the Docker host is not sufficient. The scheduler runs inside the container, so that is where routing must work.
 
 ## Onboarding a Sensor
 
-Navigate to **Settings → Sensors** in the sub-header dropdown (or go directly to `/settings/sensors`).
+Open **Settings → Sensors** — pick **Sensors** from the section dropdown at the top of the Settings page.
 
 ### Step 1: Discover OIDs with SNMP Walk
 
@@ -42,12 +42,12 @@ Navigate to **Settings → Sensors** in the sub-header dropdown (or go directly 
 | Name           | Yes      | Unique across all sensors                                             |
 | Host           | Yes      | IP or DNS name reachable from the `api` container                     |
 | Port           | Yes      | Default 161                                                           |
-| Community      | No       | Write-only secret, encrypted at rest. Optional since v1.27 — leave blank if the device accepts SNMPv2c without authentication. |
+| Community      | No       | Write-only secret, encrypted at rest. Optional — leave blank if the device accepts SNMPv2c without authentication. |
 | Temperature OID| No       | Leave blank to skip temperature for this sensor                       |
 | Temperature scale | Yes   | Positive number; 1.0 or 10.0 typical                                  |
 | Humidity OID   | No       | Leave blank to skip humidity for this sensor                          |
 | Humidity scale | Yes      | Positive number; 1.0 or 10.0 typical                                  |
-| Chart color    | No       | Hex color (`#RRGGBB`) for this sensor's line on `/sensors`. Blank = next color from the default palette (v1.39). |
+| Chart color    | No       | Hex color (`#RRGGBB`) for this sensor's line on the Sensors dashboard. Blank = next color from the default palette. |
 | Enabled        | Yes      | Disable to stop polling without deleting the row                      |
 
 ### Step 3: Probe
@@ -68,7 +68,7 @@ Global thresholds apply to all sensors. Set them in the **Global thresholds** ca
 
 When a reading falls outside the range, the KPI card shows a destructive (red-tinted) value and an "Out of range" caption. Charts draw dashed reference lines at each threshold.
 
-> **Known limitation (v1.15):** Leaving a threshold input blank means "do not change". To clear a previously-set threshold, contact the operator to unset it directly in the database or wait for a future phase that adds an explicit reset action.
+> **Known limitation:** Leaving a threshold input blank means "do not change". To clear a previously-set threshold, contact the operator to unset it directly in the database or wait for a future release that adds an explicit reset action.
 
 Per-sensor threshold overrides are not supported in this release.
 
@@ -79,7 +79,7 @@ The **Polling cadence** card sets a single interval (5–86400 seconds) for all 
 Recommendations:
 
 - 60 s (default): typical production environmental monitoring
-- 30 s: for tight threshold alerting (future v1.16 feature)
+- 30 s: for tight threshold alerting (planned future feature)
 - 300+ s: for low-frequency baseline monitoring
 
 | Interval | Daily polls per sensor | Typical use case                |
@@ -160,18 +160,18 @@ Look for `PollResult` entries. Empty result sets with no errors usually mean the
 
 The polling-interval input triggers an in-process reschedule on save. If the previous interval persists:
 
-1. Reload `/settings/sensors` and confirm the value was saved.
+1. Reload the Sensors settings page and confirm the value was saved.
 2. If the value is correct but behavior is not, restart the `api` container: `docker compose restart api`.
 
 ## Security
 
-> **Community is optional since v1.27.** Some SNMP devices (e.g., certain Hutermann models) accept queries without a community string — leave the field blank in that case. If your device requires a community, **never use the default `public` in production**: change it on the device to a per-deployment secret before exposing the monitor.
+> **Community is optional.** Some SNMP devices (e.g., certain Hutermann models) accept queries without a community string — leave the field blank in that case. If your device requires a community, **never use the default `public` in production**: change it on the device to a per-deployment secret before exposing the monitor.
 
 > **Community strings are encrypted at rest** using the application's Fernet key (same key as Personio credentials). They are never decrypted into API responses and never logged. The admin form treats community as write-only: blank on edit preserves the stored value, a new string overwrites it.
 
 Additional guidance:
 
-- Rotate community strings on the sensor device when an admin leaves the team; update the row in `/settings/sensors` afterwards (blank = keep).
+- Rotate community strings on the sensor device when an admin leaves the team; update the row on the Sensors settings page afterwards (blank = keep).
 - Restrict SNMP on the sensor host to the Docker host's source IP where the device firmware allows it.
 - Keep the sensor subnet off the public internet.
 
