@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useSettings } from "@/hooks/useSettings";
 import { useSettingsDraft } from "@/hooks/useSettingsDraft";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
@@ -99,11 +99,9 @@ export function HrSettingsPage() {
       {!isLoading && !isError && draft && (
         <>
           {/* v1.29: redundant H1 removed — the SubHeader dropdown shows the active section. */}
+          {/* v1.30: outer "HR" Card wrapper dropped — Personio + Sollwerte stand on their own. */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold">{t("settings.hr.title")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-8">
+            <CardContent className="space-y-8 pt-6">
               <PersonioCard
                 draft={draft}
                 setField={setField}
