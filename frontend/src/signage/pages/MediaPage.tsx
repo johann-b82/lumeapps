@@ -11,7 +11,6 @@ import {
 } from "@/signage/lib/signageApi";
 import type { SignageMedia } from "@/signage/lib/signageTypes";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { MediaUploadDropZone } from "@/signage/components/MediaUploadDropZone";
 import { MediaRegisterUrlDialog } from "@/signage/components/MediaRegisterUrlDialog";
@@ -99,7 +98,20 @@ export function MediaPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
-      <MediaUploadDropZone />
+      {/* v1.35: drop zone + "register external" CTA stand side-by-side as equal entry points. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <MediaUploadDropZone />
+        <button
+          type="button"
+          onClick={() => setRegisterOpen(true)}
+          className="rounded-md border-2 border-dashed border-border bg-muted min-h-[120px] flex flex-col items-center justify-center text-center p-6 transition-colors hover:bg-accent/10 hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LinkIcon className="w-5 h-5 text-muted-foreground mb-2" aria-hidden />
+          <p className="text-sm font-semibold text-foreground">
+            {t("signage.admin.media.register_url_button")}
+          </p>
+        </button>
+      </div>
 
       {mediaQuery.isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -205,16 +217,8 @@ export function MediaPage() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setRegisterOpen(true)}
-        >
-          {t("signage.admin.media.register_url_button")}
-        </Button>
-      </div>
-
+      {/* v1.35: bottom-right "URL / HTML registrieren" button removed — the
+          dashed-border CTA at the top now opens the same dialog. */}
       <MediaRegisterUrlDialog
         open={registerOpen}
         onOpenChange={setRegisterOpen}
