@@ -21,7 +21,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { SectionHeader } from "@/components/ui/section-header";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { ScheduleEditDialog } from "@/signage/components/ScheduleEditDialog";
 import {
@@ -178,11 +177,7 @@ export function SchedulesPage() {
   if (isLoading) {
     return (
       <section className="space-y-4">
-        <SectionHeader
-          title={t("section.signage.schedules.title")}
-          description={t("section.signage.schedules.description")}
-          className="mt-8"
-        />
+        {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
         <div className="rounded-md border border-border bg-card p-6 text-sm text-muted-foreground">
           {t("signage.admin.schedules.page_title")}…
         </div>
@@ -192,11 +187,7 @@ export function SchedulesPage() {
   if (isError) {
     return (
       <section className="space-y-4">
-        <SectionHeader
-          title={t("section.signage.schedules.title")}
-          description={t("section.signage.schedules.description")}
-          className="mt-8"
-        />
+        {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
         <div className="rounded-md border border-border bg-card p-6 text-sm text-destructive">
           {t("signage.admin.schedules.error.load_failed")}
         </div>
@@ -208,11 +199,7 @@ export function SchedulesPage() {
 
   return (
     <section className="space-y-4">
-      <SectionHeader
-        title={t("section.signage.schedules.title")}
-        description={t("section.signage.schedules.description")}
-        className="mt-8"
-      />
+      {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
       {isEmpty ? (
         <section className="rounded-md border border-border bg-card p-12 text-center space-y-3">
           <h2 className="text-lg font-semibold">

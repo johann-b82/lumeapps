@@ -109,15 +109,7 @@ export function PairPage() {
   return (
     <div className="max-w-xl mx-auto px-6 pt-8 pb-16">
       <div className="rounded-xl border border-border bg-card p-6 space-y-6 shadow-sm">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">
-            {t("signage.admin.pair.title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {t("signage.admin.pair.subtitle")}
-          </p>
-        </div>
-
+        {/* v1.34: page title + subtitle dropped — breadcrumb in NavBar identifies the page. */}
         <form onSubmit={onSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="pair-code">

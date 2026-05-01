@@ -13,7 +13,6 @@ import type { SignageMedia } from "@/signage/lib/signageTypes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { SectionHeader } from "@/components/ui/section-header";
 import { MediaUploadDropZone } from "@/signage/components/MediaUploadDropZone";
 import { MediaRegisterUrlDialog } from "@/signage/components/MediaRegisterUrlDialog";
 import { MediaStatusPill } from "@/signage/components/MediaStatusPill";
@@ -99,12 +98,7 @@ export function MediaPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeader
-        title={t("section.signage.media.title")}
-        description={t("section.signage.media.description")}
-        className="mt-8"
-      />
-
+      {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
       <MediaUploadDropZone />
 
       {mediaQuery.isLoading && (

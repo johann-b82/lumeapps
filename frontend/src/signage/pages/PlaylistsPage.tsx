@@ -16,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SectionHeader } from "@/components/ui/section-header";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { PlaylistNewDialog } from "@/signage/components/PlaylistNewDialog";
 import type { SignagePlaylist } from "@/signage/lib/signageTypes";
@@ -122,11 +121,7 @@ export function PlaylistsPage() {
 
   return (
     <section className="space-y-4">
-      <SectionHeader
-        title={t("section.signage.playlists.title")}
-        description={t("section.signage.playlists.description")}
-        className="mt-8"
-      />
+      {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
 
       {isLoading ? (
         <div className="rounded-md border border-border bg-card p-6 text-sm text-muted-foreground">
