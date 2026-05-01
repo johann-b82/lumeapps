@@ -48,11 +48,11 @@ function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre"> & { n
   const { node: _node, ...rest } = props as { node?: unknown };
 
   return (
-    <div className="group relative my-4 not-prose">
+    <div className="group relative my-4 overflow-hidden rounded-md bg-muted not-prose">
       <pre
         ref={ref}
         {...rest}
-        className="overflow-x-auto rounded-md bg-muted px-4 py-3 text-sm leading-relaxed"
+        className="overflow-x-auto bg-transparent px-4 py-3 text-sm leading-relaxed"
       >
         {children as ReactNode}
       </pre>
