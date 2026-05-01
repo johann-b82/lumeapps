@@ -84,21 +84,23 @@ Playlists are matched to devices by **tags**. A playlist plays on a device when 
 
 ## Uploading Media
 
-Navigate to **Signage → Media** to manage media assets.
+Navigate to **Signage → Media** to manage media assets. Since v1.40 all intake surfaces (drop zone + URL/HTML form) and the existing-content grid live in **a single Card** separated by a horizontal rule. The previously modal "Register external content" dialog was inlined in v1.36 and now sits permanently to the right of the drop zone.
 
 ### Uploading Images and Videos
 
-Drag and drop files onto the upload area, or click **Upload File**. Supported formats: JPEG, PNG, GIF, WEBP (images), MP4, WEBM (videos).
+Drag and drop files onto the left drop zone, or click **Browse files**. Supported formats: JPEG, PNG, GIF, WEBP (images), MP4, WEBM (videos).
 
 Files are stored on the server. After upload, the asset becomes available for use in any playlist.
 
-### Registering a URL
+### Registering a URL or HTML
 
-Click **Register URL** and paste a web address (e.g., `https://www.example.com/status`). The kiosk loads the URL in a full-screen frame. The page must be reachable from the Pi's network.
+In the inline form to the right of the drop zone:
 
-### Registering HTML
+1. Pick the **URL** or **HTML** radio.
+2. Enter a **Title** and the **Content** (a URL for "URL", an HTML snippet for "HTML").
+3. Click **Register URL** (or **Register HTML**).
 
-Click **Register HTML** and paste an HTML snippet. Useful for custom status pages or styled text overlays.
+For URLs the kiosk loads the address in a full-screen frame; the page must be reachable from the Pi's network. For HTML the snippet is rendered full-screen — useful for custom status pages or styled text overlays.
 
 ### Uploading a PPTX Presentation
 

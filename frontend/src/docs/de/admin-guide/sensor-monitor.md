@@ -4,7 +4,7 @@
 
 Der Sensor Monitor fragt Umgebungs-SNMP-Sensoren (Temperatur + Luftfeuchtigkeit) aus dem gemeinsamen Docker-Netzwerk ab, speichert die Messwerte in PostgreSQL und zeigt sie im admin-exklusiven `/sensors`-Dashboard an. Die Einrichtung erfolgt vollständig über die UI -- du brauchst keinen YAML- oder SQL-Zugriff.
 
-Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensor-Konfiguration öffnen** (oder direkt unter `/settings/sensors`). Nur Administratoren sehen diese Seite; Viewer haben weder Zugriff auf die Launcher-Kachel noch auf die Unterseite.
+Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensoren** im Sub-Header-Dropdown (oder direkt unter `/settings/sensors`). Seit v1.28 ist Sensoren eine eigenständige Einstellungs-Seite — gleichwertig zu Allgemein und HR — und wird nicht mehr in einem Overlay geöffnet. Nur Administratoren sehen diese Seite.
 
 ## Voraussetzungen
 
@@ -22,7 +22,7 @@ Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensor-Kon
 
 ## Einen Sensor einrichten
 
-Öffne **Einstellungen → Sensor-Konfiguration öffnen** (oder gehe direkt zu `/settings/sensors`).
+Öffne **Einstellungen → Sensoren** im Sub-Header-Dropdown (oder gehe direkt zu `/settings/sensors`).
 
 ### Schritt 1: OIDs mit SNMP-Walk finden
 
@@ -42,11 +42,12 @@ Die gesamte Sensor-Konfiguration findest du unter **Einstellungen → Sensor-Kon
 | Name               | Ja      | Eindeutig über alle Sensoren hinweg                                      |
 | Host               | Ja      | IP oder DNS-Name, erreichbar aus dem `api`-Container                     |
 | Port               | Ja      | Standard 161                                                             |
-| Community          | Ja      | Schreibgeschütztes Secret, verschlüsselt gespeichert                     |
+| Community          | Nein    | Schreibgeschütztes Secret, verschlüsselt gespeichert. Seit v1.27 optional — leer lassen, wenn das Gerät SNMPv2c ohne Authentifizierung akzeptiert. |
 | Temperatur-OID     | Nein    | Leer lassen, um Temperatur für diesen Sensor zu überspringen             |
 | Temperatur-Skalierung | Ja   | Positive Zahl; typisch 1.0 oder 10.0                                     |
 | Luftfeuchte-OID    | Nein    | Leer lassen, um Luftfeuchte für diesen Sensor zu überspringen            |
 | Luftfeuchte-Skalierung | Ja  | Positive Zahl; typisch 1.0 oder 10.0                                     |
+| Diagrammfarbe      | Nein    | Hex-Farbe (`#RRGGBB`) für die Linie dieses Sensors auf `/sensors`. Leer = nächste Farbe aus der Standard-Palette (v1.39). |
 | Aktiviert          | Ja      | Deaktivieren stoppt die Abfrage, ohne die Zeile zu löschen               |
 
 ### Schritt 3: Prüfen
@@ -164,7 +165,7 @@ Die Eingabe für das Abfrage-Intervall löst beim Speichern einen In-Prozess-Res
 
 ## Sicherheit
 
-> **Verwende in Produktion niemals `public` als Community-String.** Die meisten Sensoren liefern `public` als Standard aus; ändere es auf dem Gerät auf ein deployment-spezifisches Secret, bevor du den Monitor exponierst.
+> **Community ist seit v1.27 optional.** Manche SNMP-Geräte (z. B. einige Hutermann-Modelle) akzeptieren Anfragen ohne Community-String — lass das Feld dann leer. Wenn dein Gerät einen Community-String erwartet, **verwende in Produktion niemals den Default `public`**: ändere ihn am Gerät auf ein deployment-spezifisches Secret, bevor du den Monitor exponierst.
 
 > **Community-Strings werden verschlüsselt gespeichert** mit dem Fernet-Key der Anwendung (derselbe Key wie für Personio-Credentials). Sie werden niemals in API-Antworten entschlüsselt und niemals geloggt. Das Admin-Formular behandelt Community als schreibgeschützt: leer lassen beim Bearbeiten behält den gespeicherten Wert, ein neuer String überschreibt ihn.
 

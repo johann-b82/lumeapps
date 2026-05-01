@@ -84,21 +84,23 @@ Playlists werden Geräten über **Tags** zugeordnet. Eine Playlist läuft auf ei
 
 ## Medien hochladen
 
-Öffne **Signage → Medien**, um Medien-Assets zu verwalten.
+Öffne **Signage → Medien**, um Medien-Assets zu verwalten. Seit v1.40 sind alle Aufnahme-Surfaces (Drop-Zone + URL/HTML-Formular) und das vorhandene Inhaltsraster in **einer einzigen Karte** zusammengeführt — getrennt durch eine horizontale Trennlinie. Die früher modale „Externen Inhalt registrieren"-Dialog wurde in v1.36 als Inline-Formular eingebaut und ist jetzt rechts neben der Drop-Zone immer sichtbar.
 
 ### Bilder und Videos hochladen
 
-Ziehe Dateien per Drag-and-drop in den Upload-Bereich oder klicke auf **Datei hochladen**. Unterstützte Formate: JPEG, PNG, GIF, WEBP (Bilder), MP4, WEBM (Videos).
+Ziehe Dateien per Drag-and-drop in die linke Drop-Zone oder klicke auf **Dateien auswählen**. Unterstützte Formate: JPEG, PNG, GIF, WEBP (Bilder), MP4, WEBM (Videos).
 
 Dateien werden auf dem Server gespeichert. Nach dem Upload steht das Asset in jeder Playlist zur Verfügung.
 
-### URL registrieren
+### URL oder HTML registrieren
 
-Klicke auf **URL registrieren** und füge eine Webadresse ein (z. B. `https://www.example.com/status`). Der Kiosk lädt die URL vollbildschirmfüllend. Die Seite muss vom Pi-Netzwerk aus erreichbar sein.
+Im Inline-Formular rechts der Drop-Zone:
 
-### HTML registrieren
+1. Wähle den Radio-Button **URL** oder **HTML**.
+2. Trage einen **Titel** und den **Inhalt** ein (URL für „URL", HTML-Snippet für „HTML").
+3. Klicke auf **URL registrieren** (bzw. **HTML registrieren**).
 
-Klicke auf **HTML registrieren** und füge ein HTML-Snippet ein. Nützlich für benutzerdefinierte Statusseiten oder gestaltete Texteinblendungen.
+Bei URL lädt der Kiosk die Adresse vollbildschirmfüllend; die Seite muss vom Pi-Netzwerk aus erreichbar sein. Bei HTML wird das Snippet vollflächig gerendert — nützlich für benutzerdefinierte Statusseiten oder gestaltete Texteinblendungen.
 
 ### PPTX-Präsentation hochladen
 

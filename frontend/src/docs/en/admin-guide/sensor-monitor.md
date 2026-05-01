@@ -4,7 +4,7 @@
 
 The Sensor Monitor polls environmental SNMP sensors (temperature + humidity) from the shared Docker network, stores readings in PostgreSQL, and surfaces them on the admin-only `/sensors` dashboard. Onboarding is entirely UI-driven -- no YAML or SQL access required.
 
-All sensor configuration lives under **Settings → Open sensor configuration** (or navigate directly to `/settings/sensors`). Only administrators see this page; viewers have no access to the launcher tile or the sub-page.
+All sensor configuration lives under **Settings → Sensors** in the sub-header dropdown (or navigate directly to `/settings/sensors`). Since v1.28 Sensors is a peer settings page — equal to General and HR — and is no longer opened in an overlay. Only administrators see this page.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ All sensor configuration lives under **Settings → Open sensor configuration** 
 
 ## Onboarding a Sensor
 
-Navigate to **Settings → Open sensor configuration** (or go directly to `/settings/sensors`).
+Navigate to **Settings → Sensors** in the sub-header dropdown (or go directly to `/settings/sensors`).
 
 ### Step 1: Discover OIDs with SNMP Walk
 
@@ -42,11 +42,12 @@ Navigate to **Settings → Open sensor configuration** (or go directly to `/sett
 | Name           | Yes      | Unique across all sensors                                             |
 | Host           | Yes      | IP or DNS name reachable from the `api` container                     |
 | Port           | Yes      | Default 161                                                           |
-| Community      | Yes      | Write-only secret, encrypted at rest                                  |
+| Community      | No       | Write-only secret, encrypted at rest. Optional since v1.27 — leave blank if the device accepts SNMPv2c without authentication. |
 | Temperature OID| No       | Leave blank to skip temperature for this sensor                       |
 | Temperature scale | Yes   | Positive number; 1.0 or 10.0 typical                                  |
 | Humidity OID   | No       | Leave blank to skip humidity for this sensor                          |
 | Humidity scale | Yes      | Positive number; 1.0 or 10.0 typical                                  |
+| Chart color    | No       | Hex color (`#RRGGBB`) for this sensor's line on `/sensors`. Blank = next color from the default palette (v1.39). |
 | Enabled        | Yes      | Disable to stop polling without deleting the row                      |
 
 ### Step 3: Probe
@@ -164,7 +165,7 @@ The polling-interval input triggers an in-process reschedule on save. If the pre
 
 ## Security
 
-> **Never use `public` as the community string in production.** Most sensors ship with `public` as the default; change it to a per-deployment secret at the device level before exposing the monitor.
+> **Community is optional since v1.27.** Some SNMP devices (e.g., certain Hutermann models) accept queries without a community string — leave the field blank in that case. If your device requires a community, **never use the default `public` in production**: change it on the device to a per-deployment secret before exposing the monitor.
 
 > **Community strings are encrypted at rest** using the application's Fernet key (same key as Personio credentials). They are never decrypted into API responses and never logged. The admin form treats community as write-only: blank on edit preserves the stored value, a new string overwrites it.
 

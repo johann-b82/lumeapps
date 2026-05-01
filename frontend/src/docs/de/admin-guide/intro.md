@@ -14,11 +14,23 @@ Verstehen Sie, wie die Dienste zusammenarbeiten -- von der PostgreSQL-Datenbank 
 
 [Zur Architekturuebersicht](/docs/admin-guide/architecture)
 
+## Digital Signage
+
+Raspberry-Pi-Kiosks bereitstellen, Playlists erstellen und Geräten über Tags zuweisen. Behandelt Medienaufnahme (Drag-and-drop, URL/HTML, PPTX-Konvertierung), Zeitpläne und Offline-Verhalten.
+
+[Zum Digital-Signage-Handbuch](/docs/admin-guide/digital-signage)
+
 ## Personio-Integration
 
 Konfigurieren Sie die Verbindung zu Personio fuer die automatische HR-Datensynchronisierung, einschliesslich Zugangsdaten, Sync-Intervallen und Attribut-Zuordnung.
 
 [Zur Personio-Integration](/docs/admin-guide/personio)
+
+## Sensor Monitor
+
+SNMP-Umgebungssensoren (Temperatur + Luftfeuchtigkeit) einrichten, Abfrage-Kadenz und Schwellenwerte setzen, und pro Sensor die Diagrammfarbe konfigurieren.
+
+[Zum Sensor-Monitor-Handbuch](/docs/admin-guide/sensor-monitor)
 
 ## Benutzerverwaltung
 
@@ -26,9 +38,15 @@ Verwalten Sie Benutzerrollen und Zugriffsrechte ueber Directus, einschliesslich 
 
 [Zur Benutzerverwaltung](/docs/admin-guide/user-management)
 
+## Einstellungen-Layout (seit v1.28)
+
+Die Einstellungs-Seite ist in eigenständige Unterseiten aufgeteilt — **Allgemein**, **HR** und **Sensoren** — auswählbar über ein Dropdown im Sub-Header. Jede Seite hat einen eigenen Draft- und Speichern/Verwerfen-Balken; das Wechseln des Abschnitts bei ungespeicherten Änderungen wird vorab abgefangen.
+
 ## Verwandte Artikel
 
 - [Systemeinrichtung](/docs/admin-guide/system-setup)
 - [Architektur](/docs/admin-guide/architecture)
+- [Digital Signage](/docs/admin-guide/digital-signage)
 - [Personio-Integration](/docs/admin-guide/personio)
+- [Sensor Monitor](/docs/admin-guide/sensor-monitor)
 - [Benutzerverwaltung](/docs/admin-guide/user-management)
