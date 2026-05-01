@@ -11,6 +11,7 @@ import {
 } from "@/signage/lib/signageApi";
 import type { SignageMedia } from "@/signage/lib/signageTypes";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { MediaUploadDropZone } from "@/signage/components/MediaUploadDropZone";
 import { MediaRegisterUrlForm } from "@/signage/components/MediaRegisterUrlForm";
@@ -95,46 +96,52 @@ export function MediaPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
-      {/* v1.35 → v1.36: drop zone (left) + inline register form (right) stand
-          side-by-side as equal entry points; the click-to-open dialog is gone. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <MediaUploadDropZone />
-        <MediaRegisterUrlForm />
-      </div>
-
-      {mediaQuery.isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="h-48 rounded-md bg-muted animate-pulse"
-            />
-          ))}
+    // v1.34: top-level page header dropped — SubHeader dropdown shows the active section.
+    // v1.40: unified into a single Card. Top half is the entry points (drop
+    // zone + register form), an <hr> separates from the bottom half which
+    // is the existing-content grid. Element chrome is flat — no per-section
+    // dashed borders or muted fills — so the page reads like the settings
+    // sub-pages.
+    <Card>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <MediaUploadDropZone />
+          <MediaRegisterUrlForm />
         </div>
-      )}
 
-      {mediaQuery.isError && (
-        <p className="text-sm text-destructive">
-          {t("signage.admin.error.loading")}
-        </p>
-      )}
+        <hr className="border-border" />
 
-      {mediaQuery.data && mediaQuery.data.length === 0 && (
-        <div className="rounded-md border border-border bg-card p-12 text-center">
-          <h2 className="text-xl font-semibold">
-            {t("signage.admin.media.empty_title")}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t("signage.admin.media.empty_body")}
+        {mediaQuery.isLoading && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="h-48 rounded-md bg-muted animate-pulse"
+              />
+            ))}
+          </div>
+        )}
+
+        {mediaQuery.isError && (
+          <p className="text-sm text-destructive">
+            {t("signage.admin.error.loading")}
           </p>
-        </div>
-      )}
+        )}
 
-      {mediaQuery.data && mediaQuery.data.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {mediaQuery.data.map((media) => {
+        {mediaQuery.data && mediaQuery.data.length === 0 && (
+          <div className="p-8 text-center">
+            <h2 className="text-xl font-semibold">
+              {t("signage.admin.media.empty_title")}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t("signage.admin.media.empty_body")}
+            </p>
+          </div>
+        )}
+
+        {mediaQuery.data && mediaQuery.data.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {mediaQuery.data.map((media) => {
             const thumb = thumbnailUrl(media);
             return (
               <article
@@ -203,19 +210,21 @@ export function MediaPage() {
                   </div>
                 </div>
               </article>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
 
       {/* v1.36: register form is now inline in the top-of-page grid; the
-          old dialog instantiation lived here. */}
+          old dialog instantiation lived here. v1.40: dialog instances stay
+          outside the Card so they portal cleanly. */}
       <MediaInUseDialog
         open={!!inUseTarget}
         onOpenChange={(o) => !o && setInUseTarget(null)}
         itemLabel={inUseTarget?.name ?? ""}
         playlistIds={inUseTarget?.playlistIds ?? []}
       />
-    </div>
+    </Card>
   );
 }

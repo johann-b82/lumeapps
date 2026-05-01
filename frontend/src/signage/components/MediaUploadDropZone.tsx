@@ -135,14 +135,17 @@ export function MediaUploadDropZone() {
     },
   });
 
+  // v1.40: drop the bg-muted fill so the drop zone reads as a clean
+  // dashed-bordered region inside the surrounding Card (same chrome
+  // weight as a settings-form section).
   let containerClass =
     "rounded-md border-2 border-dashed min-h-[120px] flex flex-col items-center justify-center text-center p-6 transition-colors";
   if (uploadMutation.isPending) {
-    containerClass += " bg-muted border-border cursor-not-allowed";
+    containerClass += " border-border cursor-not-allowed opacity-60";
   } else if (isDragActive) {
     containerClass += " bg-primary/5 border-solid border-primary";
   } else {
-    containerClass += " bg-muted border-border";
+    containerClass += " border-border";
   }
 
   return (

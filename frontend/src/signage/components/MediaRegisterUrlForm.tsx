@@ -88,9 +88,12 @@ export function MediaRegisterUrlForm() {
   };
 
   return (
+    // v1.40: drop the dashed border + bg-muted chrome — the form sits
+    // inside the page-level Card now and matches the visual weight of a
+    // settings-form section.
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="rounded-md border-2 border-dashed border-border bg-muted p-4 flex flex-col gap-3"
+      className="flex flex-col gap-3"
       aria-labelledby="register-url-heading"
     >
       <h2
