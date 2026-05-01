@@ -142,29 +142,69 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
   return payload;
 }
 
-function shallowEqualDraft(a: DraftFields, b: DraftFields): boolean {
-  return (
-    a.color_primary === b.color_primary &&
-    a.color_accent === b.color_accent &&
-    a.color_background === b.color_background &&
-    a.color_foreground === b.color_foreground &&
-    a.color_muted === b.color_muted &&
-    a.color_destructive === b.color_destructive &&
-    a.app_name === b.app_name &&
-    a.personio_client_id === b.personio_client_id &&
-    a.personio_client_secret === b.personio_client_secret &&
-    a.personio_sync_interval_h === b.personio_sync_interval_h &&
-    JSON.stringify(a.personio_sick_leave_type_id) === JSON.stringify(b.personio_sick_leave_type_id) &&
-    JSON.stringify(a.personio_production_dept) === JSON.stringify(b.personio_production_dept) &&
-    JSON.stringify(a.personio_skill_attr_key) === JSON.stringify(b.personio_skill_attr_key)
-  );
+export type SettingsSlice = "general" | "hr";
+
+const GENERAL_FIELDS = [
+  "app_name",
+  "color_primary",
+  "color_accent",
+  "color_background",
+  "color_foreground",
+  "color_muted",
+  "color_destructive",
+] as const satisfies readonly (keyof DraftFields)[];
+
+const HR_FIELDS = [
+  "personio_client_id",
+  "personio_client_secret",
+  "personio_sync_interval_h",
+  "personio_sick_leave_type_id",
+  "personio_production_dept",
+  "personio_skill_attr_key",
+  "target_overtime_ratio",
+  "target_sick_leave_ratio",
+  "target_fluctuation",
+  "target_revenue_per_employee",
+] as const satisfies readonly (keyof DraftFields)[];
+
+function fieldsForSlice(slice: SettingsSlice): readonly (keyof DraftFields)[] {
+  return slice === "general" ? GENERAL_FIELDS : HR_FIELDS;
+}
+
+function eqField<K extends keyof DraftFields>(
+  _key: K,
+  a: DraftFields[K],
+  b: DraftFields[K],
+): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return a === b;
+}
+
+function sliceIsDirty(
+  draft: DraftFields,
+  snapshot: DraftFields,
+  slice: SettingsSlice,
+): boolean {
+  for (const k of fieldsForSlice(slice)) {
+    if (!eqField(k, draft[k], snapshot[k])) return true;
+  }
+  return false;
+}
+
+interface UseSettingsDraftOptions {
+  slice: SettingsSlice;
 }
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useSettingsDraft(): UseSettingsDraftReturn {
+export function useSettingsDraft(
+  opts: UseSettingsDraftOptions = { slice: "general" },
+): UseSettingsDraftReturn {
+  const { slice } = opts;
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useSettings();
   const [snapshot, setSnapshot] = useState<DraftFields | null>(null);
@@ -184,8 +224,8 @@ export function useSettingsDraft(): UseSettingsDraftReturn {
 
   const isDirty = useMemo(() => {
     if (!draft || !snapshot) return false;
-    return !shallowEqualDraft(draft, snapshot);
-  }, [draft, snapshot]);
+    return sliceIsDirty(draft, snapshot, slice);
+  }, [draft, snapshot, slice]);
 
   const setField = useCallback(
     <K extends keyof DraftFields>(field: K, value: DraftFields[K]) => {
