@@ -1,4 +1,10 @@
-"""Sales KPI compute endpoints (v1.41)."""
+"""Sales KPI compute endpoints (v1.41).
+
+Compute-justified: clause 1 (server-side ISO-week aggregation across
+sales_contacts + sales_records — Directus collections do not support
+the JOIN through the alias table or the Kommentar→order_number bridge
+needed for orders_per_week_per_rep).
+"""
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query

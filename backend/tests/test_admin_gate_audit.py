@@ -31,6 +31,9 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/hr/kpis", frozenset({"GET"})),
     ("/api/hr/kpis/history", frozenset({"GET"})),
     ("/api/data/employees/overtime", frozenset({"GET"})),
+    # v1.41 sales-activity dashboard reads — viewer role.
+    ("/api/data/sales/contacts-weekly", frozenset({"GET"})),
+    ("/api/data/sales/orders-distribution", frozenset({"GET"})),
     # Viewer-readable sync freshness (mixed-gate; see sync.py docstring).
     ("/api/sync/meta", frozenset({"GET"})),
     # Signage pair/player endpoints use device-token auth, not user/admin auth.

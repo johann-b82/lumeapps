@@ -7,6 +7,10 @@ the employee no longer qualifies on the next sync.
 
 GET returns the full alias list; the HR settings page renders both
 canonical (read-only, padlock) and manual rows from this single payload.
+
+Compute-justified: clause 4 (admin-only mutation surface that bridges
+the Kontakte file's ``Wer`` token to a Personio employee — Directus has
+no equivalent shape because the join is computed at sync time).
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
