@@ -7,7 +7,7 @@ Decisions:
 """
 from datetime import date as date_type, datetime, time as time_type, timedelta, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,10 +17,12 @@ from app.models import (
     PersonioAttendance,
     PersonioEmployee,
     PersonioSyncMeta,
+    SalesEmployeeAlias,
 )
 from app.schemas import SyncResult
 from app.security.fernet import decrypt_credential
 from app.services.personio_client import PersonioAPIError, PersonioClient
+from app.services.sales_aliases import canonical_token
 
 
 # Incremental syncs re-fetch the trailing window so late-entered / edited
@@ -81,6 +83,11 @@ async def run_sync(session: AsyncSession) -> SyncResult:
         emp_count = await _upsert(session, PersonioEmployee, employees)
         att_count = await _upsert(session, PersonioAttendance, attendances)
         abs_count = await _upsert(session, PersonioAbsence, absences)
+
+        # v1.41: rebuild canonical sales-rep aliases from the configured
+        # sales departments. Manual aliases (is_canonical=False) are
+        # never touched here.
+        await rebuild_canonical_sales_aliases(session)
 
         await _update_sync_meta(session, emp_count, att_count, abs_count, "ok")
 
@@ -344,3 +351,63 @@ async def _get_settings(session: AsyncSession) -> AppSettings:
     """Fetch the AppSettings singleton row (id=1)."""
     result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
     return result.scalar_one()
+
+
+async def rebuild_canonical_sales_aliases(session: AsyncSession) -> None:
+    """Per Personio sync: drop and rebuild canonical sales alias rows.
+
+    Manual rows (``is_canonical = False``) are NEVER touched. Canonical
+    rows are derived from Personio employees whose ``department`` is in
+    ``AppSettings.personio_sales_dept``. If a canonical token collides
+    with an existing manual alias, the manual row wins (the canonical
+    row is simply skipped).
+    """
+    settings_row = (
+        await session.execute(select(AppSettings).where(AppSettings.id == 1))
+    ).scalar_one_or_none()
+    sales_depts: list[str] = (
+        settings_row.personio_sales_dept or [] if settings_row else []
+    )
+
+    # Always drop existing canonical rows; rebuild below if config still has
+    # any sales departments selected.
+    await session.execute(
+        delete(SalesEmployeeAlias).where(SalesEmployeeAlias.is_canonical.is_(True))
+    )
+
+    if not sales_depts:
+        await session.commit()
+        return
+
+    employees = (
+        await session.execute(
+            select(PersonioEmployee).where(
+                PersonioEmployee.department.in_(sales_depts)
+            )
+        )
+    ).scalars().all()
+
+    # Existing manual tokens — canonical rows that would collide are skipped.
+    manual_tokens = {
+        row[0]
+        for row in (
+            await session.execute(
+                select(SalesEmployeeAlias.employee_token).where(
+                    SalesEmployeeAlias.is_canonical.is_(False)
+                )
+            )
+        ).all()
+    }
+
+    for emp in employees:
+        token = canonical_token(emp.last_name)
+        if not token or token in manual_tokens:
+            continue
+        session.add(
+            SalesEmployeeAlias(
+                personio_employee_id=emp.id,
+                employee_token=token,
+                is_canonical=True,
+            )
+        )
+    await session.commit()
