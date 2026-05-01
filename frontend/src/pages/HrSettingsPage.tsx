@@ -90,7 +90,7 @@ export function HrSettingsPage() {
   return (
     <div
       data-testid="settings-page-hr"
-      className="max-w-7xl mx-auto px-6 pt-4 pb-32 space-y-8"
+      className="max-w-7xl mx-auto px-6 pt-2 pb-32 space-y-4"
     >
       {isError && (
         <div className="p-6 text-destructive">{t("theme.error_toast")}</div>
@@ -101,7 +101,7 @@ export function HrSettingsPage() {
           {/* v1.29: redundant H1 removed — the SubHeader dropdown shows the active section. */}
           {/* v1.30: outer "HR" Card wrapper dropped — Personio + Sollwerte stand on their own. */}
           <Card>
-            <CardContent className="space-y-8 pt-6">
+            <CardContent className="space-y-6">
               <PersonioCard
                 draft={draft}
                 setField={setField}

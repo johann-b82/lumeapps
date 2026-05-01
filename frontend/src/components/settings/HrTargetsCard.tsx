@@ -68,7 +68,7 @@ export function HrTargetsCard({ draft, setField, embedded = false }: HrTargetsCa
     return (
       <section className="space-y-4">
         <div>
-          <h3 className="text-base font-semibold">
+          <h3 className="text-xl font-semibold">
             {t("settings.targets.title")}
           </h3>
           <p className="text-sm text-muted-foreground">

@@ -300,7 +300,7 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
   if (embedded) {
     return (
       <section className="space-y-4">
-        <h3 className="text-base font-semibold">
+        <h3 className="text-xl font-semibold">
           {t("settings.personio.title")}
         </h3>
         {body}
