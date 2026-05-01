@@ -166,7 +166,6 @@ export function MediaUploadDropZone() {
               {t("signage.admin.media.upload_or")}
             </p>
             <Button
-              variant="outline"
               size="sm"
               type="button"
               onClick={(e) => {

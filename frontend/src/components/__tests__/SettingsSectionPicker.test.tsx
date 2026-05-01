@@ -49,7 +49,11 @@ describe("SettingsSectionPicker", () => {
     const { memory } = renderAt("/settings/general");
     const trigger = screen.getByTestId("settings-section-picker-trigger");
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole("option", { name: /HR/i }));
+    // base-ui Select renders options in a portal that flips from `hidden`
+    // to visible on open — race-prone with sync getByRole in the full
+    // suite. findByRole waits for the popup to mount.
+    const hrOption = await screen.findByRole("option", { name: /HR/i });
+    await userEvent.click(hrOption);
     expect(memory.history).toContain("/settings/hr");
   });
 });

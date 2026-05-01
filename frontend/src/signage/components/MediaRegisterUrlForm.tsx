@@ -134,6 +134,7 @@ export function MediaRegisterUrlForm() {
         <Input
           id="register-title"
           type="text"
+          className="bg-background"
           {...register("title")}
           aria-invalid={errors.title ? "true" : "false"}
         />
@@ -146,6 +147,7 @@ export function MediaRegisterUrlForm() {
         <Input
           id="register-content"
           type="text"
+          className="bg-background"
           {...register("content")}
           aria-invalid={errors.content ? "true" : "false"}
           placeholder={
