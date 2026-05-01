@@ -38,16 +38,21 @@ export default function DocsPage() {
     }
   }, [section, role, navigate]);
 
-  // Guard render while redirecting (prevent flash per Pitfall 4)
+  const content =
+    (section && slug
+      ? registry[lang]?.[section]?.[slug] ?? registry["en"]?.[section]?.[slug]
+      : undefined) ?? "";
+
+  const tocEntries = useMemo(() => extractToc(content), [content]);
+
+  // Guard render while redirecting (prevent flash per Pitfall 4).
+  // Hooks above MUST run on every render to keep hook order stable —
+  // earlier versions placed useMemo below these early returns and broke
+  // articles on first click (hook count grew on the second render and
+  // React refused to commit; reloading masked it).
   if (!section || !slug) return null;
   if (role === null) return null;
   if (section === "admin-guide" && role !== "admin") return null;
-
-  const content = registry[lang]?.[section]?.[slug]
-    ?? registry["en"]?.[section]?.[slug]
-    ?? "";
-
-  const tocEntries = useMemo(() => extractToc(content), [content]);
 
   return (
     <div className="flex gap-8 px-6 py-8 max-w-7xl mx-auto">

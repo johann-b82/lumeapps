@@ -76,16 +76,6 @@ export function UserMenu() {
         </div>
         <DropdownSeparator />
         <MenuPrimitive.LinkItem
-          href="/docs"
-          render={<WouterLink href="/docs" />}
-          className={cn(
-            "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1 text-sm outline-none",
-            "data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
-          )}
-        >
-          {t("userMenu.docs")}
-        </MenuPrimitive.LinkItem>
-        <MenuPrimitive.LinkItem
           href="/settings"
           render={<WouterLink href="/settings" />}
           className={cn(

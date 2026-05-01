@@ -58,7 +58,7 @@ describe("SubHeader signage tabs", () => {
     const { memory } = renderAt("/signage/playlists");
     const trigger = screen.getByTestId("signage-tabs-trigger");
     await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole("option", { name: /devices/i }));
+    await userEvent.click(await screen.findByRole("option", { name: /devices/i }));
     expect(memory.history).toContain("/signage/devices");
   });
 });
