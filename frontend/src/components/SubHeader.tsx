@@ -15,6 +15,7 @@ import { DateRangeFilter } from "@/components/dashboard/DateRangeFilter";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { SensorTimeWindowPicker } from "@/components/sensors/SensorTimeWindow";
 import { PollNowButton } from "@/components/sensors/PollNowButton";
+import { SettingsSectionPicker } from "@/components/SettingsSectionPicker";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { fetchSyncMeta, fetchSensorStatus } from "@/lib/api";
 import { syncKeys, sensorKeys } from "@/lib/queryKeys";
@@ -179,6 +180,7 @@ export function SubHeader() {
               </SelectContent>
             </Select>
           )}
+          {location.startsWith("/settings") && <SettingsSectionPicker />}
         </div>
         <div className="flex items-center gap-3">
           {location === "/sales" && (
