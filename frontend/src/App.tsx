@@ -9,6 +9,8 @@ import { HRPage } from "./pages/HRPage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SensorsSettingsPage } from "./pages/SensorsSettingsPage";
+import { GeneralSettingsPage } from "@/pages/GeneralSettingsPage";
+import { HrSettingsPage } from "@/pages/HrSettingsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { LauncherPage } from "./pages/LauncherPage";
 import { SignagePage } from "./signage/pages/SignagePage";
@@ -73,6 +75,8 @@ function AppShell() {
           </Route>
           {/* /settings/sensors MUST appear before /settings so wouter's first-match wins */}
           <Route path="/settings/sensors" component={SensorsSettingsPage} />
+          <Route path="/settings/general" component={GeneralSettingsPage} />
+          <Route path="/settings/hr" component={HrSettingsPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/docs/:section/:slug">
             <Suspense fallback={
