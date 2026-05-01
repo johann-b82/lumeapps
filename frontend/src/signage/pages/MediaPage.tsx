@@ -13,7 +13,7 @@ import type { SignageMedia } from "@/signage/lib/signageTypes";
 import { Badge } from "@/components/ui/badge";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { MediaUploadDropZone } from "@/signage/components/MediaUploadDropZone";
-import { MediaRegisterUrlDialog } from "@/signage/components/MediaRegisterUrlDialog";
+import { MediaRegisterUrlForm } from "@/signage/components/MediaRegisterUrlForm";
 import { MediaStatusPill } from "@/signage/components/MediaStatusPill";
 import { MediaInUseDialog } from "@/signage/components/MediaInUseDialog";
 
@@ -56,7 +56,6 @@ export function MediaPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const [registerOpen, setRegisterOpen] = useState(false);
   const [inUseTarget, setInUseTarget] = useState<InUseTarget | null>(null);
   // Tracks the media currently being deleted so the 409 onError handler can
   // recover its title for the in-use dialog. Cleared on settle.
@@ -98,19 +97,11 @@ export function MediaPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* v1.34: top-level page header dropped — SubHeader dropdown shows the active section. */}
-      {/* v1.35: drop zone + "register external" CTA stand side-by-side as equal entry points. */}
+      {/* v1.35 → v1.36: drop zone (left) + inline register form (right) stand
+          side-by-side as equal entry points; the click-to-open dialog is gone. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MediaUploadDropZone />
-        <button
-          type="button"
-          onClick={() => setRegisterOpen(true)}
-          className="rounded-md border-2 border-dashed border-border bg-muted min-h-[120px] flex flex-col items-center justify-center text-center p-6 transition-colors hover:bg-accent/10 hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <LinkIcon className="w-5 h-5 text-muted-foreground mb-2" aria-hidden />
-          <p className="text-sm font-semibold text-foreground">
-            {t("signage.admin.media.register_url_button")}
-          </p>
-        </button>
+        <MediaRegisterUrlForm />
       </div>
 
       {mediaQuery.isLoading && (
@@ -217,12 +208,8 @@ export function MediaPage() {
         </div>
       )}
 
-      {/* v1.35: bottom-right "URL / HTML registrieren" button removed — the
-          dashed-border CTA at the top now opens the same dialog. */}
-      <MediaRegisterUrlDialog
-        open={registerOpen}
-        onOpenChange={setRegisterOpen}
-      />
+      {/* v1.36: register form is now inline in the top-of-page grid; the
+          old dialog instantiation lived here. */}
       <MediaInUseDialog
         open={!!inUseTarget}
         onOpenChange={(o) => !o && setInUseTarget(null)}
