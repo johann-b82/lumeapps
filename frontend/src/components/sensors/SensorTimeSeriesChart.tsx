@@ -41,7 +41,10 @@ type ChartRow = { ts: string } & Record<string, number | null | string>;
  * with one Line per sensor. Same color index across both charts (consistent legend).
  *
  * D-07: TanStack Query refetch 15s foreground, no background, refetch on focus, 5s stale.
- * D-08: connectNulls={false} — gaps show as absent segments, not straight bridges.
+ * D-08 (revised v1.38 per user feedback): connectNulls={true} — bridge across
+ * NULL gaps so each sensor reads as a single solid line. The previous "gaps
+ * as absent segments" rendering produced isolated dots when polling missed
+ * cycles, which the user reported as visually noisy.
  * D-05: sensorPalette is the only documented hex exception; no Tailwind dark variants.
  *
  * 39-02 (D-12): Render dashed destructive <ReferenceLine /> at temperature
@@ -155,7 +158,7 @@ export function SensorTimeSeriesChart() {
               name={sensor.name}
               stroke={sensorPalette[i % sensorPalette.length]}
               dot={false}
-              connectNulls={false}
+              connectNulls={true}
               isAnimationActive={false}
             />
           ))}
@@ -208,7 +211,7 @@ export function SensorTimeSeriesChart() {
               name={sensor.name}
               stroke={sensorPalette[i % sensorPalette.length]}
               dot={false}
-              connectNulls={false}
+              connectNulls={true}
               isAnimationActive={false}
             />
           ))}
