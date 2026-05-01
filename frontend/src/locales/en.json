@@ -463,6 +463,8 @@
   "sensors.admin.fields.humidity_oid": "Humidity OID",
   "sensors.admin.fields.humidity_scale": "Humidity scale",
   "sensors.admin.fields.enabled": "Enabled",
+  "sensors.admin.fields.chart_color": "Chart color",
+  "sensors.admin.fields.chart_color.clear": "Use default",
   "sensors.admin.validation.name_required": "Name is required",
   "sensors.admin.validation.host_required": "Host is required",
   "sensors.admin.validation.name_duplicate": "Sensor names must be unique",

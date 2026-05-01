@@ -463,6 +463,8 @@
   "sensors.admin.fields.humidity_oid": "Luftfeuchte-OID",
   "sensors.admin.fields.humidity_scale": "Luftfeuchte-Skalierung",
   "sensors.admin.fields.enabled": "Aktiv",
+  "sensors.admin.fields.chart_color": "Diagramm-Farbe",
+  "sensors.admin.fields.chart_color.clear": "Standard verwenden",
   "sensors.admin.validation.name_required": "Name ist erforderlich",
   "sensors.admin.validation.host_required": "Host ist erforderlich",
   "sensors.admin.validation.name_duplicate": "Sensor-Namen müssen eindeutig sein",

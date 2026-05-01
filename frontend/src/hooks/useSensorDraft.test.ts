@@ -21,6 +21,7 @@ function baseRow(overrides: Partial<SensorDraftRow> = {}): SensorDraftRow {
     temperature_scale: "1.0",
     humidity_scale: "1.0",
     enabled: true,
+    chart_color: "",
     hasStoredCommunity: true,
     _markedForDelete: false,
     ...overrides,

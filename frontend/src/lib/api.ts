@@ -615,6 +615,8 @@ export interface SensorRead {
   temperature_scale: string; // Decimal serialized
   humidity_scale: string;
   enabled: boolean;
+  /** v1.39: optional `#rrggbb` chart color override; null → palette fallback. */
+  chart_color: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -684,6 +686,8 @@ export interface SensorCreatePayload {
   temperature_scale: string;      // Decimal
   humidity_scale: string;         // Decimal
   enabled: boolean;
+  /** v1.39: optional `#rrggbb` chart color; null → palette fallback. */
+  chart_color?: string | null;
 }
 
 export interface SensorUpdatePayload {
@@ -697,6 +701,7 @@ export interface SensorUpdatePayload {
   temperature_scale?: string;
   humidity_scale?: string;
   enabled?: boolean;
+  chart_color?: string | null;
 }
 
 export async function createSensor(body: SensorCreatePayload): Promise<SensorRead> {

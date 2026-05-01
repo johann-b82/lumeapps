@@ -304,6 +304,10 @@ class Sensor(Base):
         Numeric(10, 4), nullable=False, default=Decimal("1.0")
     )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # v1.39: optional `#rrggbb` chart color override; NULL → fall back to the
+    # frontend palette index. Validated as 7-char hex by SensorCreate /
+    # SensorUpdate; never stored as anything other than a 7-char string.
+    chart_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

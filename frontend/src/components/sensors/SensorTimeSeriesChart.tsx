@@ -156,7 +156,7 @@ export function SensorTimeSeriesChart() {
               type="monotone"
               dataKey={`s_${sensor.id}_temp`}
               name={sensor.name}
-              stroke={sensorPalette[i % sensorPalette.length]}
+              stroke={sensor.chart_color ?? sensorPalette[i % sensorPalette.length]}
               dot={false}
               connectNulls={true}
               isAnimationActive={false}
@@ -209,7 +209,7 @@ export function SensorTimeSeriesChart() {
               type="monotone"
               dataKey={`s_${sensor.id}_hum`}
               name={sensor.name}
-              stroke={sensorPalette[i % sensorPalette.length]}
+              stroke={sensor.chart_color ?? sensorPalette[i % sensorPalette.length]}
               dot={false}
               connectNulls={true}
               isAnimationActive={false}

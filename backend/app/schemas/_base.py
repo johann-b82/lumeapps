@@ -323,6 +323,9 @@ class CurrentUser(BaseModel):
 # SecretStr imported at top; Decimal + datetime already imported at top.
 
 
+_HEX_COLOR_RE = r"^#[0-9a-fA-F]{6}$"
+
+
 class SensorRead(BaseModel):
     """Admin-facing sensor config read. community is NEVER included (PITFALLS C-3)."""
     id: int
@@ -336,6 +339,7 @@ class SensorRead(BaseModel):
     temperature_scale: Decimal
     humidity_scale: Decimal
     enabled: bool
+    chart_color: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -354,6 +358,8 @@ class SensorCreate(BaseModel):
     temperature_scale: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0"))
     humidity_scale: Decimal = Field(default=Decimal("1.0"), gt=Decimal("0"))
     enabled: bool = True
+    # v1.39: optional `#rrggbb` chart color. NULL → frontend palette fallback.
+    chart_color: str | None = Field(default=None, pattern=_HEX_COLOR_RE)
 
 
 class SensorUpdate(BaseModel):
@@ -367,6 +373,7 @@ class SensorUpdate(BaseModel):
     temperature_scale: Decimal | None = Field(default=None, gt=Decimal("0"))
     humidity_scale: Decimal | None = Field(default=None, gt=Decimal("0"))
     enabled: bool | None = None
+    chart_color: str | None = Field(default=None, pattern=_HEX_COLOR_RE)
 
 
 class SensorReadingRead(BaseModel):

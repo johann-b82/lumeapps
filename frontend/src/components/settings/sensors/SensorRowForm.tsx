@@ -153,8 +153,8 @@ export function SensorRowForm({ row, onChange, onRemove }: SensorRowFormProps) {
         </div>
       </div>
 
-      {/* Row 4: temp_scale | humidity_scale | enabled */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      {/* Row 4: temp_scale | humidity_scale | chart_color | enabled */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <div className="flex flex-col gap-2">
           <Label
             htmlFor={`sensor-${row._localId}-temp-scale`}
@@ -188,6 +188,35 @@ export function SensorRowForm({ row, onChange, onRemove }: SensorRowFormProps) {
             onChange={(e) => onChange({ humidity_scale: e.target.value })}
             disabled={isMarkedForDelete}
           />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor={`sensor-${row._localId}-chart-color`}
+            className="text-sm font-medium"
+          >
+            {t("sensors.admin.fields.chart_color")}
+          </Label>
+          <div className="flex items-center gap-2">
+            <input
+              id={`sensor-${row._localId}-chart-color`}
+              type="color"
+              value={row.chart_color || "#3b82f6"}
+              onChange={(e) => onChange({ chart_color: e.target.value })}
+              disabled={isMarkedForDelete}
+              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={t("sensors.admin.fields.chart_color")}
+            />
+            {row.chart_color && (
+              <button
+                type="button"
+                onClick={() => onChange({ chart_color: "" })}
+                disabled={isMarkedForDelete}
+                className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t("sensors.admin.fields.chart_color.clear")}
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 pb-2">
           <Checkbox

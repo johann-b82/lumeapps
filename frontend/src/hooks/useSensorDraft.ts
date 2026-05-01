@@ -37,6 +37,8 @@ export interface SensorDraftRow {
   temperature_scale: string;
   humidity_scale: string;
   enabled: boolean;
+  /** v1.39: optional `#rrggbb` chart color. "" in draft = NULL server-side. */
+  chart_color: string;
   /**
    * On existing rows loaded from server, tracks whether the server has a
    * stored community. Frontend uses this to show the "saved — leave blank
@@ -105,6 +107,7 @@ function serverSensorToRow(s: SensorRead): SensorDraftRow {
     temperature_scale: s.temperature_scale,
     humidity_scale: s.humidity_scale,
     enabled: s.enabled,
+    chart_color: s.chart_color ?? "",
     // Backend never echoes community but every persisted sensor_config row
     // has an encrypted community (required on create). Treat any server
     // row as "has a stored community".
@@ -138,6 +141,7 @@ function rowsEqual(a: SensorDraftRow, b: SensorDraftRow): boolean {
     a.temperature_scale === b.temperature_scale &&
     a.humidity_scale === b.humidity_scale &&
     a.enabled === b.enabled &&
+    a.chart_color === b.chart_color &&
     a._markedForDelete === b._markedForDelete
   );
 }
@@ -179,6 +183,9 @@ export function buildSensorUpdatePayload(
     body.humidity_scale = row.humidity_scale;
   }
   if (row.enabled !== snapshotRow.enabled) body.enabled = row.enabled;
+  if (row.chart_color !== snapshotRow.chart_color) {
+    body.chart_color = row.chart_color === "" ? null : row.chart_color;
+  }
   return body;
 }
 
@@ -193,6 +200,7 @@ function buildSensorCreatePayload(row: SensorDraftRow): SensorCreatePayload {
     temperature_scale: row.temperature_scale,
     humidity_scale: row.humidity_scale,
     enabled: row.enabled,
+    chart_color: row.chart_color === "" ? null : row.chart_color,
   };
 }
 
@@ -361,6 +369,7 @@ export function useSensorDraft(): UseSensorDraftReturn {
         temperature_scale: "1.0",
         humidity_scale: "1.0",
         enabled: true,
+        chart_color: "",
         hasStoredCommunity: false,
         _markedForDelete: false,
       });
