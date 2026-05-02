@@ -55,12 +55,19 @@ export function OrdersDistributionCard({
   const noBaselineTooltip = t("dashboard.delta.noBaselineTooltip");
 
   const current = q.data?.orders_per_week_per_rep;
-  const prevPeriodValue = prevPeriodQ.data?.orders_per_week_per_rep;
-  const prevYearValue = prevYearQ.data?.orders_per_week_per_rep;
-  const rawDelta = {
-    prevPeriodDelta: computeDelta(current, prevPeriodValue),
-    prevYearDelta: computeDelta(current, prevYearValue),
-  };
+  const rawDelta =
+    current === undefined
+      ? { prevPeriodDelta: null, prevYearDelta: null }
+      : {
+          prevPeriodDelta: computeDelta(
+            current,
+            prevPeriodQ.data?.orders_per_week_per_rep ?? null,
+          ),
+          prevYearDelta: computeDelta(
+            current,
+            prevYearQ.data?.orders_per_week_per_rep ?? null,
+          ),
+        };
   // Match KpiCardGrid's thisYear collapse: single badge "vs. <prior year>".
   const perRepDelta =
     preset === "thisYear"
