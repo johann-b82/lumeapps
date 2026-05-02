@@ -550,5 +550,5 @@
   "sales.orders_distribution.top3": "Top-3 customer share",
   "sales.orders_distribution.top3_empty": "no orders yet",
   "sales.orders_distribution.remaining": "Remaining customers",
-  "sales.orders_distribution.remaining_subtitle": "100 % − top-3 share"
+  "sales.orders_distribution.share_title": "Customer share"
 }

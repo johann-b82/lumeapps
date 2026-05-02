@@ -550,5 +550,5 @@
   "sales.orders_distribution.top3": "Top-3-Kunden-Anteil",
   "sales.orders_distribution.top3_empty": "noch keine Aufträge",
   "sales.orders_distribution.remaining": "Restkunden",
-  "sales.orders_distribution.remaining_subtitle": "100 % − Top-3-Anteil"
+  "sales.orders_distribution.share_title": "Kundenanteil"
 }
