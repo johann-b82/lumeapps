@@ -96,23 +96,27 @@ jobs:
 
       # -----------------------------------------------------------------------
       # Phase 67 MIG-DATA-04 + CLEAN-04(b): CI guard — fail on any literal
-      # `"/api/data/sales"` or `"/api/data/employees"` (with trailing quote or
-      # non-slash character, so `"/api/data/employees/overtime"` is ALLOWED)
-      # under backend/app/. data.py was deleted; row-data is served by
-      # Directus (sales_records + personio_employees). The overtime compute
-      # endpoint lives at `/api/data/employees/overtime` and MUST remain.
-      # Pre-stack grep — fails in <1s on regression.
+      # `"/api/data/employees"` (bare or followed by a non-slash character)
+      # under backend/app/. The deleted `data.py` row-data endpoints must
+      # not come back; row-data is served by Directus. The overtime compute
+      # endpoint at `/api/data/employees/overtime` is the only allowed
+      # `/api/data/employees/...` path.
+      #
+      # v1.41 carve-out: `/api/data/sales/...` is no longer guarded — the
+      # sales-activity KPIs (`/api/data/sales/contacts-weekly`,
+      # `/api/data/sales/orders-distribution`) are aggregate compute
+      # endpoints, not row data, and live under `routers/sales_kpis.py`
+      # with `prefix="/api/data/sales"` by design.
       # -----------------------------------------------------------------------
-      - name: "Guard — no /api/data/sales or /api/data/employees in backend (MIG-DATA-04)"
+      - name: "Guard — no /api/data/employees row-data in backend (MIG-DATA-04)"
         run: |
-          # Pattern 1: "/api/data/sales" literal.
-          # Pattern 2: "/api/data/employees" followed by a quote or any char
-          #   that is NOT `/` (so /overtime is allowed). Use extended regex.
-          if grep -rnE '"/api/data/sales"|"/api/data/employees"|"/api/data/employees[^/"]' backend/app/; then
-            echo "ERROR: /api/data/sales or /api/data/employees reference found in backend/app/ (Phase 67 MIG-DATA-04 — data.py deleted; row-data is served by Directus. /api/data/employees/overtime is allowed.)"
+          # "/api/data/employees" followed by a quote or any char that is
+          # NOT `/` (so `/overtime` is allowed). Extended regex.
+          if grep -rnE '"/api/data/employees"|"/api/data/employees[^/"]' backend/app/; then
+            echo "ERROR: bare /api/data/employees reference found in backend/app/ (Phase 67 MIG-DATA-04 — row-data is served by Directus. Only /api/data/employees/overtime is allowed.)"
             exit 1
           fi
-          echo "OK: no /api/data/sales or /api/data/employees references in backend/app/ (overtime endpoint permitted)"
+          echo "OK: no bare /api/data/employees references in backend/app/ (overtime endpoint permitted)"
 
       # -----------------------------------------------------------------------
       # Phase 68 MIG-SIGN-01 + MIG-SIGN-02: CI guard — fail on any literal
