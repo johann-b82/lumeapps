@@ -37,7 +37,7 @@ Eine horizontale gestapelte Leiste zeigt, welchen Anteil die drei umsatzstärkst
 
 Rechts daneben (oder darunter auf schmalen Viewports) zählt eine nummerierte Liste (1. / 2. / 3.) die Top-3-Kunden in absteigender Auftragswert-Reihenfolge auf.
 
-Das Widget verwendet zwei Schattierungen des dashboard-Primärblaus — `blue-600` für das Top-3-Segment, `blue-300` für den Rest. Auf dem Umsatz-Dashboard wird kein Rot verwendet.
+Das Widget nutzt das Primärfarb-Token (`var(--primary)`) für das Top-3-Segment und das gedämpfte Hintergrund-Token (`var(--muted)`) für den Rest. Wird die Primärfarbe in den Einstellungen geändert, zieht das Top-3-Segment dynamisch nach. Auf dem Umsatz-Dashboard wird kein Rot verwendet.
 
 ## Umsatzverlauf-Diagramm
 
@@ -64,7 +64,7 @@ Die Standardauswahl ist **Diesen Monat**. Die Auswahl wird zurückgesetzt, wenn 
 
 ## Vertriebsaktivität
 
-Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentliche **gestapelte Balkendiagramme** — eines pro KPI. Die Segmente eines Balkens sind die Beiträge der einzelnen Vertriebler in dieser Woche, die Balkenhöhe ist die Team-Summe, und die Segmente sind die jeweiligen Anteile.
+Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentliche **Balkendiagramme** — eines pro KPI. Jeder Balken stellt die Team-Summe der jeweiligen Woche in der Primärfarbe dar. Beim Hover (Balken wechselt zur gedämpften Farbe) zeigt ein Tooltip die Gesamtsumme sowie die Aufschlüsselung pro Vertriebler.
 
 | KPI | Was gezählt wird |
 |-----|------------------|
@@ -75,7 +75,7 @@ Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentlic
 
 Die Vertriebler kommen direkt aus der Spalte `Wer` der hochgeladenen Kontakte-Datei (z. B. `KARRER`, `GUENDEL`). Eine Personio-Zuordnung wird nicht verwendet.
 
-Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards. Jeder Vertriebler erhält über alle vier Diagramme dieselbe stabile Schattierung des Primärblaus, sodass eine Person dashboardweit als dieselbe Farbe lesbar bleibt.
+Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards. Die Wochenlabels werden ohne Jahresangabe dargestellt (z. B. `KW 18`).
 
 Die Diagramme bleiben leer, solange keine Kontakte-Datei hochgeladen wurde.
 

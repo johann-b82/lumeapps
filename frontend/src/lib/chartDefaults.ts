@@ -61,21 +61,20 @@ export const sensorPalette = [
 ] as const;
 
 /**
- * primaryPalette — alternating primary-blue / gedämpft-gray shades, used
- * by the SalesActivityCard so each per-rep bar reads with the same
- * primary-vs-muted contrast as the "Order value over time" chart
- * (current = primary blue, prior = muted gray). Index 0 is the actual
- * primary token (#2563eb / blue-600); odd indices are gedämpft grays of
- * decreasing lightness; even indices are primary-blue variations. Same
- * allow-listed-hex exception as sensorPalette above.
+ * primaryPalette — variations of the primary blue token, used by stacked
+ * multi-series charts (e.g. SalesActivityCard per-rep bars). Index 0 is
+ * the canonical primary (#0d5bec); subsequent indices step
+ * through darker and lighter blue shades to keep series visually distinct
+ * while staying within the primary color family. Same allow-listed-hex
+ * exception as sensorPalette above.
  */
 export const primaryPalette = [
-  "#2563eb", // 0 blue-600  — primary (matches --color-primary)
-  "#9ca3af", // 1 gray-400  — gedämpft (matches --color-chart-prior visual weight)
-  "#60a5fa", // 2 blue-400  — primary, lighter
-  "#d1d5db", // 3 gray-300  — gedämpft, lighter
-  "#1d4ed8", // 4 blue-700  — primary, darker
-  "#6b7280", // 5 gray-500  — gedämpft, darker
-  "#93c5fd", // 6 blue-300  — primary, very light
-  "#4b5563", // 7 gray-600  — gedämpft, darkest
+  "#0d5bec", // 0 — primary (matches --color-primary)
+  "#1d4ed8", // 1 blue-700
+  "#60a5fa", // 2 blue-400
+  "#1e40af", // 3 blue-800
+  "#3b82f6", // 4 blue-500
+  "#93c5fd", // 5 blue-300
+  "#172554", // 6 blue-950
+  "#bfdbfe", // 7 blue-200
 ] as const;

@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { primaryPalette } from "@/lib/chartDefaults";
 import { useOrdersDistribution } from "@/hooks/useOrdersDistribution";
 
 interface Props {
@@ -101,7 +100,7 @@ function ShareBar({
   top3Label: string;
   remainingLabel: string;
 }) {
-  const top3Color = primaryPalette[0]; // primary blue-600
+  const top3Color = "var(--primary)";
   // v1.46: align with --color-chart-prior = var(--muted) so the share-bar
   // "Remaining customers" segment matches the previous-period bar on the
   // Order-value-over-time chart (both gedämpft surface gray).

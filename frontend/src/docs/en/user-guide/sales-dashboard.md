@@ -37,7 +37,7 @@ A horizontal stacked bar shows what share of order value the top-3 customers rep
 
 To the right (or below on narrow viewports), a numbered list (1. / 2. / 3.) names the top-3 customers in descending order of value.
 
-The widget uses two shades of the dashboard's primary blue — `blue-600` for the top-3 segment, `blue-300` for the rest. No red is used anywhere on the Sales Dashboard.
+The widget uses the primary colour token (`var(--primary)`) for the top-3 segment and the muted surface token (`var(--muted)`) for the rest. If the primary colour is changed in settings, the top-3 segment follows automatically. No red is used anywhere on the Sales Dashboard.
 
 ## Revenue over Time Chart
 
@@ -64,7 +64,7 @@ The default selection is **This month**. Your selection resets to the default wh
 
 ## Sales Activity
 
-Below the revenue chart, the **Sales activity** card shows four weekly **stacked bar charts** — one per KPI. Each bar's segments are the per-rep contributions for that week, so the bar height is the team total and the segments are each rep's share.
+Below the revenue chart, the **Sales activity** card shows four weekly **bar charts** — one per KPI. Each bar represents the team total for that week in the primary colour. On hover (the bar switches to the muted colour) a tooltip shows the total plus the per-rep breakdown.
 
 | KPI | What it counts |
 |-----|----------------|
@@ -75,7 +75,7 @@ Below the revenue chart, the **Sales activity** card shows four weekly **stacked
 
 Sales reps are taken straight from the `Wer` column in the uploaded Kontakte file (e.g. `KARRER`, `GUENDEL`). No Personio mapping is involved.
 
-All four charts respect the dashboard's date-range filter. Each rep gets a stable shade of the primary blue across all four charts, so a person reads as the same colour everywhere on the dashboard.
+All four charts respect the dashboard's date-range filter. Week labels are shown without the year (e.g. `KW 18` / `CW 18`).
 
 The charts stay empty until at least one Kontakte file has been uploaded.
 

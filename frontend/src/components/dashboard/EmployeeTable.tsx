@@ -95,7 +95,7 @@ export function EmployeeTable() {
                 value={filter}
                 onValueChange={setFilter}
               >
-                <SelectTrigger data-testid="employee-filter-trigger" className="w-36">
+                <SelectTrigger data-testid="employee-filter-trigger" className="w-48">
                   <SelectValue>{renderLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
