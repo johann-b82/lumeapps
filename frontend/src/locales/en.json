@@ -546,7 +546,7 @@
   "sales.kpi.angebote": "Quotes",
   "sales.orders_distribution.title": "Order distribution",
   "sales.orders_distribution.per_rep": "Orders / week / rep",
-  "sales.orders_distribution.top3": "Top-3 customer share",
+  "sales.orders_distribution.top3": "Top-3 customers",
   "sales.orders_distribution.top3_empty": "no orders yet",
   "sales.orders_distribution.remaining": "Remaining customers",
   "sales.orders_distribution.share_title": "Customer share",

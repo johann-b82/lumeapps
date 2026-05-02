@@ -546,7 +546,7 @@
   "sales.kpi.angebote": "Angebote",
   "sales.orders_distribution.title": "Auftragsverteilung",
   "sales.orders_distribution.per_rep": "Aufträge / Woche / Vertriebler",
-  "sales.orders_distribution.top3": "Top-3-Kunden-Anteil",
+  "sales.orders_distribution.top3": "Top-3-Kunden",
   "sales.orders_distribution.top3_empty": "noch keine Aufträge",
   "sales.orders_distribution.remaining": "Restkunden",
   "sales.orders_distribution.share_title": "Kundenanteil",
