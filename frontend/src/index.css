@@ -11,11 +11,7 @@
   --color-destructive: #dc2626;
   --color-success: #15803d;
   --color-chart-current: var(--primary);
-  /* Previous-period bars/area use a muted *primary* (blue-300) instead of
-     the surface --muted gray, so the comparison series reads as a faded
-     version of the current series and matches the share-bar's "Restkunden"
-     fill. */
-  --color-chart-prior: #93c5fd;
+  --color-chart-prior: var(--muted);
   --color-warning: #facc15;
 }
 

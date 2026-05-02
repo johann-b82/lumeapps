@@ -102,7 +102,10 @@ function ShareBar({
   remainingLabel: string;
 }) {
   const top3Color = primaryPalette[0]; // primary blue-600
-  const remainingColor = primaryPalette[3]; // muted primary blue-300
+  // v1.46: align with --color-chart-prior = var(--muted) so the share-bar
+  // "Remaining customers" segment matches the previous-period bar on the
+  // Order-value-over-time chart (both gedämpft surface gray).
+  const remainingColor = "var(--muted)";
   const total = top3Pct + remainingPct || 1;
   const top3Width = (top3Pct / total) * 100;
   const remainingWidth = 100 - top3Width;
