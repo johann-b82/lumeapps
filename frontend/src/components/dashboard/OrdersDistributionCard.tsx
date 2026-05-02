@@ -25,7 +25,7 @@ export function OrdersDistributionCard({ startDate, endDate }: Props) {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <KpiCard
         label={t("sales.orders_distribution.per_rep")}
-        subtitle={t("sales.orders_distribution.per_rep_subtitle")}
+        subtitle={t("dashboard.kpi.exclusionNote")}
         isLoading={isLoading}
         value={
           data ? data.orders_per_week_per_rep.toFixed(1).replace(".", ",") : undefined

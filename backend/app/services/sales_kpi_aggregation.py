@@ -124,7 +124,15 @@ async def _build_order_to_rep_bridge(
 async def compute_orders_distribution(
     session: AsyncSession, date_from: date, date_to: date,
 ) -> dict:
-    """Orders/wk/rep + top-3 customer share + remaining share."""
+    """Orders/wk/rep + top-3 customer share + remaining share.
+
+    ``orders_per_week_per_rep`` excludes €0 orders (consistent with the
+    revenue cards above) and divides by the number of distinct sales
+    reps that *created* any non-zero order in the range — "created"
+    derived via the Kontakte bridge (a row whose comment matches
+    ``Angebot <order_number>``). When no rep can be inferred (e.g. no
+    Kontakte file uploaded yet) the metric is 0.0.
+    """
     orders = (
         await session.execute(
             select(SalesRecord).where(
@@ -145,18 +153,22 @@ async def compute_orders_distribution(
             "top3_customers": [],
         }
 
-    bridge = await _build_order_to_rep_bridge(session, date_from, date_to)
+    # Exclude €0 (NULL counts as 0) orders from both the rate metric
+    # and the customer-share metrics — matches the "Aufträge mit Wert
+    # 0 € werden ausgeschlossen" disclaimer below the per_rep tile.
+    nonzero = [o for o in orders if float(o.total_value or 0) > 0]
 
-    attributed = [o for o in orders if o.order_number in bridge]
-    rep_tokens = {bridge[o.order_number] for o in attributed}
+    bridge = await _build_order_to_rep_bridge(session, date_from, date_to)
+    creators = {bridge[o.order_number] for o in nonzero if o.order_number in bridge}
+    rep_count = len(creators)
     weeks = max(1, ((date_to - date_from).days // 7) + 1)
-    rep_count = max(1, len(rep_tokens))
-    orders_per_week_per_rep = (
-        round(len(attributed) / weeks / rep_count, 2) if rep_count else 0.0
-    )
+    if rep_count == 0:
+        orders_per_week_per_rep = 0.0
+    else:
+        orders_per_week_per_rep = round(len(nonzero) / rep_count / weeks, 2)
 
     by_customer: dict[str, float] = defaultdict(float)
-    for o in orders:
+    for o in nonzero:
         by_customer[o.customer_name or ""] += float(o.total_value or 0)
     sorted_cust = sorted(by_customer.items(), key=lambda kv: kv[1], reverse=True)
     total = sum(by_customer.values()) or 1.0

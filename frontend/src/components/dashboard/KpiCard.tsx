@@ -23,15 +23,15 @@ export function KpiCard({ label, subtitle, value, isLoading, delta }: KpiCardPro
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      {subtitle && (
-        <p className="text-xs text-muted-foreground/70 mt-0.5">{subtitle}</p>
-      )}
       <div className="mt-2 flex items-center justify-between gap-4">
         <p className="text-3xl font-semibold tabular-nums">{value ?? "—"}</p>
         {delta != null && (
           <div className="flex-shrink-0 text-right">{delta}</div>
         )}
       </div>
+      {subtitle && (
+        <p className="mt-2 text-xs text-muted-foreground/70">{subtitle}</p>
+      )}
     </Card>
   );
 }
