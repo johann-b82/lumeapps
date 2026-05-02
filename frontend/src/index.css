@@ -136,6 +136,10 @@
   }
   html {
     @apply font-sans;
+    /* Reserve vertical scrollbar gutter so the viewport width stays stable
+       across pages with vs. without overflow — keeps the NavBar icons from
+       shifting horizontally when navigating between sections. */
+    scrollbar-gutter: stable;
   }
 }
 

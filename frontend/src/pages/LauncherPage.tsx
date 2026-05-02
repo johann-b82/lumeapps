@@ -15,7 +15,7 @@ export function LauncherPage() {
   void user;
 
   return (
-    <div className="max-w-7xl mx-auto px-8 pt-16 pb-8">
+    <div className="max-w-7xl mx-auto px-6 pt-16 pb-8">
       <div
         className="grid gap-8"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}

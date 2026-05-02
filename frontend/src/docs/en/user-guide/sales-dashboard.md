@@ -29,13 +29,13 @@ Directly below the three top KPI cards, a second row breaks the orders down per 
 
 ### Orders / week / rep
 
-The mean number of orders per sales rep per week in the selected range. The numerator is the count of non-zero orders. The denominator is the number of distinct creators (derived from the Kontakte file — see "Sales Activity" below) multiplied by the number of weeks in the range. If no Kontakte file has been uploaded yet, this tile reads `0,0`.
+The mean number of orders per sales rep per week in the selected range. The numerator is the count of non-zero orders. The denominator is the number of distinct creators — taken directly from the `Benutzer` column of the uploaded Aufträge file — multiplied by the number of weeks in the range. Order rows uploaded before v1.44 don't carry this field and don't contribute to the denominator; re-upload the Aufträge file in that case.
 
 ### Customer share + Top-3 list
 
 A horizontal stacked bar shows what share of order value the top-3 customers represent versus the rest. Each segment is labelled with its percentage (segments smaller than 8 % hide the inline label to avoid overflow). A small legend below the bar repeats the colour key.
 
-To the right (or below on narrow viewports), a numbered list (1. / 2. / 3.) names the top-3 customers in descending order of value.
+To the right (or below on narrow viewports), a numbered list (1. / 2. / 3.) names the top-3 customers in descending order of value — each row shows the order value plus that customer's individual share of total revenue in brackets (e.g. `87.1 %`).
 
 The widget uses the primary colour token (`var(--primary)`) for the top-3 segment and the muted surface token (`var(--muted)`) for the rest. If the primary colour is changed in settings, the top-3 segment follows automatically. No red is used anywhere on the Sales Dashboard.
 

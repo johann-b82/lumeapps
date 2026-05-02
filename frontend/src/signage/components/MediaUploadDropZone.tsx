@@ -139,11 +139,11 @@ export function MediaUploadDropZone() {
   // dashed-bordered region inside the surrounding Card (same chrome
   // weight as a settings-form section).
   let containerClass =
-    "rounded-md border-2 border-dashed min-h-[120px] flex flex-col items-center justify-center text-center p-6 transition-colors";
+    "rounded-md border-2 min-h-[120px] flex flex-col items-center justify-center text-center p-6 transition-colors";
   if (uploadMutation.isPending) {
     containerClass += " border-border cursor-not-allowed opacity-60";
   } else if (isDragActive) {
-    containerClass += " bg-primary/5 border-solid border-primary";
+    containerClass += " bg-primary/5 border-primary";
   } else {
     containerClass += " border-border";
   }
@@ -169,7 +169,6 @@ export function MediaUploadDropZone() {
               {t("signage.admin.media.upload_or")}
             </p>
             <Button
-              size="sm"
               type="button"
               onClick={(e) => {
                 e.stopPropagation();

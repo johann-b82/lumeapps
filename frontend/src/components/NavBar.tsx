@@ -27,7 +27,6 @@ export function NavBar() {
               className="max-h-8 max-w-8 object-contain"
             />
           )}
-          <span className="text-sm font-medium">{settings.app_name}</span>
         </Link>
         {!isLauncher && (
           <div data-testid="navbar-breadcrumb-wrapper" className="hidden md:block">

@@ -86,7 +86,6 @@ export function LoginPage() {
               className="mx-auto h-16 w-16 object-contain mb-2"
             />
           )}
-          <p className="text-center text-2xl font-semibold mb-4">KPI Dashboard</p>
         </CardHeader>
         <CardContent>
           <h1 className="text-2xl font-semibold text-center text-foreground mb-6">

@@ -88,6 +88,10 @@ class SalesRecord(Base):
     technical_check: Mapped[str | None] = mapped_column(String(10), nullable=True)
     purchase_check: Mapped[str | None] = mapped_column(String(10), nullable=True)
     approval_comment_2: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # v1.44: ERP "Benutzer" — token of the user who created the order. Used as
+    # the rep field for orders/wk/rep, replacing the Kontakte bridge. Nullable
+    # because legacy rows uploaded before v1.44 won't have it.
+    created_by_user: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # --- Date columns (per D-10: nullable, DD.MM.YYYY) ---
     order_date: Mapped[date | None] = mapped_column(Date, nullable=True)

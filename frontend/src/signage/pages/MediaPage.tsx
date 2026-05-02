@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Code, FileText, Link as LinkIcon, Presentation } from "lucide-react";
 
 import { signageKeys } from "@/lib/queryKeys";
+import { getAccessToken } from "@/lib/apiClient";
 import {
   ApiErrorWithBody,
   signageApi,
@@ -20,14 +21,18 @@ import { MediaInUseDialog } from "@/signage/components/MediaInUseDialog";
 
 const DIRECTUS_URL =
   (import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-  "http://localhost:8055";
+  (typeof window !== "undefined"
+    ? `${window.location.origin}/directus`
+    : "http://localhost/directus");
 
 function thumbnailUrl(media: SignageMedia): string | null {
   if (
     (media.kind === "image" || media.kind === "video") &&
     media.uri
   ) {
-    return `${DIRECTUS_URL}/assets/${media.uri}`;
+    const token = getAccessToken();
+    const qs = token ? `?access_token=${encodeURIComponent(token)}` : "";
+    return `${DIRECTUS_URL}/assets/${media.uri}${qs}`;
   }
   return null;
 }
@@ -104,10 +109,17 @@ export function MediaPage() {
     // sub-pages.
     <Card>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <MediaUploadDropZone />
-          <MediaRegisterUrlForm />
-        </div>
+        <section aria-labelledby="add-media-heading" className="space-y-3">
+          <h2 id="add-media-heading" className="text-base font-semibold">
+            {t("signage.admin.media.add_section_title")}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <MediaUploadDropZone />
+            <div className="rounded-md border-2 border-border p-6">
+              <MediaRegisterUrlForm />
+            </div>
+          </div>
+        </section>
 
         <hr className="border-border" />
 

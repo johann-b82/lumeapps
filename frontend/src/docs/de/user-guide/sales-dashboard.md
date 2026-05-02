@@ -29,13 +29,13 @@ Direkt unter den drei oberen KPI-Kacheln zeigt eine zweite Reihe die Aufteilung 
 
 ### Aufträge / Woche / Vertriebler
 
-Die durchschnittliche Anzahl Aufträge pro Vertriebler pro Woche im gewählten Zeitraum. Zähler ist die Anzahl der Aufträge mit Wert > 0 €. Nenner ist die Anzahl unterschiedlicher Ersteller (abgeleitet aus der Kontakte-Datei — siehe „Vertriebsaktivität") multipliziert mit der Anzahl Wochen im Zeitraum. Wurde noch keine Kontakte-Datei hochgeladen, steht hier `0,0`.
+Die durchschnittliche Anzahl Aufträge pro Vertriebler pro Woche im gewählten Zeitraum. Zähler ist die Anzahl der Aufträge mit Wert > 0 €. Nenner ist die Anzahl unterschiedlicher Ersteller — direkt aus der Spalte `Benutzer` der hochgeladenen Aufträge-Datei — multipliziert mit der Anzahl Wochen im Zeitraum. Auftragsdatensätze, die vor v1.44 hochgeladen wurden, haben dieses Feld nicht und tragen nicht zum Nenner bei; in diesem Fall die Aufträge-Datei erneut hochladen.
 
 ### Kundenanteil + Top-3-Liste
 
 Eine horizontale gestapelte Leiste zeigt, welchen Anteil die drei umsatzstärksten Kunden am Auftragsvolumen haben — gegenüber dem Rest. Jedes Segment trägt seine Prozentzahl im Inneren (Segmente unter 8 % verstecken die Inline-Beschriftung, um Überlauf zu vermeiden). Eine kleine Legende unter der Leiste wiederholt die Farbzuordnung.
 
-Rechts daneben (oder darunter auf schmalen Viewports) zählt eine nummerierte Liste (1. / 2. / 3.) die Top-3-Kunden in absteigender Auftragswert-Reihenfolge auf.
+Rechts daneben (oder darunter auf schmalen Viewports) zählt eine nummerierte Liste (1. / 2. / 3.) die Top-3-Kunden in absteigender Auftragswert-Reihenfolge auf — jeweils mit Auftragswert und individuellem Anteil am Gesamtumsatz in Klammern (z. B. `87,1 %`).
 
 Das Widget nutzt das Primärfarb-Token (`var(--primary)`) für das Top-3-Segment und das gedämpfte Hintergrund-Token (`var(--muted)`) für den Rest. Wird die Primärfarbe in den Einstellungen geändert, zieht das Top-3-Segment dynamisch nach. Auf dem Umsatz-Dashboard wird kein Rot verwendet.
 

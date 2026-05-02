@@ -12,19 +12,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { signageKeys } from "@/lib/queryKeys";
+import { getAccessToken } from "@/lib/apiClient";
 import { signageApi } from "@/signage/lib/signageApi";
 import type { SignageMedia } from "@/signage/lib/signageTypes";
 
 const DIRECTUS_URL =
   (import.meta.env.VITE_DIRECTUS_URL as string | undefined) ??
-  "http://localhost:8055";
+  (typeof window !== "undefined"
+    ? `${window.location.origin}/directus`
+    : "http://localhost/directus");
 
 function thumbnailUrl(media: SignageMedia): string | null {
   if (
     (media.kind === "image" || media.kind === "video") &&
     media.uri
   ) {
-    return `${DIRECTUS_URL}/assets/${media.uri}`;
+    const token = getAccessToken();
+    const qs = token ? `?access_token=${encodeURIComponent(token)}` : "";
+    return `${DIRECTUS_URL}/assets/${media.uri}${qs}`;
   }
   return null;
 }

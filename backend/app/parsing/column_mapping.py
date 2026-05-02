@@ -3,12 +3,15 @@
 # v1.26 (2026-04-30): swapped to the 60-column "Aufträge" export format.
 # Headers from the new export are listed below in source order; only the
 # subset that maps to a column on `SalesRecord` is kept — unmapped headers
-# (Land, EDI, MS, M Sperre, ES, Beleg Nr, LS / RG, Sperrkz, Benutzer,
-# Erfolg %, GS, Ihr Datum, Ihre Zeichen, Telefonnummer, Telefaxnummer, TZ,
-# Basis, Anteil 1..5, Vers.Nw., Vers.Nw. Datum, Anz.Druck, Kopfrabatt %,
+# (Land, EDI, MS, M Sperre, ES, Beleg Nr, LS / RG, Sperrkz, Erfolg %, GS,
+# Ihr Datum, Ihre Zeichen, Telefonnummer, Telefaxnummer, TZ, Basis,
+# Anteil 1..5, Vers.Nw., Vers.Nw. Datum, Anz.Druck, Kopfrabatt %,
 # Zoll-Status, Zoll-MRN, MRN-Datum, STR-Status, User1, User2, Aktion, GBst,
 # GBst-St, GBst-Art, Name 2, Name 3, Wert, brutto, Versand per Mail) are
 # dropped at parse time.
+#
+# v1.44: "Benutzer" promoted from dropped → created_by_user; used as the rep
+# field for orders/wk/rep (replaces the Kontakte bridge).
 #
 # Schema columns that the new format does NOT populate stay NULL:
 # remaining_value, complexity_group, comment, business_area, delivery_date,
@@ -37,6 +40,7 @@ GERMAN_TO_ENGLISH: dict[str, str] = {
     "Lieferort": "delivery_city",
     "Bestellnummer": "vv_number",
     "Proj.Nr.": "project_number",
+    "Benutzer": "created_by_user",
 }
 
 # English column names that contain DD.MM.YYYY dates.

@@ -141,18 +141,8 @@ async def test_orders_distribution_top3_share(viewer_client):
                     order_date=date(2026, 4, 27),
                     customer_name=cust,
                     total_value=Decimal(tot),
-                )
-            )
-        # Bridge: a Kontakte row attributing each order to rep "X".
-        for i in range(5):
-            s.add(
-                SalesContact(
-                    contact_date=date(2026, 4, 1),
-                    employee_token="X",
-                    contact_type="EMAIL",
-                    comment=f"Angebot O{i}",
-                    status=1,
-                    imported_at=now,
+                    # v1.44: rep is the ERP "Benutzer" column.
+                    created_by_user="X",
                 )
             )
         await s.commit()

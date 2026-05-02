@@ -237,6 +237,7 @@
   "signage.admin.nav.playlists": "Playlists",
   "signage.admin.nav.devices": "Geräte",
   "signage.admin.nav.schedules": "Zeitpläne",
+  "signage.admin.media.add_section_title": "Datei oder URL hinzufügen",
   "signage.admin.media.upload_title": "Dateien hier ablegen",
   "signage.admin.media.upload_or": "oder",
   "signage.admin.media.browse_button": "Dateien auswählen",

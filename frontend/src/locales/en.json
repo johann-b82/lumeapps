@@ -237,6 +237,7 @@
   "signage.admin.nav.playlists": "Playlists",
   "signage.admin.nav.devices": "Devices",
   "signage.admin.nav.schedules": "Schedules",
+  "signage.admin.media.add_section_title": "Add File or URL",
   "signage.admin.media.upload_title": "Drop files here to upload",
   "signage.admin.media.upload_or": "or",
   "signage.admin.media.browse_button": "Browse files",

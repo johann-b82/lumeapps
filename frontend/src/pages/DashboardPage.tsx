@@ -19,7 +19,12 @@ export function DashboardPage() {
         preset={preset}
         range={range}
       />
-      <OrdersDistributionCard startDate={startDate} endDate={endDate} />
+      <OrdersDistributionCard
+        startDate={startDate}
+        endDate={endDate}
+        preset={preset}
+        range={range}
+      />
       <RevenueChart
         startDate={startDate}
         endDate={endDate}

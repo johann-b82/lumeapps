@@ -1,19 +1,19 @@
-"""Sales KPI aggregation service (v1.42).
+"""Sales KPI aggregation service (v1.44).
 
-Two compute paths, both keyed by the ``Wer`` token from the Kontakte
-file directly — no Personio binding (v1.41 had one; v1.42 dropped it):
+Two compute paths:
 
 1. ``compute_contacts_weekly`` — group ``sales_contacts`` rows by
    (iso_year, iso_week, employee_token) and emit four counts per
-   bucket: erstkontakte, interessenten, visits, angebote.
+   bucket: erstkontakte, interessenten, visits, angebote. Keyed by the
+   ``Wer`` token from the Kontakte file directly.
 
 2. ``compute_orders_distribution`` — three numbers for the combined
    "Auftragsverteilung" card:
 
    - **orders_per_week_per_rep** — mean orders per rep per week. Rep
-     attribution is bridged through the Kontakte file: a SalesRecord is
-     attributed to the token recorded on a Kontakte row whose
-     ``comment`` starts with ``Angebot <order_number>``.
+     attribution is the ERP "Benutzer" column on each ``SalesRecord``
+     (``created_by_user``); v1.44 dropped the v1.41/v1.42 Kontakte
+     bridge.
    - **top3_share_pct** — sum(top-3 customers' total_value) /
      sum(all total_value), in percent. Always over the FULL set of
      orders in the date range, regardless of rep attribution.
@@ -21,7 +21,6 @@ file directly — no Personio binding (v1.41 had one; v1.42 dropped it):
 """
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from datetime import date
 
@@ -29,8 +28,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import SalesContact, SalesRecord
-
-_ANGEBOT_RE = re.compile(r"^\s*Angebot\s+(\S+)", re.IGNORECASE)
 
 
 async def compute_contacts_weekly(
@@ -84,43 +81,6 @@ async def compute_contacts_weekly(
     return {"weeks": sorted_weeks}
 
 
-async def _build_order_to_rep_bridge(
-    session: AsyncSession, date_from: date, date_to: date,
-) -> dict[str, str]:
-    """Map ``order_number`` → Wer token via Kontakte comments.
-
-    A Kontakte row whose ``comment`` starts with ``Angebot <number>``
-    associates that order_number with the rep recorded in ``Wer``.
-    Multiple Kontakte rows can mention the same order_number; we take
-    the most recent contact_date as authoritative.
-    """
-    contact_lookback = date_from.replace(year=date_from.year - 5)
-    rows = (
-        await session.execute(
-            select(SalesContact).where(
-                and_(
-                    SalesContact.contact_date >= contact_lookback,
-                    SalesContact.contact_date <= date_to,
-                )
-            )
-        )
-    ).scalars().all()
-
-    latest: dict[str, tuple[date, str]] = {}
-    for r in rows:
-        m = _ANGEBOT_RE.match(r.comment or "")
-        if not m:
-            continue
-        order_no = m.group(1)
-        token = r.employee_token
-        if not token:
-            continue
-        existing = latest.get(order_no)
-        if existing is None or r.contact_date > existing[0]:
-            latest[order_no] = (r.contact_date, token)
-    return {ord_no: token for ord_no, (_, token) in latest.items()}
-
-
 async def compute_orders_distribution(
     session: AsyncSession, date_from: date, date_to: date,
 ) -> dict:
@@ -128,10 +88,10 @@ async def compute_orders_distribution(
 
     ``orders_per_week_per_rep`` excludes €0 orders (consistent with the
     revenue cards above) and divides by the number of distinct sales
-    reps that *created* any non-zero order in the range — "created"
-    derived via the Kontakte bridge (a row whose comment matches
-    ``Angebot <order_number>``). When no rep can be inferred (e.g. no
-    Kontakte file uploaded yet) the metric is 0.0.
+    reps that *created* any non-zero order in the range. v1.44: rep is
+    taken from ``sales_records.created_by_user`` (ERP "Benutzer"
+    column). When no rep can be resolved (e.g. legacy rows uploaded
+    before v1.44) the metric is 0.0.
     """
     orders = (
         await session.execute(
@@ -158,8 +118,11 @@ async def compute_orders_distribution(
     # 0 € werden ausgeschlossen" disclaimer below the per_rep tile.
     nonzero = [o for o in orders if float(o.total_value or 0) > 0]
 
-    bridge = await _build_order_to_rep_bridge(session, date_from, date_to)
-    creators = {bridge[o.order_number] for o in nonzero if o.order_number in bridge}
+    creators = {
+        (o.created_by_user or "").strip()
+        for o in nonzero
+        if (o.created_by_user or "").strip()
+    }
     rep_count = len(creators)
     weeks = max(1, ((date_to - date_from).days // 7) + 1)
     if rep_count == 0:
