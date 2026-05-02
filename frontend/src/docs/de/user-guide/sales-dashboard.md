@@ -1,16 +1,16 @@
 # Umsatz-Dashboard
 
-Das Umsatz-Dashboard gibt dir einen aktuellen Überblick über deine Umsatzentwicklung. Es kombiniert drei KPI-Übersichtskacheln, einen „Umsatzverlauf"-Diagrammbereich und eine durchsuchbare Auftragstabelle — alles nach Zeitraum filterbar. Dieser Artikel erklärt die einzelnen Bereiche und die Bedeutung der angezeigten Daten.
+Das Umsatz-Dashboard gibt dir einen aktuellen Überblick über deine Vertriebsleistung. Es kombiniert oben sechs Übersichts­kacheln (drei Umsatz-KPIs sowie Aufträge / Woche / Vertriebler und ein Kundenanteils-Widget), darunter den Umsatzverlauf, die wöchentlichen Vertriebsaktivitäts-Balken pro Vertriebler und eine durchsuchbare Auftragstabelle — alles nach Zeitraum filterbar. Dieser Artikel erklärt jeden Bereich.
 
 ## KPI-Kacheln
 
 Am oberen Rand des Dashboards zeigen drei Kacheln deine wichtigsten Kennzahlen für den ausgewählten Zeitraum:
 
-- **Gesamtumsatz** — Die Summe aller Auftragswerte in EUR.
-- **Durchschnittlicher Auftragswert** — Gesamtumsatz geteilt durch die Anzahl der Aufträge, in EUR.
+- **Auftragswert** — Die Summe aller Auftragswerte im gewählten Zeitraum, in EUR. (Umbenannt von „Gesamtumsatz".)
+- **Durchschnittlicher Auftragswert** — Auftragswert geteilt durch die Anzahl der Aufträge, in EUR.
 - **Aufträge gesamt** — Die Anzahl aller Aufträge im gewählten Zeitraum.
 
-> **Hinweis:** Aufträge mit Wert 0 € werden bei allen drei Kennzahlen nicht berücksichtigt.
+> **Hinweis:** Aufträge mit Wert 0 € werden in jeder Kennzahl auf dem Umsatz-Dashboard ausgeschlossen — den drei KPI-Kacheln oben, **Aufträge / Woche / Vertriebler** und der Kundenanteils-Leiste.
 
 ### Delta-Badges
 
@@ -19,14 +19,29 @@ Jede Kachel zeigt ein oder zwei Delta-Badges, die den aktuellen Zeitraum mit ein
 - **Diesen Monat** — Zwei Badges: vs. Vormonat und vs. Vorjahresmonat.
 - **Dieses Quartal** — Zwei Badges: vs. Vorquartal und vs. Vorjahr.
 - **Dieses Jahr** — Ein Badge: vs. Vorjahr (Jahr-zu-dato-Vergleich).
-- **Gesamter Zeitraum** — Keine Delta-Badges.
-- **Benutzerdefiniert** — Keine Delta-Badges.
+- **Gesamter Zeitraum** / **Benutzerdefiniert** — Keine Delta-Badges.
 
-Falls kein Vergleichszeitraum verfügbar ist, zeigt das Badge den Tooltip: „Kein Vergleichszeitraum verfügbar".
+Falls kein Vergleichszeitraum verfügbar ist, zeigt das Badge den Tooltip „Kein Vergleichszeitraum verfügbar".
+
+## Auftragsverteilungs-Reihe
+
+Direkt unter den drei oberen KPI-Kacheln zeigt eine zweite Reihe die Aufteilung der Aufträge pro Vertriebler und pro Kunde.
+
+### Aufträge / Woche / Vertriebler
+
+Die durchschnittliche Anzahl Aufträge pro Vertriebler pro Woche im gewählten Zeitraum. Zähler ist die Anzahl der Aufträge mit Wert > 0 €. Nenner ist die Anzahl unterschiedlicher Ersteller (abgeleitet aus der Kontakte-Datei — siehe „Vertriebsaktivität") multipliziert mit der Anzahl Wochen im Zeitraum. Wurde noch keine Kontakte-Datei hochgeladen, steht hier `0,0`.
+
+### Kundenanteil + Top-3-Liste
+
+Eine horizontale gestapelte Leiste zeigt, welchen Anteil die drei umsatzstärksten Kunden am Auftragsvolumen haben — gegenüber dem Rest. Jedes Segment trägt seine Prozentzahl im Inneren (Segmente unter 8 % verstecken die Inline-Beschriftung, um Überlauf zu vermeiden). Eine kleine Legende unter der Leiste wiederholt die Farbzuordnung.
+
+Rechts daneben (oder darunter auf schmalen Viewports) zählt eine nummerierte Liste (1. / 2. / 3.) die Top-3-Kunden in absteigender Auftragswert-Reihenfolge auf.
+
+Das Widget verwendet zwei Schattierungen des dashboard-Primärblaus — `blue-600` für das Top-3-Segment, `blue-300` für den Rest. Auf dem Umsatz-Dashboard wird kein Rot verwendet.
 
 ## Umsatzverlauf-Diagramm
 
-Unterhalb der KPI-Kacheln visualisiert das Diagramm **Umsatzverlauf** die Umsätze im gewählten Zeitraum.
+Unterhalb der Auftragsverteilungs-Reihe visualisiert das Diagramm **Umsatzverlauf** die Umsätze im gewählten Zeitraum.
 
 - Mit dem **Balken** / **Fläche**-Umschalter oben rechts im Diagramm wechselst du den Diagrammtyp. Standardmäßig ist „Balken" ausgewählt.
 - Bei Voreinstellungen mit Vergleichszeitraum (Diesen Monat, Dieses Quartal, Dieses Jahr) wird eine Vergleichsserie überlagert.
@@ -47,9 +62,26 @@ Der Zeitraumfilter befindet sich oben auf der Dashboard-Seite. Wähle eine der v
 
 Die Standardauswahl ist **Diesen Monat**. Die Auswahl wird zurückgesetzt, wenn du das Dashboard verlässt.
 
+## Vertriebsaktivität
+
+Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentliche **gestapelte Balkendiagramme** — eines pro KPI. Die Segmente eines Balkens sind die Beiträge der einzelnen Vertriebler in dieser Woche, die Balkenhöhe ist die Team-Summe, und die Segmente sind die jeweiligen Anteile.
+
+| KPI | Was gezählt wird |
+|-----|------------------|
+| Erstkontakte | Neue Leads (Typ = ERS in der Kontakte-Datei) |
+| Interessenten | Frühe Vertriebsgespräche (Typ ∈ {ANFR, EPA}) |
+| Besuche | Vor-Ort-Termine beim Kunden (Typ = ORT) |
+| Angebote | Im Kontakt erfasste Angebote (Kommentar beginnt mit „Angebot") |
+
+Die Vertriebler kommen direkt aus der Spalte `Wer` der hochgeladenen Kontakte-Datei (z. B. `KARRER`, `GUENDEL`). Eine Personio-Zuordnung wird nicht verwendet.
+
+Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards. Jeder Vertriebler erhält über alle vier Diagramme dieselbe stabile Schattierung des Primärblaus, sodass eine Person dashboardweit als dieselbe Farbe lesbar bleibt.
+
+Die Diagramme bleiben leer, solange keine Kontakte-Datei hochgeladen wurde.
+
 ## Auftragstabelle
 
-Unterhalb des Diagramms listet die Tabelle **Aufträge** alle Aufträge im gewählten Zeitraum. Du kannst:
+Unterhalb der Aktivitäts-Diagramme listet die Tabelle **Aufträge** alle Aufträge im gewählten Zeitraum. Du kannst:
 
 - **Suchen** — Gib einen Begriff ins Suchfeld ein, um nach Auftrags-Nr., Kunde oder Projektname zu filtern.
 - **Sortieren** — Klicke auf einen Spaltenkopf zum Sortieren.
@@ -64,33 +96,6 @@ Tabellenspalten:
 | Datum | Auftragsdatum |
 | Gesamt | Gesamter Auftragswert (EUR) |
 | Restwert | Offener Restbetrag (EUR) |
-
-## Vertriebsaktivität
-
-Unter dem Umsatzverlauf zeigt die Karte **Vertriebsaktivität** vier wöchentliche Liniendiagramme — eines pro KPI, mit einer Linie pro Vertriebler:
-
-| KPI | Was gezählt wird |
-|-----|------------------|
-| Erstkontakte | Neue Leads (Typ = ERS in der Kontakte-Datei) |
-| Interessenten | Frühe Vertriebsgespräche (Typ ∈ {ANFR, EPA}) |
-| Besuche | Vor-Ort-Termine beim Kunden (Typ = ORT) |
-| Angebote | Im Kontakt erfasste Angebote (Kommentar beginnt mit „Angebot") |
-
-Die Vertriebler kommen direkt aus der Spalte `Wer` der hochgeladenen Kontakte-Datei (z. B. `KARRER`, `GUENDEL`). Eine Personio-Zuordnung wird nicht verwendet.
-
-Alle vier Diagramme respektieren den Zeitraumfilter des Dashboards und verwenden pro Vertriebler dieselbe Farbe — eine Person liest sich also auf allen vier Diagrammen als dieselbe Linie.
-
-## Auftragsverteilung
-
-Unter den Aktivitäts-Diagrammen zeigt die Karte **Auftragsverteilung** drei Zahlen für den gewählten Zeitraum:
-
-| Kennzahl | Bedeutung |
-|----------|-----------|
-| Aufträge / Woche / Vertriebler | Durchschnittliche Auftragsanzahl pro Vertriebler pro Woche. Aufträge werden über Kontakte-Zeilen einem Vertriebler zugeordnet, deren Kommentar die Auftragsnummer nennt („Angebot 5000000"). |
-| Top-3-Kunden-Anteil | Anteil des Auftragsvolumens, der auf die drei umsatzstärksten Kunden entfällt. Der Untertitel listet diese Kunden auf. |
-| Restkunden | 100 % minus Top-3-Anteil — der Long-Tail-Anteil am Umsatz. |
-
-Beide Karten bleiben leer, solange keine Kontakte-Datei hochgeladen wurde.
 
 ## Verwandte Artikel
 

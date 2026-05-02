@@ -91,7 +91,6 @@
   "dashboard.kpi.totalRevenue.label": "Auftragswert",
   "dashboard.kpi.averageOrderValue.label": "Durchschnittlicher Auftragswert",
   "dashboard.kpi.totalOrders.label": "Aufträge gesamt",
-  "dashboard.kpi.exclusionNote": "Aufträge mit Wert 0 € werden ausgeschlossen.",
   "dashboard.filter.label": "Zeitraum",
   "dashboard.filter.thisMonth": "Diesen Monat",
   "dashboard.filter.thisQuarter": "Dieses Quartal",

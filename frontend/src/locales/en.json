@@ -91,7 +91,6 @@
   "dashboard.kpi.totalRevenue.label": "Order value",
   "dashboard.kpi.averageOrderValue.label": "Average order value",
   "dashboard.kpi.totalOrders.label": "Total orders",
-  "dashboard.kpi.exclusionNote": "Orders with a value of €0 are excluded.",
   "dashboard.filter.label": "Date range",
   "dashboard.filter.thisMonth": "This month",
   "dashboard.filter.thisQuarter": "This quarter",
