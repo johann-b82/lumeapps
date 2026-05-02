@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Bar,
+  BarChart,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { sensorPalette } from "@/lib/chartDefaults";
+import { primaryPalette } from "@/lib/chartDefaults";
 import { useContactsWeekly } from "@/hooks/useContactsWeekly";
 import type {
   ContactsWeeklyEmployeeBucket,
@@ -102,24 +102,22 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
             <div className="text-sm font-medium mb-2">{t(k.titleKey)}</div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={buildSeries(q.data!, tokens, k.key)}>
+                <BarChart data={buildSeries(q.data!, tokens, k.key)}>
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip />
                   {idx === 0 && <Legend wrapperStyle={{ fontSize: 11 }} />}
                   {tokens.map((tk, i) => (
-                    <Line
+                    <Bar
                       key={tk}
-                      type="monotone"
                       dataKey={tk}
                       name={tk}
-                      stroke={sensorPalette[i % sensorPalette.length]}
-                      strokeWidth={2}
-                      dot={false}
+                      fill={primaryPalette[i % primaryPalette.length]}
+                      stackId="reps"
                       isAnimationActive={false}
                     />
                   ))}
-                </LineChart>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
