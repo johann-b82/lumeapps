@@ -101,8 +101,8 @@ function ShareBar({
   top3Label: string;
   remainingLabel: string;
 }) {
-  const top3Color = primaryPalette[2]; // blue-600
-  const remainingColor = primaryPalette[5]; // blue-300
+  const top3Color = primaryPalette[0]; // primary blue-600
+  const remainingColor = primaryPalette[3]; // muted primary blue-300
   const total = top3Pct + remainingPct || 1;
   const top3Width = (top3Pct / total) * 100;
   const remainingWidth = 100 - top3Width;

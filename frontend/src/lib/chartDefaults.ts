@@ -62,19 +62,18 @@ export const sensorPalette = [
 
 /**
  * primaryPalette — eight monochromatic shades of the dashboard's primary
- * blue, used by the SalesActivityCard bar charts so a single chart with
- * many sales reps reads as a coherent gradient instead of a clash of
- * primary + secondary hues. Same allow-listed-hex exception as
- * sensorPalette above. Sorted dark → light so the first rep in the
- * legend gets the strongest contrast against the chart background.
+ * blue. Index 0 is the actual primary token (#2563eb / blue-600); the
+ * rest are variations that step out from it (lighter first, then darker)
+ * so a chart with many series reads as a coherent gradient anchored on
+ * the primary. Same allow-listed-hex exception as sensorPalette above.
  */
 export const primaryPalette = [
-  "#1e3a8a", // blue-900
-  "#1d4ed8", // blue-700
-  "#2563eb", // blue-600
+  "#2563eb", // blue-600  — primary (matches --color-primary)
+  "#60a5fa", // blue-400  — primary, lighter
+  "#1d4ed8", // blue-700  — primary, darker
+  "#93c5fd", // blue-300  — primary, very light (shared with --color-chart-prior)
+  "#1e3a8a", // blue-900  — primary, very dark
   "#3b82f6", // blue-500
-  "#60a5fa", // blue-400
-  "#93c5fd", // blue-300
-  "#0c4a6e", // sky-900
   "#0284c7", // sky-600
+  "#0ea5e9", // sky-500
 ] as const;
