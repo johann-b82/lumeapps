@@ -447,11 +447,16 @@ class ContactsWeeklyResponse(BaseModel):
     weeks: list[ContactsWeeklyWeek]
 
 
+class TopCustomer(BaseModel):
+    name: str
+    total_value: float
+
+
 class OrdersDistributionResponse(BaseModel):
     orders_per_week_per_rep: float
     top3_share_pct: float
     remaining_share_pct: float
-    top3_customers: list[str]
+    top3_customers: list[TopCustomer]
 
 
 __all__ = [
@@ -489,5 +494,6 @@ __all__ = [
     "ContactsWeeklyEmployeeBucket",
     "ContactsWeeklyWeek",
     "ContactsWeeklyResponse",
+    "TopCustomer",
     "OrdersDistributionResponse",
 ]

@@ -165,7 +165,10 @@ async def test_orders_distribution_top3_share(viewer_client):
     # 5 orders, totals 50+30+10+5+5 = 100. Top-3 = 50+30+10 = 90 → 90%.
     assert body["top3_share_pct"] == 90.0
     assert body["remaining_share_pct"] == 10.0
-    assert sorted(body["top3_customers"]) == ["A", "B", "C"]
+    names = [c["name"] for c in body["top3_customers"]]
+    values = [c["total_value"] for c in body["top3_customers"]]
+    assert names == ["A", "B", "C"]
+    assert values == [50.0, 30.0, 10.0]
     # 5 attributed orders / 1 week / 1 rep → 5.0
     assert body["orders_per_week_per_rep"] == 5.0
 

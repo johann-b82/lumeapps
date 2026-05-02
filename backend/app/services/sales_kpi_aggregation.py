@@ -179,5 +179,5 @@ async def compute_orders_distribution(
         "orders_per_week_per_rep": orders_per_week_per_rep,
         "top3_share_pct": top3_pct,
         "remaining_share_pct": round(100.0 - top3_pct, 2),
-        "top3_customers": [c for c, _ in top3],
+        "top3_customers": [{"name": c, "total_value": round(v, 2)} for c, v in top3],
     }

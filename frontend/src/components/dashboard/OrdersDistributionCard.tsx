@@ -15,16 +15,23 @@ function formatPct(n: number): string {
 }
 
 export function OrdersDistributionCard({ startDate, endDate }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const q = useOrdersDistribution(startDate ?? "", endDate ?? "");
+  const locale = i18n.language || "de-DE";
+
+  const formatCurrency = (n: number) =>
+    new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(n);
 
   const data = q.data;
   const isLoading = q.isLoading;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Left tile: orders / week / rep. The €0-exclusion note moved to
-          the docs (sales-dashboard.md). */}
+      {/* Col 1: orders / week / rep */}
       <KpiCard
         label={t("sales.orders_distribution.per_rep")}
         isLoading={isLoading}
@@ -33,52 +40,51 @@ export function OrdersDistributionCard({ startDate, endDate }: Props) {
         }
       />
 
-      {/* Right widget: stacked share bar (left column) + numbered top-3
-          list (right column). Each column has its own KUNDENANTEIL /
-          TOP-3 header so they read as twin label-led blocks. */}
-      <Card className="p-6 md:col-span-2">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("sales.orders_distribution.share_title")}
-            </p>
-            {isLoading ? (
-              <div className="mt-4 h-9 w-full bg-muted rounded animate-pulse" />
-            ) : (
-              <ShareBar
-                top3Pct={data?.top3_share_pct ?? 0}
-                remainingPct={data?.remaining_share_pct ?? 0}
-                top3Label={t("sales.orders_distribution.top3")}
-                remainingLabel={t("sales.orders_distribution.remaining")}
-              />
+      {/* Col 2: stacked share bar */}
+      <Card className="p-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("sales.orders_distribution.share_title")}
+        </p>
+        {isLoading ? (
+          <div className="mt-4 h-9 w-full bg-muted animate-pulse" />
+        ) : (
+          <ShareBar
+            top3Pct={data?.top3_share_pct ?? 0}
+            remainingPct={data?.remaining_share_pct ?? 0}
+            top3Label={t("sales.orders_distribution.top3")}
+            remainingLabel={t("sales.orders_distribution.remaining")}
+          />
+        )}
+      </Card>
+
+      {/* Col 3: numbered TOP-3 customers with order value */}
+      <Card className="p-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("sales.orders_distribution.top3_customers_title")}
+        </p>
+        {isLoading ? (
+          <div className="mt-4 h-16 bg-muted animate-pulse" />
+        ) : (
+          <ol className="mt-4 text-sm space-y-1 list-none p-0">
+            {(data?.top3_customers ?? []).map((c, i) => (
+              <li
+                key={c.name}
+                className="flex items-baseline gap-2 text-muted-foreground"
+              >
+                <span className="tabular-nums">{i + 1}.</span>
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="tabular-nums whitespace-nowrap">
+                  {formatCurrency(c.total_value)}
+                </span>
+              </li>
+            ))}
+            {!data?.top3_customers.length && (
+              <li className="text-muted-foreground italic">
+                {t("sales.orders_distribution.top3_empty")}
+              </li>
             )}
-          </div>
-          <div className="min-w-[200px]">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("sales.orders_distribution.top3")}
-            </p>
-            {isLoading ? (
-              <div className="mt-4 h-16 bg-muted rounded animate-pulse" />
-            ) : (
-              <ol className="mt-4 text-sm space-y-1 list-none p-0">
-                {(data?.top3_customers ?? []).map((c, i) => (
-                  <li
-                    key={c}
-                    className="flex gap-2 text-muted-foreground"
-                  >
-                    <span className="tabular-nums">{i + 1}.</span>
-                    <span>{c}</span>
-                  </li>
-                ))}
-                {!data?.top3_customers.length && (
-                  <li className="text-muted-foreground italic">
-                    {t("sales.orders_distribution.top3_empty")}
-                  </li>
-                )}
-              </ol>
-            )}
-          </div>
-        </div>
+          </ol>
+        )}
       </Card>
     </div>
   );
