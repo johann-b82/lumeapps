@@ -24,7 +24,7 @@ export function NavBar() {
             <img
               src={settings.logo_url}
               alt={settings.app_name}
-              className="max-h-8 max-w-8 object-contain"
+              className="max-h-24 max-w-24 object-contain"
             />
           )}
         </Link>

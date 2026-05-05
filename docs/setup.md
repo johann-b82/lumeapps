@@ -29,6 +29,37 @@ must be chosen BEFORE you run `docker compose up -d` for the first time. Changin
 
 ## Bring-up
 
+### Option A — One-shot installer (recommended)
+
+```bash
+git clone <repo-url> acm-kpi-light
+cd acm-kpi-light
+./scripts/install.sh
+```
+
+The script does, in order:
+
+1. Generates `.env` with random `POSTGRES_PASSWORD`, `DIRECTUS_KEY`,
+   `DIRECTUS_SECRET`, `DIRECTUS_ADMIN_PASSWORD`, `FERNET_KEY`, and
+   `SIGNAGE_DEVICE_JWT_SECRET`. Skipped if `.env` already exists. Prints the
+   admin password once — save it.
+2. Creates the bind-mount directories at the repo root (`postgres_data`,
+   `directus_uploads`, `directus_extensions`, `directus_database`,
+   `caddy_data`, `caddy_config`, `frontend_node_modules`, `backups`).
+3. Runs `docker compose up -d --build`.
+4. Polls the DB for the Administrator role UUID Directus seeded on first
+   boot, writes it back into `.env` as `DIRECTUS_ADMINISTRATOR_ROLE_UUID`,
+   and restarts the `api` container so it picks up the value. This patches
+   over the v1.46 footgun where a stale UUID in `.env` from a prior DB
+   silently 401'd every authenticated `/api/*` call.
+5. Probes `:8000/health`.
+
+The script is idempotent — safe to re-run on an existing deployment. It
+preserves an existing `.env` and only updates the admin role UUID if it
+drifted from what's currently in the DB.
+
+### Option B — Manual
+
 Step by step. Every command is copy-paste-ready against a clean clone.
 
 1. **Clone the repo and enter it:**
@@ -174,7 +205,15 @@ This exact restore path was exercised end-to-end during Phase 30 execution; the 
 By design. Directus seeds the first admin only against an empty database; both variables are ignored on subsequent boots. Fix: sign in as the existing admin via `http://localhost:8055`, open **User Directory**, and edit the user directly. The only alternative is destroying the Postgres volume (see next entry — it deletes everything).
 
 **"I ran `docker compose down -v` and the database is gone."**
-`-v` deletes named volumes, including `postgres_data`. Everything Directus and the app stored is gone. Use `docker compose down` (without `-v`) to stop services while preserving data. To recover: bring the stack back up (`docker compose up -d`) and restore from the most recent dump in `./backups/` via `./scripts/restore.sh backups/kpi-<date>.sql.gz`.
+**Persistence note (v1.46+):** named volumes have been replaced by bind
+mounts under the repo root (`postgres_data/`, `directus_uploads/`,
+`directus_extensions/`, `directus_database/`, `caddy_data/`,
+`caddy_config/`, `frontend_node_modules/`, `backups/`). `docker compose
+down -v` no longer wipes data because there are no Compose-managed
+volumes — the dirs are still on disk. To wipe a deployment intentionally,
+`rm -rf` the relevant dirs (typically `postgres_data/` and
+`directus_uploads/`). Backups are unchanged: restore via
+`./scripts/restore.sh backups/kpi-<date>.sql.gz`.
 
 **"The `backup` container logs a permission error when writing to `/backups`."**
 The host's `./backups/` directory and the sidecar's UID don't agree. Quick fix:

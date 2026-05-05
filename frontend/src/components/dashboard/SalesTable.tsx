@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Search, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { fetchSalesRecords, type SalesRecordRow } from "@/lib/api";
 import { useTableState } from "@/hooks/useTableState";
+
+const PAGE_SIZE = 50;
 
 // Phase 61: useTableState requires T extends Record<string, unknown> but
 // SalesRecordRow has concrete fields only. Intersect at the call site so
@@ -37,6 +40,18 @@ export function SalesTable({ startDate, endDate }: SalesTableProps) {
   const { processed, sortKey, sortDir, toggleSort } = useTableState<SalesRow>(
     data as SalesRow[] | undefined,
     { key: "order_date", dir: "desc" },
+  );
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE));
+  // Reset to first page whenever the underlying result set or sort changes.
+  useEffect(() => {
+    setPage(1);
+  }, [search, sortKey, sortDir, data?.length]);
+  const safePage = Math.min(page, totalPages);
+  const pageRows = processed.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
   );
 
   const formatCurrency = (v: number | null) =>
@@ -115,7 +130,7 @@ export function SalesTable({ startDate, endDate }: SalesTableProps) {
                 </td>
               </tr>
             ) : (
-              processed.map((row) => (
+              pageRows.map((row) => (
                 <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                   <td className="px-3 py-2 font-mono text-xs">{row.order_number}</td>
                   <td className="px-3 py-2">{row.customer_name ?? "—"}</td>
@@ -130,9 +145,41 @@ export function SalesTable({ startDate, endDate }: SalesTableProps) {
         </table>
       </div>
       {data && (
-        <p className="text-xs text-muted-foreground mt-2">
-          {processed.length} {t("dashboard.table.records")}
-        </p>
+        <div className="flex items-center justify-between mt-3">
+          <p className="text-xs text-muted-foreground">
+            {processed.length === 0
+              ? `0 ${t("dashboard.table.records")}`
+              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(
+                  safePage * PAGE_SIZE,
+                  processed.length,
+                )} / ${processed.length} ${t("dashboard.table.records")}`}
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       )}
     </Card>
   );

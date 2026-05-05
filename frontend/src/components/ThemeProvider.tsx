@@ -70,6 +70,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (error && !errorToastFired.current) {
+      // Suppress toast on 401: AuthGate redirects to /login. Settings query
+      // fires before auth is established on cold loads (Phase 28 gated the
+      // endpoint), so a 401 here is expected, not a real failure.
+      if (error instanceof Error && error.message === "unauthorized") return;
       toast.error(t("theme.error_toast"));
       errorToastFired.current = true;
     }

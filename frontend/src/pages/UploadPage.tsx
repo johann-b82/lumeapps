@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Separator } from "@/components/ui/separator";
+import { Card } from "@/components/ui/card";
 import { DropZone } from "@/components/DropZone";
 import { ContactsDropZone } from "@/components/ContactsDropZone";
 import { ErrorList } from "@/components/ErrorList";
@@ -27,30 +27,32 @@ export function UploadPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
-      <h1 className="text-xl font-semibold">{t("page_title")}</h1>
-
       {errors.length > 0 && <ErrorList errors={errors} />}
 
-      <Separator className="my-8" />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">{t("upload.orders_title")}</h2>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.orders_title")}
+          </p>
           <DropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(data) => setErrors(data.errors)}
           />
-        </div>
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">{t("upload.contacts_title")}</h2>
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.contacts_title")}
+          </p>
           <ContactsDropZone />
-        </div>
+        </Card>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">{t("history_title")}</h2>
+      <Card className="p-6 space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("history_title")}
+        </p>
         <UploadHistory />
-      </div>
+      </Card>
     </div>
   );
 }

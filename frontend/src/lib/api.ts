@@ -28,6 +28,7 @@ export interface UploadBatchSummary {
   row_count: number;
   error_count: number;
   status: "success" | "partial" | "failed";
+  kind: "orders" | "contacts";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -73,6 +74,7 @@ export async function getUploads(): Promise<UploadBatchSummary[]> {
           "row_count",
           "error_count",
           "status",
+          "kind",
         ],
       }),
     );

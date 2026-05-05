@@ -35,6 +35,9 @@ class UploadBatch(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False
     )  # "success" | "failed" | "partial"
+    kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="orders"
+    )  # "orders" | "contacts" — discriminator for the upload history view (v1.46)
 
     records: Mapped[list["SalesRecord"]] = relationship(
         "SalesRecord",

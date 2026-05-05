@@ -95,6 +95,11 @@ export default defineConfig(({ mode }) => {
           target: process.env.VITE_API_TARGET || "http://api:8000",
           changeOrigin: true,
         },
+        "/directus": {
+          target: process.env.VITE_DIRECTUS_TARGET || "http://directus:8055",
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/directus/, ""),
+        },
       },
     },
   };

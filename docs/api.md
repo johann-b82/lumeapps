@@ -29,9 +29,10 @@ Role is resolved from the Directus-issued JWT (HS256, shared secret). Role chang
 | GET    | /api/settings                   |   ✓    |   ✓   | Read settings (colors, app name) |
 | GET    | /api/settings/personio-options  |   ✓    |   ✓   | Live Personio metadata — read-only |
 | GET    | /api/settings/logo              |   ✓    |   ✓   | Serves raw logo bytes |
-| GET    | /api/uploads                    |   ✓    |   ✓   | Upload history |
+| GET    | /api/uploads                    |   ✓    |   ✓   | Upload history (orders + contacts; `kind` discriminates) |
 | GET    | /api/sync/meta                  |   ✓    |   ✓   | Last sync metadata |
-| POST   | /api/upload                     |   —    |   ✓   | ERP file upload |
+| POST   | /api/upload                     |   —    |   ✓   | ERP orders file upload — writes `upload_batches(kind='orders')` |
+| POST   | /api/upload-contacts            |   —    |   ✓   | Kontakte (.txt) upload — writes `upload_batches(kind='contacts')` (v1.46) |
 | DELETE | /api/uploads/{batch_id}         |   —    |   ✓   | Cascade-deletes sales records |
 | POST   | /api/sync                       |   —    |   ✓   | Full Personio sync |
 | POST   | /api/sync/test                  |   —    |   ✓   | Personio credential test |

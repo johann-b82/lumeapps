@@ -793,7 +793,9 @@ docker compose logs directus-schema-apply
 **Step 3:** If the failure is unrelated to #25760 (e.g., a network error or a malformed YAML):
 
 ```bash
-# Tear down the stack and all volumes
+# v1.46+: persistence is bind-mounted at the repo root, so `down -v` does
+# NOT wipe data. To reset state intentionally, also `rm -rf` the relevant
+# dirs (typically `postgres_data/` and `directus_uploads/`).
 docker compose down -v
 
 # Restart only the database and Directus (without the schema-apply)
@@ -849,8 +851,10 @@ would need to be reverted manually (out of scope).
    docker compose down -v
    docker compose up -d --wait
    ```
-   `down -v` drops named volumes (DB, Directus uploads). Confirm before
-   running on production — restore from the latest `./backups/` if needed.
+   v1.46+: persistence is bind-mounted under the repo root, so `down -v`
+   does NOT wipe data. To reset DB state, additionally `rm -rf postgres_data/`
+   (irreversible). Restore via `./scripts/restore.sh` from `./backups/`
+   afterward. On production, snapshot first.
 
 3. **Wait for healthchecks:** `docker compose ps` — all services
    must show `healthy`. Approx. 60s for first-boot Postgres seeding.

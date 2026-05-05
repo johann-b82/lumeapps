@@ -75,6 +75,7 @@ async def upload_file(
         row_count=len(valid_rows),
         error_count=len(errors),
         status=status,
+        kind="orders",
     )
     db.add(batch)
     await db.flush()  # Get batch.id without committing
@@ -151,8 +152,21 @@ async def upload_contacts(
             detail="Only .txt files are accepted for Kontakte uploads.",
         )
     contents = await file.read()
-    rows, _errors = parse_kontakte_file(contents, filename)
+    rows, errors = parse_kontakte_file(contents, filename)
+    now = datetime.now(timezone.utc)
     if not rows:
+        # Still log the failed attempt to upload history.
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="contacts",
+            )
+        )
+        await db.commit()
         return ContactsUploadResponse(
             rows_inserted=0,
             rows_replaced=0,
@@ -171,7 +185,6 @@ async def upload_contacts(
     )
     rows_replaced = deleted.rowcount or 0
 
-    now = datetime.now(timezone.utc)
     for r in rows:
         r["imported_at"] = now
     cols_per_row = max(1, len(rows[0]))
@@ -181,6 +194,21 @@ async def upload_contacts(
         chunk = rows[start : start + chunk_size]
         result = await db.execute(pg_insert(SalesContact).values(chunk))
         inserted_total += result.rowcount or 0
+
+    db.add(
+        UploadBatch(
+            filename=filename,
+            uploaded_at=now,
+            row_count=inserted_total,
+            error_count=len(errors),
+            status=(
+                "failed"
+                if errors and inserted_total == 0
+                else ("partial" if errors else "success")
+            ),
+            kind="contacts",
+        )
+    )
     await db.commit()
 
     return ContactsUploadResponse(

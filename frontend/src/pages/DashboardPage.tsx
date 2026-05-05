@@ -1,3 +1,4 @@
+import { CustomerShareCard } from "@/components/dashboard/CustomerShareCard";
 import { KpiCardGrid } from "@/components/dashboard/KpiCardGrid";
 import { OrdersDistributionCard } from "@/components/dashboard/OrdersDistributionCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -19,12 +20,19 @@ export function DashboardPage() {
         preset={preset}
         range={range}
       />
-      <OrdersDistributionCard
-        startDate={startDate}
-        endDate={endDate}
-        preset={preset}
-        range={range}
-      />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+        <OrdersDistributionCard
+          startDate={startDate}
+          endDate={endDate}
+          preset={preset}
+          range={range}
+        />
+        <CustomerShareCard
+          startDate={startDate}
+          endDate={endDate}
+          className="lg:col-span-2"
+        />
+      </div>
       <RevenueChart
         startDate={startDate}
         endDate={endDate}

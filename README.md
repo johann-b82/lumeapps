@@ -104,13 +104,35 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 git clone https://github.com/johann-b82/kpi-dashboard.git
 cd kpi-dashboard
 
-# 2. Create your .env file from the template
-cp .env.example .env
-# Edit .env with your credentials
-
-# 3. Bring the stack up
-docker compose up --build
+# 2. One-shot first-boot installer
+#    Generates .env with random secrets, creates bind-mount dirs,
+#    starts the stack, and patches the Directus Administrator role
+#    UUID into .env after Directus seeds it on first boot.
+./scripts/install.sh
 ```
+
+If you'd rather configure `.env` by hand, copy `.env.example`, fill it in, then
+run `docker compose up --build`. Either path is supported; the installer just
+collapses the manual steps.
+
+### Persistence
+
+All stateful data lives in bind-mount directories at the repo root —
+no named Docker volumes:
+
+| Path | Owner | Contents |
+|------|-------|----------|
+| `./postgres_data/` | `db` | PostgreSQL data dir |
+| `./directus_uploads/` | `directus` (rw) / `api` (ro) | Asset bytes |
+| `./directus_extensions/` | `directus` | Extension drop-in dir |
+| `./directus_database/` | `directus` | Reserved (sqlite slot — empty in Postgres mode) |
+| `./caddy_data/` | `caddy` | TLS cert / account state |
+| `./caddy_config/` | `caddy` | Caddy runtime config |
+| `./frontend_node_modules/` | `frontend` | Vite dev `node_modules` (auto-installed if empty) |
+| `./backups/` | `backup` | Nightly `pg_dump` archives |
+
+All seven dirs are gitignored. Back up the lot to back up the deployment;
+restore by dropping them back in place before `docker compose up`.
 
 Once containers are healthy:
 

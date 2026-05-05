@@ -3,7 +3,7 @@ services:
     image: postgres:17-alpine
     env_file: .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -43,7 +43,7 @@ services:
       - ./frontend/dist:/app/frontend/dist:ro
       # Directus owns the uploads volume (rw on directus service, ro here).
       # FastAPI reads media files by path resolved from signage_media.uri (Directus asset UUID) — SGN-INF-02.
-      - directus_uploads:/directus/uploads:ro
+      - ./directus_uploads:/directus/uploads:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -60,9 +60,12 @@ services:
     build: ./frontend
     ports:
       - "5173:5173"
+    # Bind-mounted node_modules starts empty on fresh checkouts — install if
+    # vite binary is missing, then run dev server. Idempotent on warm boots.
+    command: sh -c "[ -x node_modules/.bin/vite ] || npm install --legacy-peer-deps; npm run dev"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - ./frontend_node_modules:/app/node_modules
     depends_on:
       api:
         condition: service_healthy
@@ -73,7 +76,9 @@ services:
     ports:
       - "127.0.0.1:8055:8055"
     volumes:
-      - directus_uploads:/directus/uploads
+      - ./directus_uploads:/directus/uploads
+      - ./directus_extensions:/directus/extensions
+      - ./directus_database:/directus/database
     depends_on:
       db:
         condition: service_healthy
@@ -153,6 +158,13 @@ services:
       - ./directus/snapshots:/snapshots:ro
       - ./directus/apply-snapshot-idempotent.sh:/apply-snapshot-idempotent.sh:ro
       - ./directus/apply-snapshot-fallback.mjs:/apply-snapshot-fallback.mjs:ro
+    tmpfs:
+      # Override directus image's VOLUME declarations so Docker doesn't create
+      # anonymous volumes on each run. This service only applies a schema and
+      # exits — it never writes uploads/extensions/database files.
+      - /directus/uploads
+      - /directus/extensions
+      - /directus/database
     depends_on:
       directus:
         condition: service_healthy
@@ -199,6 +211,10 @@ services:
       PGDATABASE: ${POSTGRES_DB}
     volumes:
       - ./directus/bootstrap-permissions.sql:/bootstrap-permissions.sql:ro
+    tmpfs:
+      # Override postgres image's VOLUME so no anon vol is created — this
+      # container is a transient psql client, not a database.
+      - /var/lib/postgresql/data
     depends_on:
       directus-bootstrap-roles:
         condition: service_completed_successfully
@@ -213,8 +229,8 @@ services:
       - "80:80"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./caddy_data:/data
+      - ./caddy_config:/config
     depends_on:
       api:
         condition: service_healthy
@@ -245,14 +261,12 @@ services:
       - ./backups:/backups
       - ./backup/entrypoint.sh:/entrypoint.sh:ro
       - ./backup/dump.sh:/usr/local/bin/dump.sh:ro
+    tmpfs:
+      # Override postgres image's VOLUME so no anon vol is created — this
+      # container only runs pg_dump against the `db` service.
+      - /var/lib/postgresql/data
     depends_on:
       db:
         condition: service_healthy
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-  directus_uploads:
-  caddy_data:
-  caddy_config:

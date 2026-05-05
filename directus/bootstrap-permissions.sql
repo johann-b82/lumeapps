@@ -64,7 +64,7 @@ VALUES (
   :'viewer_policy_id',
   'upload_batches',
   'read',
-  'id,filename,uploaded_at,row_count,error_count,status',
+  'id,filename,uploaded_at,row_count,error_count,status,kind',
   '{}'
 );
 
