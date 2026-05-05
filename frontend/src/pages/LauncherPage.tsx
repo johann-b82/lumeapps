@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Box, Thermometer, MonitorPlay } from "lucide-react";
+import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -86,6 +86,30 @@ export function LauncherPage() {
             </span>
           </div>
         </AdminOnly>
+
+        {/* Documents (Paperless-ngx via Caddy /paperless; Directus SSO through
+            Caddy forward_auth + FastAPI /api/auth/forward). Outside the React
+            Router scope — full-page navigation. */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/paperless/";
+            }}
+            aria-label={t("launcher.tile.documents")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-emerald-500 to-teal-600
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <FileText className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("launcher.tile.documents")}
+          </span>
+        </div>
 
         {/* Coming-soon tiles (1x) — opacity-40 + pointer-events-none per D-04 */}
         {[0].map((i) => (

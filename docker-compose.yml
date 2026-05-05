@@ -270,3 +270,70 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Paperless-ngx — document management. Mounted at /paperless via Caddy.
+  # Auth is delegated to Directus through Caddy `forward_auth` (see Caddyfile)
+  # and Paperless's `PAPERLESS_ENABLE_HTTP_REMOTE_USER`. Local Paperless users
+  # are auto-provisioned on first hit matching the X-Remote-User header.
+  # ---------------------------------------------------------------------------
+  paperless-broker:
+    image: redis:7-alpine
+    profiles: ["paperless"]
+    restart: unless-stopped
+    tmpfs:
+      # Redis VOLUME at /data — we don't need persistent broker state.
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    profiles: ["paperless"]
+    restart: unless-stopped
+    depends_on:
+      paperless-broker:
+        condition: service_healthy
+    volumes:
+      - ./paperless_data:/usr/src/paperless/data
+      - ./paperless_media:/usr/src/paperless/media
+      - ./paperless_consume:/usr/src/paperless/consume
+      - ./paperless_export:/usr/src/paperless/export
+    environment:
+      PAPERLESS_REDIS: redis://paperless-broker:6379
+      # SQLite default — single-file DB lives in ./paperless_data/db.sqlite3.
+      # Switch to the existing Postgres later by setting PAPERLESS_DBHOST,
+      # PAPERLESS_DBNAME, PAPERLESS_DBUSER, PAPERLESS_DBPASS.
+
+      # Subpath deployment: app served from /paperless/* via Caddy.
+      PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost}
+      PAPERLESS_FORCE_SCRIPT_NAME: /paperless
+      PAPERLESS_STATIC_URL: /paperless/static/
+      PAPERLESS_LOGOUT_REDIRECT_URL: /
+
+      # SSO: trust X-Remote-User from Caddy. Caddy only sets this header
+      # after a successful forward_auth call to /api/auth/forward, so any
+      # request reaching Paperless with the header is already authenticated.
+      # Django converts X-Remote-User -> HTTP_X_REMOTE_USER on the WSGI side.
+      PAPERLESS_ENABLE_HTTP_REMOTE_USER: "true"
+      PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME: HTTP_X_REMOTE_USER
+
+      # Paperless requires an admin on first start; we let it create one.
+      # Subsequent users are auto-provisioned on first SSO hit.
+      PAPERLESS_ADMIN_USER: ${DIRECTUS_ADMIN_EMAIL:-admin@example.com}
+      PAPERLESS_ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+
+      # OCR + locale defaults; safe to override per deployment.
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-deu+eng}
+      PAPERLESS_TIME_ZONE: Europe/Berlin
+      USERMAP_UID: "1000"
+      USERMAP_GID: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "5", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

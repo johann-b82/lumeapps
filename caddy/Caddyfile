@@ -32,6 +32,24 @@
 		reverse_proxy directus:8055
 	}
 
+	# --- /paperless/* → Paperless-ngx (Directus SSO via forward_auth) ----------
+	# Every request gets validated against Directus first via the FastAPI
+	# auth-forward endpoint. On 200, Caddy lifts the `X-Remote-User` header
+	# from the auth response onto the upstream request. Paperless reads
+	# HTTP_X_REMOTE_USER (Django/WSGI form) and auto-provisions the user.
+	# On 401/503, the auth response status short-circuits to the client.
+	#
+	# Prefix preserved: Paperless is configured with FORCE_SCRIPT_NAME=/paperless,
+	# so it builds its own URLs with that prefix and expects the inbound path
+	# to include it. Use `handle` (not `handle_path`).
+	handle /paperless/* {
+		forward_auth api:8000 {
+			uri /api/auth/forward
+			copy_headers X-Remote-User
+		}
+		reverse_proxy paperless:8000
+	}
+
 	# --- /player/* → FastAPI (kiosk bundle) ------------------------------------
 	# The player bundle is built into frontend/dist/player/ and mounted by
 	# FastAPI as a StaticFiles handler (see backend/app/main.py:44-62). Vite

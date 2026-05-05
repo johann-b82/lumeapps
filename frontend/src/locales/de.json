@@ -234,6 +234,7 @@
   "launcher.tile.kpi_dashboard": "KPI-Dashboard",
   "launcher.tile.coming_soon": "Demnächst",
   "launcher.tile.sensors": "Sensoren",
+  "launcher.tile.documents": "Dokumente",
   "launcher.tiles.signage": "Digital Signage",
   "signage.admin.page_title": "Digital Signage",
   "signage.admin.nav.media": "Medien",

@@ -87,13 +87,14 @@ mkdir -p \
   directus_uploads directus_extensions directus_database \
   caddy_data caddy_config \
   frontend_node_modules \
+  paperless_data paperless_media paperless_consume paperless_export \
   backups
 
 # ---------------------------------------------------------------------------
 # 3. Bring stack up
 # ---------------------------------------------------------------------------
-log "starting stack (docker compose up -d)"
-docker compose up -d --build
+log "starting stack (docker compose --profile paperless up -d)"
+docker compose --profile paperless up -d --build
 
 # ---------------------------------------------------------------------------
 # 4. Resolve Administrator role UUID

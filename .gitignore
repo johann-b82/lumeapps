@@ -18,6 +18,10 @@ directus_database/
 caddy_data/
 caddy_config/
 frontend_node_modules/
+paperless_data/
+paperless_media/
+paperless_consume/
+paperless_export/
 
 # Backups
 /backups/
