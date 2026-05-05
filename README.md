@@ -59,6 +59,12 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **Encrypted Community Strings** — Fernet-encrypted at rest, write-only secrets (never displayed post-save, shown as `••••••`)
 - **Bilingual Admin Guide** — Complete operational runbook (DE/EN) with onboarding workflows, threshold configuration, polling interval tuning, and Docker network troubleshooting
 
+### Document Management — Paperless-ngx (v1.46+)
+- **Embedded App** — Paperless-ngx mounted at `/paperless/*` via Caddy; opt-in `paperless` Compose profile (`docker compose --profile paperless up -d`)
+- **Directus SSO** — Caddy `forward_auth` validates the Directus session cookie against FastAPI `/api/auth/forward`; on success Caddy injects `X-Remote-User`, Paperless auto-provisions the local user via `PAPERLESS_ENABLE_HTTP_REMOTE_USER`
+- **Postgres Backend** — Stores documents/metadata in a dedicated `paperless` database on the shared `db` service (no SQLite); broker is a sidecar `redis:7-alpine`
+- **OCR + Ingestion** — German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify-driven ingestion
+
 ### In-App Documentation
 - **Role-Aware Docs** — Library icon in navbar opens /docs; Admins see User Guide + Admin Guide sections, Viewers see User Guide only
 - **User Guide** — 5 articles: uploading data, Sales dashboard, HR dashboard, filters & controls, language & dark mode
@@ -93,6 +99,7 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 | i18n | react-i18next (flat dotted keys, `keySeparator: false`) |
 | Scheduler | APScheduler (in-process) |
 | External | Personio API (employees, attendances, absences) |
+| Document Mgmt | Paperless-ngx 2.20 (Postgres backend, Redis broker), Caddy `forward_auth` SSO |
 | Infrastructure | Docker Compose v2 |
 
 ---
@@ -122,7 +129,7 @@ no named Docker volumes:
 
 | Path | Owner | Contents |
 |------|-------|----------|
-| `./postgres_data/` | `db` | PostgreSQL data dir |
+| `./postgres_data/` | `db` | PostgreSQL data dir (hosts `acm_kpi` + `paperless` databases) |
 | `./directus_uploads/` | `directus` (rw) / `api` (ro) | Asset bytes |
 | `./directus_extensions/` | `directus` | Extension drop-in dir |
 | `./directus_database/` | `directus` | Reserved (sqlite slot — empty in Postgres mode) |
@@ -130,6 +137,10 @@ no named Docker volumes:
 | `./caddy_config/` | `caddy` | Caddy runtime config |
 | `./frontend_node_modules/` | `frontend` | Vite dev `node_modules` (auto-installed if empty) |
 | `./backups/` | `backup` | Nightly `pg_dump` archives |
+| `./paperless_data/` | `paperless` | Paperless index + celery beat schedule (DB now in Postgres) |
+| `./paperless_media/` | `paperless` | Stored document originals + archive PDFs |
+| `./paperless_consume/` | `paperless` | Drop-folder for ingestion (inotify-watched) |
+| `./paperless_export/` | `paperless` | Output dir for Paperless exports |
 
 All seven dirs are gitignored. Back up the lot to back up the deployment;
 restore by dropping them back in place before `docker compose up`.

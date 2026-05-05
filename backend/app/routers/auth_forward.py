@@ -100,6 +100,7 @@ async def forward_auth(
     cached = _cache_get(key)
     if cached is not None:
         response.headers["X-Remote-User"] = cached
+        response.status_code = status.HTTP_200_OK
         return response
 
     # /auth/refresh in cookie mode reads the refresh-token cookie, rotates
@@ -143,6 +144,7 @@ async def forward_auth(
 
     _cache_put(key, email)
     response.headers["X-Remote-User"] = email
+    response.status_code = status.HTTP_200_OK
     # Use the env-validated SECRET via app_settings to ensure the api
     # container is properly configured at boot — keeps a runtime
     # dependency on DIRECTUS_SECRET so misconfigured deploys fail loud.

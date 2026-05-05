@@ -20,6 +20,7 @@ out of scope for this milestone.
 | `/api/*`     | `api:8000`        | Preserved                    | FastAPI routes live at `/api/...`. SSE passthrough via `flush_interval -1` + 24h `read_timeout`. |
 | `/directus/*`| `directus:8055`   | **Stripped** (`handle_path`) | Directus doesn't know it's behind a subpath; it expects bare `/auth`, `/items`, `/assets`, `/server`. |
 | `/player/*`  | `frontend:5173`   | Preserved                    | Kiosk bundle. Vite dev serves `/player/` as a separate entry; prod build writes to `dist/player/`. |
+| `/paperless/*`| `paperless:8000` | Preserved                    | Paperless-ngx UI/API. Subpath via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`. Each request first hits `forward_auth → api:8000/api/auth/forward`; on 200, Caddy lifts `X-Remote-User` onto the upstream request. |
 
 **Why Caddy, why this shape:**
 
@@ -65,7 +66,32 @@ docker compose up
   +-- directus (directus:11.x identity)       --> 127.0.0.1:8055 (loopback)
   +-- caddy    (reverse proxy)                --> :80 (LAN entry point)
   +-- backup   (pg_dump cron sidecar)         --> writes to ./backups/
+  +-- paperless / paperless-broker            --> :8000 (opt-in `paperless` profile)
+                                                  Postgres-backed, Redis broker, Directus SSO via Caddy forward_auth
 ```
+
+### Paperless-ngx (v1.46+, opt-in profile)
+
+Document management lives in two containers gated by the `paperless` Compose
+profile (`docker compose --profile paperless up -d`):
+
+- `paperless` — `ghcr.io/paperless-ngx/paperless-ngx:latest`. Backed by a
+  dedicated `paperless` database in the shared `db` service (env:
+  `PAPERLESS_DBENGINE=postgresql`, `PAPERLESS_DBHOST=db`,
+  `PAPERLESS_DBNAME=paperless`, reuses `POSTGRES_USER`/`POSTGRES_PASSWORD`).
+  Mounted at `/paperless/*` via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`.
+- `paperless-broker` — `redis:7-alpine` celery broker. tmpfs `/data` (no persistence required).
+
+**SSO**: Caddy `forward_auth` routes every `/paperless/*` hit through
+FastAPI `/api/auth/forward` (`backend/app/routers/auth_forward.py`), which
+validates the inbound `directus_refresh_token` cookie against
+`directus:8055/auth/refresh` and returns the user's email in
+`X-Remote-User`. Paperless reads `HTTP_X_REMOTE_USER` and auto-provisions
+local users on first hit (`PAPERLESS_ENABLE_HTTP_REMOTE_USER=true`).
+
+**Bind mounts**: `./paperless_data` (search index, celery beat schedule),
+`./paperless_media` (originals + archive PDFs), `./paperless_consume`
+(inotify-watched ingestion drop), `./paperless_export`.
 
 For deeper detail on any single subsystem (signage, sensors, HR pipeline,
 etc.) see the per-phase plans under `.planning/phases/`.

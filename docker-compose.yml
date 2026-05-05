@@ -297,6 +297,8 @@ services:
     depends_on:
       paperless-broker:
         condition: service_healthy
+      db:
+        condition: service_healthy
     volumes:
       - ./paperless_data:/usr/src/paperless/data
       - ./paperless_media:/usr/src/paperless/media
@@ -304,9 +306,14 @@ services:
       - ./paperless_export:/usr/src/paperless/export
     environment:
       PAPERLESS_REDIS: redis://paperless-broker:6379
-      # SQLite default — single-file DB lives in ./paperless_data/db.sqlite3.
-      # Switch to the existing Postgres later by setting PAPERLESS_DBHOST,
-      # PAPERLESS_DBNAME, PAPERLESS_DBUSER, PAPERLESS_DBPASS.
+      # Postgres backend — separate database `paperless` in the shared
+      # `db` service. Reuses POSTGRES_USER/PASSWORD from .env.
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBPORT: "5432"
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: ${POSTGRES_USER}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
 
       # Subpath deployment: app served from /paperless/* via Caddy.
       PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost}
