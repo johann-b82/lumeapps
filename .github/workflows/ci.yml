@@ -346,6 +346,31 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=6144"
 
       # -----------------------------------------------------------------------
+      # v1.46: persistence dirs are bind-mounted at the repo root rather than
+      # named volumes (see docker-compose.yml + docs/setup.md). Pre-create the
+      # writable dirs so Compose doesn't auto-create them as root and break
+      # uid-sensitive containers (postgres = uid 70, directus = uid 1000).
+      #
+      # `frontend_node_modules` is the critical one: the bind mount masks the
+      # `npm install` baked into the frontend image. Empty → vite fails with
+      # `vite: not found` until the container's command-guard reinstalls into
+      # the bind dir, which takes long enough that Caddy's healthcheck
+      # (proxies / → frontend) trips the `--wait` 5 min timeout. The
+      # preceding `Frontend npm run build` step already populated
+      # frontend/node_modules locally; rsync it into the bind so the
+      # container starts vite immediately.
+      # -----------------------------------------------------------------------
+      - name: "Prepare bind-mount dirs (v1.46 persistence layout)"
+        run: |
+          mkdir -p \
+            postgres_data \
+            directus_uploads directus_extensions directus_database \
+            caddy_data caddy_config \
+            frontend_node_modules \
+            backups
+          rsync -a --delete frontend/node_modules/ frontend_node_modules/
+
+      # -----------------------------------------------------------------------
       # Step 5: Bring up full stack and wait for healthchecks
       # --wait blocks until all services report healthy (or timeout).
       # -----------------------------------------------------------------------
