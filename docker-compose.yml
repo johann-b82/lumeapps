@@ -127,8 +127,12 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8055/server/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 12
+      # First boot on a cold CI runner runs Directus's Knex migrations against
+      # the empty `acm_kpi` database; on small GitHub runners that can take
+      # 60-90s. Keep start_period generous so `compose up --wait` doesn't
+      # short-circuit before the migrations finish.
+      start_period: 120s
 
   directus-schema-apply:
     # One-shot service that registers Directus collection metadata for the
