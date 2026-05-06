@@ -344,3 +344,87 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Stirling-PDF — PDF manipulation toolbox. Mounted at /pdf via Caddy.
+  # Internal auth disabled (DOCKER_ENABLE_SECURITY=false); access is gated by
+  # Caddy `forward_auth` against the same /api/auth/forward endpoint that
+  # protects /paperless. Stirling has no concept of users, so X-Remote-User
+  # is dropped on the floor — gate is purely a "valid Directus session
+  # exists" check at the edge.
+  #
+  # No published port; only the Caddy network reaches stirling:8080.
+  # ---------------------------------------------------------------------------
+  stirling:
+    image: stirlingtools/stirling-pdf:latest
+    profiles: ["stirling"]
+    restart: unless-stopped
+    environment:
+      # Subpath deployment: Spring Boot context path puts the whole app
+      # behind /pdf so Caddy can `handle /pdf/*` and reverse_proxy
+      # without prefix stripping.
+      SERVER_SERVLET_CONTEXT_PATH: /pdf
+      # No internal login screen; Caddy forward_auth is the gate.
+      DOCKER_ENABLE_SECURITY: "false"
+      # UI locale defaults; users can switch in-app.
+      LANGS: en_GB,de_DE
+      SYSTEM_DEFAULTLOCALE: de_DE
+      # Skip heavy Calibre + LibreOffice book/HTML pipelines we don't use,
+      # keeps the image lean. Flip to true if eBook conversion is needed.
+      INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
+    volumes:
+      - ./stirling_data/configs:/configs
+      - ./stirling_data/custom-files:/customFiles
+      - ./stirling_data/logs:/logs
+      - ./stirling_data/pipeline:/pipeline
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs --max-time 5 http://localhost:8080/pdf/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # OpenProject (community) — project management. Mounted at /op via Caddy.
+  # Edge-gated by Caddy forward_auth (Directus session must be valid to reach
+  # the OpenProject login). OpenProject still maintains its own user accounts
+  # internally because community edition does not support header-based SSO
+  # (Enterprise-only). On first boot a single admin user is seeded; further
+  # users are created in the OpenProject admin UI. Future SSO upgrade path
+  # would slot an OIDC bridge (e.g. Authentik) between Directus and OP and
+  # enable OmniAuth-OIDC on this service.
+  #
+  # Postgres backend: dedicated `openproject` database in the shared `db`
+  # service. Reuses POSTGRES_USER / POSTGRES_PASSWORD.
+  # ---------------------------------------------------------------------------
+  openproject:
+    image: openproject/openproject:15
+    profiles: ["openproject"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # All OpenProject env vars use the OPENPROJECT_ prefix and convert
+      # `_` -> dot, `__` -> underscore in the canonical key path.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/openproject
+      # Subpath: serve under /op so Caddy can `handle /op/*` without
+      # prefix stripping. OpenProject builds asset URLs with this prefix.
+      OPENPROJECT_RAILS__RELATIVE__URL__ROOT: /op
+      OPENPROJECT_HOST__NAME: localhost
+      # Behind Caddy on port 80 — no TLS at this layer.
+      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_DEFAULT__LANGUAGE: de
+      # Skip first-run wizard — let it boot straight to login.
+      OPENPROJECT_SEED__ADMIN__USER__PASSWORD: ${OPENPROJECT_ADMIN_PASSWORD:-OpenProjectAdmin1!}
+      OPENPROJECT_SEED__ADMIN__USER__PASSWORD__RESET: "false"
+      # In-memory cache is fine for a single-instance deployment.
+      OPENPROJECT_CACHE__MEMCACHE__SERVER: ""
+    volumes:
+      - ./openproject_data/assets:/var/openproject/assets
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs --max-time 5 http://localhost:8080/op/health_checks/default || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s

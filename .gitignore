@@ -35,3 +35,5 @@ paperless_export/
 *.swp
 *.swo
 .superpowers/
+stirling_data/
+openproject_data/

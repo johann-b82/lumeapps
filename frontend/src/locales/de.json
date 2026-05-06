@@ -235,6 +235,8 @@
   "launcher.tile.coming_soon": "Demnächst",
   "launcher.tile.sensors": "Sensoren",
   "launcher.tile.documents": "Dokumente",
+  "launcher.tile.pdf_tools": "PDF-Werkzeuge",
+  "launcher.tile.openproject": "Projekte",
   "launcher.tiles.signage": "Digital Signage",
   "signage.admin.page_title": "Digital Signage",
   "signage.admin.nav.media": "Medien",

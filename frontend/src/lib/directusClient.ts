@@ -29,5 +29,11 @@ const DIRECTUS_URL =
  * `apiClient.ts` (see Pattern 1 in 29-RESEARCH.md).
  */
 export const directus = createDirectus(DIRECTUS_URL)
-  .with(authentication("cookie", { credentials: "include" }))
+  // Session mode (Directus 11): cookie is `directus_session_token`, an HS256
+  // JWT signed with DIRECTUS_SECRET. No refresh-token rotation — the JWT is
+  // valid until its exp claim. This lets the FastAPI `forward_auth` endpoint
+  // (backend/app/routers/auth_forward.py) verify the JWT locally on every
+  // /paperless and /op hit instead of calling /auth/refresh, which would
+  // race the SPA's own refresh and produce intermittent 401s.
+  .with(authentication("session", { credentials: "include" }))
   .with(rest({ credentials: "include" }));
