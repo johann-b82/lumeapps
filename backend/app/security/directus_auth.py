@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.config import settings
@@ -27,12 +27,19 @@ _UNAUTHORIZED = HTTPException(
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    directus_session_token: str | None = Cookie(default=None),
 ) -> CurrentUser:
-    if credentials is None or not credentials.credentials:
+    # Token source priority: explicit Authorization header (legacy + service
+    # callers) wins; otherwise fall back to the directus_session_token cookie
+    # set by Directus 11 in session mode (frontend/src/lib/directusClient.ts
+    # uses authentication("session", ...) so the SDK never returns an
+    # access_token to the SPA — only the cookie is set).
+    token = credentials.credentials if credentials and credentials.credentials else directus_session_token
+    if not token:
         raise _UNAUTHORIZED
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             settings.DIRECTUS_SECRET,
             algorithms=["HS256"],
         )

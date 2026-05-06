@@ -47,6 +47,17 @@ from app.config import settings as app_settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
+# One-shot helper: navigate the browser here to wipe stale directus_* cookies
+# left over from cookie-mode (refresh-token) auth before the session-mode
+# switchover. Each Set-Cookie below sets the cookie name with Max-Age=0 on
+# Path=/ and Path=/directus (the two paths Directus actually used). Idempotent.
+_STALE_COOKIE_NAMES = (
+    "directus_refresh_token",
+    "directus_session_token",  # cleared so the next login is a clean session
+)
+_CLEAR_PATHS = ("/", "/directus")
+
 _logger = logging.getLogger(__name__)
 
 # Directus 11 session-mode cookie. Set by the SPA's `authentication("session")`
@@ -108,6 +119,30 @@ async def _resolve_email(user_id: str, access_jwt: str) -> Optional[str]:
         return None
     _cache_put_email(user_id, email)
     return email
+
+
+@router.get("/clear-cookies", include_in_schema=False)
+async def clear_cookies() -> Response:
+    """Expire stale Directus cookies and bounce back to /login.
+
+    Starlette's Response stores headers in raw_headers as a list of
+    (name, value) byte tuples, which is the only path that preserves
+    duplicate `set-cookie` headers (a dict-based headers arg would
+    collapse them and we'd only emit the last one).
+    """
+    raw: list[tuple[bytes, bytes]] = []
+    for name in _STALE_COOKIE_NAMES:
+        for path in _CLEAR_PATHS:
+            raw.append(
+                (
+                    b"set-cookie",
+                    f"{name}=; Path={path}; Max-Age=0; HttpOnly; SameSite=Lax".encode(),
+                )
+            )
+    raw.append((b"location", b"/login"))
+    response = Response(status_code=status.HTTP_303_SEE_OTHER)
+    response.raw_headers = raw
+    return response
 
 
 @router.get("/forward", include_in_schema=False)
