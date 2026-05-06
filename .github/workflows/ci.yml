@@ -370,6 +370,11 @@ jobs:
             paperless_data paperless_media paperless_consume paperless_export \
             backups
           rsync -a --delete frontend/node_modules/ frontend_node_modules/
+          # Directus runs as uid 1000 in the official image; without chown
+          # the runner-created dirs are owned by root, /directus/uploads is
+          # read-only inside the container, /server/health reports
+          # storage:local in ERROR state, and the healthcheck never passes.
+          sudo chown -R 1000:1000 directus_uploads directus_extensions directus_database
 
       # -----------------------------------------------------------------------
       # Step 5: Bring up full stack and wait for healthchecks
