@@ -45,6 +45,14 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/signage/player/stream", frozenset({"GET"})),
     ("/api/signage/player/asset/{media_id}", frozenset({"GET"})),
     ("/api/signage/player/calibration", frozenset({"GET"})),
+    # Caddy `forward_auth` gate for /paperless, /pdf, /op. Intentionally
+    # public — this endpoint IS the authentication, called by Caddy with
+    # the inbound Cookie. See app/routers/auth_forward.py docstring.
+    ("/api/auth/forward", frozenset({"GET"})),
+    # One-shot helper to expire stale Directus cookies during the
+    # cookie-mode -> session-mode migration. Public by design (the user
+    # might be unauth at that moment); only effect is Set-Cookie expiry.
+    ("/api/auth/clear-cookies", frozenset({"GET"})),
 }
 
 

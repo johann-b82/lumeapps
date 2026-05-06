@@ -1,5 +1,11 @@
 """Caddy forward_auth endpoint — gates embedded apps behind Directus session.
 
+Compute-justified: clause 1 (side effect outside Postgres — this endpoint
+issues HTTP calls to Directus's internal /users/me to resolve the JWT
+holder's email and emits Set-Cookie / X-Remote-User headers consumed by
+Caddy and the embedded apps; nothing here maps onto a Directus collection
+read or write).
+
 Caddy is configured to forward every request that lands on `/paperless/*`,
 `/pdf/*`, and `/op/*` through this endpoint first (caddy/Caddyfile). When
 the Directus session cookie attached to the inbound request is valid, we
