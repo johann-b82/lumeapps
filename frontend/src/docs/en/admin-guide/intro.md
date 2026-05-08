@@ -38,6 +38,16 @@ Manage user roles and access through Directus, including administrator and viewe
 
 [Read the User Management guide](/docs/admin-guide/user-management)
 
+## Embedded Apps (v1.46+ / v1.48+)
+
+Three optional third-party apps ship with the stack but stay off by default. Each runs under its own Docker Compose profile so a small deployment can skip what it does not need:
+
+- **Documents — Paperless-ngx** (`paperless` profile, v1.46+) — mounted at `/paperless/*`, Postgres-backed, full Directus SSO via `X-Remote-User`. Local users are auto-provisioned on first hit.
+- **PDF Tools — Stirling-PDF** (`stirling` profile, v1.48+) — mounted at `/pdf/*`, community edition with internal login disabled. Caddy `forward_auth` is the only auth gate.
+- **Projects — OpenProject** (`openproject` profile, v1.48+) — mounted at `/op/*`, dedicated `openproject` Postgres database. The Caddy gate keeps unauthenticated browsers off the OP login page; the community edition has no header SSO so users authenticate against OpenProject separately on first visit. Set `OPENPROJECT_ADMIN_PASSWORD` in `.env` before bringing the profile up.
+
+Enable a profile with `docker compose --profile <name> up -d`. Multiple profiles compose; list them all in `COMPOSE_PROFILES` in `.env` to bring them up together.
+
 ## Settings layout
 
 The Settings area is split into three pages — **General**, **HR**, and **Sensors** — picked from the section dropdown at the top of the page. Each page has its own Save and Discard buttons; switching to another section while you have unsaved changes asks for confirmation first.

@@ -237,3 +237,45 @@ The restore script requires the stack to be running so it can `docker compose ex
 
 **"`curl ... /auth/login` returns 401 when fetching the Administrator role UUID."**
 Your `DIRECTUS_ADMIN_EMAIL` and `DIRECTUS_ADMIN_PASSWORD` don't match what Directus seeded on first boot. Either sign in at `http://localhost:8055` with the values you actually set and use those, or destroy the volume (`docker compose down -v`; this deletes all data) and start over from step 1 with fresh values.
+
+---
+
+## Optional Embedded Apps (Compose profiles)
+
+Three opt-in third-party apps ship with the stack but stay off by default. Each runs under its own Compose profile so a small deployment can skip what it does not need.
+
+| Profile | Apps | Activation |
+|---------|------|------------|
+| `paperless` (v1.46+) | `paperless` + `paperless-broker` (Redis) | `docker compose --profile paperless up -d` |
+| `stirling` (v1.48+) | `stirling` (Stirling-PDF community) | `docker compose --profile stirling up -d` |
+| `openproject` (v1.48+) | `openproject` community | `docker compose --profile openproject up -d` |
+
+Profiles compose: enable several at once with multiple `--profile` flags, or list them all in `COMPOSE_PROFILES` in `.env`.
+
+**OpenProject extra env var.** Add to `.env` before bringing up the profile:
+
+```
+OPENPROJECT_ADMIN_PASSWORD=<random 24+ chars>
+```
+
+Generate a fresh random value with `openssl rand -base64 24`. The bootstrap admin user is `admin@example.net` (default OP convention) — change the email + password from inside OpenProject after first login. OpenProject community edition has no header-SSO mode, so users authenticate against OpenProject directly even though Caddy gates the `/op/*` perimeter with the same Directus session check used by Paperless.
+
+**Stirling-PDF login.** Internal Stirling login is disabled by config (`./stirling_data/settings.yml` sets `security.enableLogin=false`); the Caddy `forward_auth` gate is the only auth boundary. Do not flip that flag unless you also want a second login wall.
+
+---
+
+## Auth migration (v1.48 — refresh-cookie → session-mode)
+
+Existing browsers that signed in under v1.46/v1.47 carry a stale
+`directus_refresh_token` cookie that the v1.48 SPA no longer reads. After
+upgrading the deployment, hit the one-shot endpoint once per browser to
+clear the leftover cookies and restart the login flow:
+
+```
+http://<host>/api/auth/clear-cookies
+```
+
+It expires every `directus_*` cookie on the response and 303-redirects to
+`/login`. New browsers (no prior cookie) are unaffected — they go straight
+to the SPA login form and pick up the new session-mode cookie
+(`directus_session_token`) automatically.

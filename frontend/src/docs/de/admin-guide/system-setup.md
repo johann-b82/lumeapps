@@ -26,12 +26,14 @@ cp .env.example .env
 | `POSTGRES_USER` | PostgreSQL-Benutzername fuer die KPI-Datenbank |
 | `POSTGRES_PASSWORD` | PostgreSQL-Passwort |
 | `POSTGRES_DB` | Datenbankname (z.B. `kpi_db`) |
-| `DEX_KPI_SECRET` | OIDC-Client-Secret, geteilt zwischen Dex und der API |
-| `DEX_OUTLINE_SECRET` | OIDC-Client-Secret, geteilt zwischen Dex und Outline |
-| `SESSION_SECRET` | Signaturschluessel fuer API-Session-Cookies |
-| `OUTLINE_SECRET_KEY` | Outline-Anwendungsschluessel |
-| `OUTLINE_UTILS_SECRET` | Outline-Hilfsschluessel |
-| `OUTLINE_DB_PASSWORD` | Passwort fuer die dedizierte Outline-Datenbank |
+| `DIRECTUS_KEY` | Interner Directus-Schlüssel (`openssl rand -base64 32`) |
+| `DIRECTUS_SECRET` | Directus-Signaturschlüssel — wird zusätzlich zur Verifikation der Session-JWTs in `forward_auth` genutzt (`openssl rand -base64 32`) |
+| `DIRECTUS_ADMIN_EMAIL` | Bootstrap-Admin-E-Mail — wird nur gegen eine leere Datenbank gesetzt, sorgfältig wählen |
+| `DIRECTUS_ADMIN_PASSWORD` | Bootstrap-Admin-Passwort (`openssl rand -base64 24`) |
+| `DIRECTUS_ADMINISTRATOR_ROLE_UUID` | UUID der angelegten Administrator-Rolle; wird durch `scripts/install.sh` automatisch gepatcht |
+| `FERNET_KEY` | Fernet-Schlüssel für die Verschlüsselung von Personio- und SNMP-Zugangsdaten in Ruhe |
+| `SIGNAGE_DEVICE_JWT_SECRET` | Signaturgeheimnis für Kiosk-Device-JWTs |
+| `OPENPROJECT_ADMIN_PASSWORD` | OpenProject-Bootstrap-Admin-Passwort (nur erforderlich, wenn das `openproject`-Compose-Profil aktiv ist, ab v1.48) |
 
 > **Tipp:** Generieren Sie Secrets mit `openssl rand -hex 32`. Jedes Secret sollte einzigartig sein -- verwenden Sie nicht denselben Wert fuer mehrere Variablen.
 

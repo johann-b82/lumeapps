@@ -59,11 +59,21 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **Encrypted Community Strings** — Fernet-encrypted at rest, write-only secrets (never displayed post-save, shown as `••••••`)
 - **Bilingual Admin Guide** — Complete operational runbook (DE/EN) with onboarding workflows, threshold configuration, polling interval tuning, and Docker network troubleshooting
 
-### Document Management — Paperless-ngx (v1.46+)
-- **Embedded App** — Paperless-ngx mounted at `/paperless/*` via Caddy; opt-in `paperless` Compose profile (`docker compose --profile paperless up -d`)
-- **Directus SSO** — Caddy `forward_auth` validates the Directus session cookie against FastAPI `/api/auth/forward`; on success Caddy injects `X-Remote-User`, Paperless auto-provisions the local user via `PAPERLESS_ENABLE_HTTP_REMOTE_USER`
-- **Postgres Backend** — Stores documents/metadata in a dedicated `paperless` database on the shared `db` service (no SQLite); broker is a sidecar `redis:7-alpine`
-- **OCR + Ingestion** — German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify-driven ingestion
+### Embedded Apps (v1.46+)
+
+The launcher exposes three opt-in third-party apps, all gated by a Caddy `forward_auth` hook to the same Directus identity that powers the dashboard. Each runs under its own Compose profile so you only spin up what you use.
+
+- **Documents — Paperless-ngx** (v1.46, `paperless` profile, mounted at `/paperless/*`)
+  - SSO via `X-Remote-User` (`PAPERLESS_ENABLE_HTTP_REMOTE_USER=true`); local user auto-provisioned on first hit
+  - Postgres backend on the shared `db` service (`paperless` database, no SQLite); `redis:7-alpine` broker sidecar
+  - German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify ingestion
+- **PDF Tools — Stirling-PDF** (v1.48, `stirling` profile, mounted at `/pdf/*`)
+  - Community edition with internal login disabled (`security.enableLogin=false`); auth handled exclusively by the Caddy gate
+  - Stateless app; `./stirling_data/` bind mount holds settings + custom config only
+- **Projects — OpenProject Community** (v1.48, `openproject` profile, mounted at `/op/*`)
+  - Caddy gate keeps unauthenticated users off the OP login page; community edition has no header SSO so users still sign into OP separately on first visit
+  - Dedicated `openproject` database on the shared `db` service; admin password set via `OPENPROJECT_ADMIN_PASSWORD` in `.env`
+- **Launcher behavior** — Documents / PDF Tools / Projects tiles open in a new tab via real `<a target="_blank">` anchors so popup blockers stay quiet
 
 ### In-App Documentation
 - **Role-Aware Docs** — Library icon in navbar opens /docs; Admins see User Guide + Admin Guide sections, Viewers see User Guide only
@@ -100,6 +110,8 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 | Scheduler | APScheduler (in-process) |
 | External | Personio API (employees, attendances, absences) |
 | Document Mgmt | Paperless-ngx 2.20 (Postgres backend, Redis broker), Caddy `forward_auth` SSO |
+| PDF Tools | Stirling-PDF community (Caddy `forward_auth` SSO) |
+| Project Mgmt | OpenProject community (Postgres backend, Caddy `forward_auth` gate) |
 | Infrastructure | Docker Compose v2 |
 
 ---
@@ -141,8 +153,9 @@ no named Docker volumes:
 | `./paperless_media/` | `paperless` | Stored document originals + archive PDFs |
 | `./paperless_consume/` | `paperless` | Drop-folder for ingestion (inotify-watched) |
 | `./paperless_export/` | `paperless` | Output dir for Paperless exports |
+| `./stirling_data/` | `stirling` | Stirling-PDF settings + custom config (opt-in `stirling` profile) |
 
-All seven dirs are gitignored. Back up the lot to back up the deployment;
+All bind dirs are gitignored. OpenProject (`openproject` profile) keeps its data inside the shared `openproject` Postgres database — no extra bind mount. Back up the lot to back up the deployment;
 restore by dropping them back in place before `docker compose up`.
 
 Once containers are healthy:
@@ -377,6 +390,7 @@ Exits 0 on success; non-zero and prints the failing step on failure. The harness
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v1.48 | 2026-05-08 | Stirling-PDF + OpenProject embedded apps; switch Directus auth to session mode. Two new opt-in Compose profiles: `stirling` (community edition mounted at `/pdf/*`, internal login disabled, Caddy `forward_auth` is the only gate) and `openproject` (community edition at `/op/*`, dedicated `openproject` Postgres database, `OPENPROJECT_ADMIN_PASSWORD` in `.env`; users still log into OP separately because community edition has no header SSO). Three new launcher tiles (Documents / PDF Tools / Projects) open in a new tab via real `<a target="_blank">` anchors so popup blockers stay quiet. **Auth migration:** SPA + `forward_auth` switched from Directus refresh-cookie mode to session mode — cookie is now `directus_session_token` (HS256 JWT signed with `DIRECTUS_SECRET`), `forward_auth` verifies the JWT locally with PyJWT (no `/auth/refresh` on the hot path, no rotation race against the SPA's own refresh loop). Email is resolved once per id via `/users/me` and cached for 5 min. Backend `get_current_user` now accepts the `directus_session_token` cookie alongside the existing `Authorization: Bearer` header (Bearer wins for service-to-service callers). New `POST /api/auth/clear-cookies` one-shot endpoint expires stale `directus_*` cookies and 303-redirects to `/login` for migrating existing browser sessions to the new SDK config. Vite dev proxy forwards `/paperless`, `/pdf`, `/op` to `caddy:80` with `changeOrigin: false` (true rewrote Host and OpenProject 400'd). CI: chown Directus bind mounts to `1000:1000`, bump Directus health `start_period` to 120s + retries to 12, dump container logs on stack-up failure, allowlist the two public auth routes in the admin-gate audit, declare `auth_forward` Compute-justified. |
 | v1.45 | 2026-05-02 | Dashboard + signage polish pass. Sales: orders/wk/rep tile gains the same `DeltaBadgeStack` (vs. prior period + vs. prior year) as the top-row KPIs; second-row grid switched to `lg:grid-cols-3 gap-8` to match the top row's spacing exactly. Top-3 customers list now shows each customer's share as `(NN,N %)` next to the order-value, names + amounts in default foreground (was muted). Signage: `/signage/media` got an "Add file or URL" section title with both the drop zone and the URL form wrapped in matching solid-bordered boxes (was dashed drop zone + bare form); browse button height aligned with the URL submit. Asset URLs everywhere (`/signage/media`, picker dialog, playlist editor + item list) now append `?access_token=` from the in-memory Directus token so `<img>` requests pass auth — fixes the 403/broken-thumbnail regression after the Caddy proxy switch. NavBar app-name wordmark removed (logo only); LoginPage "KPI Dashboard" wordmark removed. LauncherPage padding aligned to `px-6` to match NavBar. `scrollbar-gutter: stable` on `html` keeps the right-side icons from shifting when navigating between pages with vs. without overflow. |
 | v1.44 | 2026-05-02 | Orders/wk/rep KPI now reads the rep directly from the Aufträge file's "Benutzer" column instead of the v1.41 Kontakte bridge — fixes the empty-bridge-shows-`0,0` regression. Adds `sales_records.created_by_user VARCHAR(100)` (Alembic `v1_44_sales_user`) and `Benutzer → created_by_user` to `GERMAN_TO_ENGLISH`; `compute_orders_distribution` counts distinct `created_by_user` over non-zero orders (the `_build_order_to_rep_bridge` helper is gone, along with `re`/`_ANGEBOT_RE`). Existing rows uploaded before v1.44 have the column NULL and don't contribute to the denominator until the Aufträge file is re-uploaded. |
 | v1.43 | 2026-05-02 | Sales-dashboard color + Vertriebsaktivität rework. Primary token `--primary` / `--color-primary` re-set to `#0d5bec` (light + dark). The Top-3-Kunden share bar in `OrdersDistributionCard` now reads from `var(--primary)` dynamically instead of the hard-coded `primaryPalette[0]` hex, so theme changes flow through. The four `SalesActivityCard` charts dropped the per-rep stack: each week renders one bar in `var(--primary)` (team total) with `activeBar` + tooltip-cursor on `var(--color-muted)` for hover, and a custom tooltip that lists total + per-rep breakdown. Week labels lost the year (`KW 18 / 2026` → `KW 18`). `primaryPalette` rewritten as 8 primary-blue variations only (gray entries removed). |

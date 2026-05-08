@@ -38,6 +38,16 @@ Verwalten Sie Benutzerrollen und Zugriffsrechte ueber Directus, einschliesslich 
 
 [Zur Benutzerverwaltung](/docs/admin-guide/user-management)
 
+## Eingebettete Apps (v1.46+ / v1.48+)
+
+Drei optionale Drittanbieter-Apps werden mit dem Stack ausgeliefert, sind aber standardmäßig deaktiviert. Jede läuft unter einem eigenen Docker-Compose-Profil, sodass kleinere Deployments nur das aktivieren, was sie wirklich brauchen:
+
+- **Dokumente — Paperless-ngx** (Profil `paperless`, ab v1.46) — eingebunden unter `/paperless/*`, Postgres-Backend, vollständige Directus-SSO via `X-Remote-User`. Lokale Nutzer werden beim ersten Zugriff automatisch angelegt.
+- **PDF-Werkzeuge — Stirling-PDF** (Profil `stirling`, ab v1.48) — eingebunden unter `/pdf/*`, Community Edition mit deaktiviertem internen Login. Die Caddy-`forward_auth` ist die einzige Authentifizierungs-Schranke.
+- **Projekte — OpenProject** (Profil `openproject`, ab v1.48) — eingebunden unter `/op/*`, dedizierte `openproject`-Postgres-Datenbank. Das Caddy-Gate hält unauthentifizierte Browser von der OP-Login-Seite fern; die Community Edition unterstützt keine Header-SSO, daher müssen sich Nutzer beim ersten Besuch zusätzlich in OpenProject anmelden. Vor dem ersten Hochfahren `OPENPROJECT_ADMIN_PASSWORD` in `.env` setzen.
+
+Ein Profil aktivierst du mit `docker compose --profile <name> up -d`. Mehrere Profile lassen sich kombinieren — am einfachsten über `COMPOSE_PROFILES` in `.env`.
+
 ## Einstellungen-Layout
 
 Der Einstellungsbereich ist in drei Seiten aufgeteilt — **Allgemein**, **HR** und **Sensoren** — auswählbar über das Abschnitts-Dropdown oben auf der Seite. Jede Seite hat ihre eigenen Speichern- und Verwerfen-Buttons; ein Wechsel zu einem anderen Abschnitt mit ungespeicherten Änderungen fragt vorab zur Bestätigung nach.
