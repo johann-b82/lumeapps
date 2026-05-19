@@ -1,0 +1,10 @@
+# Shell scripts must always check out with LF endings.
+# Alpine /bin/sh chokes on `set -e\r` and similar CRLF artifacts that
+# core.autocrlf=true introduces on Windows clones. This rule is what
+# keeps the Docker stack bootable on mixed-OS checkouts.
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# Windows-native scripts stay CRLF.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
