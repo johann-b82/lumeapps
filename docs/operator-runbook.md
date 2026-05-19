@@ -620,6 +620,38 @@ sudo -u signage XDG_RUNTIME_DIR=/run/user/${SIGNAGE_UID} \
   systemctl --user restart labwc
 ```
 
+### 9.9 Kiosk Stuck on `{"detail":"Not Found"}`
+
+**Symptom:** Pi screen shows the raw JSON body `{"detail":"Not Found"}` (or German-locale browser variant) instead of the pairing code or playback canvas. Admin UI signage pages work normally.
+
+**Cause:** Chromium navigated to `<api-host>/player/` while the FastAPI player bundle was missing — i.e. `frontend/dist/player/` was empty on the server, so the StaticFiles mount in `backend/app/main.py` silently no-op'd and the request fell through to FastAPI's default 404 (`{"detail":"Not Found"}`). Chromium kiosk does not auto-reload, so even after the bundle is rebuilt the Pi keeps displaying the stale 404 response.
+
+**Server-side check (run on the API host first):**
+
+```bash
+curl -sI <api-host>/player/ | head -1
+# Expected: HTTP/1.1 200 OK with content-type text/html
+```
+
+If the curl returns 404, the bundle still isn't built — rebuild inside the frontend container and restart the API:
+
+```bash
+docker compose exec frontend npm run build:player
+docker compose restart api
+```
+
+The FastAPI mount only registers at startup, so the API container MUST be restarted after the bundle lands.
+
+**Fix on the Pi (once the server returns 200):**
+
+```bash
+SIGNAGE_UID=$(id -u signage)
+sudo -u signage XDG_RUNTIME_DIR=/run/user/${SIGNAGE_UID} \
+  systemctl --user restart signage-player
+```
+
+Chromium reloads and fetches the new bundle. If the device token in `/var/lib/signage/device_token` is still valid, playback resumes; otherwise the pairing screen with a fresh 6-digit code appears within 30 seconds.
+
 ---
 
 ## 10. Fallback: Image-Only Playlist
