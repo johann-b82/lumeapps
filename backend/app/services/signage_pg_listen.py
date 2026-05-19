@@ -12,13 +12,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from uuid import UUID
 
 import asyncpg
 from sqlalchemy import select
 
-from app.database import AsyncSessionLocal
+from app.database import DATABASE_URL, AsyncSessionLocal
 from app.models.signage import SignageSchedule
 from app.services.signage_broadcast import notify_device
 from app.services.signage_resolver import (
@@ -34,9 +33,8 @@ _MAX_BACKOFF = 30.0
 
 
 def _pg_dsn() -> str:
-    """Build a plain asyncpg DSN from the SQLAlchemy DATABASE_URL env var."""
-    url = os.environ.get("DATABASE_URL") or os.environ.get("SYNC_DATABASE_URL", "")
-    return url.replace("postgresql+asyncpg://", "postgresql://")
+    """Strip the SQLAlchemy driver tag from app.database.DATABASE_URL so asyncpg can consume it."""
+    return DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
 async def _handle_notify(conn, pid, channel, payload: str) -> None:  # noqa: ARG001
