@@ -19,7 +19,7 @@ from sqlalchemy import select
 
 from app.database import DATABASE_URL, AsyncSessionLocal
 from app.models.signage import SignageSchedule
-from app.services.signage_broadcast import notify_device
+from app.services.signage_broadcast import notify_admin, notify_device
 from app.services.signage_resolver import (
     devices_affected_by_device_update,
     devices_affected_by_playlist,
@@ -91,6 +91,11 @@ async def _handle_notify(conn, pid, channel, payload: str) -> None:  # noqa: ARG
 
             for dev_id in affected:
                 notify_device(dev_id, {"event": event, "table": table, "op": op})
+
+            # Admin SSE fan-out: one event per signage_change notify,
+            # regardless of how many devices are affected. The admin UI
+            # invalidates query caches based on event kind alone.
+            notify_admin({"event": event, "table": table, "op": op})
 
     except (ValueError, KeyError):
         log.warning("signage_pg_listen: bad payload %s", payload)

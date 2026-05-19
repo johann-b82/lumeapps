@@ -75,6 +75,12 @@ log = logging.getLogger(__name__)
 # subscribe simultaneously).  notify_device() delivers to all of them.
 _device_queues: dict[int, list[asyncio.Queue]] = {}
 
+# Admin SSE fanout: one queue per active /api/signage/admin/stream
+# connection. notify_admin() delivers to all of them. Unlike the device
+# fanout there is no per-device key — admins receive every signage_change
+# event regardless of which device(s) it affects.
+_admin_queues: list[asyncio.Queue] = []
+
 
 def subscribe(device_id: int) -> asyncio.Queue:
     """Register a fresh fanout queue for ``device_id`` and return it.
@@ -136,6 +142,47 @@ def notify_device(device_id: int, payload: dict) -> None:
                     "signage broadcast queue full for device %s (depth=%s) —"
                     " dropping oldest",
                     device_id,
+                    q.qsize(),
+                )
+                q._warned_full = True  # type: ignore[attr-defined]
+            try:
+                q.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            q.put_nowait(payload)
+
+
+def subscribe_admin() -> asyncio.Queue:
+    """Register a fresh fanout queue for an admin SSE connection."""
+    q: asyncio.Queue = asyncio.Queue(maxsize=32)
+    _admin_queues.append(q)
+    return q
+
+
+def unsubscribe_admin(queue: asyncio.Queue) -> None:
+    """Remove a specific queue from the admin subscriber list (identity match)."""
+    try:
+        _admin_queues.remove(queue)
+    except ValueError:
+        pass
+
+
+def notify_admin(payload: dict) -> None:
+    """Enqueue ``payload`` for every active admin SSE subscriber.
+
+    Same drop-oldest-on-full semantics as ``notify_device``; warns once
+    per queue.
+    """
+    if not _admin_queues:
+        return
+    for q in _admin_queues:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            if not getattr(q, "_warned_full", False):
+                log.warning(
+                    "signage admin broadcast queue full (depth=%s) —"
+                    " dropping oldest",
                     q.qsize(),
                 )
                 q._warned_full = True  # type: ignore[attr-defined]
