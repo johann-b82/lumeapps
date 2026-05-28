@@ -164,8 +164,8 @@ async def get_readings(
     polling is:
 
     - ≤24h  → 5-minute bucket averages (~288 points worst-case for 24h)
-    - >24h  → 30-minute bucket averages (~336 points for 7d, ~1 440 for 30d,
-      ~17 500 for 365d — Recharts handles that fine because the rows are
+    - >24h  → 1-hour bucket averages (~168 points for 7d, ~720 for 30d,
+      ~8 760 for 365d — Recharts handles that fine because the rows are
       pre-aggregated server-side)
 
     Bucket rows carry ``id=null`` (no natural row id); ``error_code`` is also
@@ -191,7 +191,7 @@ async def get_readings(
     # not accept; passing it via ``CAST(:bucket AS interval)`` then explodes
     # inside asyncpg's interval codec which expects a timedelta. timedelta
     # is the only encoding that round-trips cleanly.
-    bucket = timedelta(minutes=5) if hours <= 24 else timedelta(minutes=30)
+    bucket = timedelta(minutes=5) if hours <= 24 else timedelta(hours=1)
     stmt = text(
         """
         SELECT
