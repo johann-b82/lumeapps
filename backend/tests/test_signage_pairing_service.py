@@ -10,7 +10,6 @@ import pytest
 
 from app.config import settings
 from app.services.signage_pairing import (
-    DEVICE_JWT_TTL_HOURS,
     PAIRING_ALPHABET,
     PAIRING_CODE_LEN,
     format_for_display,
@@ -61,10 +60,13 @@ def test_mint_device_jwt_roundtrip():
     )
     assert payload["sub"] == str(device_id)
     assert payload["scope"] == "device"
-    assert "iat" in payload and "exp" in payload
+    assert "iat" in payload
 
-    # exp is roughly iat + 24h
-    assert payload["exp"] - payload["iat"] == DEVICE_JWT_TTL_HOURS * 3600
+    # Device tokens are non-expiring — revocation lives on
+    # signage_devices.revoked_at, never on a JWT exp claim. A kiosk that was
+    # paired a year ago and stayed offline must still authenticate when it
+    # reconnects.
+    assert "exp" not in payload
 
     # iat is within ±5s of "now"
     now = int(time.time())

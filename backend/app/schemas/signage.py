@@ -259,3 +259,16 @@ class HeartbeatRequest(BaseModel):
 
     current_item_id: uuid.UUID | None = None
     playlist_etag: str | None = None
+
+
+class HeartbeatResponse(BaseModel):
+    """Server -> player heartbeat reply.
+
+    Carries a freshly-minted device JWT on every heartbeat so the client's
+    in-flight credential is continuously rolled. The device token is
+    non-expiring (no ``exp`` claim), so missing a rotation never causes
+    a forced re-pair — rotation is purely for forward-secrecy hygiene.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    token: str

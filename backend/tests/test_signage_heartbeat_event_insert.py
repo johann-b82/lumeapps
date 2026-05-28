@@ -130,7 +130,7 @@ async def test_heartbeat_post_inserts_event_row(client):
         headers={"Authorization": f"Bearer {token}"},
         json={},
     )
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 200, resp.text
 
     after = await _count_events(dsn, device_id)
     assert after == before + 1
@@ -168,7 +168,7 @@ async def test_heartbeat_post_is_idempotent_on_same_microsecond(
         headers={"Authorization": f"Bearer {token}"},
         json={},
     )
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 200, resp.text
 
     # Exactly one row at that ts — ON CONFLICT DO NOTHING did its job.
     conn = await asyncpg.connect(dsn=dsn)

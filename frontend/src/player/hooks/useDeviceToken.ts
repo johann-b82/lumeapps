@@ -10,6 +10,10 @@ const STORAGE_KEY = "signage_device_token";
 export interface UseDeviceTokenResult {
   token: string | null;
   clearToken: () => void;
+  /** Persist a server-rotated device JWT (from POST /heartbeat). Idempotent — a
+   *  re-set of the same value is a no-op so the React effect that drives
+   *  EventSource teardown doesn't churn on every heartbeat. */
+  rotateToken: (next: string) => void;
 }
 
 export function useDeviceToken(): UseDeviceTokenResult {
@@ -57,5 +61,20 @@ export function useDeviceToken(): UseDeviceTokenResult {
     navigate("/");
   }, [navigate]);
 
-  return { token, clearToken };
+  const rotateToken = useCallback((next: string) => {
+    if (!next) return;
+    setToken((prev) => {
+      if (prev === next) return prev;
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, next);
+        } catch {
+          /* fail soft — URL/in-memory value still works for this session */
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  return { token, clearToken, rotateToken };
 }

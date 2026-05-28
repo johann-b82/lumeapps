@@ -16,7 +16,12 @@ import type {
   PlayerItemKind,
   PlayerTransition,
 } from "@/signage/player/types";
-import { fetchCalibration, playerFetch } from "@/player/lib/playerApi";
+import {
+  fetchCalibration,
+  playerFetch,
+  postSidecarToken,
+  type PlayerHeartbeatResponse,
+} from "@/player/lib/playerApi";
 import { playerKeys } from "@/player/lib/queryKeys";
 import { applyDurationDefaults } from "@/player/lib/durationDefaults";
 import { resolveMediaUrl } from "@/player/lib/mediaUrl";
@@ -48,7 +53,7 @@ const PLAYLIST_URL = "/api/signage/player/playlist";
 const STREAM_URL = "/api/signage/player/stream";
 
 export function PlaybackShell() {
-  const { token, clearToken } = useDeviceToken();
+  const { token, clearToken, rotateToken } = useDeviceToken();
   const queryClient = useQueryClient();
   const sidecarStatus = useSidecarStatus();
 
@@ -135,26 +140,43 @@ export function PlaybackShell() {
   // when the player is opened directly in a browser (admin QA, kiosk tabs that
   // may be backgrounded). No visibilityState guard — kiosk displays frequently
   // run with the tab unfocused, and we still want presence reflected.
+  //
+  // The response carries a freshly-minted device JWT (revoke-only, no exp).
+  // We swap it into localStorage and forward it to the sidecar so the
+  // in-flight credential stays rolling. A heartbeat failure is non-fatal —
+  // the existing token remains valid.
   useEffect(() => {
     if (!token) return;
     const tick = () => {
-      void playerFetch<void>("/api/signage/player/heartbeat", {
-        token,
-        method: "POST",
-        body: JSON.stringify({
-          current_item_id: null,
-          playlist_etag: null,
-        }),
-        headers: { "Content-Type": "application/json" },
-        on401: clearToken,
-      }).catch(() => {
-        // Heartbeat failures are non-fatal for playback. Silence.
-      });
+      void playerFetch<PlayerHeartbeatResponse>(
+        "/api/signage/player/heartbeat",
+        {
+          token,
+          method: "POST",
+          body: JSON.stringify({
+            current_item_id: null,
+            playlist_etag: null,
+          }),
+          headers: { "Content-Type": "application/json" },
+          on401: clearToken,
+        },
+      )
+        .then((body) => {
+          if (body?.token && body.token !== token) {
+            rotateToken(body.token);
+            // Best-effort sidecar sync. 200ms timeout inside postSidecarToken
+            // means a missing sidecar is silently tolerated.
+            void postSidecarToken(body.token);
+          }
+        })
+        .catch(() => {
+          // Heartbeat failures are non-fatal for playback. Silence.
+        });
     };
     tick();
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
-  }, [token, clearToken]);
+  }, [token, clearToken, rotateToken]);
 
   // Hide cursor on playback canvas (UI-SPEC §"No user interaction" safety net).
   useEffect(() => {

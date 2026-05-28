@@ -5,7 +5,8 @@ Covers decisions:
   - D-06 / D-07: tag-resolved playlist envelope shape
   - D-09: ETag round-trip; If-None-Match -> 304
   - D-10: GET /playlist does NOT mutate signage_devices.last_seen_at
-  - D-11 / D-12: POST /heartbeat updates presence, flips offline->online, 204
+  - D-11 / D-12: POST /heartbeat updates presence, flips offline->online,
+    returns 200 with a rolled device JWT (post-{re-pairing fix})
 
 Seeding uses asyncpg against the live database; tokens are minted with
 ``app.services.signage_pairing.mint_device_jwt``. Skips cleanly when
@@ -22,6 +23,9 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
+import jwt
+
+from app.config import settings
 from app.services.signage_pairing import mint_device_jwt
 from tests.test_directus_auth import _mint as _mint_user_jwt, ADMIN_UUID
 
@@ -323,7 +327,7 @@ async def test_heartbeat_requires_device_token(client, dsn):
     assert r.status_code == 401, r.text
 
 
-async def test_heartbeat_returns_204_and_updates_device(client, dsn):
+async def test_heartbeat_returns_rolled_token_and_updates_device(client, dsn):
     device_id = await _insert_device(dsn, status="online", last_seen_at=None)
     item_id = uuid.uuid4()
     token = mint_device_jwt(device_id)
@@ -333,7 +337,19 @@ async def test_heartbeat_returns_204_and_updates_device(client, dsn):
         json={"current_item_id": str(item_id), "playlist_etag": "x"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
+    body = r.json()
+    new_token = body["token"]
+    assert isinstance(new_token, str) and new_token
+
+    # Rolled token is a fresh, valid device JWT bound to the same device,
+    # signed by the device secret, and carries no exp (revoke-only model).
+    payload = jwt.decode(
+        new_token, settings.SIGNAGE_DEVICE_JWT_SECRET, algorithms=["HS256"]
+    )
+    assert payload["sub"] == str(device_id)
+    assert payload["scope"] == "device"
+    assert "exp" not in payload
 
     row = await _fetch_device(dsn, device_id)
     assert row["current_item_id"] == item_id
@@ -352,7 +368,7 @@ async def test_heartbeat_flips_offline_to_online(client, dsn):
         json={"current_item_id": None, "playlist_etag": None},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
 
     row = await _fetch_device(dsn, device_id)
     assert row["status"] == "online", row
@@ -368,4 +384,37 @@ async def test_heartbeat_accepts_null_payload(client, dsn):
         json={"current_item_id": None, "playlist_etag": None},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
+    assert "token" in r.json()
+
+
+async def test_long_lived_token_still_authenticates(client, dsn):
+    """Regression: a device JWT minted a year ago must still authenticate.
+
+    Re-pairing should be required ONLY when an admin sets
+    ``signage_devices.revoked_at``. The natural rolling of the heartbeat
+    rotation is hygiene, not a survival mechanism — if a kiosk has been
+    offline and missed every rotation, the original token must still work.
+    """
+    import time as _time
+    from uuid import uuid4 as _uuid4
+
+    device_id = await _insert_device(dsn, status="online")
+
+    one_year_ago = int(_time.time()) - 365 * 24 * 3600
+    stale_token = jwt.encode(
+        {
+            "sub": str(device_id),
+            "scope": "device",
+            "iat": one_year_ago,
+            "jti": str(_uuid4()),
+        },
+        settings.SIGNAGE_DEVICE_JWT_SECRET,
+        algorithm="HS256",
+    )
+
+    r = await client.get(
+        "/api/signage/player/playlist",
+        headers={"Authorization": f"Bearer {stale_token}"},
+    )
+    assert r.status_code == 200, r.text

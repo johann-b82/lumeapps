@@ -480,7 +480,15 @@ async def _playlist_refresh_loop() -> None:
 
 
 async def _heartbeat_loop() -> None:
-    """POST heartbeat to upstream every 60s when token is set."""
+    """POST heartbeat to upstream every 60s when token is set.
+
+    The heartbeat response carries a freshly-minted device JWT
+    (``{"token": "..."}``). Device tokens are non-expiring (revoke-only),
+    so missing a rotation never breaks the sidecar; rotation is forward-
+    secrecy hygiene. When a new token arrives, we persist it to disk and
+    update the in-memory copy so subsequent requests authenticate with it.
+    """
+    global _device_token
     while True:
         await asyncio.sleep(60)
         token = _device_token
@@ -496,12 +504,25 @@ async def _heartbeat_loop() -> None:
             body["calibration_last_applied_at"] = _calibration_last_applied_at
         try:
             async with httpx.AsyncClient() as client:
-                await client.post(
+                response = await client.post(
                     f"{base}/api/signage/player/heartbeat",
                     headers={"Authorization": f"Bearer {token}"},
                     json=body,
                     timeout=5.0,
                 )
+            if response.status_code == 200:
+                try:
+                    new_token = response.json().get("token")
+                except (ValueError, json.JSONDecodeError):
+                    new_token = None
+                if new_token and new_token != _device_token:
+                    _device_token = new_token
+                    try:
+                        _write_secure(_cache_dir() / "device_token", new_token)
+                    except OSError as exc:
+                        logger.warning(
+                            "Failed to persist rotated device token: %s", exc,
+                        )
         except Exception as exc:
             logger.debug("Heartbeat fire-and-forget error (suppressed): %s", exc)
 

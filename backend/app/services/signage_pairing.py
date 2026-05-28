@@ -7,17 +7,20 @@ Two responsibilities:
    confusing glyphs `0 O 1 I L`. Uses `secrets.choice` (cryptographically
    secure, OWASP-recommended); `random` is NOT acceptable here.
 
-2. Mint a scoped device JWT (HS256) carrying `{sub, scope, iat, exp}` per
-   D-01. Signing key is `settings.SIGNAGE_DEVICE_JWT_SECRET` — a separate
-   trust domain from the Directus JWT secret.
+2. Mint a scoped device JWT (HS256) carrying ``{sub, scope, iat}`` — no
+   ``exp`` claim. The device token is non-expiring by design: a paired
+   kiosk must keep working indefinitely until an admin explicitly revokes
+   it (``signage_devices.revoked_at``). Heartbeat re-issues a fresh token
+   on every request so the in-flight credential stays rolling, but the
+   token's *validity* is gated solely by signature + scope + revocation.
 
-Token TTL: 24h (D-01). Re-issuance happens on future heartbeat rotation
-(Phase 43+); Phase 42 just mints the initial token on claim.
+   Signing key is ``settings.SIGNAGE_DEVICE_JWT_SECRET`` — a separate
+   trust domain from the Directus JWT secret.
 """
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 import jwt
@@ -32,9 +35,6 @@ assert len(PAIRING_ALPHABET) == 31
 
 PAIRING_CODE_LEN = 6
 
-# D-01: 24-hour device JWT TTL.
-DEVICE_JWT_TTL_HOURS = 24
-
 
 def generate_pairing_code() -> str:
     """Return a 6-char uppercase pairing code. 31**6 ≈ 887M combinations."""
@@ -48,13 +48,17 @@ def format_for_display(code: str) -> str:
 
 
 def mint_device_jwt(device_id: UUID) -> str:
-    """Mint an HS256 device JWT with scope='device' and a 24h TTL (D-01)."""
+    """Mint a non-expiring HS256 device JWT with ``scope='device'``.
+
+    No ``exp`` claim — revocation flows exclusively through
+    ``signage_devices.revoked_at`` so an unattended kiosk never silently
+    drops back to the pairing screen. ``iat`` is recorded for audit.
+    """
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(device_id),
         "scope": "device",
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(hours=DEVICE_JWT_TTL_HOURS)).timestamp()),
     }
     return jwt.encode(
         payload, settings.SIGNAGE_DEVICE_JWT_SECRET, algorithm="HS256"

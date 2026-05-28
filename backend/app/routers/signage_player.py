@@ -12,7 +12,10 @@ Decisions enforced here:
     ``signage_devices.last_seen_at``; heartbeat owns presence.
   - D-11 / D-12: POST /heartbeat updates ``last_seen_at``, ``current_item_id``,
     and ``current_playlist_etag``, and flips ``status`` from ``offline`` to
-    ``online`` on the first heartbeat after an offline window. Returns 204.
+    ``online`` on the first heartbeat after an offline window. Returns 200
+    with a freshly-minted, non-expiring device JWT so the client's in-flight
+    credential is continuously rolled (forward-secrecy hygiene; the token is
+    revoke-only, so missed rotations never force a re-pair).
   - Phase 45 D-01 / D-03: GET /stream pushes ``{event,playlist_id,etag}`` SSE
     frames with 15s server pings, uses last-writer-wins semantics on
     reconnect, and re-raises ``asyncio.CancelledError`` in the generator's
@@ -39,11 +42,13 @@ from app.database import get_async_db_session
 from app.models.signage import SignageDevice, SignageHeartbeatEvent, SignageMedia
 from app.schemas.signage import (
     HeartbeatRequest,
+    HeartbeatResponse,
     PlaylistEnvelope,
     SignageCalibrationRead,
 )
 from app.security.device_auth import get_current_device
 from app.services import signage_broadcast
+from app.services.signage_pairing import mint_device_jwt
 from app.services.signage_resolver import (
     compute_playlist_etag,
     resolve_playlist_for_device,
@@ -86,16 +91,22 @@ async def get_device_playlist(
     return envelope
 
 
-@router.post("/heartbeat", status_code=204)
+@router.post("/heartbeat", response_model=HeartbeatResponse)
 async def post_heartbeat(
     payload: HeartbeatRequest,
     device: SignageDevice = Depends(get_current_device),
     db: AsyncSession = Depends(get_async_db_session),
-) -> Response:
-    """D-11 / D-12: update presence; 204 No Content.
+) -> HeartbeatResponse:
+    """D-11 / D-12: update presence and roll the device JWT.
 
     Writes ``last_seen_at`` / ``current_item_id`` / ``current_playlist_etag``,
     and flips ``status`` to ``online`` if the device was previously offline.
+
+    The response carries a freshly-minted device JWT so the client's
+    in-flight credential is continuously rolled. Device tokens are
+    non-expiring (revoke-only), so the rolling rotation is forward-secrecy
+    hygiene rather than a re-pair-avoidance mechanism — a kiosk that misses
+    every rotation still keeps working until its row is revoked.
     """
     now = datetime.now(timezone.utc)
     values: dict = {
@@ -119,7 +130,7 @@ async def post_heartbeat(
     )
     await db.execute(hb_stmt)
     await db.commit()
-    return Response(status_code=204)
+    return HeartbeatResponse(token=mint_device_jwt(device.id))
 
 
 @router.get("/stream")

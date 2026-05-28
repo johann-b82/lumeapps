@@ -70,6 +70,14 @@ export function fetchCalibration(
   });
 }
 
+// POST /api/signage/player/heartbeat response: a freshly-minted, non-expiring
+// device JWT. The client swaps it into localStorage so the in-flight credential
+// stays rolling. A missing/empty rotation is non-fatal — the existing token
+// remains valid (device tokens are revoke-only).
+export interface PlayerHeartbeatResponse {
+  token: string;
+}
+
 // Phase 48: push the device JWT to the Pi sidecar so it can make authenticated
 // upstream requests and own the 60s heartbeat. Fire-and-forget: if the sidecar
 // is not running, the 200ms timeout fails fast and the UX is unaffected.
