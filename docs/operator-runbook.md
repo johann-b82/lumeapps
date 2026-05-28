@@ -650,7 +650,35 @@ sudo -u signage XDG_RUNTIME_DIR=/run/user/${SIGNAGE_UID} \
   systemctl --user restart signage-player
 ```
 
-Chromium reloads and fetches the new bundle. If the device token in `/var/lib/signage/device_token` is still valid, playback resumes; otherwise the pairing screen with a fresh 6-digit code appears within 30 seconds.
+Chromium reloads and fetches the new bundle. If the device row still exists in the database and is not revoked, the token in `/var/lib/signage/device_token` continues to authenticate and playback resumes; otherwise the pairing screen with a fresh 6-digit code appears within 30 seconds. (Device tokens are non-expiring as of v1.49 — see §9.10 for how to deliberately force a re-pair.)
+
+### 9.10 Force a Kiosk to Re-pair
+
+Since v1.49 the device JWT carries no `exp` claim — a paired kiosk stays paired indefinitely, even after weeks offline. The only mechanisms that drop a kiosk back to the pairing screen are **admin revoke** and **device-row deletion**.
+
+**Revoke a single device (preferred — keeps audit trail):**
+
+In the admin UI go to **Signage → Geräte** and click the red shield icon on the device row. Server-side this calls `POST /api/signage/pair/devices/{id}/revoke`, which stamps `signage_devices.revoked_at = now()`. The next request from that kiosk (heartbeat fires every 60s) returns 401, the player wipes localStorage, and the pairing screen appears within ~60 seconds. The device row is preserved so you still see when it was revoked.
+
+**Delete a device entirely (when you want the row gone):**
+
+Same surface in the admin UI: the pencil icon → delete, or via Directus directly. The kiosk's token is bound to the device UUID via `sub`; once the row is gone `get_current_device` returns 401 on the next request and the kiosk falls back to pairing.
+
+**Bulk reset all kiosks (e.g. moving to a new building or rebuilding from scratch):**
+
+```bash
+docker exec lumeapps-db-1 psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "BEGIN;
+   DELETE FROM signage_pairing_sessions;
+   DELETE FROM signage_device_tag_map;
+   DELETE FROM signage_heartbeat_event;
+   DELETE FROM signage_devices;
+   COMMIT;"
+```
+
+Every kiosk will show a fresh `XXX-XXX` pairing code within one heartbeat cycle. No Pi-side action required — the player auto-clears its token when the next request 401s.
+
+> **Note:** Do NOT use this if you want to preserve uptime analytics — `signage_heartbeat_event` is the data source for the 24 h uptime badge.
 
 ---
 
