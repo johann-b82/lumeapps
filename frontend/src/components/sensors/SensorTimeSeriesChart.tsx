@@ -151,6 +151,7 @@ export function SensorTimeSeriesChart() {
               y={tempMin}
               stroke="var(--color-destructive)"
               strokeDasharray="4 4"
+              ifOverflow="extendDomain"
               label={{ value: t("sensors.threshold.min"), position: "insideTopRight", fill: "var(--color-destructive)", fontSize: 11 }}
             />
           )}
@@ -159,6 +160,7 @@ export function SensorTimeSeriesChart() {
               y={tempMax}
               stroke="var(--color-destructive)"
               strokeDasharray="4 4"
+              ifOverflow="extendDomain"
               label={{ value: t("sensors.threshold.max"), position: "insideTopRight", fill: "var(--color-destructive)", fontSize: 11 }}
             />
           )}
@@ -205,6 +207,7 @@ export function SensorTimeSeriesChart() {
               y={humMin}
               stroke="var(--color-destructive)"
               strokeDasharray="4 4"
+              ifOverflow="extendDomain"
               label={{ value: t("sensors.threshold.min"), position: "insideTopRight", fill: "var(--color-destructive)", fontSize: 11 }}
             />
           )}
@@ -213,6 +216,7 @@ export function SensorTimeSeriesChart() {
               y={humMax}
               stroke="var(--color-destructive)"
               strokeDasharray="4 4"
+              ifOverflow="extendDomain"
               label={{ value: t("sensors.threshold.max"), position: "insideTopRight", fill: "var(--color-destructive)", fontSize: 11 }}
             />
           )}
