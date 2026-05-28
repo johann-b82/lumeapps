@@ -107,6 +107,17 @@ export function SensorTimeSeriesChart() {
       timeStyle: "short",
     }).format(d);
   };
+  // Format tooltip values to 2 decimals with locale-aware separator (e.g.
+  // "21,71" in DE). Bucket averages from the backend can carry many digits
+  // (AVG() returns full precision); the chart never needs more than 2 dp.
+  const numberFormatter = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const valueFormatter = (value: unknown) => {
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? numberFormatter.format(n) : String(value);
+  };
 
   const anyData = chartData.length > 0;
 
@@ -132,6 +143,7 @@ export function SensorTimeSeriesChart() {
             itemStyle={tooltipItemStyle}
             cursor={tooltipCursorProps}
             labelFormatter={labelFormatter}
+            formatter={valueFormatter}
           />
           <Legend wrapperStyle={legendWrapperStyle} />
           {tempMin != null && (
@@ -185,6 +197,7 @@ export function SensorTimeSeriesChart() {
             itemStyle={tooltipItemStyle}
             cursor={tooltipCursorProps}
             labelFormatter={labelFormatter}
+            formatter={valueFormatter}
           />
           <Legend wrapperStyle={legendWrapperStyle} />
           {humMin != null && (
