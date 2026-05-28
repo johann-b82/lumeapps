@@ -32,7 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import Sensor, SensorPollLog, SensorReading
+from app.models import Sensor, SensorPollLog
 from app.schemas import (
     PollNowResult,
     SensorCreate,
@@ -157,35 +157,28 @@ async def get_readings(
     hours: int = 24,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[Any]:
-    """Return readings for the last ``hours``.
+    """Return readings for the last ``hours``, downsampled server-side.
 
-    Short windows (≤24h) return raw rows so the live dashboard sees every
-    poll. Long windows downsample on the server via Postgres ``date_bin``
-    so the wire payload + Recharts SVG point count stay bounded:
+    All windows return time-bucketed averages so the wire payload + Recharts
+    SVG point count stay bounded regardless of how dense the underlying
+    polling is:
 
-    - ≤168h (7d) → 5-minute bucket averages (~2 000 points worst-case)
-    - >168h (≤8760h, 30d–365d) → 30-minute bucket averages (~1 440 points
-      at 30 days, ~17 500 at 365 days but Recharts handles that fine
-      because the rows are pre-aggregated server-side)
+    - ≤24h  → 5-minute bucket averages (~288 points worst-case for 24h)
+    - >24h  → 30-minute bucket averages (~336 points for 7d, ~1 440 for 30d,
+      ~17 500 for 365d — Recharts handles that fine because the rows are
+      pre-aggregated server-side)
 
-    Bucket rows carry ``id=null`` (no natural row id); the chart reads only
-    ``recorded_at`` / ``temperature`` / ``humidity`` so this is invisible to
-    the client.
+    Bucket rows carry ``id=null`` (no natural row id); ``error_code`` is also
+    null because individual error markers don't survive averaging. The chart
+    + status cards only read ``recorded_at`` / ``temperature`` / ``humidity``
+    so this is invisible to the client. The 5-min smoothing on the latest
+    bucket means the "current value" display on SensorStatusCards is the
+    average of the last ~5 min of polls rather than the most recent poll —
+    a tradeoff the operator opted into for sub-second chart loads.
     """
     if hours < 1 or hours > 24 * 365:
         raise HTTPException(422, "hours must be between 1 and 8760")
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-
-    if hours <= 24:
-        stmt = (
-            select(SensorReading)
-            .where(
-                SensorReading.sensor_id == sensor_id,
-                SensorReading.recorded_at >= since,
-            )
-            .order_by(SensorReading.recorded_at.asc())
-        )
-        return list((await db.execute(stmt)).scalars().all())
 
     # date_bin (Postgres 14+) snaps each row to a uniform grid anchored at
     # the epoch; AVG smooths sub-bucket SNMP poll noise without losing the
@@ -198,7 +191,7 @@ async def get_readings(
     # not accept; passing it via ``CAST(:bucket AS interval)`` then explodes
     # inside asyncpg's interval codec which expects a timedelta. timedelta
     # is the only encoding that round-trips cleanly.
-    bucket = timedelta(minutes=5) if hours <= 168 else timedelta(minutes=30)
+    bucket = timedelta(minutes=5) if hours <= 24 else timedelta(minutes=30)
     stmt = text(
         """
         SELECT
