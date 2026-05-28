@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -156,19 +156,77 @@ async def get_readings(
     sensor_id: int,
     hours: int = 24,
     db: AsyncSession = Depends(get_async_db_session),
-) -> list[SensorReading]:
+) -> list[Any]:
+    """Return readings for the last ``hours``.
+
+    Short windows (≤24h) return raw rows so the live dashboard sees every
+    poll. Long windows downsample on the server via Postgres ``date_bin``
+    so the wire payload + Recharts SVG point count stay bounded:
+
+    - ≤168h (7d) → 5-minute bucket averages (~2 000 points worst-case)
+    - >168h (≤8760h, 30d–365d) → 30-minute bucket averages (~1 440 points
+      at 30 days, ~17 500 at 365 days but Recharts handles that fine
+      because the rows are pre-aggregated server-side)
+
+    Bucket rows carry ``id=null`` (no natural row id); the chart reads only
+    ``recorded_at`` / ``temperature`` / ``humidity`` so this is invisible to
+    the client.
+    """
     if hours < 1 or hours > 24 * 365:
         raise HTTPException(422, "hours must be between 1 and 8760")
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    stmt = (
-        select(SensorReading)
-        .where(
-            SensorReading.sensor_id == sensor_id,
-            SensorReading.recorded_at >= since,
+
+    if hours <= 24:
+        stmt = (
+            select(SensorReading)
+            .where(
+                SensorReading.sensor_id == sensor_id,
+                SensorReading.recorded_at >= since,
+            )
+            .order_by(SensorReading.recorded_at.asc())
         )
-        .order_by(SensorReading.recorded_at.asc())
+        return list((await db.execute(stmt)).scalars().all())
+
+    # date_bin (Postgres 14+) snaps each row to a uniform grid anchored at
+    # the epoch; AVG smooths sub-bucket SNMP poll noise without losing the
+    # trend. NULL temp/humidity rows (poll errors) drop out of AVG
+    # naturally — the bucket still appears as long as at least one row in
+    # the window had a value.
+    #
+    # asyncpg encodes Python ``timedelta`` as Postgres INTERVAL natively —
+    # passing a string ("5 minutes") binds as VARCHAR which date_bin does
+    # not accept; passing it via ``CAST(:bucket AS interval)`` then explodes
+    # inside asyncpg's interval codec which expects a timedelta. timedelta
+    # is the only encoding that round-trips cleanly.
+    bucket = timedelta(minutes=5) if hours <= 168 else timedelta(minutes=30)
+    stmt = text(
+        """
+        SELECT
+            date_bin(:bucket, recorded_at, TIMESTAMPTZ 'epoch') AS recorded_at,
+            AVG(temperature) AS temperature,
+            AVG(humidity) AS humidity
+        FROM sensor_readings
+        WHERE sensor_id = :sensor_id
+          AND recorded_at >= :since
+        GROUP BY 1
+        ORDER BY 1 ASC
+        """
     )
-    return list((await db.execute(stmt)).scalars().all())
+    result = await db.execute(
+        stmt,
+        {"bucket": bucket, "sensor_id": sensor_id, "since": since},
+    )
+    return [
+        SensorReadingRead(
+            id=None,
+            sensor_id=sensor_id,
+            recorded_at=row.recorded_at,
+            temperature=row.temperature,
+            humidity=row.humidity,
+            error_code=None,
+        )
+        for row in result.all()
+    ]
 
 
 # ---------------------------------------------------------------------------

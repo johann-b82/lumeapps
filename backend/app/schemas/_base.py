@@ -377,13 +377,18 @@ class SensorUpdate(BaseModel):
 
 
 class SensorReadingRead(BaseModel):
-    """One sensor_readings row."""
-    id: int
+    """One sensor_readings row OR a synthesised time-bucket average.
+
+    ``id`` is null when the row is a bucket average returned by the
+    long-window downsample path (``hours > 24`` on
+    ``/api/sensors/{id}/readings``). Raw rows always carry a real id.
+    """
+    id: int | None = None
     sensor_id: int
     recorded_at: datetime
     temperature: Decimal | None
     humidity: Decimal | None
-    error_code: str | None
+    error_code: str | None = None
 
     model_config = {"from_attributes": True}
 

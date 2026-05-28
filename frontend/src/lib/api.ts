@@ -643,7 +643,9 @@ export interface SensorRead {
 }
 
 export interface SensorReadingRead {
-  id: number;
+  // `id` is null when the backend returns a downsampled bucket average for
+  // long windows (hours > 24). Raw rows carry a real id.
+  id: number | null;
   sensor_id: number;
   recorded_at: string; // ISO8601
   temperature: string | null; // Decimal, may be null on gaps
