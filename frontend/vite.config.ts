@@ -65,6 +65,11 @@ export default defineConfig(({ mode }) => {
               },
               workbox: {
                 navigateFallback: "/player/index.html",
+                // Kiosk Pis never navigate; the default "wait until all pages close"
+                // SW activation leaves them on stale chunks forever. Skip-wait +
+                // claim makes the new build take over on the next reload.
+                skipWaiting: true,
+                clientsClaim: true,
                 // Cache name is versioned: bump to v2 when the /playlist envelope shape changes (Pitfall P8).
                 runtimeCaching: [
                   {

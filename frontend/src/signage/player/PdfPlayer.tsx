@@ -58,16 +58,22 @@ export function PdfPlayer({
     return () => observer.disconnect();
   }, []);
 
-  // Fit-to-contain scale: pick the dimension that constrains harder so the
-  // page sits entirely inside the container with aspect preserved (object-
-  // contain semantics for the rendered canvas).
-  const fitScale =
-    containerSize && pageNatural
-      ? Math.min(
-          containerSize.w / pageNatural.w,
-          containerSize.h / pageNatural.h,
-        )
-      : undefined;
+  // Fit-to-contain via width OR height prop (not both, not scale): react-pdf
+  // computes the right scale from whichever dimension binds. This is more
+  // robust than supplying scale ourselves — earlier attempts using
+  // `scale={min(w/pw, h/ph)}` still let the canvas overflow on the Pi.
+  // - container is wider than the page (relative): height is binding
+  // - container is narrower than the page: width is binding
+  // - before pageNatural is known, fall back to container width
+  const fitProps: { width?: number; height?: number } = (() => {
+    if (!containerSize) return {};
+    if (!pageNatural) return { width: containerSize.w };
+    const containerAspect = containerSize.w / containerSize.h;
+    const pageAspect = pageNatural.w / pageNatural.h;
+    return pageAspect >= containerAspect
+      ? { width: containerSize.w }
+      : { height: containerSize.h };
+  })();
 
   // Auto-flip timer: every `autoFlipSeconds`, start a crossfade to the next page.
   // The timer reads `currentPage` from the effect closure, so we re-subscribe on
@@ -111,21 +117,21 @@ export function PdfPlayer({
       <Document file={uri} onLoadSuccess={({ numPages: n }) => setNumPages(n)}>
         {/* Layer A: current page — fades out as nextPage mounts on top. */}
         <div
-          className="absolute inset-0 flex items-center justify-center transition-opacity duration-200"
+          className="absolute inset-0 overflow-hidden flex items-center justify-center transition-opacity duration-200"
           style={{ opacity: nextPage === null ? 1 : 0 }}
         >
           <Page
             pageNumber={currentPage}
-            {...(fitScale !== undefined
-              ? { scale: fitScale }
-              : containerSize
-                ? { width: containerSize.w }
-                : {})}
+            {...fitProps}
             renderTextLayer={false}
             renderAnnotationLayer={false}
             onLoadSuccess={(p) => {
               if (!pageNatural) {
-                setPageNatural({ w: p.originalWidth, h: p.originalHeight });
+                // Use the public pdfjs API to get native page size instead of
+                // relying on react-pdf's added `originalWidth/Height` props,
+                // which have moved across react-pdf versions.
+                const vp = p.getViewport({ scale: 1 });
+                setPageNatural({ w: vp.width, h: vp.height });
               }
             }}
           />
@@ -138,11 +144,7 @@ export function PdfPlayer({
           >
             <Page
               pageNumber={nextPage}
-              {...(fitScale !== undefined
-                ? { scale: fitScale }
-                : containerSize
-                  ? { width: containerSize.w }
-                  : {})}
+              {...fitProps}
               renderTextLayer={false}
               renderAnnotationLayer={false}
             />
