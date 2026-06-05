@@ -87,10 +87,10 @@ export function BirthdaysCard() {
     );
 
   return (
-    <section className="rounded-lg border border-border bg-card p-6">
+    <section className="rounded-xl bg-card p-6 text-card-foreground ring-1 ring-foreground/10">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Cake className="h-5 w-5 text-pink-500" aria-hidden="true" />
+          <Cake className="h-5 w-5 text-primary" aria-hidden="true" />
           {t("hr.birthdays.title")}
         </h2>
       </div>
@@ -121,10 +121,10 @@ export function BirthdaysCard() {
               <li
                 key={entry.employee_id}
                 className={
-                  "flex items-start gap-3 rounded-lg border p-4 " +
+                  "flex items-start gap-3 rounded-xl bg-card p-4 ring-1 " +
                   (isToday
-                    ? "border-pink-400/70 bg-pink-50/50 dark:bg-pink-950/20"
-                    : "border-border bg-background")
+                    ? "ring-primary/40 bg-primary/5"
+                    : "ring-foreground/10")
                 }
               >
                 <Avatar entry={entry} />
