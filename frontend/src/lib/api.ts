@@ -421,6 +421,27 @@ export async function fetchBirthdaysThisWeekPublic(): Promise<BirthdayEntry[]> {
   return (await r.json()) as BirthdayEntry[];
 }
 
+// v1.51 — Joiners of the last 6 weeks (active employees only).
+export interface JoinerEntry {
+  employee_id: number;
+  first_name: string | null;
+  last_name: string | null;
+  department: string | null;
+  hire_date: string;          // YYYY-MM-DD
+  days_with_company: number;  // today - hire_date
+  has_photo: boolean;
+}
+
+export async function fetchJoinersRecent(): Promise<JoinerEntry[]> {
+  return apiClient<JoinerEntry[]>("/api/hr/joiners/recent");
+}
+
+export async function fetchJoinersRecentPublic(): Promise<JoinerEntry[]> {
+  const r = await fetch("/api/hr/embed/joiners/recent", { credentials: "omit" });
+  if (!r.ok) throw new Error(`joiners embed fetch failed: ${r.status}`);
+  return (await r.json()) as JoinerEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // v1.49 — Quality (8D audit findings)
 // ---------------------------------------------------------------------------

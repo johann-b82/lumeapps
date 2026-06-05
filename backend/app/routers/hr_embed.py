@@ -23,11 +23,14 @@ from app.security.fernet import decrypt_credential
 from app.services.personio_client import PersonioAPIError, PersonioClient
 from app.routers.hr_kpis import (
     BirthdayEntry,
+    JoinerEntry,
     _anniversary_in_year,
     _find_birthday_in_raw,
     _has_profile_picture,
+    _is_currently_active,
     _parse_birthday,
 )
+from fastapi import Query
 
 
 router = APIRouter(prefix="/api/hr/embed", tags=["hr-embed"])
@@ -55,6 +58,7 @@ async def embed_birthdays_this_week(
                 PersonioEmployee.first_name,
                 PersonioEmployee.last_name,
                 PersonioEmployee.department,
+                PersonioEmployee.status,
                 PersonioEmployee.termination_date,
                 PersonioEmployee.raw_json,
             )
@@ -63,7 +67,7 @@ async def embed_birthdays_this_week(
 
     entries: list[BirthdayEntry] = []
     for r in rows:
-        if r.termination_date is not None and r.termination_date <= today:
+        if not _is_currently_active(r.status, r.termination_date, today):
             continue
         raw_val = _find_birthday_in_raw(r.raw_json)
         if not raw_val:
@@ -93,6 +97,58 @@ async def embed_birthdays_this_week(
         key=lambda e: (e.occurs_on, (e.last_name or "").lower(), (e.first_name or "").lower())
     )
     return entries
+
+
+@router.get("/joiners/recent", response_model=list[JoinerEntry])
+async def embed_joiners_recent(
+    weeks: int = Query(6, ge=1, le=52),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[JoinerEntry]:
+    """Unauthenticated mirror of /api/hr/joiners/recent — same shape, no auth."""
+    today = date.today()
+    earliest = today - timedelta(weeks=weeks)
+    rows = (
+        await db.execute(
+            sa_select(
+                PersonioEmployee.id,
+                PersonioEmployee.first_name,
+                PersonioEmployee.last_name,
+                PersonioEmployee.department,
+                PersonioEmployee.status,
+                PersonioEmployee.hire_date,
+                PersonioEmployee.termination_date,
+                PersonioEmployee.raw_json,
+            )
+        )
+    ).all()
+
+    out: list[JoinerEntry] = []
+    for r in rows:
+        if not _is_currently_active(r.status, r.termination_date, today):
+            continue
+        if r.hire_date is None:
+            continue
+        if r.hire_date < earliest or r.hire_date > today:
+            continue
+        out.append(
+            JoinerEntry(
+                employee_id=r.id,
+                first_name=r.first_name,
+                last_name=r.last_name,
+                department=r.department,
+                hire_date=r.hire_date,
+                days_with_company=(today - r.hire_date).days,
+                has_photo=_has_profile_picture(r.raw_json),
+            )
+        )
+    out.sort(
+        key=lambda e: (
+            -(e.hire_date.toordinal()),
+            (e.last_name or "").lower(),
+            (e.first_name or "").lower(),
+        )
+    )
+    return out
 
 
 @router.get("/employees/{employee_id}/photo")
