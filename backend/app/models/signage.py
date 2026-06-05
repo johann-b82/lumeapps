@@ -210,6 +210,13 @@ class SignageDevice(Base):
         Boolean, nullable=False, server_default=text("false")
     )
 
+    # v1.50: identity reported by the Pi sidecar on every heartbeat.
+    # Browser-fallback heartbeats can't fill these; older sidecars leave them
+    # NULL — the heartbeat handler only writes columns that arrive non-null.
+    mac_address: Mapped[str | None] = mapped_column(String(17), nullable=True)
+    hostname: Mapped[str | None] = mapped_column(String(253), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

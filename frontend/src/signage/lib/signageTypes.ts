@@ -65,6 +65,12 @@ export interface SignageDevice {
   hdmi_mode: string | null;
   audio_enabled: boolean;
   available_modes?: string[] | null;
+  // v1.50 — Pi-reported network identity refreshed each heartbeat. Null on
+  // pending devices that haven't paired yet, and on browser-fallback kiosks
+  // where the JS bundle can't see MAC/host/IP.
+  mac_address: string | null;
+  hostname: string | null;
+  ip_address: string | null;
   created_at: string;
   updated_at: string;
 }

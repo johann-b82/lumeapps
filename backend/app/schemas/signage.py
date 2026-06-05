@@ -118,6 +118,11 @@ class SignageDeviceRead(SignageDeviceBase):
     rotation: Literal[0, 90, 180, 270] = 0
     hdmi_mode: str | None = None
     audio_enabled: bool = False
+    # v1.50 — Pi-reported network identity. Null on pending devices that have
+    # never heartbeated, on browser-fallback kiosks, and on pre-v1.50 sidecars.
+    mac_address: str | None = None
+    hostname: str | None = None
+    ip_address: str | None = None
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
@@ -252,13 +257,21 @@ class DeviceAnalyticsRead(BaseModel):
 class HeartbeatRequest(BaseModel):
     """Player -> server heartbeat payload. D-11.
 
-    Both fields are nullable so a just-booted player without a current item
-    or cached ETag can still heartbeat.
+    Both presence fields are nullable so a just-booted player without a
+    current item or cached ETag can still heartbeat.
+
+    v1.50 identity fields (mac_address / hostname / ip_address) are populated
+    by the Pi sidecar — the browser fallback heartbeat omits them. The
+    backend only writes columns that arrive non-null, so omitting them
+    leaves the previous values intact.
     """
     model_config = ConfigDict(extra="ignore")
 
     current_item_id: uuid.UUID | None = None
     playlist_etag: str | None = None
+    mac_address: str | None = Field(default=None, max_length=17)
+    hostname: str | None = Field(default=None, max_length=253)
+    ip_address: str | None = Field(default=None, max_length=45)
 
 
 class HeartbeatResponse(BaseModel):

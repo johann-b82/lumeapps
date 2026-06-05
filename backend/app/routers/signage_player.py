@@ -116,6 +116,15 @@ async def post_heartbeat(
     }
     if device.status == "offline":
         values["status"] = "online"
+    # v1.50: Pi sidecar reports identity each heartbeat. Only write columns
+    # that arrived non-null so a browser-fallback heartbeat (which can't
+    # see MAC/hostname/IP) doesn't clobber a previously-known value.
+    if payload.mac_address is not None:
+        values["mac_address"] = payload.mac_address
+    if payload.hostname is not None:
+        values["hostname"] = payload.hostname
+    if payload.ip_address is not None:
+        values["ip_address"] = payload.ip_address
     await db.execute(
         update(SignageDevice)
         .where(SignageDevice.id == device.id)

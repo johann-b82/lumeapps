@@ -479,6 +479,51 @@ async def _playlist_refresh_loop() -> None:
             logger.warning("Playlist refresh error: %s", exc)
 
 
+def _read_first_mac() -> str | None:
+    """Return the MAC of the first non-loopback interface that has one.
+
+    Reads from /sys/class/net/<iface>/address — kernel sysfs, no extra
+    binaries needed. Returns None on environments where sysfs isn't present
+    (dev hosts, containers without /sys mounted) so a missing identity field
+    falls through to the heartbeat handler's "leave previous value" branch.
+    """
+    try:
+        for iface in sorted(os.listdir("/sys/class/net")):
+            if iface == "lo":
+                continue
+            try:
+                mac = (Path("/sys/class/net") / iface / "address").read_text().strip()
+            except OSError:
+                continue
+            if mac and mac != "00:00:00:00:00:00":
+                return mac
+    except OSError:
+        return None
+    return None
+
+
+def _detect_primary_ip() -> str | None:
+    """Resolve the IP of the interface that would reach the upstream API.
+
+    Uses the standard UDP-socket trick — the kernel chooses a source address
+    via the routing table without actually sending anything. Falls back to
+    None on hosts with no routable interface.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            # 203.0.113.0/24 is RFC 5737 (TEST-NET-3) — never reaches anything.
+            s.connect(("203.0.113.1", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return None
+
+
+# Cached at first heartbeat — hostname and MAC don't change at runtime; IP
+# is re-read each heartbeat so a DHCP renewal eventually surfaces in the UI.
+_cached_mac: str | None = None
+_cached_hostname: str | None = None
+
+
 async def _heartbeat_loop() -> None:
     """POST heartbeat to upstream every 60s when token is set.
 
@@ -488,7 +533,14 @@ async def _heartbeat_loop() -> None:
     secrecy hygiene. When a new token arrives, we persist it to disk and
     update the in-memory copy so subsequent requests authenticate with it.
     """
-    global _device_token
+    global _device_token, _cached_mac, _cached_hostname
+    if _cached_mac is None:
+        _cached_mac = _read_first_mac()
+    if _cached_hostname is None:
+        try:
+            _cached_hostname = socket.gethostname() or None
+        except OSError:
+            _cached_hostname = None
     while True:
         await asyncio.sleep(60)
         token = _device_token
@@ -502,6 +554,15 @@ async def _heartbeat_loop() -> None:
             body["calibration_last_error"] = _calibration_last_error
         if _calibration_last_applied_at is not None:
             body["calibration_last_applied_at"] = _calibration_last_applied_at
+        # v1.50 — Pi identity. Re-read IP every heartbeat so DHCP changes
+        # surface; MAC/hostname are stable so we use the cached values.
+        if _cached_mac:
+            body["mac_address"] = _cached_mac
+        if _cached_hostname:
+            body["hostname"] = _cached_hostname
+        ip = _detect_primary_ip()
+        if ip:
+            body["ip_address"] = ip
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(

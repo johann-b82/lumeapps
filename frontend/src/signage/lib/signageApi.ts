@@ -127,6 +127,10 @@ const DEVICE_FIELDS = [
   "rotation",
   "hdmi_mode",
   "audio_enabled",
+  // v1.50 — Pi-reported network identity.
+  "mac_address",
+  "hostname",
+  "ip_address",
 ] as const;
 
 // Phase v1.23 C-2: field allowlist mirroring SignageMediaRead

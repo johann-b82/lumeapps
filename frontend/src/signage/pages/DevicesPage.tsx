@@ -179,7 +179,21 @@ export function DevicesPage() {
             {devices.map((d) => (
               <TableRow key={d.id}>
                 <TableCell>
-                  <span className="text-sm font-semibold">{d.name}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold">{d.name}</span>
+                    {(d.hostname || d.ip_address || d.mac_address) && (
+                      <span className="text-xs text-muted-foreground font-mono leading-tight">
+                        {d.hostname ?? ""}
+                        {d.hostname && d.ip_address ? " · " : ""}
+                        {d.ip_address ?? ""}
+                      </span>
+                    )}
+                    {d.mac_address && (
+                      <span className="text-[10px] text-muted-foreground/70 font-mono leading-tight">
+                        {d.mac_address}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <DeviceStatusChip lastSeenAt={d.last_seen_at} />
