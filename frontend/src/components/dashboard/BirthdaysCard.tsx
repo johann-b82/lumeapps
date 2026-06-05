@@ -18,6 +18,9 @@ import {
 } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
+import { useEmbedPaging } from "./useEmbedPaging";
+
+const EMBED_PAGE_SIZE = 2;
 
 interface BirthdaysCardProps {
   /** Switch the data source + photo URL prefix to the unauthenticated mirror.
@@ -102,6 +105,8 @@ export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
     staleTime: 30 * 60_000, // a birthday doesn't move within the day
   });
 
+  const paging = useEmbedPaging(data?.length ?? 0, EMBED_PAGE_SIZE);
+
   const formatDay = (iso: string) =>
     new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(
       new Date(iso + "T00:00:00"),
@@ -157,7 +162,13 @@ export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
 
       {!isLoading && !isError && (data?.length ?? 0) > 0 && (
         <ul className={cls.grid}>
-          {(data ?? []).map((entry) => {
+          {(embed
+            ? (data ?? []).slice(
+                paging.page * EMBED_PAGE_SIZE,
+                paging.page * EMBED_PAGE_SIZE + EMBED_PAGE_SIZE,
+              )
+            : (data ?? [])
+          ).map((entry) => {
             const isToday = entry.weekday === today;
             return (
               <li

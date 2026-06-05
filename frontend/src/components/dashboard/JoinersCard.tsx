@@ -19,6 +19,9 @@ import {
 } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
+import { useEmbedPaging } from "./useEmbedPaging";
+
+const EMBED_PAGE_SIZE = 2;
 
 interface JoinersCardProps {
   /** Switch to the unauthenticated mirror for the /embed/joiners kiosk view. */
@@ -78,6 +81,8 @@ export function JoinersCard({ embed = false }: JoinersCardProps = {}) {
     staleTime: 30 * 60_000,
   });
 
+  const paging = useEmbedPaging(data?.length ?? 0, EMBED_PAGE_SIZE);
+
   const formatDay = (iso: string) =>
     new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(
       new Date(iso + "T00:00:00"),
@@ -132,7 +137,13 @@ export function JoinersCard({ embed = false }: JoinersCardProps = {}) {
 
       {!isLoading && !isError && (data?.length ?? 0) > 0 && (
         <ul className={cls.grid}>
-          {(data ?? []).map((entry) => {
+          {(embed
+            ? (data ?? []).slice(
+                paging.page * EMBED_PAGE_SIZE,
+                paging.page * EMBED_PAGE_SIZE + EMBED_PAGE_SIZE,
+              )
+            : (data ?? [])
+          ).map((entry) => {
             // Day-0 joiners (started today) get the highlight + Today badge.
             const isToday = entry.days_with_company === 0;
             return (

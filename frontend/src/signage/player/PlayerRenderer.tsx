@@ -41,7 +41,7 @@ function renderItem(
         </Suspense>
       );
     case "url":
-      return <IframePlayer uri={item.uri} />;
+      return <IframePlayer uri={item.uri} durationS={item.duration_s} />;
     case "html":
       return <HtmlPlayer html={item.html} />;
     case "pptx":
