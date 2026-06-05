@@ -58,8 +58,13 @@ function Avatar({ entry, embed }: { entry: BirthdayEntry; embed: boolean }) {
   const photoUrl = embed
     ? `/api/hr/embed/employees/${entry.employee_id}/photo`
     : `/api/hr/employees/${entry.employee_id}/photo`;
+  // Embed view doubles the avatar size for kiosk readability.
+  const sizeCls = embed ? "h-24 w-24" : "h-12 w-12";
+  const initialsCls = embed
+    ? "text-2xl font-semibold text-muted-foreground"
+    : "text-sm font-semibold text-muted-foreground";
   return (
-    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
+    <div className={`relative shrink-0 overflow-hidden rounded-full bg-muted ${sizeCls}`}>
       {showImage ? (
         <img
           src={photoUrl}
@@ -69,7 +74,7 @@ function Avatar({ entry, embed }: { entry: BirthdayEntry; embed: boolean }) {
           onError={() => setFailed(true)}
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
+        <span className={`flex h-full w-full items-center justify-center ${initialsCls}`}>
           {initials(entry)}
         </span>
       )}
@@ -102,42 +107,64 @@ export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
       new Date(iso + "T00:00:00"),
     );
 
+  // Doubled sizing for the /embed/birthdays kiosk view. Wrapper + tile
+  // chrome (rounded-xl, ring, bg-card) is shared so the same component reads
+  // as one design at two scales.
+  const cls = {
+    section: embed ? "p-12" : "p-6",
+    titleRow: embed ? "mb-8" : "mb-4",
+    title: embed ? "gap-4 text-3xl font-semibold" : "gap-2 text-lg font-semibold",
+    titleIcon: embed ? "h-10 w-10 text-primary" : "h-5 w-5 text-primary",
+    statusText: embed ? "text-2xl" : "text-sm",
+    grid: embed
+      ? "grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3"
+      : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+    tile: embed ? "gap-6 p-8" : "gap-3 p-4",
+    nameRow: embed ? "gap-4" : "gap-2",
+    name: embed ? "text-2xl font-semibold" : "text-sm font-semibold",
+    badge: embed ? "text-base" : "text-xs",
+    department: embed ? "text-lg" : "text-xs",
+    dateLine: embed ? "mt-2 text-lg" : "mt-1 text-xs",
+  };
+
   return (
-    <section className="rounded-xl bg-card p-6 text-card-foreground ring-1 ring-foreground/10">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Cake className="h-5 w-5 text-primary" aria-hidden="true" />
+    <section
+      className={`rounded-xl bg-card text-card-foreground ring-1 ring-foreground/10 ${cls.section}`}
+    >
+      <div className={`flex items-center justify-between ${cls.titleRow}`}>
+        <h2 className={`flex items-center ${cls.title}`}>
+          <Cake className={cls.titleIcon} aria-hidden="true" />
           {t("hr.birthdays.title")}
         </h2>
       </div>
 
       {isLoading && (
-        <p className="text-sm text-muted-foreground">
+        <p className={`text-muted-foreground ${cls.statusText}`}>
           {t("common.loading")}
         </p>
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">
+        <p className={`text-destructive ${cls.statusText}`}>
           {t("hr.birthdays.error")}
         </p>
       )}
 
       {!isLoading && !isError && (data?.length ?? 0) === 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className={`text-muted-foreground ${cls.statusText}`}>
           {t("hr.birthdays.empty")}
         </p>
       )}
 
       {!isLoading && !isError && (data?.length ?? 0) > 0 && (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <ul className={cls.grid}>
           {(data ?? []).map((entry) => {
             const isToday = entry.weekday === today;
             return (
               <li
                 key={entry.employee_id}
                 className={
-                  "flex items-start gap-3 rounded-xl bg-card p-4 ring-1 " +
+                  `flex items-start rounded-xl bg-card ring-1 ${cls.tile} ` +
                   (isToday
                     ? "ring-primary/40 bg-primary/5"
                     : "ring-foreground/10")
@@ -145,22 +172,22 @@ export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
               >
                 <Avatar entry={entry} embed={embed} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-semibold">
+                  <div className={`flex items-center ${cls.nameRow}`}>
+                    <span className={`truncate ${cls.name}`}>
                       {displayName(entry)}
                     </span>
                     {isToday && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className={cls.badge}>
                         {t("hr.birthdays.today")}
                       </Badge>
                     )}
                   </div>
                   {entry.department && (
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className={`truncate text-muted-foreground ${cls.department}`}>
                       {entry.department}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                  <p className={`text-muted-foreground tabular-nums ${cls.dateLine}`}>
                     {t(WEEKDAY_KEYS[entry.weekday])} · {formatDay(entry.occurs_on)}
                   </p>
                 </div>
