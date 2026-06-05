@@ -6,6 +6,7 @@
  * The card whose `occurs_on` matches today is highlighted with a "Today"
  * badge and a stronger border. Empty week shows a friendly empty state.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Cake } from "lucide-react";
@@ -27,6 +28,39 @@ const WEEKDAY_KEYS = [
 function displayName(e: BirthdayEntry): string {
   const parts = [e.first_name, e.last_name].filter((p): p is string => !!p);
   return parts.length ? parts.join(" ") : `#${e.employee_id}`;
+}
+
+function initials(e: BirthdayEntry): string {
+  const f = (e.first_name ?? "").trim()[0] ?? "";
+  const l = (e.last_name ?? "").trim()[0] ?? "";
+  const combined = (f + l).toUpperCase();
+  return combined || "?";
+}
+
+/** Avatar component: Personio photo via proxy with an initials fallback.
+ *  Uses a state flag rather than direct DOM manipulation so React can swap
+ *  cleanly when the <img> 404s (Personio sometimes drops a photo between
+ *  list-time and view-time). */
+function Avatar({ entry }: { entry: BirthdayEntry }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = entry.has_photo && !failed;
+  return (
+    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
+      {showImage ? (
+        <img
+          src={`/api/hr/employees/${entry.employee_id}/photo`}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
+          {initials(entry)}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function todayWeekdayIdx(): number {
@@ -93,13 +127,7 @@ export function BirthdaysCard() {
                     : "border-border bg-background")
                 }
               >
-                <Cake
-                  className={
-                    "h-7 w-7 shrink-0 " +
-                    (isToday ? "text-pink-500" : "text-muted-foreground/70")
-                  }
-                  aria-hidden="true"
-                />
+                <Avatar entry={entry} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">

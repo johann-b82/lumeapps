@@ -296,6 +296,48 @@ class PersonioClient:
             offset += limit
         return results
 
+    async def fetch_profile_picture(
+        self,
+        employee_id: int,
+    ) -> tuple[bytes, str] | None:
+        """GET /company/employees/{id}/profile-picture; return (bytes, content_type).
+
+        Personio returns image bytes directly on 200, 404 when the employee has
+        no picture. Returns None on 404 so the caller can surface a clean
+        "no photo" path rather than spamming the proxy with a 502.
+
+        Raises PersonioAPIError / PersonioRateLimitError / PersonioNetworkError
+        on every other failure shape — same contract as the other fetchers.
+        """
+        token = await self._get_valid_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            resp = await self._http.get(
+                f"/company/employees/{employee_id}/profile-picture",
+                headers=headers,
+            )
+        except httpx.TimeoutException as exc:
+            raise PersonioNetworkError(f"Personio unreachable (timeout): {exc}") from exc
+        except httpx.RequestError as exc:
+            raise PersonioNetworkError(f"Personio unreachable: {exc}") from exc
+        if resp.status_code == 404:
+            return None
+        if resp.status_code == 401:
+            raise PersonioAuthError("Invalid credentials", status_code=401)
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "60"))
+            raise PersonioRateLimitError(
+                f"Rate limited, retry in {retry_after}s",
+                retry_after=retry_after,
+            )
+        if resp.is_error:
+            raise PersonioAPIError(
+                f"Personio API error {resp.status_code}",
+                status_code=resp.status_code,
+            )
+        ct = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        return resp.content, ct
+
     async def fetch_absence_types(self) -> list[dict]:
         """Paginated GET /company/time-off-types. Returns list of absence type dicts.
 

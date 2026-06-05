@@ -13,14 +13,17 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user
+from app.security.fernet import decrypt_credential
 from app.models import AppSettings, PersonioEmployee
 from app.schemas import HrKpiHistoryPoint, HrKpiResponse
+from app.services.personio_client import PersonioAPIError, PersonioClient
 from app.services.hr_kpi_aggregation import (
     _fluctuation,
     _month_bounds,
@@ -235,6 +238,10 @@ class BirthdayEntry(BaseModel):
     weekday: int            # 0 = Monday … 6 = Sunday — week-relative
     occurs_on: date         # this year's anniversary date (handles Feb 29)
     age_turning: int        # age the employee turns on `occurs_on`
+    # True when Personio's raw_json carries a non-null Profile Picture URL.
+    # The frontend uses this to decide whether to attempt the photo proxy
+    # endpoint (skipping the fetch avoids a 404 per employee with no photo).
+    has_photo: bool
 
 
 def _find_birthday_in_raw(raw: Any) -> str | None:
@@ -281,6 +288,21 @@ def _anniversary_in_year(dob: date, year: int) -> date:
         return dob.replace(year=year)
     except ValueError:
         return dob.replace(year=year, day=28)
+
+
+def _has_profile_picture(raw: Any) -> bool:
+    """Return True if raw_json carries a non-null Profile Picture URL."""
+    if isinstance(raw, dict):
+        if raw.get("label") == "Profile Picture":
+            return bool(raw.get("value"))
+        for v in raw.values():
+            if _has_profile_picture(v):
+                return True
+    elif isinstance(raw, list):
+        for item in raw:
+            if _has_profile_picture(item):
+                return True
+    return False
 
 
 @router.get("/birthdays/this-week", response_model=list[BirthdayEntry])
@@ -335,6 +357,7 @@ async def get_birthdays_this_week(
                         weekday=occurs.weekday(),
                         occurs_on=occurs,
                         age_turning=year - dob.year,
+                        has_photo=_has_profile_picture(r.raw_json),
                     )
                 )
                 break  # avoid the duplicate when monday.year == sunday.year
@@ -343,3 +366,53 @@ async def get_birthdays_this_week(
         key=lambda e: (e.occurs_on, (e.last_name or "").lower(), (e.first_name or "").lower())
     )
     return entries
+
+
+@router.get("/employees/{employee_id}/photo")
+async def get_employee_photo(
+    employee_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Authenticated proxy for the Personio profile picture of one employee.
+
+    The Personio asset URL needs a Personio bearer and CORS-blocks the
+    browser; this route hides both. Returns the image bytes with a 1-hour
+    browser cache so repeat renders in the same session don't refetch.
+    404 when the row is missing, when Personio has no picture, or when
+    Personio credentials aren't configured (treated as "no photo").
+    """
+    emp = (
+        await db.execute(sa_select(PersonioEmployee).where(PersonioEmployee.id == employee_id))
+    ).scalar_one_or_none()
+    if emp is None:
+        raise HTTPException(status_code=404, detail="employee not found")
+
+    settings_row = (
+        await db.execute(sa_select(AppSettings).where(AppSettings.id == 1))
+    ).scalar_one_or_none()
+    if (
+        settings_row is None
+        or not settings_row.personio_client_id_enc
+        or not settings_row.personio_client_secret_enc
+    ):
+        raise HTTPException(status_code=404, detail="personio credentials not configured")
+
+    client_id = decrypt_credential(settings_row.personio_client_id_enc)
+    client_secret = decrypt_credential(settings_row.personio_client_secret_enc)
+    client = PersonioClient(client_id=client_id, client_secret=client_secret)
+    try:
+        result = await client.fetch_profile_picture(employee_id)
+    except PersonioAPIError as exc:
+        raise HTTPException(status_code=502, detail="personio fetch failed") from exc
+    finally:
+        await client.close()
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="no profile picture")
+
+    body, content_type = result
+    return Response(
+        content=body,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )

@@ -405,6 +405,7 @@ export interface BirthdayEntry {
   weekday: number;      // 0 = Monday … 6 = Sunday
   occurs_on: string;    // this year's anniversary date (YYYY-MM-DD)
   age_turning: number;
+  has_photo: boolean;   // true => GET /api/hr/employees/{id}/photo returns an image
 }
 
 export async function fetchBirthdaysThisWeek(): Promise<BirthdayEntry[]> {
