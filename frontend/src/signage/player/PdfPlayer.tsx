@@ -14,18 +14,30 @@ export interface PdfPlayerProps {
   autoFlipSeconds?: number;
   /** Crossfade duration in ms between consecutive pages (SGN-DIFF-03). */
   crossfadeMs?: number;
+  /** Optional. Fired after the last page has been shown for `autoFlipSeconds`.
+   *  When provided, PdfPlayer stops flipping rather than wrapping back to page 1
+   *  — the parent decides what comes next (e.g. advance to the next playlist
+   *  item). Without it, the player loops back to page 1. */
+  onCycleEnd?: () => void;
 }
 
 export function PdfPlayer({
   uri,
   autoFlipSeconds = 8,
   crossfadeMs = 200,
+  onCycleEnd,
 }: PdfPlayerProps) {
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [nextPage, setNextPage] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
+  // Latest onCycleEnd in a ref so the flip effect doesn't re-subscribe (which
+  // would reset the timer) when the callback identity changes between renders.
+  const onCycleEndRef = useRef(onCycleEnd);
+  useEffect(() => {
+    onCycleEndRef.current = onCycleEnd;
+  }, [onCycleEnd]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -41,11 +53,20 @@ export function PdfPlayer({
   // The timer reads `currentPage` from the effect closure, so we re-subscribe on
   // every page change — each tick schedules exactly one crossfade and unmounts.
   useEffect(() => {
-    if (numPages <= 1) return;
+    if (numPages === 0) return;
     if (nextPage !== null) return; // crossfade in flight — wait for it to commit
     const intervalMs = Math.max(1000, autoFlipSeconds * 1000);
     const id = window.setTimeout(() => {
-      const target = currentPage >= numPages ? 1 : currentPage + 1;
+      const isLastPage = currentPage >= numPages;
+      if (isLastPage) {
+        // End of cycle: hand off to parent if it asked, else wrap.
+        if (onCycleEndRef.current) {
+          onCycleEndRef.current();
+          return;
+        }
+        if (numPages <= 1) return; // single-page PDF with no parent: just hold
+      }
+      const target = isLastPage ? 1 : currentPage + 1;
       setNextPage(target);
       window.setTimeout(() => {
         setCurrentPage(target);
