@@ -41,7 +41,13 @@ function renderItem(
         </Suspense>
       );
     case "url":
-      return <IframePlayer uri={item.uri} durationS={item.duration_s} />;
+      return (
+        <IframePlayer
+          uri={item.uri}
+          durationS={item.duration_s}
+          onCycleEnd={isEmbedUrl(item.uri) ? onCycleEnd : undefined}
+        />
+      );
     case "html":
       return <HtmlPlayer html={item.html} />;
     case "pptx":
@@ -59,10 +65,17 @@ function renderItem(
 
 // Item kinds whose inner player owns its own lifetime via `onCycleEnd`.
 // For these, PlayerRenderer skips the outer `duration_s`-seconds setTimeout —
-// `duration_s` is interpreted per slide / page, so the total visible time is
-// driven by the slide / page count, not by a single outer countdown.
-function ownsOwnLifetime(kind: PlayerItem["kind"]): boolean {
-  return kind === "pptx" || kind === "pdf";
+// `duration_s` is interpreted per slide / page / embed-page, so the total
+// visible time is driven by the inner cycle count rather than a single outer
+// countdown. `/embed/*` URLs join this club because the embed page paginates
+// internally; other URL items keep the outer-timer behavior.
+function isEmbedUrl(uri: string | null): boolean {
+  return !!uri && /\/embed\//.test(uri);
+}
+function ownsOwnLifetime(item: PlayerItem): boolean {
+  if (item.kind === "pptx" || item.kind === "pdf") return true;
+  if (item.kind === "url" && isEmbedUrl(item.uri)) return true;
+  return false;
 }
 
 /**
@@ -138,7 +151,7 @@ export function PlayerRenderer({ items, className, audioEnabled = false }: Playe
     const item = items[currentIndex] ?? items[0];
     // PPTX / PDF items advance via the inner player's onCycleEnd — their
     // duration_s is per-slide / per-page, not per-item. Skip the outer timer.
-    if (ownsOwnLifetime(item.kind)) return;
+    if (ownsOwnLifetime(item)) return;
     const durationMs = Math.max(1000, item.duration_s * 1000);
     const advanceTimer = window.setTimeout(advance, durationMs);
     return () => window.clearTimeout(advanceTimer);
@@ -158,7 +171,7 @@ export function PlayerRenderer({ items, className, audioEnabled = false }: Playe
   // onCycleEnd only fires for PPTX/PDF and only when there's somewhere to
   // advance to. Single-item playlists let the inner player loop internally.
   const onCycleEnd =
-    ownsOwnLifetime(current.kind) && items.length > 1 ? advance : undefined;
+    ownsOwnLifetime(current) && items.length > 1 ? advance : undefined;
   return (
     <div
       // Stable key per item forces unmount/remount — critical for iframes (HTML preview) and to
