@@ -90,6 +90,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
+      // Bind-mount fs events from the Windows host into the Linux container don't
+      // propagate reliably through Docker Desktop's gRPC FUSE — Vite's inotify-based
+      // watcher silently misses edits and serves stale transforms until the dev server
+      // is restarted. Polling is a few % extra CPU but never misses an event.
+      watch: { usePolling: true, interval: 300 },
       proxy: {
         "/api": {
           target: process.env.VITE_API_TARGET || "http://api:8000",
