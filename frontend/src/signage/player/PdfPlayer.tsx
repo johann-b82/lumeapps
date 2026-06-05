@@ -31,7 +31,11 @@ export function PdfPlayer({
   const [currentPage, setCurrentPage] = useState(1);
   const [nextPage, setNextPage] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
+  // Native page dimensions (CSS pixels at scale=1). Set on the FIRST page load
+  // success — we assume a uniform page geometry across the deck, which holds
+  // for the vast majority of PDFs and avoids reflow flicker per page.
+  const [pageNatural, setPageNatural] = useState<{ w: number; h: number } | null>(null);
   // Latest onCycleEnd in a ref so the flip effect doesn't re-subscribe (which
   // would reset the timer) when the callback identity changes between renders.
   const onCycleEndRef = useRef(onCycleEnd);
@@ -43,11 +47,27 @@ export function PdfPlayer({
     const el = containerRef.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) setContainerWidth(entry.contentRect.width);
+      for (const entry of entries) {
+        setContainerSize({
+          w: entry.contentRect.width,
+          h: entry.contentRect.height,
+        });
+      }
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Fit-to-contain scale: pick the dimension that constrains harder so the
+  // page sits entirely inside the container with aspect preserved (object-
+  // contain semantics for the rendered canvas).
+  const fitScale =
+    containerSize && pageNatural
+      ? Math.min(
+          containerSize.w / pageNatural.w,
+          containerSize.h / pageNatural.h,
+        )
+      : undefined;
 
   // Auto-flip timer: every `autoFlipSeconds`, start a crossfade to the next page.
   // The timer reads `currentPage` from the effect closure, so we re-subscribe on
@@ -96,9 +116,18 @@ export function PdfPlayer({
         >
           <Page
             pageNumber={currentPage}
-            width={containerWidth}
+            {...(fitScale !== undefined
+              ? { scale: fitScale }
+              : containerSize
+                ? { width: containerSize.w }
+                : {})}
             renderTextLayer={false}
             renderAnnotationLayer={false}
+            onLoadSuccess={(p) => {
+              if (!pageNatural) {
+                setPageNatural({ w: p.originalWidth, h: p.originalHeight });
+              }
+            }}
           />
         </div>
         {/* Layer B: next page, only mounted during the crossfade window. */}
@@ -109,7 +138,11 @@ export function PdfPlayer({
           >
             <Page
               pageNumber={nextPage}
-              width={containerWidth}
+              {...(fitScale !== undefined
+                ? { scale: fitScale }
+                : containerSize
+                  ? { width: containerSize.w }
+                  : {})}
               renderTextLayer={false}
               renderAnnotationLayer={false}
             />
