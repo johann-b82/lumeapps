@@ -193,7 +193,7 @@ export function PlaybackShell() {
   // after a quiet interval. Reset on any interaction-y event so the pointer
   // stays visible while it's being used.
   useEffect(() => {
-    const HIDE_AFTER_MS = 10_000;
+    const HIDE_AFTER_MS = 5_000;
     const prev = document.body.style.cursor;
     let timeoutId: number | undefined;
     const hide = () => {
