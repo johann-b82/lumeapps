@@ -179,6 +179,10 @@ async def stream_events(
 # Uploads directory is mounted ro via docker-compose (directus_uploads volume).
 # filename_disk convention is "<uuid>.<ext>" — glob for the uuid prefix.
 _UPLOADS_DIR = Path("/directus/uploads")
+# PPTX slides are written by signage_pptx.py to /app/media/slides/<media_id>/slide-NNN.png.
+# Same root used by SLIDES_ROOT over there; kept as a literal here to avoid
+# importing the conversion module (which pulls in subprocess + httpx fixtures).
+_MEDIA_ROOT = Path("/app/media")
 
 
 @router.get("/asset/{media_id}")
@@ -199,6 +203,42 @@ async def get_media_asset(
     return FileResponse(
         matches[0],
         media_type=media.mime_type or None,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@router.get("/asset/{media_id}/slide/{idx}")
+async def get_pptx_slide(
+    media_id: uuid_lib.UUID,
+    idx: int,
+    device: SignageDevice = Depends(get_current_device),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> FileResponse:
+    """Serve a single PPTX slide PNG with device auth.
+
+    Conversion writes slides under /app/media/slides/<media_id>/, and the DB row
+    persists their relative paths in signage_media.slide_paths. The kiosk addresses
+    them by 1-based index; we look the path up in the row rather than reconstructing
+    the filename so a future naming change in signage_pptx stays transparent here.
+    """
+    media = (
+        await db.execute(select(SignageMedia).where(SignageMedia.id == media_id))
+    ).scalar_one_or_none()
+    if media is None or media.kind != "pptx" or not media.slide_paths:
+        raise HTTPException(status_code=404, detail="slide not found")
+    if idx < 1 or idx > len(media.slide_paths):
+        raise HTTPException(status_code=404, detail="slide index out of range")
+    rel = media.slide_paths[idx - 1]
+    candidate = (_MEDIA_ROOT / rel).resolve()
+    media_root = _MEDIA_ROOT.resolve()
+    # Defense-in-depth: refuse anything that escaped /app/media/ via symlink or ../.
+    if media_root not in candidate.parents and candidate != media_root:
+        raise HTTPException(status_code=404, detail="slide path outside media root")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="slide file missing")
+    return FileResponse(
+        candidate,
+        media_type="image/png",
         headers={"Cache-Control": "public, max-age=300"},
     )
 

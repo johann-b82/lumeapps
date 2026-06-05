@@ -148,12 +148,22 @@ export function PlaylistEditorPage() {
       const media = mediaLookup.get(it.media_id);
       if (!media) continue;
       const kind = media.kind as PlayerItemKind;
+      // PPTX preview: rewrite the server's relative slide_paths into admin-gated
+      // URLs that <img> can fetch with the Directus session cookie. Same on-disk
+      // file as the kiosk path; only the auth domain differs (admin session vs.
+      // device token).
+      const slidePaths =
+        kind === "pptx" && media.slide_paths && media.slide_paths.length > 0
+          ? media.slide_paths.map(
+              (_, i) => `/api/signage/media/${media.id}/slide/${i + 1}`,
+            )
+          : media.slide_paths;
       out.push({
         id: it.key,
         kind,
         uri: resolveMediaUri(media),
         html: media.html_content,
-        slide_paths: media.slide_paths,
+        slide_paths: slidePaths,
         duration_s: it.duration_s,
         transition: it.transition,
       });

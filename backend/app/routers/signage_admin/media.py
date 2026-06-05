@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import shutil
 import uuid
+from pathlib import Path
 from typing import Literal
 
 from fastapi import (
@@ -24,7 +25,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +43,11 @@ log = logging.getLogger(__name__)
 # D-10: canonical PPTX MIME; fallbacks accepted only with the .pptx extension.
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 _PPTX_FALLBACK_MIMES = {"application/octet-stream", "application/zip"}
+
+# PPTX slides written by signage_pptx.py live under /app/media/slides/<media_id>/.
+# Same root as signage_pptx.SLIDES_ROOT — kept as a literal to keep this module
+# free of the conversion pipeline import.
+_MEDIA_ROOT = Path("/app/media")
 
 router = APIRouter(prefix="/media", tags=["signage-admin-media"])
 
@@ -211,6 +217,41 @@ async def upload_pptx_media(
     # task can re-fetch it via its own session.
     background_tasks.add_task(convert_pptx, row.id)
     return row
+
+
+@router.get("/{media_id}/slide/{idx}")
+async def get_pptx_slide_admin(
+    media_id: uuid.UUID,
+    idx: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> FileResponse:
+    """Admin-auth'd PPTX slide passthrough — drives the playlist-editor preview.
+
+    Sibling to /api/signage/player/asset/<media_id>/slide/<idx>, which is
+    device-auth'd for kiosks. Same on-disk layout (/app/media/slides/...);
+    only the auth domain differs. <img> tags on the admin SPA travel with the
+    Directus session cookie that get_current_user accepts, so no query-string
+    token is needed here.
+    """
+    media = (
+        await db.execute(select(SignageMedia).where(SignageMedia.id == media_id))
+    ).scalar_one_or_none()
+    if media is None or media.kind != "pptx" or not media.slide_paths:
+        raise HTTPException(status_code=404, detail="slide not found")
+    if idx < 1 or idx > len(media.slide_paths):
+        raise HTTPException(status_code=404, detail="slide index out of range")
+    rel = media.slide_paths[idx - 1]
+    candidate = (_MEDIA_ROOT / rel).resolve()
+    media_root = _MEDIA_ROOT.resolve()
+    if media_root not in candidate.parents and candidate != media_root:
+        raise HTTPException(status_code=404, detail="slide path outside media root")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="slide file missing")
+    return FileResponse(
+        candidate,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=60"},
+    )
 
 
 @router.post("/{media_id}/reconvert", response_model=SignageMediaRead, status_code=202)

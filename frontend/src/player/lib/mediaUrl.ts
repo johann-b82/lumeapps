@@ -34,4 +34,27 @@ export function resolveMediaUrl(media: MediaForUrl, token?: string | null): stri
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
+/**
+ * PPTX slide URL resolver. Conversion writes slides server-side under
+ * /app/media/slides/<media_id>/slide-NNN.png, exposed via the device-auth'd
+ * /api/signage/player/asset/<media_id>/slide/<idx> endpoint. <img> can't set
+ * Authorization, so the device token rides in as ?token=… same as other assets.
+ *
+ * Sidecar path mirrors resolveMediaUrl — the kiosk's local proxy is expected to
+ * forward /media/<id>/slide/<idx> upstream (no-op until the sidecar adds that
+ * route; until then we still go through the backend even when the sidecar is
+ * online, since browsing the wrong scheme would just 404).
+ */
+export function resolveSlideUrl(
+  mediaId: string,
+  idx: number,
+  token?: string | null,
+): string {
+  if (typeof window !== "undefined" && window.signageSidecarReady === true) {
+    return `http://localhost:8080/media/${mediaId}/slide/${idx}`;
+  }
+  const base = `/api/signage/player/asset/${mediaId}/slide/${idx}`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
 export {};

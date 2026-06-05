@@ -11,6 +11,7 @@ Consumed by plan 44-03's POST /api/signage/media/pptx endpoint.
 from __future__ import annotations
 
 import logging
+import tempfile
 from typing import AsyncIterator
 
 import httpx
@@ -49,44 +50,45 @@ async def upload_pptx_to_directus(
     """
     total_bytes = 0
 
-    async def _capped_stream() -> AsyncIterator[bytes]:
-        nonlocal total_bytes
+    # Spool the request body into a SpooledTemporaryFile: in-memory up to 10MB
+    # (the typical small-deck case), automatic spill to a tempfile on disk past
+    # that. httpx's multipart `files=` parameter wants a sync file-like object
+    # with `.read(n)` — an async generator does not satisfy that contract and
+    # blows up inside _multipart.render_data() with AttributeError.
+    # The 50MB cap is enforced byte-by-byte as data arrives, BEFORE the buffer
+    # is handed to httpx.
+    spool = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
+    try:
         async for chunk in body_stream:
             if not chunk:
                 continue
             total_bytes += len(chunk)
             if total_bytes > MAX_UPLOAD_BYTES:
-                # Bail BEFORE yielding the overage chunk — httpx will then
-                # abort the upstream request.
                 raise HTTPException(
                     status_code=413,
                     detail="pptx upload exceeds 50MB cap",
                 )
-            yield chunk
+            spool.write(chunk)
+        spool.seek(0)
 
-    # Directus /files multipart upload with a streaming `file` part.
-    url = f"{settings.DIRECTUS_URL.rstrip('/')}/files"
-    headers = {
-        "Authorization": f"Bearer {settings.DIRECTUS_ADMIN_TOKEN}",
-    }
+        url = f"{settings.DIRECTUS_URL.rstrip('/')}/files"
+        headers = {
+            "Authorization": f"Bearer {settings.DIRECTUS_ADMIN_TOKEN}",
+        }
+        files = {
+            "file": (filename, spool, content_type),
+        }
 
-    # httpx supports multipart via `files=` with a (filename, file-like, content-type)
-    # tuple. We supply our capped async generator as the file-like stream.
-    files = {
-        "file": (filename, _capped_stream(), content_type),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=_DIRECTUS_TIMEOUT_S) as http:
-            response = await http.post(url, headers=headers, files=files)
-    except HTTPException:
-        # Re-raise cap-exceeded 413 from the generator unchanged.
-        raise
-    except httpx.HTTPError as exc:
-        log.warning("directus upload transport error: %s", exc)
-        raise HTTPException(
-            status_code=502, detail="directus upload failed"
-        ) from exc
+        try:
+            async with httpx.AsyncClient(timeout=_DIRECTUS_TIMEOUT_S) as http:
+                response = await http.post(url, headers=headers, files=files)
+        except httpx.HTTPError as exc:
+            log.warning("directus upload transport error: %s", exc)
+            raise HTTPException(
+                status_code=502, detail="directus upload failed"
+            ) from exc
+    finally:
+        spool.close()
 
     if response.status_code // 100 != 2:
         snippet = response.text[:_RESPONSE_SNIPPET_BYTES]

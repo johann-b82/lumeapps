@@ -24,7 +24,7 @@ import {
 } from "@/player/lib/playerApi";
 import { playerKeys } from "@/player/lib/queryKeys";
 import { applyDurationDefaults } from "@/player/lib/durationDefaults";
-import { resolveMediaUrl } from "@/player/lib/mediaUrl";
+import { resolveMediaUrl, resolveSlideUrl } from "@/player/lib/mediaUrl";
 import { useDeviceToken } from "@/player/hooks/useDeviceToken";
 import { useSseWithPollingFallback } from "@/player/hooks/useSseWithPollingFallback";
 import { useSidecarStatus } from "@/player/hooks/useSidecarStatus";
@@ -122,12 +122,20 @@ export function PlaybackShell() {
         it.transition === "fade" || it.transition === "cut"
           ? it.transition
           : null;
+      // PPTX: rewrite the server's relative slide_paths (e.g.
+      // "slides/<media_id>/slide-001.png") into fully-qualified, token-bearing
+      // URLs that the device-auth'd slide endpoint will serve. The position in
+      // the array becomes the 1-based index in the URL.
+      const slidePaths =
+        it.kind === "pptx" && it.slide_paths && it.slide_paths.length > 0
+          ? it.slide_paths.map((_, i) => resolveSlideUrl(it.media_id, i + 1, token))
+          : (it.slide_paths ?? null);
       return {
         id: `${it.media_id}-${it.position}`,
         kind: it.kind,
         uri: resolveMediaUrl({ id: it.media_id, uri: it.uri }, token),
         html: it.html ?? null,
-        slide_paths: it.slide_paths ?? null,
+        slide_paths: slidePaths,
         duration_s: it.duration_ms > 0 ? it.duration_ms / 1000 : 0,
         transition,
       };
