@@ -115,7 +115,7 @@ export function BirthdaysCard() {
                   {rows.map((entry) => (
                     <li
                       key={entry.employee_id}
-                      className="flex items-baseline justify-between gap-3 text-sm"
+                      className="flex items-baseline gap-3 text-sm"
                     >
                       <span className="font-medium">
                         {displayName(entry)}
@@ -124,9 +124,6 @@ export function BirthdaysCard() {
                             {entry.department}
                           </span>
                         )}
-                      </span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {t("hr.birthdays.turning_n", { n: entry.age_turning })}
                       </span>
                     </li>
                   ))}
