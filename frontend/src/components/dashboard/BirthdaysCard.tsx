@@ -11,9 +11,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Cake } from "lucide-react";
 
-import { fetchBirthdaysThisWeek, type BirthdayEntry } from "@/lib/api";
+import {
+  fetchBirthdaysThisWeek,
+  fetchBirthdaysThisWeekPublic,
+  type BirthdayEntry,
+} from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
+
+interface BirthdaysCardProps {
+  /** Switch the data source + photo URL prefix to the unauthenticated mirror.
+   *  Used by the /embed/birthdays signage page; the admin HR view leaves it
+   *  off so behavior + photo provenance are unchanged. */
+  embed?: boolean;
+}
 
 const WEEKDAY_KEYS = [
   "common.weekday.monday",
@@ -41,14 +52,17 @@ function initials(e: BirthdayEntry): string {
  *  Uses a state flag rather than direct DOM manipulation so React can swap
  *  cleanly when the <img> 404s (Personio sometimes drops a photo between
  *  list-time and view-time). */
-function Avatar({ entry }: { entry: BirthdayEntry }) {
+function Avatar({ entry, embed }: { entry: BirthdayEntry; embed: boolean }) {
   const [failed, setFailed] = useState(false);
   const showImage = entry.has_photo && !failed;
+  const photoUrl = embed
+    ? `/api/hr/embed/employees/${entry.employee_id}/photo`
+    : `/api/hr/employees/${entry.employee_id}/photo`;
   return (
     <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
       {showImage ? (
         <img
-          src={`/api/hr/employees/${entry.employee_id}/photo`}
+          src={photoUrl}
           alt=""
           loading="lazy"
           className="h-full w-full object-cover"
@@ -70,14 +84,16 @@ function todayWeekdayIdx(): number {
   return day === 0 ? 6 : day - 1;
 }
 
-export function BirthdaysCard() {
+export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "de" ? "de-DE" : "en-US";
   const today = todayWeekdayIdx();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: hrKpiKeys.birthdaysThisWeek(),
-    queryFn: fetchBirthdaysThisWeek,
+    queryKey: embed
+      ? [...hrKpiKeys.birthdaysThisWeek(), "embed"]
+      : hrKpiKeys.birthdaysThisWeek(),
+    queryFn: embed ? fetchBirthdaysThisWeekPublic : fetchBirthdaysThisWeek,
     staleTime: 30 * 60_000, // a birthday doesn't move within the day
   });
 
@@ -127,7 +143,7 @@ export function BirthdaysCard() {
                     : "ring-foreground/10")
                 }
               >
-                <Avatar entry={entry} />
+                <Avatar entry={entry} embed={embed} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">

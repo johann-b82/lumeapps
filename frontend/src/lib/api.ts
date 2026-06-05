@@ -412,6 +412,15 @@ export async function fetchBirthdaysThisWeek(): Promise<BirthdayEntry[]> {
   return apiClient<BirthdayEntry[]>("/api/hr/birthdays/this-week");
 }
 
+// Unauthenticated mirror for the /embed/birthdays signage view. Same shape as
+// the auth'd endpoint but skips apiClient's 401-retry/silent-refresh dance,
+// which we don't want firing on a kiosk that never had a Directus session.
+export async function fetchBirthdaysThisWeekPublic(): Promise<BirthdayEntry[]> {
+  const r = await fetch("/api/hr/embed/birthdays/this-week", { credentials: "omit" });
+  if (!r.ok) throw new Error(`birthdays embed fetch failed: ${r.status}`);
+  return (await r.json()) as BirthdayEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // v1.49 — Quality (8D audit findings)
 // ---------------------------------------------------------------------------

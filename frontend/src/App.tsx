@@ -6,6 +6,8 @@ import { Loader2 } from "lucide-react";
 import { UploadPage } from "./pages/UploadPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HRPage } from "./pages/HRPage";
+import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
+import { QualityPage } from "./pages/QualityPage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SensorsSettingsPage } from "./pages/SensorsSettingsPage";
@@ -49,6 +51,7 @@ function AppShell() {
           <Route path="/" component={LauncherPage} />
           <Route path="/upload" component={UploadPage} />
           <Route path="/hr" component={HRPage} />
+          <Route path="/quality" component={QualityPage} />
           <Route path="/sensors" component={SensorsPage} />
           {/* Phase 46 — signage routes (specific → general per wouter first-match). */}
           {/* Plan 46-05 — /signage/playlists/:id MUST precede /signage/playlists (Pitfall 1). */}
@@ -102,11 +105,15 @@ function AppShell() {
   );
 }
 
-function App() {
+/** Top-level router that lets a few public routes short-circuit before the
+ *  Auth-gated AppShell. /embed/* paths are the kiosk/signage views — they
+ *  need to render without a Directus session. */
+function RootRouter() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider>
+    <Switch>
+      <Route path="/embed/birthdays" component={EmbedBirthdaysPage} />
+      <Route>
+        <AuthProvider>
           <SettingsDraftProvider>
             <SensorDraftProvider>
               <DateRangeProvider>
@@ -116,8 +123,18 @@ function App() {
               </DateRangeProvider>
             </SensorDraftProvider>
           </SettingsDraftProvider>
-        </ThemeProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </Route>
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <RootRouter />
+      </ThemeProvider>
       <Toaster position="top-right" />
     </QueryClientProvider>
   );
