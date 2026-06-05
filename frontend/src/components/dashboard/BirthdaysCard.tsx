@@ -1,11 +1,10 @@
 /**
  * BirthdaysCard — current ISO-week birthday roster for the HR landing.
  *
- * Reads from GET /api/hr/birthdays/this-week. Layout: today's birthdays sit
- * at the top in a slightly larger row with a 🎂 emoji and a "Today" pill;
- * the remaining six weekdays are listed below, grouped by weekday. Empty
- * weekdays are skipped. If the whole week is empty we show a friendly
- * "no birthdays this week" state.
+ * Reads from GET /api/hr/birthdays/this-week. Layout: a responsive grid of
+ * one card per employee, sorted by the date of their birthday this week.
+ * The card whose `occurs_on` matches today is highlighted with a "Today"
+ * badge and a stronger border. Empty week shows a friendly empty state.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -31,8 +30,8 @@ function displayName(e: BirthdayEntry): string {
 }
 
 function todayWeekdayIdx(): number {
-  // Mirror Python's date.weekday() — Monday=0…Sunday=6 — so the badge picks
-  // the right Today/Yesterday/etc row even if the user's locale is en-US.
+  // Mirror Python's date.weekday() — Monday=0…Sunday=6 — so the highlight
+  // lines up with the backend's `weekday` field even in en-US.
   const day = new Date().getDay();
   return day === 0 ? 6 : day - 1;
 }
@@ -47,13 +46,6 @@ export function BirthdaysCard() {
     queryFn: fetchBirthdaysThisWeek,
     staleTime: 30 * 60_000, // a birthday doesn't move within the day
   });
-
-  const grouped = new Map<number, BirthdayEntry[]>();
-  for (const entry of data ?? []) {
-    const bucket = grouped.get(entry.weekday) ?? [];
-    bucket.push(entry);
-    grouped.set(entry.weekday, bucket);
-  }
 
   const formatDay = (iso: string) =>
     new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(
@@ -88,46 +80,46 @@ export function BirthdaysCard() {
       )}
 
       {!isLoading && !isError && (data?.length ?? 0) > 0 && (
-        <ul className="divide-y divide-border">
-          {WEEKDAY_KEYS.map((key, weekday) => {
-            const rows = grouped.get(weekday) ?? [];
-            if (rows.length === 0) return null;
-            const isToday = weekday === today;
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {(data ?? []).map((entry) => {
+            const isToday = entry.weekday === today;
             return (
-              <li key={key} className="py-3 first:pt-0 last:pb-0">
-                <div className="mb-1 flex items-center gap-2">
-                  <span
-                    className={
-                      isToday
-                        ? "text-sm font-semibold text-foreground"
-                        : "text-sm font-medium text-muted-foreground"
-                    }
-                  >
-                    {t(key)} · {formatDay(rows[0].occurs_on)}
-                  </span>
-                  {isToday && (
-                    <Badge variant="secondary" className="text-xs">
-                      {t("hr.birthdays.today")}
-                    </Badge>
+              <li
+                key={entry.employee_id}
+                className={
+                  "flex items-start gap-3 rounded-lg border p-4 " +
+                  (isToday
+                    ? "border-pink-400/70 bg-pink-50/50 dark:bg-pink-950/20"
+                    : "border-border bg-background")
+                }
+              >
+                <Cake
+                  className={
+                    "h-7 w-7 shrink-0 " +
+                    (isToday ? "text-pink-500" : "text-muted-foreground/70")
+                  }
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold">
+                      {displayName(entry)}
+                    </span>
+                    {isToday && (
+                      <Badge variant="secondary" className="text-xs">
+                        {t("hr.birthdays.today")}
+                      </Badge>
+                    )}
+                  </div>
+                  {entry.department && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {entry.department}
+                    </p>
                   )}
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                    {t(WEEKDAY_KEYS[entry.weekday])} · {formatDay(entry.occurs_on)}
+                  </p>
                 </div>
-                <ul className="space-y-1">
-                  {rows.map((entry) => (
-                    <li
-                      key={entry.employee_id}
-                      className="flex items-baseline gap-3 text-sm"
-                    >
-                      <span className="font-medium">
-                        {displayName(entry)}
-                        {entry.department && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {entry.department}
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               </li>
             );
           })}
