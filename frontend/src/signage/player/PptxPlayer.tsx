@@ -22,10 +22,18 @@ export function PptxPlayer({ slidePaths, durationS, onCycleEnd }: PptxPlayerProp
     onCycleEndRef.current = onCycleEnd;
   }, [onCycleEnd]);
 
-  // Reset to slide 1 whenever the slide set changes (new item or reconvert).
+  // Identity of the slide deck IGNORING query strings — the per-slide URLs
+  // carry the rotating device token (`?token=…`), so the array identity
+  // changes every ~60 s. Resetting `index` on every such churn would trap the
+  // kiosk on the first slide forever instead of cycling. Compare base paths.
+  const pathsKey = paths.map((p) => p.split("?")[0]).join("|");
+
+  // Reset to slide 1 whenever the slide SET actually changes (new item or
+  // reconvert), not when only the token changed.
   useEffect(() => {
     setIndex(0);
-  }, [paths]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey]);
 
   useEffect(() => {
     if (paths.length === 0) return;

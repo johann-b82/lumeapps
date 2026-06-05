@@ -186,11 +186,36 @@ export function PlaybackShell() {
     return () => window.clearInterval(id);
   }, [token, clearToken, rotateToken]);
 
-  // Hide cursor on playback canvas (UI-SPEC §"No user interaction" safety net).
+  // Hide cursor on playback canvas after 10 s of mouse inactivity. The kiosk Pi
+  // normally has no mouse, but when an operator plugs one in for setup the
+  // pointer was previously hidden hard via `cursor: none` — making click
+  // targets hard to find. We now show the cursor on movement and hide it again
+  // after a quiet interval. Reset on any interaction-y event so the pointer
+  // stays visible while it's being used.
   useEffect(() => {
+    const HIDE_AFTER_MS = 10_000;
     const prev = document.body.style.cursor;
-    document.body.style.cursor = "none";
+    let timeoutId: number | undefined;
+    const hide = () => {
+      document.body.style.cursor = "none";
+    };
+    const show = () => {
+      document.body.style.cursor = "";
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(hide, HIDE_AFTER_MS);
+    };
+    // Start hidden — the common Pi case has no mouse and never produces events.
+    hide();
+    const events: (keyof DocumentEventMap)[] = [
+      "mousemove",
+      "mousedown",
+      "wheel",
+      "touchstart",
+    ];
+    for (const ev of events) document.addEventListener(ev, show, { passive: true });
     return () => {
+      for (const ev of events) document.removeEventListener(ev, show);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       document.body.style.cursor = prev;
     };
   }, []);

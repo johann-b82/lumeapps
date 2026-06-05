@@ -99,10 +99,17 @@ export function PlayerRenderer({ items, className, audioEnabled = false }: Playe
   // currentIndex actually advances.
   const advancedRef = useRef(false);
 
-  // Reset on items reference change — mitigates stale-index after add/remove.
+  // Only reset on actual structural change (item ids differ). PlaybackShell
+  // recomputes its `items` memo on every envelope refetch AND every device-token
+  // rotation, both of which churn the array identity without changing the
+  // underlying playlist. Resetting `currentIndex` on those would bump the kiosk
+  // back to item 0 every ~8 s (the playlist poll cadence) — the PDF in
+  // particular never got past page 1 because of this.
+  const itemsKey = items.map((it) => it.id).join("|");
   useEffect(() => {
     setCurrentIndex(0);
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey]);
 
   // Re-arm the advance guard whenever we move to a new item.
   useEffect(() => {

@@ -102,11 +102,14 @@ export function PdfPlayer({
     return () => window.clearTimeout(id);
   }, [numPages, autoFlipSeconds, crossfadeMs, currentPage, nextPage]);
 
-  // Reset page when uri changes.
+  // Reset page when the SOURCE PDF changes — strip the query string so the
+  // periodic device-token rotation (`?token=…` rotates ~60 s) doesn't reset
+  // the cycle back to page 1 and trap the kiosk on pages 1–2 forever.
+  const uriBase = uri ? uri.split("?")[0] : null;
   useEffect(() => {
     setCurrentPage(1);
     setNextPage(null);
-  }, [uri]);
+  }, [uriBase]);
 
   if (!uri) return null;
   return (
