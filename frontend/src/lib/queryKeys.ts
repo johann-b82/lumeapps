@@ -44,6 +44,7 @@ export const hrKpiKeys = {
     ["hr", "kpis", "history", { from, to }] as const,
   employees: (from?: string, to?: string, search?: string) =>
     ["hr", "employees", { from, to, search }] as const,
+  birthdaysThisWeek: () => ["hr", "birthdays", "this-week"] as const,
 };
 
 /**
@@ -83,6 +84,17 @@ export const signageKeys = {
   tags: () => ["directus", "signage_tags"] as const,
   schedules: () => ["directus", "signage_schedules"] as const,
   scheduleItem: (id: string) => ["directus", "signage_schedules", id] as const,
+};
+
+// v1.49 — Quality (8D audit findings + later complaints).
+export const qualityKeys = {
+  all: ["quality"] as const,
+  auditFindings: (from?: string, to?: string, types?: readonly string[]) =>
+    ["quality", "audit-findings", { from, to, types }] as const,
+  auditFindingsHistory: (from?: string, to?: string, types?: readonly string[]) =>
+    ["quality", "audit-findings", "history", { from, to, types }] as const,
+  auditFindingsList: (from?: string, to?: string, types?: readonly string[]) =>
+    ["quality", "audit-findings", "list", { from, to, types }] as const,
 };
 
 // v1.41 — Sales activity / orders distribution.

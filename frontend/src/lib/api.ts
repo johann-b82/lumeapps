@@ -28,7 +28,7 @@ export interface UploadBatchSummary {
   row_count: number;
   error_count: number;
   status: "success" | "partial" | "failed";
-  kind: "orders" | "contacts";
+  kind: "orders" | "contacts" | "quality";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -392,6 +392,122 @@ export async function fetchHrKpiHistory(params?: {
   const qs = q.toString();
   return apiClient<HrKpiHistoryPoint[]>(
     `/api/hr/kpis/history${qs ? `?${qs}` : ""}`,
+  );
+}
+
+// v1.51 — Birthdays of the week (Personio raw_json -> Geburtsdatum).
+export interface BirthdayEntry {
+  employee_id: number;
+  first_name: string | null;
+  last_name: string | null;
+  department: string | null;
+  birthday: string;     // YYYY-MM-DD
+  weekday: number;      // 0 = Monday … 6 = Sunday
+  occurs_on: string;    // this year's anniversary date (YYYY-MM-DD)
+  age_turning: number;
+}
+
+export async function fetchBirthdaysThisWeek(): Promise<BirthdayEntry[]> {
+  return apiClient<BirthdayEntry[]>("/api/hr/birthdays/this-week");
+}
+
+// ---------------------------------------------------------------------------
+// v1.49 — Quality (8D audit findings)
+// ---------------------------------------------------------------------------
+
+export const AUDIT_TYPE_CODES = ["BH AUD", "EX AUD", "IN AUD", "KU AUD"] as const;
+export type AuditTypeCode = (typeof AUDIT_TYPE_CODES)[number];
+
+export interface QualityUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export interface AuditFindingsValue {
+  level_1: number;
+  level_2: number;
+  previous_period_level_1: number | null;
+  previous_period_level_2: number | null;
+  previous_year_level_1: number | null;
+  previous_year_level_2: number | null;
+}
+
+export interface AuditFindingsHistoryPoint {
+  month: string;
+  level_1: number;
+  level_2: number;
+  // Variable-key (level, art) breakdown — one field per active filter code,
+  // e.g. `level_1_BH_AUD`, `level_2_KU_AUD`. The set of keys is governed by
+  // the active audit_types query param; keys absent from the response are
+  // *not* present at all (not zero-filled). Render code should fall back to
+  // 0 on missing lookups.
+  [key: `level_${1 | 2}_${string}`]: number | string;
+}
+
+export async function uploadQualityFile(file: File): Promise<QualityUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<QualityUploadResponse>("/api/upload-quality", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+function _buildQualityQuery(params?: {
+  date_from?: string;
+  date_to?: string;
+  audit_types?: readonly AuditTypeCode[];
+}): string {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.audit_types && params.audit_types.length > 0) {
+    q.set("audit_types", params.audit_types.join(","));
+  }
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchAuditFindings(params?: {
+  date_from?: string;
+  date_to?: string;
+  audit_types?: readonly AuditTypeCode[];
+}): Promise<AuditFindingsValue> {
+  return apiClient<AuditFindingsValue>(
+    `/api/quality/audit-findings${_buildQualityQuery(params)}`,
+  );
+}
+
+export async function fetchAuditFindingsHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  audit_types?: readonly AuditTypeCode[];
+}): Promise<AuditFindingsHistoryPoint[]> {
+  return apiClient<AuditFindingsHistoryPoint[]>(
+    `/api/quality/audit-findings/history${_buildQualityQuery(params)}`,
+  );
+}
+
+export interface AuditFindingRow {
+  report_nr: string;
+  report_date: string | null;
+  art: AuditTypeCode | null;
+  level: 1 | 2 | null;
+  issuer: string | null;
+  customer_name: string | null;
+  customer_id: string | null;
+  designation: string | null;
+  status_code: string | null;
+}
+
+export async function fetchAuditFindingsList(params?: {
+  date_from?: string;
+  date_to?: string;
+  audit_types?: readonly AuditTypeCode[];
+}): Promise<AuditFindingRow[]> {
+  return apiClient<AuditFindingRow[]>(
+    `/api/quality/audit-findings/list${_buildQualityQuery(params)}`,
   );
 }
 

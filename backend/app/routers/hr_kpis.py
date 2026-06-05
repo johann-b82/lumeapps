@@ -9,15 +9,17 @@ thisYear landing experience.
 Compute-justified: clause 3 (multi-row HR KPI aggregation).
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user
-from app.models import AppSettings
+from app.models import AppSettings, PersonioEmployee
 from app.schemas import HrKpiHistoryPoint, HrKpiResponse
 from app.services.hr_kpi_aggregation import (
     _fluctuation,
@@ -215,3 +217,129 @@ async def get_hr_kpi_history(
             revenue_per_production_employee=rpe,
         ))
     return points
+
+
+# ---------------------------------------------------------------------------
+# Birthdays — current-week roster from Personio raw_json
+# ---------------------------------------------------------------------------
+
+
+class BirthdayEntry(BaseModel):
+    """One employee with a birthday in the current ISO week."""
+
+    employee_id: int
+    first_name: str | None
+    last_name: str | None
+    department: str | None
+    birthday: date          # full DOB (YYYY-MM-DD)
+    weekday: int            # 0 = Monday … 6 = Sunday — week-relative
+    occurs_on: date         # this year's anniversary date (handles Feb 29)
+    age_turning: int        # age the employee turns on `occurs_on`
+
+
+def _find_birthday_in_raw(raw: Any) -> str | None:
+    """Walk Personio's nested raw_json and return the `value` of any node whose
+    `label == "Geburtsdatum"`. Returns None if absent or not a string.
+
+    Personio shape varies: birthday lives inside ``attributes.<key>.{label, value}``
+    in the v1 API but can also appear under nested ``children`` arrays. We do a
+    plain recursive scan instead of pinning a path so the resolver survives
+    Personio's schema drift.
+    """
+    if isinstance(raw, dict):
+        if raw.get("label") == "Geburtsdatum":
+            v = raw.get("value")
+            return v if isinstance(v, str) and v else None
+        for v in raw.values():
+            found = _find_birthday_in_raw(v)
+            if found is not None:
+                return found
+    elif isinstance(raw, list):
+        for item in raw:
+            found = _find_birthday_in_raw(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _parse_birthday(raw_value: str) -> date | None:
+    """Accept the ISO-ish strings Personio uses (full timestamp or plain date)."""
+    # Personio returns "1977-02-15T00:00:00+01:00" — fromisoformat handles both.
+    try:
+        parsed = datetime.fromisoformat(raw_value)
+        return parsed.date()
+    except ValueError:
+        try:
+            return date.fromisoformat(raw_value[:10])
+        except ValueError:
+            return None
+
+
+def _anniversary_in_year(dob: date, year: int) -> date:
+    """Project a DOB onto the given year. Feb 29 → Feb 28 in non-leap years."""
+    try:
+        return dob.replace(year=year)
+    except ValueError:
+        return dob.replace(year=year, day=28)
+
+
+@router.get("/birthdays/this-week", response_model=list[BirthdayEntry])
+async def get_birthdays_this_week(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[BirthdayEntry]:
+    """Return the active employees whose birthday falls in the current ISO week.
+
+    Week boundary = Monday 00:00 .. Sunday 23:59 (date-only comparison).
+    "Active" = no termination_date set, or termination_date in the future.
+    Result is sorted by `occurs_on`, then last_name + first_name for stability.
+    """
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    # The week can straddle a year boundary (Dec 30..Jan 5). Check both years.
+    candidate_years = {monday.year, sunday.year}
+
+    rows = (
+        await db.execute(
+            sa_select(
+                PersonioEmployee.id,
+                PersonioEmployee.first_name,
+                PersonioEmployee.last_name,
+                PersonioEmployee.department,
+                PersonioEmployee.termination_date,
+                PersonioEmployee.raw_json,
+            )
+        )
+    ).all()
+
+    entries: list[BirthdayEntry] = []
+    for r in rows:
+        if r.termination_date is not None and r.termination_date <= today:
+            continue
+        raw_val = _find_birthday_in_raw(r.raw_json)
+        if not raw_val:
+            continue
+        dob = _parse_birthday(raw_val)
+        if dob is None:
+            continue
+        for year in candidate_years:
+            occurs = _anniversary_in_year(dob, year)
+            if monday <= occurs <= sunday:
+                entries.append(
+                    BirthdayEntry(
+                        employee_id=r.id,
+                        first_name=r.first_name,
+                        last_name=r.last_name,
+                        department=r.department,
+                        birthday=dob,
+                        weekday=occurs.weekday(),
+                        occurs_on=occurs,
+                        age_turning=year - dob.year,
+                    )
+                )
+                break  # avoid the duplicate when monday.year == sunday.year
+
+    entries.sort(
+        key=lambda e: (e.occurs_on, (e.last_name or "").lower(), (e.first_name or "").lower())
+    )
+    return entries
