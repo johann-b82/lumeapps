@@ -240,25 +240,27 @@ Your `DIRECTUS_ADMIN_EMAIL` and `DIRECTUS_ADMIN_PASSWORD` don't match what Direc
 
 ---
 
-## Optional Embedded Apps (Compose profiles)
+## Embedded Apps
 
-Three opt-in third-party apps ship with the stack but stay off by default. Each runs under its own Compose profile so a small deployment can skip what it does not need.
+Three third-party apps ship with the stack and start with the rest of the services on `docker compose up -d`:
 
-| Profile | Apps | Activation |
-|---------|------|------------|
-| `paperless` (v1.46+) | `paperless` + `paperless-broker` (Redis) | `docker compose --profile paperless up -d` |
-| `stirling` (v1.48+) | `stirling` (Stirling-PDF community) | `docker compose --profile stirling up -d` |
-| `openproject` (v1.48+) | `openproject` community | `docker compose --profile openproject up -d` |
+| App | Containers | Mounted at |
+|-----|------------|------------|
+| Paperless-ngx (v1.46+) | `paperless` + `paperless-broker` (Redis) | `/paperless/*` |
+| Stirling-PDF (v1.48+) | `stirling` (community edition) | `/pdf/*` |
+| OpenProject (v1.48+) | `openproject` community | `/op/*` |
 
-Profiles compose: enable several at once with multiple `--profile` flags, or list them all in `COMPOSE_PROFILES` in `.env`.
+All three are stopped together with `docker compose down`.
 
-**OpenProject extra env var.** Add to `.env` before bringing up the profile:
+**OpenProject extra env var.** Add to `.env` before the first `docker compose up`:
 
 ```
 OPENPROJECT_ADMIN_PASSWORD=<random 24+ chars>
 ```
 
 Generate a fresh random value with `openssl rand -base64 24`. The bootstrap admin user is `admin@example.net` (default OP convention) — change the email + password from inside OpenProject after first login. OpenProject community edition has no header-SSO mode, so users authenticate against OpenProject directly even though Caddy gates the `/op/*` perimeter with the same Directus session check used by Paperless.
+
+If you want to skip one of these apps on a given host, use `docker compose up -d --scale paperless=0 --scale paperless-broker=0` (or `--scale stirling=0`, `--scale openproject=0`) — the service stays in the compose file but no container is started.
 
 **Stirling-PDF login.** Internal Stirling login is disabled by config (`./stirling_data/settings.yml` sets `security.enableLogin=false`); the Caddy `forward_auth` gate is the only auth boundary. Do not flip that flag unless you also want a second login wall.
 

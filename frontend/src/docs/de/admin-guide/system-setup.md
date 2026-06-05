@@ -33,7 +33,7 @@ cp .env.example .env
 | `DIRECTUS_ADMINISTRATOR_ROLE_UUID` | UUID der angelegten Administrator-Rolle; wird durch `scripts/install.sh` automatisch gepatcht |
 | `FERNET_KEY` | Fernet-Schlüssel für die Verschlüsselung von Personio- und SNMP-Zugangsdaten in Ruhe |
 | `SIGNAGE_DEVICE_JWT_SECRET` | Signaturgeheimnis für Kiosk-Device-JWTs |
-| `OPENPROJECT_ADMIN_PASSWORD` | OpenProject-Bootstrap-Admin-Passwort (nur erforderlich, wenn das `openproject`-Compose-Profil aktiv ist, ab v1.48) |
+| `OPENPROJECT_ADMIN_PASSWORD` | OpenProject-Bootstrap-Admin-Passwort (ab v1.48) |
 
 > **Tipp:** Generieren Sie Secrets mit `openssl rand -hex 32`. Jedes Secret sollte einzigartig sein -- verwenden Sie nicht denselben Wert fuer mehrere Variablen.
 

@@ -40,13 +40,13 @@ Verwalten Sie Benutzerrollen und Zugriffsrechte ueber Directus, einschliesslich 
 
 ## Eingebettete Apps (v1.46+ / v1.48+)
 
-Drei optionale Drittanbieter-Apps werden mit dem Stack ausgeliefert, sind aber standardmäßig deaktiviert. Jede läuft unter einem eigenen Docker-Compose-Profil, sodass kleinere Deployments nur das aktivieren, was sie wirklich brauchen:
+Drei Drittanbieter-Apps werden mit dem Stack ausgeliefert und starten zusammen mit `docker compose up`:
 
-- **Dokumente — Paperless-ngx** (Profil `paperless`, ab v1.46) — eingebunden unter `/paperless/*`, Postgres-Backend, vollständige Directus-SSO via `X-Remote-User`. Lokale Nutzer werden beim ersten Zugriff automatisch angelegt.
-- **PDF-Werkzeuge — Stirling-PDF** (Profil `stirling`, ab v1.48) — eingebunden unter `/pdf/*`, Community Edition mit deaktiviertem internen Login. Die Caddy-`forward_auth` ist die einzige Authentifizierungs-Schranke.
-- **Projekte — OpenProject** (Profil `openproject`, ab v1.48) — eingebunden unter `/op/*`, dedizierte `openproject`-Postgres-Datenbank. Das Caddy-Gate hält unauthentifizierte Browser von der OP-Login-Seite fern; die Community Edition unterstützt keine Header-SSO, daher müssen sich Nutzer beim ersten Besuch zusätzlich in OpenProject anmelden. Vor dem ersten Hochfahren `OPENPROJECT_ADMIN_PASSWORD` in `.env` setzen.
+- **Dokumente — Paperless-ngx** (ab v1.46) — eingebunden unter `/paperless/*`, Postgres-Backend, vollständige Directus-SSO via `X-Remote-User`. Lokale Nutzer werden beim ersten Zugriff automatisch angelegt.
+- **PDF-Werkzeuge — Stirling-PDF** (ab v1.48) — eingebunden unter `/pdf/*`, Community Edition mit deaktiviertem internen Login. Die Caddy-`forward_auth` ist die einzige Authentifizierungs-Schranke.
+- **Projekte — OpenProject** (ab v1.48) — eingebunden unter `/op/*`, dedizierte `openproject`-Postgres-Datenbank. Das Caddy-Gate hält unauthentifizierte Browser von der OP-Login-Seite fern; die Community Edition unterstützt keine Header-SSO, daher müssen sich Nutzer beim ersten Besuch zusätzlich in OpenProject anmelden. Vor dem ersten Start `OPENPROJECT_ADMIN_PASSWORD` in `.env` setzen.
 
-Ein Profil aktivierst du mit `docker compose --profile <name> up -d`. Mehrere Profile lassen sich kombinieren — am einfachsten über `COMPOSE_PROFILES` in `.env`.
+Alle drei werden mit `docker compose down` zusammen gestoppt. Soll eine App auf einem Host übersprungen werden, beim Start auf null skalieren: `docker compose up -d --scale stirling=0`.
 
 ## Einstellungen-Layout
 

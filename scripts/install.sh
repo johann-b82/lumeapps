@@ -93,8 +93,8 @@ mkdir -p \
 # ---------------------------------------------------------------------------
 # 3. Bring stack up
 # ---------------------------------------------------------------------------
-log "starting stack (docker compose --profile paperless up -d)"
-docker compose --profile paperless up -d --build
+log "starting stack (docker compose up -d)"
+docker compose up -d --build
 
 # ---------------------------------------------------------------------------
 # 4. Resolve Administrator role UUID

@@ -283,7 +283,6 @@ services:
   # ---------------------------------------------------------------------------
   paperless-broker:
     image: redis:7-alpine
-    profiles: ["paperless"]
     restart: unless-stopped
     tmpfs:
       # Redis VOLUME at /data — we don't need persistent broker state.
@@ -296,7 +295,6 @@ services:
 
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
-    profiles: ["paperless"]
     restart: unless-stopped
     depends_on:
       paperless-broker:
@@ -361,7 +359,6 @@ services:
   # ---------------------------------------------------------------------------
   stirling:
     image: stirlingtools/stirling-pdf:latest
-    profiles: ["stirling"]
     restart: unless-stopped
     environment:
       # Subpath deployment: Spring Boot context path puts the whole app
@@ -403,7 +400,6 @@ services:
   # ---------------------------------------------------------------------------
   openproject:
     image: openproject/openproject:15
-    profiles: ["openproject"]
     restart: unless-stopped
     depends_on:
       db:

@@ -21,8 +21,8 @@ out of scope for this milestone.
 | `/directus/*`| `directus:8055`   | **Stripped** (`handle_path`) | Directus doesn't know it's behind a subpath; it expects bare `/auth`, `/items`, `/assets`, `/server`. |
 | `/player/*`  | `frontend:5173`   | Preserved                    | Kiosk bundle. Vite dev serves `/player/` as a separate entry; prod build writes to `dist/player/`. |
 | `/paperless/*`| `paperless:8000` | Preserved                    | Paperless-ngx UI/API. Subpath via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`. Each request first hits `forward_auth → api:8000/api/auth/forward`; on 200, Caddy lifts `X-Remote-User` onto the upstream request. |
-| `/pdf/*`     | `stirling:8080`   | Preserved                    | Stirling-PDF community edition. Caddy `forward_auth` is the only auth gate; internal Stirling login is disabled (`security.enableLogin=false` in `./stirling_data/settings.yml`). Opt-in `stirling` profile. |
-| `/op/*`      | `openproject:80`  | Preserved                    | OpenProject community. Caddy `forward_auth` keeps unauthenticated browsers off the OP login page; community edition has no header SSO so users still authenticate against OP separately on first visit. Opt-in `openproject` profile. |
+| `/pdf/*`     | `stirling:8080`   | Preserved                    | Stirling-PDF community edition. Caddy `forward_auth` is the only auth gate; internal Stirling login is disabled (`security.enableLogin=false` in `./stirling_data/settings.yml`). |
+| `/op/*`      | `openproject:80`  | Preserved                    | OpenProject community. Caddy `forward_auth` keeps unauthenticated browsers off the OP login page; community edition has no header SSO so users still authenticate against OP separately on first visit. |
 
 **Why Caddy, why this shape:**
 
@@ -68,18 +68,17 @@ docker compose up
   +-- directus (directus:11.x identity)       --> 127.0.0.1:8055 (loopback)
   +-- caddy    (reverse proxy)                --> :80 (LAN entry point)
   +-- backup   (pg_dump cron sidecar)         --> writes to ./backups/
-  +-- paperless / paperless-broker            --> :8000 (opt-in `paperless` profile)
+  +-- paperless / paperless-broker            --> :8000 (v1.46)
                                                   Postgres-backed, Redis broker, Directus SSO via Caddy forward_auth
-  +-- stirling                                --> :8080 (opt-in `stirling` profile, v1.48)
+  +-- stirling                                --> :8080 (v1.48)
                                                   Caddy forward_auth gate, internal login disabled
-  +-- openproject                             --> :80   (opt-in `openproject` profile, v1.48)
+  +-- openproject                             --> :80   (v1.48)
                                                   Dedicated `openproject` Postgres DB on shared db service
 ```
 
-### Paperless-ngx (v1.46+, opt-in profile)
+### Paperless-ngx (v1.46+)
 
-Document management lives in two containers gated by the `paperless` Compose
-profile (`docker compose --profile paperless up -d`):
+Document management lives in two containers, both started by `docker compose up`:
 
 - `paperless` — `ghcr.io/paperless-ngx/paperless-ngx:latest`. Backed by a
   dedicated `paperless` database in the shared `db` service (env:
@@ -109,21 +108,21 @@ into OP separately on first visit).
 `./paperless_media` (originals + archive PDFs), `./paperless_consume`
 (inotify-watched ingestion drop), `./paperless_export`.
 
-### Stirling-PDF (v1.48+, opt-in `stirling` profile)
+### Stirling-PDF (v1.48+)
 
 Single `stirling` container running `frooodle/s-pdf:latest` on internal
 port 8080, mounted at `/pdf/*` via Caddy. `./stirling_data/` bind mount
 holds `settings.yml` (with `security.enableLogin=false`) plus any custom
-config — the app itself is stateless. Enabled with
-`docker compose --profile stirling up -d`.
+config — the app itself is stateless. Comes up with the rest of the stack
+on `docker compose up`.
 
-### OpenProject Community (v1.48+, opt-in `openproject` profile)
+### OpenProject Community (v1.48+)
 
 Single `openproject` container (`openproject/community:latest`) mounted
 at `/op/*`. Stores all data in a dedicated `openproject` database on the
 shared `db` service (no separate Postgres). Bootstrap admin password
-comes from `OPENPROJECT_ADMIN_PASSWORD` in `.env`. Enabled with
-`docker compose --profile openproject up -d`. Because the community
+comes from `OPENPROJECT_ADMIN_PASSWORD` in `.env`; the container starts
+with the rest of the stack on `docker compose up`. Because the community
 edition has no header-SSO mode, the Caddy gate is purely a perimeter
 defence: a user who clears the OP login still has to authenticate
 against OP itself; we accept the double login in exchange for keeping

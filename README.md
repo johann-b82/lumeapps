@@ -61,16 +61,16 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 
 ### Embedded Apps (v1.46+)
 
-The launcher exposes three opt-in third-party apps, all gated by a Caddy `forward_auth` hook to the same Directus identity that powers the dashboard. Each runs under its own Compose profile so you only spin up what you use.
+The launcher exposes three third-party apps, all gated by a Caddy `forward_auth` hook to the same Directus identity that powers the dashboard. All three come up with `docker compose up` alongside the rest of the stack.
 
-- **Documents — Paperless-ngx** (v1.46, `paperless` profile, mounted at `/paperless/*`)
+- **Documents — Paperless-ngx** (v1.46, mounted at `/paperless/*`)
   - SSO via `X-Remote-User` (`PAPERLESS_ENABLE_HTTP_REMOTE_USER=true`); local user auto-provisioned on first hit
   - Postgres backend on the shared `db` service (`paperless` database, no SQLite); `redis:7-alpine` broker sidecar
   - German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify ingestion
-- **PDF Tools — Stirling-PDF** (v1.48, `stirling` profile, mounted at `/pdf/*`)
+- **PDF Tools — Stirling-PDF** (v1.48, mounted at `/pdf/*`)
   - Community edition with internal login disabled (`security.enableLogin=false`); auth handled exclusively by the Caddy gate
   - Stateless app; `./stirling_data/` bind mount holds settings + custom config only
-- **Projects — OpenProject Community** (v1.48, `openproject` profile, mounted at `/op/*`)
+- **Projects — OpenProject Community** (v1.48, mounted at `/op/*`)
   - Caddy gate keeps unauthenticated users off the OP login page; community edition has no header SSO so users still sign into OP separately on first visit
   - Dedicated `openproject` database on the shared `db` service; admin password set via `OPENPROJECT_ADMIN_PASSWORD` in `.env`
 - **Launcher behavior** — Documents / PDF Tools / Projects tiles open in a new tab via real `<a target="_blank">` anchors so popup blockers stay quiet
@@ -153,9 +153,9 @@ no named Docker volumes:
 | `./paperless_media/` | `paperless` | Stored document originals + archive PDFs |
 | `./paperless_consume/` | `paperless` | Drop-folder for ingestion (inotify-watched) |
 | `./paperless_export/` | `paperless` | Output dir for Paperless exports |
-| `./stirling_data/` | `stirling` | Stirling-PDF settings + custom config (opt-in `stirling` profile) |
+| `./stirling_data/` | `stirling` | Stirling-PDF settings + custom config |
 
-All bind dirs are gitignored. OpenProject (`openproject` profile) keeps its data inside the shared `openproject` Postgres database — no extra bind mount. Back up the lot to back up the deployment;
+All bind dirs are gitignored. OpenProject keeps its data inside the shared `openproject` Postgres database — no extra bind mount. Back up the lot to back up the deployment;
 restore by dropping them back in place before `docker compose up`.
 
 Once containers are healthy:
