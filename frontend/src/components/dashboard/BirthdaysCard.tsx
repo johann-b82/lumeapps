@@ -58,10 +58,10 @@ function Avatar({ entry, embed }: { entry: BirthdayEntry; embed: boolean }) {
   const photoUrl = embed
     ? `/api/hr/embed/employees/${entry.employee_id}/photo`
     : `/api/hr/employees/${entry.employee_id}/photo`;
-  // Embed view doubles the avatar size for kiosk readability.
-  const sizeCls = embed ? "h-24 w-24" : "h-12 w-12";
+  // Embed view doubles again (now ~4x the admin size) for kiosk readability.
+  const sizeCls = embed ? "h-48 w-48" : "h-12 w-12";
   const initialsCls = embed
-    ? "text-2xl font-semibold text-muted-foreground"
+    ? "text-5xl font-semibold text-muted-foreground"
     : "text-sm font-semibold text-muted-foreground";
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-full bg-muted ${sizeCls}`}>
@@ -107,24 +107,23 @@ export function BirthdaysCard({ embed = false }: BirthdaysCardProps = {}) {
       new Date(iso + "T00:00:00"),
     );
 
-  // Doubled sizing for the /embed/birthdays kiosk view. Wrapper + tile
-  // chrome (rounded-xl, ring, bg-card) is shared so the same component reads
-  // as one design at two scales.
+  // Doubled (again) sizing for /embed/birthdays — now ~4x the admin view so
+  // the cards read clearly across the room on a 1080p signage display.
   const cls = {
-    section: embed ? "p-12" : "p-6",
-    titleRow: embed ? "mb-8" : "mb-4",
-    title: embed ? "gap-4 text-3xl font-semibold" : "gap-2 text-lg font-semibold",
-    titleIcon: embed ? "h-10 w-10 text-primary" : "h-5 w-5 text-primary",
-    statusText: embed ? "text-2xl" : "text-sm",
+    section: embed ? "p-24" : "p-6",
+    titleRow: embed ? "mb-16" : "mb-4",
+    title: embed ? "gap-8 text-6xl font-semibold" : "gap-2 text-lg font-semibold",
+    titleIcon: embed ? "h-20 w-20 text-primary" : "h-5 w-5 text-primary",
+    statusText: embed ? "text-4xl" : "text-sm",
     grid: embed
-      ? "grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3"
+      ? "grid gap-12 sm:grid-cols-1 xl:grid-cols-2"
       : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-    tile: embed ? "gap-6 p-8" : "gap-3 p-4",
-    nameRow: embed ? "gap-4" : "gap-2",
-    name: embed ? "text-2xl font-semibold" : "text-sm font-semibold",
-    badge: embed ? "text-base" : "text-xs",
-    department: embed ? "text-lg" : "text-xs",
-    dateLine: embed ? "mt-2 text-lg" : "mt-1 text-xs",
+    tile: embed ? "gap-12 p-16" : "gap-3 p-4",
+    nameRow: embed ? "gap-8" : "gap-2",
+    name: embed ? "text-5xl font-semibold" : "text-sm font-semibold",
+    badge: embed ? "text-2xl" : "text-xs",
+    department: embed ? "text-3xl" : "text-xs",
+    dateLine: embed ? "mt-4 text-3xl" : "mt-1 text-xs",
   };
 
   return (
