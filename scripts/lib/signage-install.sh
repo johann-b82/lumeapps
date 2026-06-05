@@ -63,6 +63,24 @@ create_signage_user() {
   install -d -m 0755 -o signage -g signage /home/signage/.config
   install -d -m 0755 -o signage -g signage /home/signage/.config/systemd
   install -d -m 0755 -o signage -g signage /home/signage/.config/systemd/user
+  install -d -m 0755 -o signage -g signage /home/signage/.config/labwc
+}
+
+deploy_labwc_autostart() {
+  # Signature: deploy_labwc_autostart()
+  # Copies scripts/labwc/autostart to /home/signage/.config/labwc/autostart.
+  # labwc runs this as a shell script once per session — currently it just
+  # starts unclutter-xfixes so the cursor hides after 5 s of mouse idle.
+  local autostart_src
+  if [ "${SIGNAGE_BUILD_CONTEXT:-}" = "chroot" ]; then
+    autostart_src="/opt/signage/scripts/labwc/autostart"
+  else
+    autostart_src="${SCRIPT_DIR}/../scripts/labwc/autostart"
+  fi
+  local autostart_dest="/home/signage/.config/labwc/autostart"
+  [ -f "${autostart_src}" ] || { _error "labwc autostart not found: ${autostart_src}"; exit 3; }
+  install -m 0755 -o signage -g signage "${autostart_src}" "${autostart_dest}"
+  _info "labwc autostart deployed to ${autostart_dest}"
 }
 
 create_signage_directories() {

@@ -1,0 +1,8 @@
+#!/bin/sh
+# ~/.config/labwc/autostart — runs once per labwc session.
+#
+# Hide the mouse cursor after 5 seconds of mouse inactivity. unclutter-xfixes
+# is a Wayland-aware replacement for the original X11 unclutter; the standard
+# `unclutter` package silently no-ops under labwc. The pi-sidecar runs as the
+# same `signage` user so this autostart applies to the kiosk session too.
+unclutter-xfixes --timeout 5 &

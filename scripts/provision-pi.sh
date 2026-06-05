@@ -216,6 +216,7 @@ setup_sidecar_venv
 
 SIGNAGE_UID=$(id -u signage)
 deploy_systemd_units "${SIGNAGE_API_URL}" "${SIGNAGE_UID}"
+deploy_labwc_autostart
 
 # Auto-detects runtime context (no SIGNAGE_BUILD_CONTEXT set) → calls loginctl
 enable_linger_signage
