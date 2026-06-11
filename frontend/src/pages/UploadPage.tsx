@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { DropZone } from "@/components/DropZone";
 import { ContactsDropZone } from "@/components/ContactsDropZone";
+import { QualityDropZone } from "@/components/QualityDropZone";
+import { InteressentenDropZone } from "@/components/InteressentenDropZone";
+import { AngeboteDropZone } from "@/components/AngeboteDropZone";
 import { ErrorList } from "@/components/ErrorList";
 import { UploadHistory } from "@/components/UploadHistory";
 import type { ValidationErrorDetail } from "@/lib/api";
@@ -29,7 +32,7 @@ export function UploadPage() {
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
       {errors.length > 0 && <ErrorList errors={errors} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         <Card className="p-6 space-y-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t("upload.orders_title")}
@@ -44,6 +47,33 @@ export function UploadPage() {
             {t("upload.contacts_title")}
           </p>
           <ContactsDropZone />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.quality_title")}
+          </p>
+          <QualityDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.interessenten_title")}
+          </p>
+          <InteressentenDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.angebote_title")}
+          </p>
+          <AngeboteDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
         </Card>
       </div>
 

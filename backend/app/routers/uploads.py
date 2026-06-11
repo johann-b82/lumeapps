@@ -18,11 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
-from app.models import SalesContact, SalesRecord, UploadBatch
+from app.models import Interessent, Offer, QualityRecord, SalesContact, SalesRecord, UploadBatch
+from app.parsing.angebote_parser import parse_angebote_file
 from app.parsing.erp_parser import parse_erp_file
+from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
+from app.parsing.quality_parser import parse_quality_file
 from app.schemas import (
+    AngeboteUploadResponse,
     ContactsUploadResponse,
+    InteressentenUploadResponse,
+    QualityUploadResponse,
     UploadResponse,
     ValidationErrorDetail,
 )
@@ -216,4 +222,304 @@ async def upload_contacts(
         rows_replaced=rows_replaced,
         date_range_from=date_from,
         date_range_to=date_to,
+    )
+
+
+# ── v1.49 — Quality (8D audit findings + later complaints) ──────────────
+
+
+@admin_router.post("/upload-quality", response_model=QualityUploadResponse)
+async def upload_quality(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> QualityUploadResponse:
+    """Upsert of an 8D report dump (.txt, tab-separated, cp1252).
+
+    Each row carries a unique ``Nr.`` from the source ERP. ``ON CONFLICT
+    (report_nr) DO UPDATE`` overwrites every data column except the
+    business key — so the user can edit a 8D report's status / level /
+    customer / etc. in the ERP, re-export the file, re-upload it, and see
+    the dashboard reflect the new state without first deleting anything.
+
+    Re-pointing ``upload_batch_id`` to the latest batch keeps the
+    upload-history audit log consistent: any cascade-delete of a batch
+    only removes the rows that were not later re-uploaded.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Quality / 8D uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_quality_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="quality",
+            )
+        )
+        await db.commit()
+        return QualityUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    # Count which report_nrs already exist BEFORE the upsert — that's the
+    # number of UPDATEs the next statement will perform. Single COUNT
+    # query, scales fine to the ~1k-rows-per-file 8D volume.
+    incoming_nrs = [r["report_nr"] for r in rows]
+    existing_stmt = sa.select(sa.func.count(QualityRecord.id)).where(
+        QualityRecord.report_nr.in_(incoming_nrs)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="quality",
+    )
+    db.add(batch)
+    await db.flush()  # need batch.id before insert
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    # Columns to overwrite on conflict. Everything except the conflict
+    # key (report_nr) and the synthetic PK (id). upload_batch_id is also
+    # refreshed so an edited row's audit trail points at the latest file.
+    table = QualityRecord.__table__
+    update_cols = [
+        c.name for c in table.columns if c.name not in ("id", "report_nr")
+    ]
+
+    # asyncpg statement cap: floor(32767 / cols_per_row) rows per chunk.
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(QualityRecord).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["report_nr"],
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return QualityUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+# ── v1.51 — Interessenten (prospect master-data) ───────────────────────
+
+
+@admin_router.post("/upload-interessenten", response_model=InteressentenUploadResponse)
+async def upload_interessenten(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> InteressentenUploadResponse:
+    """Upsert of the Adressen/Interessenten master-data dump (88-col .txt).
+
+    Idempotent: ``ON CONFLICT (adress_nr) DO UPDATE`` so re-uploading the
+    same file is a no-op on body and only refreshes ``upload_batch_id``
+    and ``imported_at``.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Interessenten uploads.",
+        )
+
+    contents = await file.read()
+    rows, errors = parse_interessenten_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="interessenten",
+            )
+        )
+        await db.commit()
+        return InteressentenUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                           column=e.get("field", ""),
+                                           message=e.get("message", "")) for e in errors],
+        )
+
+    incoming_nrs = [r["adress_nr"] for r in rows]
+    existing_stmt = sa.select(sa.func.count()).select_from(Interessent).where(
+        Interessent.adress_nr.in_(incoming_nrs)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="interessenten",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+        r["imported_at"] = now
+
+    update_cols = [
+        c.name for c in Interessent.__table__.columns if c.name != "adress_nr"
+    ]
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(Interessent).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["adress_nr"],
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return InteressentenUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                       column=e.get("field", ""),
+                                       message=e.get("message", "")) for e in errors],
+    )
+
+
+# ── v1.52 — Angebote (sales-offer line) ingestion ──────────────────────
+
+
+@admin_router.post("/upload-angebote", response_model=AngeboteUploadResponse)
+async def upload_angebote(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AngeboteUploadResponse:
+    """Upsert of the AswKpf_ANG.txt sales-offer dump (18-col .txt).
+
+    Idempotent: ``ON CONFLICT (vorgang_nr) DO UPDATE`` so re-uploading
+    the same file is a no-op on body and only refreshes
+    ``upload_batch_id`` and ``imported_at``.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Angebote uploads.",
+        )
+
+    contents = await file.read()
+    rows, errors = parse_angebote_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="offers",
+            )
+        )
+        await db.commit()
+        return AngeboteUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                           column=e.get("field", ""),
+                                           message=e.get("message", "")) for e in errors],
+        )
+
+    incoming = [r["vorgang_nr"] for r in rows]
+    existing_stmt = sa.select(sa.func.count()).select_from(Offer).where(
+        Offer.vorgang_nr.in_(incoming)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="offers",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+        r["imported_at"] = now
+
+    update_cols = [
+        c.name for c in Offer.__table__.columns if c.name != "vorgang_nr"
+    ]
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(Offer).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["vorgang_nr"],
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return AngeboteUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                       column=e.get("field", ""),
+                                       message=e.get("message", "")) for e in errors],
     )

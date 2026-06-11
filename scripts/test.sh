@@ -1,0 +1,1 @@
+log() { printf '\033[1;36m[install]\033[0m %s\n' "$*"; }

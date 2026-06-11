@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Upload as UploadIcon } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
-import { Toggle } from "@/components/ui/toggle";
 import {
   Select,
   SelectContent,
@@ -105,7 +104,11 @@ export function SubHeader() {
   // navigation between / and other routes.
   if (location === "/") return null;
 
-  const isDashboard = location === "/sales" || location === "/hr";
+  const isDashboard =
+    location === "/sales" || location === "/hr" || location === "/quality";
+
+  const dashboardPath: "/sales" | "/hr" | "/quality" =
+    location === "/hr" ? "/hr" : location === "/quality" ? "/quality" : "/sales";
 
   // Signage admin routes share a 4-tab pill. /signage/pair is a standalone
   // pairing screen and keeps the default SubHeader layout (no tabs).
@@ -131,16 +134,30 @@ export function SubHeader() {
       <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
         <div className="flex items-center gap-3">
           {isDashboard && (
-            <Toggle
-              segments={[
-                { value: "/sales", label: t("nav.sales") },
-                { value: "/hr", label: t("nav.hr") },
-              ] as const}
-              value={location === "/hr" ? "/hr" : "/sales"}
-              onChange={(path) => navigate(path)}
-              aria-label={t("nav.dashboardToggleLabel")}
-              variant="muted"
-            />
+            <Select
+              value={dashboardPath}
+              onValueChange={(path) => navigate(path)}
+            >
+              <SelectTrigger
+                className="w-32"
+                aria-label={t("nav.dashboardToggleLabel")}
+              >
+                <SelectValue>
+                  {(p) =>
+                    p === "/hr"
+                      ? t("nav.hr")
+                      : p === "/quality"
+                      ? t("nav.quality")
+                      : t("nav.sales")
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="/sales">{t("nav.sales")}</SelectItem>
+                <SelectItem value="/hr">{t("nav.hr")}</SelectItem>
+                <SelectItem value="/quality">{t("nav.quality")}</SelectItem>
+              </SelectContent>
+            </Select>
           )}
           {isDashboard && (
             <DateRangeFilter
@@ -183,7 +200,7 @@ export function SubHeader() {
           {location.startsWith("/settings") && <SettingsSectionPicker />}
         </div>
         <div className="flex items-center gap-3">
-          {location === "/sales" && (
+          {(location === "/sales" || location === "/quality") && (
             <AdminOnly>
               <Link
                 href="/upload"

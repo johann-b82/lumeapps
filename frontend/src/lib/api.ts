@@ -28,7 +28,7 @@ export interface UploadBatchSummary {
   row_count: number;
   error_count: number;
   status: "success" | "partial" | "failed";
-  kind: "orders" | "contacts" | "quality";
+  kind: "orders" | "contacts" | "quality" | "interessenten" | "offers";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -480,6 +480,42 @@ export async function uploadQualityFile(file: File): Promise<QualityUploadRespon
   const formData = new FormData();
   formData.append("file", file);
   return apiClient<QualityUploadResponse>("/api/upload-quality", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// v1.51 — Interessenten (prospect master-data) upload.
+export interface InteressentenUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadInteressentenFile(
+  file: File,
+): Promise<InteressentenUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<InteressentenUploadResponse>("/api/upload-interessenten", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// v1.52 — Angebote (sales-offer) upload from AswKpf_ANG.txt.
+export interface AngeboteUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadAngeboteFile(
+  file: File,
+): Promise<AngeboteUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<AngeboteUploadResponse>("/api/upload-angebote", {
     method: "POST",
     body: formData,
   });

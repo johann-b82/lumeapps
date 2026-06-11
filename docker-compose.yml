@@ -15,6 +15,15 @@ services:
     build: ./backend
     command: alembic upgrade head
     env_file: .env
+    # Bind-mount the backend source so new Alembic revisions are picked up
+    # without rebuilding the image. Without this, the image freezes the
+    # alembic/versions/ directory at build time and a new migration applied
+    # in the running `api` container leaves the DB ahead of the `migrate`
+    # image — every subsequent `compose up` then fails with
+    # "Can't locate revision identified by '<rev>'". See operator runbook §
+    # "migrate exit 255 after adding a new migration".
+    volumes:
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy

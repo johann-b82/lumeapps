@@ -427,3 +427,116 @@ class SalesContact(Base):
 # file's ``Wer`` token to a Personio employee. v1.42 removes the
 # binding entirely — sales reps are identified directly by the token —
 # so the model has been deleted along with the Alembic table drop.
+
+
+# ── v1.49 — Quality (8D audit findings + later complaints) ──────────────
+
+
+class QualityRecord(Base):
+    """One 8D report row from the 8D.txt dump.
+
+    Used by the Quality dashboard to count audit findings per level
+    (1 = Major, 2 = Minor) filtered by audit type (``art`` ∈
+    {BH AUD, EX AUD, IN AUD, KU AUD}). Reklamationen rows are also
+    ingested so the future complaints branch can read from the same
+    table without re-upload.
+    """
+
+    __tablename__ = "quality_records"
+    __table_args__ = (
+        Index("ix_quality_records_report_date", "report_date"),
+        Index("ix_quality_records_art_level_date", "art", "level", "report_date"),
+        CheckConstraint(
+            "level IS NULL OR level IN (1, 2)",
+            name="ck_quality_records_level",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    report_nr: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    report_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    art: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    level: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    issuer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    designation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    problem_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Interessent(Base):
+    """Prospect master-data row from the Adressen / Interessenten ERP export.
+
+    One row per prospective customer. ``datum_save`` is the ERP's
+    ``Datum Save`` column (when this prospect record was created /
+    last persisted). The dashboard's "Interessenten" KPI counts rows
+    grouped by ISO-week of ``datum_save`` — global, not per sales rep,
+    because the source file has no rep column.
+
+    ``upload_batch_id`` is nullable (ON DELETE SET NULL) so re-uploads
+    can rewrite the row's batch ownership without cascading the prior
+    batch's delete to historic prospect rows.
+    """
+
+    __tablename__ = "interessenten"
+    __table_args__ = (
+        Index("ix_interessenten_datum_save", "datum_save"),
+    )
+
+    adress_nr: Mapped[str] = mapped_column(String(50), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    datum_save: Mapped[date] = mapped_column(Date, nullable=False)
+    upload_batch_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Offer(Base):
+    """Sales-offer row from the AswKpf_ANG.txt ERP export.
+
+    One row per Vorgang Nr.. ``erfasser`` is the ERP "Erfasst durch"
+    column (the rep who created the offer); ``wert_eur`` is the EUR
+    value (``Wert`` column, German decimal). The dashboard's "Angebote"
+    KPI sums ``wert_eur`` per (ISO-week, erfasser).
+
+    Deliberately separate from sales_records: AswKpf_ANG and AswKpf_AUF
+    live in distinct tables so order-side KPIs (Auftragswert / chart /
+    orders-distribution) can never accidentally include offer values.
+    """
+
+    __tablename__ = "offers"
+    __table_args__ = (
+        Index("ix_offers_datum", "datum"),
+        Index("ix_offers_erfasser_datum", "erfasser", "datum"),
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), primary_key=True)
+    datum: Mapped[date] = mapped_column(Date, nullable=False)
+    erfasser: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wert_eur: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    adr_nr: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ort: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    upload_batch_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

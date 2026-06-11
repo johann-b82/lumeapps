@@ -2,10 +2,21 @@
 
 Two compute paths:
 
-1. ``compute_contacts_weekly`` — group ``sales_contacts`` rows by
-   (iso_year, iso_week, employee_token) and emit four counts per
-   bucket: erstkontakte, interessenten, visits, angebote. Keyed by the
-   ``Wer`` token from the Kontakte file directly.
+1. ``compute_contacts_weekly`` — emits per-week buckets for the
+   Vertriebsaktivität card. Three of the KPIs are per-employee:
+
+   - **erstkontakte**, **visits**, **angebote** — counts from
+     ``sales_contacts`` rows (Typ ERS / ORT / comment-prefix "ANGEBOT"),
+     grouped by the ``Wer`` token from the Kontakte file directly.
+
+   The fourth KPI is global per week, NOT per rep:
+
+   - **interessenten** — count from the dedicated ``interessenten``
+     table (Adressen/Interessenten ERP export, keyed by Adress-Nr.,
+     date = Datum Save). v1.51 retired the Kontakte
+     ``Typ IN ('ANFR','EPA')`` heuristic when this dedicated source
+     landed. The field therefore sits at week-level, not in
+     ``per_employee``.
 
 2. ``compute_orders_distribution`` — three numbers for the combined
    "Auftragsverteilung" card:
@@ -24,17 +35,23 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import SalesContact, SalesRecord
+from app.models import Interessent, Offer, SalesContact, SalesRecord
 
 
 async def compute_contacts_weekly(
     session: AsyncSession, date_from: date, date_to: date,
 ) -> dict:
-    """Return weekly KPI buckets keyed by Wer token."""
-    rows = (
+    """Return weekly KPI buckets.
+
+    Three KPIs (erstkontakte, visits, angebote) come from ``sales_contacts``
+    and are bucketed per (week, Wer-token). ``interessenten`` comes from
+    the dedicated ``interessenten`` table and is a global per-week count
+    — the source dump has no rep column.
+    """
+    contacts = (
         await session.execute(
             select(SalesContact).where(
                 and_(
@@ -46,10 +63,10 @@ async def compute_contacts_weekly(
         )
     ).scalars().all()
 
-    agg: dict[tuple[int, int, str], dict[str, int]] = defaultdict(
-        lambda: {"erstkontakte": 0, "interessenten": 0, "visits": 0, "angebote": 0}
+    agg: dict[tuple[int, int, str], dict[str, float]] = defaultdict(
+        lambda: {"erstkontakte": 0, "visits": 0, "onl": 0, "angebote": 0.0}
     )
-    for r in rows:
+    for r in contacts:
         token = r.employee_token
         if not token:
             continue
@@ -57,12 +74,12 @@ async def compute_contacts_weekly(
         bucket = agg[(iso_year, iso_week, token)]
         if r.contact_type == "ERS":
             bucket["erstkontakte"] += 1
-        if r.contact_type in ("ANFR", "EPA"):
-            bucket["interessenten"] += 1
         if r.contact_type == "ORT":
             bucket["visits"] += 1
-        if (r.comment or "").strip().upper().startswith("ANGEBOT"):
-            bucket["angebote"] += 1
+        if r.contact_type == "ONL":
+            bucket["onl"] += 1
+        # v1.52: the comment-prefix heuristic for Angebote was retired;
+        # offers now live in their own table and are summed in EUR below.
 
     weeks: dict[tuple[int, int], dict] = {}
     for (yr, wk, token), bucket in agg.items():
@@ -72,10 +89,80 @@ async def compute_contacts_weekly(
                 "iso_year": yr,
                 "iso_week": wk,
                 "label": f"KW {wk:02d} / {yr}",
+                "interessenten": 0,
                 "per_employee": {},
             },
         )
         w["per_employee"][token] = bucket
+
+    # Interessenten — global per-week count from the dedicated table.
+    int_rows = (
+        await session.execute(
+            select(
+                func.extract("isoyear", Interessent.datum_save).label("iso_year"),
+                func.extract("week", Interessent.datum_save).label("iso_week"),
+                func.count().label("n"),
+            )
+            .where(
+                and_(
+                    Interessent.datum_save >= date_from,
+                    Interessent.datum_save <= date_to,
+                )
+            )
+            .group_by("iso_year", "iso_week")
+        )
+    ).all()
+    for r in int_rows:
+        key = (int(r.iso_year), int(r.iso_week))
+        w = weeks.setdefault(
+            key,
+            {
+                "iso_year": key[0],
+                "iso_week": key[1],
+                "label": f"KW {key[1]:02d} / {key[0]}",
+                "interessenten": 0,
+                "per_employee": {},
+            },
+        )
+        w["interessenten"] = int(r.n)
+
+    # Angebote — EUR sum per (iso-week, Erfasser) from the offers table.
+    offer_rows = (
+        await session.execute(
+            select(
+                func.extract("isoyear", Offer.datum).label("iso_year"),
+                func.extract("week", Offer.datum).label("iso_week"),
+                Offer.erfasser.label("erfasser"),
+                func.sum(Offer.wert_eur).label("eur"),
+            )
+            .where(
+                and_(
+                    Offer.datum >= date_from,
+                    Offer.datum <= date_to,
+                )
+            )
+            .group_by("iso_year", "iso_week", Offer.erfasser)
+        )
+    ).all()
+    for r in offer_rows:
+        token = (r.erfasser or "").strip()
+        if not token:
+            continue
+        key = (int(r.iso_year), int(r.iso_week))
+        w = weeks.setdefault(
+            key,
+            {
+                "iso_year": key[0],
+                "iso_week": key[1],
+                "label": f"KW {key[1]:02d} / {key[0]}",
+                "interessenten": 0,
+                "per_employee": {},
+            },
+        )
+        bucket = w["per_employee"].setdefault(
+            token, {"erstkontakte": 0, "visits": 0, "onl": 0, "angebote": 0.0}
+        )
+        bucket["angebote"] = float(r.eur or 0)
 
     sorted_weeks = sorted(weeks.values(), key=lambda w: (w["iso_year"], w["iso_week"]))
     return {"weeks": sorted_weeks}

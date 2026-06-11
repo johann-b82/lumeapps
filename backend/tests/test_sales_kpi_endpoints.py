@@ -11,6 +11,8 @@ from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
 from app.models import (
+    Interessent,
+    Offer,
     SalesContact,
     SalesRecord,
     UploadBatch,
@@ -23,6 +25,8 @@ async def _wipe() -> None:
     async with AsyncSessionLocal() as s:
         await s.execute(delete(SalesContact))
         await s.execute(delete(SalesRecord))
+        await s.execute(delete(Interessent))
+        await s.execute(delete(Offer))
         await s.execute(delete(UploadBatch))
         await s.commit()
 
@@ -46,6 +50,17 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
                 status=1,
                 imported_at=now,
             ),
+            # v1.52: ONL (online meeting) counts as a Besuch too.
+            SalesContact(
+                contact_date=date(2026, 4, 28),
+                employee_token="KARRER",
+                contact_type="ONL",
+                status=1,
+                imported_at=now,
+            ),
+            # v1.51: ANFR/EPA no longer count as interessenten — they're
+            # sourced from the dedicated table now. This row should not
+            # appear in any KPI bucket.
             SalesContact(
                 contact_date=date(2026, 4, 29),
                 employee_token="KARRER",
@@ -53,6 +68,8 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
                 status=1,
                 imported_at=now,
             ),
+            # v1.52: comment-prefix "Angebot" no longer drives the angebote
+            # KPI — moved to a dedicated table sourced from AswKpf_ANG.
             SalesContact(
                 contact_date=date(2026, 4, 30),
                 employee_token="KARRER",
@@ -70,6 +87,31 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
                 imported_at=now,
             ),
         ])
+        # v1.51: 3 Interessenten with Datum Save in KW 18 / 2026.
+        s.add_all([
+            Interessent(adress_nr="1001", name="Acme A",
+                        datum_save=date(2026, 4, 27), imported_at=now),
+            Interessent(adress_nr="1002", name="Acme B",
+                        datum_save=date(2026, 4, 30), imported_at=now),
+            Interessent(adress_nr="1003", name="Acme C",
+                        datum_save=date(2026, 5, 3), imported_at=now),
+            # Outside the window — should not count.
+            Interessent(adress_nr="1004", name="Acme D",
+                        datum_save=date(2026, 5, 4), imported_at=now),
+        ])
+        # v1.52: two offers in KW 18 / 2026 by KARRER → angebote = 322611.16 + 84000 = 406611.16
+        s.add_all([
+            Offer(vorgang_nr="OFR-1", datum=date(2026, 4, 27),
+                  erfasser="KARRER", wert_eur=Decimal("322611.16"),
+                  imported_at=now),
+            Offer(vorgang_nr="OFR-2", datum=date(2026, 5, 3),
+                  erfasser="KARRER", wert_eur=Decimal("84000"),
+                  imported_at=now),
+            # Outside the window — should not count.
+            Offer(vorgang_nr="OFR-3", datum=date(2026, 5, 4),
+                  erfasser="KARRER", wert_eur=Decimal("999999"),
+                  imported_at=now),
+        ])
         await s.commit()
 
     r = await viewer_client.get(
@@ -79,12 +121,14 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
     body = r.json()
     week = next(w for w in body["weeks"] if w["iso_week"] == 18)
     bucket = week["per_employee"]["KARRER"]
-    assert bucket == {
-        "erstkontakte": 1,
-        "interessenten": 1,
-        "visits": 1,
-        "angebote": 1,
-    }
+    # interessenten is no longer in the per-employee bucket.
+    # angebote is now an EUR sum from the dedicated offers table.
+    assert bucket["erstkontakte"] == 1
+    assert bucket["visits"] == 1  # only ORT counts here
+    assert bucket["onl"] == 1     # ONL is its own field, stacked in the chart
+    assert bucket["angebote"] == 406611.16
+    # interessenten is a week-global total — 3 inside the window.
+    assert week["interessenten"] == 3
 
 
 async def test_contacts_weekly_multiple_reps(viewer_client):

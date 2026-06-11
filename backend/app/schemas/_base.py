@@ -434,15 +434,29 @@ class ContactsUploadResponse(BaseModel):
 
 class ContactsWeeklyEmployeeBucket(BaseModel):
     erstkontakte: int
-    interessenten: int
+    # v1.51: interessenten removed from the per-employee bucket — the new
+    # Adressen/Interessenten data source has no rep column, so the field
+    # moves to ``ContactsWeeklyWeek.interessenten`` as a global per-week
+    # total. Kept at zero for backwards-compatible payloads from older
+    # clients that still read it via dict access.
     visits: int
-    angebote: int
+    # v1.52: onl (online meetings) is a separate KPI from visits (ORT).
+    # Both come from sales_contacts but distinguish in-person vs online.
+    onl: int = 0
+    # v1.52: angebote is now an EUR value (sum of Wert from the offers
+    # table), not a count. Float so JSON cleanly carries non-int decimals
+    # like 322611.16.
+    angebote: float
 
 
 class ContactsWeeklyWeek(BaseModel):
     iso_year: int
     iso_week: int
     label: str
+    # v1.51: global Interessenten count for the week, sourced from the
+    # interessenten table (Adress-Nr + Datum Save). Not aggregated per
+    # employee — the source file carries no rep token.
+    interessenten: int = 0
     # Keyed by the Wer token (e.g. "GUENDEL"). v1.41 used personio_employee_id
     # int keys; v1.42 dropped the binding.
     per_employee: dict[str, ContactsWeeklyEmployeeBucket]
@@ -464,10 +478,103 @@ class OrdersDistributionResponse(BaseModel):
     top3_customers: list[TopCustomer]
 
 
+# --------------------------------------------------------------------------
+# v1.49 — Quality (8D audit findings)
+# --------------------------------------------------------------------------
+
+
+class QualityUploadResponse(BaseModel):
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class InteressentenUploadResponse(BaseModel):
+    """Response from POST /api/upload-interessenten.
+
+    Mirrors QualityUploadResponse: an upsert on Adress-Nr., with a
+    breakdown of how many rows were genuine inserts vs. updates of an
+    existing prospect record.
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class AngeboteUploadResponse(BaseModel):
+    """Response from POST /api/upload-angebote.
+
+    Mirrors the InteressentenUploadResponse upsert shape — the offers
+    file is keyed by Vorgang Nr., so re-uploads update rather than
+    inserting duplicates.
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class AuditFindingsValue(BaseModel):
+    """Counts for one window with optional prior baselines."""
+
+    level_1: int
+    level_2: int
+    previous_period_level_1: int | None = None
+    previous_period_level_2: int | None = None
+    previous_year_level_1: int | None = None
+    previous_year_level_2: int | None = None
+
+
+class AuditFindingRow(BaseModel):
+    """One row of the findings list shown under the Quality charts.
+
+    Mirrors a subset of QualityRecord columns — only what the verification
+    table needs (no big text blobs like problem_description; the table is a
+    fast scan-and-spot tool, not a drill-down detail view).
+    """
+
+    report_nr: str
+    report_date: date | None = None
+    art: str | None = None
+    level: int | None = None
+    issuer: str | None = None
+    customer_name: str | None = None
+    customer_id: str | None = None
+    designation: str | None = None
+    status_code: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AuditFindingsHistoryPoint(BaseModel):
+    """Per-bucket finding counts for the history chart.
+
+    Beyond the ``level_1`` / ``level_2`` totals each point carries one
+    ``level_<n>_<ART_CODE>`` field per (level, art) combination from the
+    active filter (e.g. ``level_1_BH_AUD``). These are the Recharts
+    ``dataKey`` values the frontend stacks into the two-panel chart.
+    Pydantic config is extra="allow" so the variable-key art breakdown
+    passes through without an explicit field per code.
+    """
+
+    model_config = {"extra": "allow"}
+
+    month: str  # same label format as HrKpiHistoryPoint
+    level_1: int
+    level_2: int
+
+
 __all__ = [
     "ValidationErrorDetail",
     "UploadResponse",
     "UploadBatchSummary",
+    "QualityUploadResponse",
+    "InteressentenUploadResponse",
+    "AngeboteUploadResponse",
+    "AuditFindingsValue",
+    "AuditFindingRow",
+    "AuditFindingsHistoryPoint",
     "KpiSummaryComparison",
     "KpiSummary",
     "ChartPoint",
