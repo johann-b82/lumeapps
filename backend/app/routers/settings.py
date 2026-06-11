@@ -98,6 +98,9 @@ def _build_read(row: AppSettings) -> SettingsRead:
         sensor_temperature_max=row.sensor_temperature_max,
         sensor_humidity_min=row.sensor_humidity_min,
         sensor_humidity_max=row.sensor_humidity_max,
+        # v1.57 World Cup signage
+        worldcup_has_api_key=row.worldcup_api_key_enc is not None,
+        worldcup_refresh_seconds=row.worldcup_refresh_seconds,
     )
 
 
@@ -281,6 +284,12 @@ async def put_settings(
         row.sensor_humidity_min = payload.sensor_humidity_min
     if payload.sensor_humidity_max is not None:
         row.sensor_humidity_max = payload.sensor_humidity_max
+
+    # v1.57 World Cup signage — None means "don't change"
+    if payload.worldcup_api_key is not None:
+        row.worldcup_api_key_enc = encrypt_credential(payload.worldcup_api_key)
+    if payload.worldcup_refresh_seconds is not None:
+        row.worldcup_refresh_seconds = payload.worldcup_refresh_seconds
 
     # D-07: if the payload exactly matches canonical defaults, this is a
     # "reset to defaults" — also wipe the logo trio. A non-default PUT

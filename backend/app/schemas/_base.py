@@ -163,6 +163,9 @@ class SettingsUpdate(BaseModel):
     sensor_temperature_max: Decimal | None = None
     sensor_humidity_min: Decimal | None = None
     sensor_humidity_max: Decimal | None = None
+    # v1.57 World Cup signage — None means "don't change" (credential pattern).
+    worldcup_api_key: str | None = None
+    worldcup_refresh_seconds: int | None = Field(default=None, ge=30, le=3600)
 
 
 class SettingsRead(BaseModel):
@@ -202,6 +205,9 @@ class SettingsRead(BaseModel):
     sensor_temperature_max: Decimal | None = None
     sensor_humidity_min: Decimal | None = None
     sensor_humidity_max: Decimal | None = None
+    # v1.57 World Cup signage — key is write-only, expose only the boolean.
+    worldcup_has_api_key: bool = False
+    worldcup_refresh_seconds: int = 60
 
     model_config = {"from_attributes": True}
 
