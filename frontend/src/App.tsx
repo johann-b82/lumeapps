@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { HRPage } from "./pages/HRPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
+import { EmbedWorldCupPage } from "./pages/EmbedWorldCupPage";
 import { QualityPage } from "./pages/QualityPage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -118,6 +119,7 @@ function RootRouter() {
     <Switch>
       <Route path="/embed/birthdays" component={EmbedBirthdaysPage} />
       <Route path="/embed/joiners" component={EmbedJoinersPage} />
+      <Route path="/embed/worldcup" component={EmbedWorldCupPage} />
       <Route>
         <AuthProvider>
           <SettingsDraftProvider>

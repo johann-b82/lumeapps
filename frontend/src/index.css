@@ -178,3 +178,15 @@ code.hljs { padding: 0; }
 .dark .hljs-number { color: #79c0ff; }
 .dark .hljs-built_in { color: #ffa657; }
 .dark .hljs-attr { color: #79c0ff; }
+/* World Cup signage goal overlay (EmbedWorldCupPage) */
+@keyframes worldcup-goal-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes worldcup-goal-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.worldcup-goal-pop { animation: worldcup-goal-pop 0.5s ease-out; }
+.worldcup-goal-flash { animation: worldcup-goal-flash 1s ease-in-out infinite; }
