@@ -20,6 +20,7 @@ from app.routers.signage_admin import router as signage_admin_router
 from app.routers.sales_kpis import router as sales_kpis_router
 from app.routers.quality_kpis import router as quality_kpis_router
 from app.routers.auth_forward import router as auth_forward_router
+from app.routers.worldcup import router as worldcup_router
 from app.scheduler import lifespan
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
@@ -39,6 +40,7 @@ app.include_router(signage_admin_router)
 app.include_router(sales_kpis_router)
 app.include_router(quality_kpis_router)
 app.include_router(auth_forward_router)
+app.include_router(worldcup_router)
 
 
 # ---------------------------------------------------------------------------

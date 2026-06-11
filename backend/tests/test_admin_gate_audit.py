@@ -54,6 +54,9 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     # cookie-mode -> session-mode migration. Public by design (the user
     # might be unauth at that moment); only effect is Set-Cookie expiry.
     ("/api/auth/clear-cookies", frozenset({"GET"})),
+    # World Cup signage embed — public by design, mirrors the hr_embed
+    # rationale (kiosks without a session). See routers/worldcup.py docstring.
+    ("/api/worldcup/embed/today", frozenset({"GET"})),
 }
 
 
