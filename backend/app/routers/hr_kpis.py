@@ -245,7 +245,7 @@ class BirthdayEntry(BaseModel):
 
 
 class JoinerEntry(BaseModel):
-    """One active employee who started in the last 6 weeks."""
+    """One active employee who started in the last 2 weeks."""
 
     employee_id: int
     first_name: str | None
@@ -396,10 +396,10 @@ async def get_birthdays_this_week(
 
 @router.get("/joiners/recent", response_model=list[JoinerEntry])
 async def get_joiners_recent(
-    weeks: int = Query(6, ge=1, le=52),
+    weeks: int = Query(2, ge=1, le=52),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[JoinerEntry]:
-    """Active employees whose hire_date is within the last `weeks` weeks (default 6).
+    """Active employees whose hire_date is within the last `weeks` weeks (default 2).
 
     Excludes status != 'active', terminated rows, future hire_dates, and
     NULL hire_dates. Sorted by hire_date desc (newest first) with last_name

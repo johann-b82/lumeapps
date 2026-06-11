@@ -608,7 +608,7 @@
   "hr.birthdays.today": "Today",
   "hr.birthdays.turning_n": "turns {{n}}",
   "hr.joiners.title": "New joiners",
-  "hr.joiners.empty": "No new joiners in the last 6 weeks.",
+  "hr.joiners.empty": "No new joiners in the last 2 weeks.",
   "hr.joiners.error": "Couldn't load new joiners.",
   "hr.joiners.today": "Welcome",
   "hr.joiners.since_date": "Joined {{date}}",

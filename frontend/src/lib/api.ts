@@ -441,7 +441,7 @@ export async function fetchBirthdaysThisWeekPublic(): Promise<BirthdayEntry[]> {
   return (await r.json()) as BirthdayEntry[];
 }
 
-// v1.51 — Joiners of the last 6 weeks (active employees only).
+// v1.51 — Joiners of the last 2 weeks (active employees only).
 export interface JoinerEntry {
   employee_id: number;
   first_name: string | null;

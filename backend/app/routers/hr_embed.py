@@ -101,7 +101,7 @@ async def embed_birthdays_this_week(
 
 @router.get("/joiners/recent", response_model=list[JoinerEntry])
 async def embed_joiners_recent(
-    weeks: int = Query(6, ge=1, le=52),
+    weeks: int = Query(2, ge=1, le=52),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[JoinerEntry]:
     """Unauthenticated mirror of /api/hr/joiners/recent — same shape, no auth."""

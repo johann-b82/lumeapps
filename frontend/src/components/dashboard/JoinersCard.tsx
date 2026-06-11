@@ -1,5 +1,5 @@
 /**
- * JoinersCard — active employees hired in the last 6 weeks, for the HR
+ * JoinersCard — active employees hired in the last 2 weeks, for the HR
  * landing and the /embed/joiners signage view.
  *
  * Mirrors BirthdaysCard exactly in chrome, scaling and embed contract so

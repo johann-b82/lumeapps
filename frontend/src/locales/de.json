@@ -604,7 +604,7 @@
   "hr.birthdays.today": "Heute",
   "hr.birthdays.turning_n": "wird {{n}}",
   "hr.joiners.title": "Neue Mitarbeitende",
-  "hr.joiners.empty": "Keine neuen Mitarbeitenden in den letzten 6 Wochen.",
+  "hr.joiners.empty": "Keine neuen Mitarbeitenden in den letzten 2 Wochen.",
   "hr.joiners.error": "Neue Mitarbeitende konnten nicht geladen werden.",
   "hr.joiners.today": "Willkommen",
   "hr.joiners.since_date": "Eingetreten am {{date}}",

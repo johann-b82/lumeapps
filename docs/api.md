@@ -41,7 +41,7 @@ FastAPI keeps only compute-justified routes (file parsing, cascade deletes, SSE 
 | GET    | /api/hr/kpis                          |   ✓    |   ✓   | HR KPI summary |
 | GET    | /api/hr/kpis/history                  |   ✓    |   ✓   | HR KPI time series |
 | GET    | /api/hr/birthdays/this-week           |   ✓    |   ✓   | Active employees with birthday in current ISO week |
-| GET    | /api/hr/joiners/recent                |   ✓    |   ✓   | Recent joiners (default: last 6 weeks) |
+| GET    | /api/hr/joiners/recent                |   ✓    |   ✓   | Recent joiners (default: last 2 weeks) |
 | GET    | /api/hr/employees/{employee_id}/photo |   ✓    |   ✓   | Personio profile picture proxy |
 | GET    | /api/data/employees/overtime          |   ✓    |   ✓   | Computed overtime per employee (row data lives in Directus) |
 | GET    | /api/data/sales/contacts-weekly       |   ✓    |   ✓   | Weekly contacts KPI |
