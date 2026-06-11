@@ -375,7 +375,9 @@ services:
       # without prefix stripping.
       SERVER_SERVLET_CONTEXT_PATH: /pdf
       # No internal login screen; Caddy forward_auth is the gate.
-      DOCKER_ENABLE_SECURITY: "false"
+      # Stirling v2 ignores the old DOCKER_ENABLE_SECURITY flag; login is
+      # controlled by security.enableLogin (settings.yml), overridden here.
+      SECURITY_ENABLELOGIN: "false"
       # UI locale defaults; users can switch in-app.
       LANGS: en_GB,de_DE
       SYSTEM_DEFAULTLOCALE: de_DE
