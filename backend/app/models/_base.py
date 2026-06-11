@@ -199,6 +199,13 @@ class AppSettings(Base):
         Numeric(8, 3), nullable=True
     )
 
+    # v1.57 — World Cup signage embed (football-data.org). Key is
+    # Fernet-encrypted like the Personio credentials above.
+    worldcup_api_key_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    worldcup_refresh_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60
+    )
+
 
 class PersonioEmployee(Base):
     __tablename__ = "personio_employees"
