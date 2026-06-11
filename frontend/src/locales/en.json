@@ -520,6 +520,7 @@
   "settings.section.hr": "HR",
   "settings.section.sensors": "Sensors",
   "settings.section.sales": "Sales",
+  "settings.section.worldcup": "World Cup",
   "settings.targets.sales.title": "Sales targets",
   "settings.targets.sales.description": "Weekly targets shown on the Sales activity card. Leave blank to use the default value.",
   "settings.targets.sales.erstkontakte": "First contacts",

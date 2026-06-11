@@ -35,6 +35,9 @@ export const DEFAULT_SETTINGS: Settings = {
   sensor_temperature_max: null,
   sensor_humidity_min: null,
   sensor_humidity_max: null,
+  // v1.57 World Cup signage
+  worldcup_has_api_key: false,
+  worldcup_refresh_seconds: 60,
 };
 
 export const THEME_TOKEN_MAP = {

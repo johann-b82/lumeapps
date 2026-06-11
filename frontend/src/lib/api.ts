@@ -216,6 +216,9 @@ export interface Settings {
   sensor_temperature_max: string | null;
   sensor_humidity_min: string | null;
   sensor_humidity_max: string | null;
+  // v1.57 World Cup signage — key is write-only, only the boolean is exposed.
+  worldcup_has_api_key: boolean;
+  worldcup_refresh_seconds: number;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -263,6 +266,9 @@ export interface SettingsUpdatePayload {
   sensor_temperature_max?: string | null;
   sensor_humidity_min?: string | null;
   sensor_humidity_max?: string | null;
+  // v1.57 World Cup signage. undefined = "don't change".
+  worldcup_api_key?: string;
+  worldcup_refresh_seconds?: number;
 }
 
 /**
@@ -454,6 +460,42 @@ export async function fetchJoinersRecentPublic(): Promise<JoinerEntry[]> {
   const r = await fetch("/api/hr/embed/joiners/recent", { credentials: "omit" });
   if (!r.ok) throw new Error(`joiners embed fetch failed: ${r.status}`);
   return (await r.json()) as JoinerEntry[];
+}
+
+// --- World Cup signage embed (v1.57) ---------------------------------------
+
+export interface WorldCupTeam {
+  name: string;
+  short_name: string | null;
+  crest: string | null;
+}
+
+export interface WorldCupMatch {
+  id: number;
+  home: WorldCupTeam;
+  away: WorldCupTeam;
+  score_home: number | null;
+  score_away: number | null;
+  status: string; // SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED/...
+  minute: number | null;
+  kickoff_utc: string;
+}
+
+export interface WorldCupFeed {
+  refresh_seconds: number;
+  stale_since: string | null;
+  error: string | null; // "not_configured" | "upstream_unavailable"
+  matches: WorldCupMatch[];
+  next_matchday: string | null;
+  next_matches: WorldCupMatch[];
+}
+
+// Unauthenticated fetcher for the /embed/worldcup signage view — same
+// credentials-omit pattern as the HR embed fetchers above.
+export async function fetchWorldCupTodayPublic(): Promise<WorldCupFeed> {
+  const r = await fetch("/api/worldcup/embed/today", { credentials: "omit" });
+  if (!r.ok) throw new Error(`worldcup embed fetch failed: ${r.status}`);
+  return (await r.json()) as WorldCupFeed;
 }
 
 // ---------------------------------------------------------------------------

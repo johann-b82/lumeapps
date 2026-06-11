@@ -40,6 +40,9 @@ export interface DraftFields {
   target_sales_angebote_eur: number | null;
   // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
   target_sales_orders_per_rep_eur: number | null;
+  // v1.57 World Cup signage — api key is write-only (not in Settings response)
+  worldcup_api_key: string;
+  worldcup_refresh_seconds: number;
 }
 
 export interface UseSettingsDraftReturn {
@@ -90,6 +93,9 @@ function settingsToDraft(s: Settings): DraftFields {
     target_sales_besuche: s.target_sales_besuche,
     target_sales_angebote_eur: s.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: s.target_sales_orders_per_rep_eur,
+    // World Cup: api key is write-only, always start empty
+    worldcup_api_key: "",
+    worldcup_refresh_seconds: s.worldcup_refresh_seconds ?? 60,
   };
 }
 
@@ -124,6 +130,7 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     target_sales_besuche: draft.target_sales_besuche,
     target_sales_angebote_eur: draft.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
+    worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
 }
 
@@ -155,6 +162,7 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     target_sales_besuche: draft.target_sales_besuche,
     target_sales_angebote_eur: draft.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
+    worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
   // Only send credentials if user typed something (non-empty)
   if (draft.personio_client_id) {
@@ -163,10 +171,13 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
   if (draft.personio_client_secret) {
     payload.personio_client_secret = draft.personio_client_secret;
   }
+  if (draft.worldcup_api_key) {
+    payload.worldcup_api_key = draft.worldcup_api_key;
+  }
   return payload;
 }
 
-export type SettingsSlice = "general" | "hr" | "sales";
+export type SettingsSlice = "general" | "hr" | "sales" | "worldcup";
 
 const GENERAL_FIELDS = [
   "app_name",
@@ -199,9 +210,15 @@ const SALES_FIELDS = [
   "target_sales_orders_per_rep_eur",
 ] as const satisfies readonly (keyof DraftFields)[];
 
+const WORLDCUP_FIELDS = [
+  "worldcup_api_key",
+  "worldcup_refresh_seconds",
+] as const satisfies readonly (keyof DraftFields)[];
+
 function fieldsForSlice(slice: SettingsSlice): readonly (keyof DraftFields)[] {
   if (slice === "general") return GENERAL_FIELDS;
   if (slice === "hr") return HR_FIELDS;
+  if (slice === "worldcup") return WORLDCUP_FIELDS;
   return SALES_FIELDS;
 }
 

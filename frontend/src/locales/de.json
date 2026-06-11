@@ -520,6 +520,7 @@
   "settings.section.hr": "HR",
   "settings.section.sensors": "Sensoren",
   "settings.section.sales": "Vertrieb",
+  "settings.section.worldcup": "WM",
   "settings.targets.sales.title": "Vertriebs-Sollwerte",
   "settings.targets.sales.description": "Wochen-Sollwerte für die Vertriebsaktivität-Karte. Leeres Feld = Default-Wert wird genutzt.",
   "settings.targets.sales.erstkontakte": "Erstkontakte",
