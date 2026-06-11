@@ -41,5 +41,6 @@
   "/api/upload",
   "/api/upload-contacts",
   "/api/uploads/{batch_id}",
+  "/api/worldcup/embed/today",
   "/health"
 ]

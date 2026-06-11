@@ -4,6 +4,10 @@ ALL endpoints in this module are PUBLIC (no auth) — same rationale as
 hr_embed.py: iframed by kiosks that carry no Directus session. Exposed data
 is public match information from football-data.org; the API key never
 leaves the server. Listed in ADMIN_GATE_ALLOWLIST (test_admin_gate_audit).
+
+Compute-justified: proxies football-data.org server-side (upstream HTTP
+fetch + TTL cache in services/worldcup_feed.py) so the API key stays
+secret and N kiosks cost one upstream call per interval — not a CRUD read.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
