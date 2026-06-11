@@ -15,6 +15,7 @@ import { SensorsSettingsPage } from "./pages/SensorsSettingsPage";
 import { GeneralSettingsPage } from "@/pages/GeneralSettingsPage";
 import { HrSettingsPage } from "@/pages/HrSettingsPage";
 import { SalesSettingsPage } from "@/pages/SalesSettingsPage";
+import { WorldCupSettingsPage } from "@/pages/WorldCupSettingsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { LauncherPage } from "./pages/LauncherPage";
 import { SignagePage } from "./signage/pages/SignagePage";
@@ -83,6 +84,7 @@ function AppShell() {
           <Route path="/settings/general" component={GeneralSettingsPage} />
           <Route path="/settings/hr" component={HrSettingsPage} />
           <Route path="/settings/sales" component={SalesSettingsPage} />
+          <Route path="/settings/worldcup" component={WorldCupSettingsPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/docs/:section/:slug">
             <Suspense fallback={
