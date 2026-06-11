@@ -28,7 +28,7 @@ export interface UploadBatchSummary {
   row_count: number;
   error_count: number;
   status: "success" | "partial" | "failed";
-  kind: "orders" | "contacts" | "quality" | "interessenten" | "offers";
+  kind: "orders" | "contacts" | "quality" | "interessenten" | "offers" | "revenues" | "auftraege";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -201,6 +201,13 @@ export interface Settings {
   target_sick_leave_ratio: number | null;
   target_fluctuation: number | null;
   target_revenue_per_employee: number | null;
+  // v1.55 — Sales-dashboard weekly targets
+  target_sales_erstkontakte: number | null;
+  target_sales_interessenten: number | null;
+  target_sales_besuche: number | null;
+  target_sales_angebote_eur: number | null;
+  // v1.56 — €/week/rep goal on the OrdersDistributionCard headline tile.
+  target_sales_orders_per_rep_eur: number | null;
   // Phase 39-02 — Sensor config read-only surfaces.
   // Decimal serialized as string; parse via Number() at render (never store as number).
   // Admin write endpoints arrive Phase 40 (SettingsUpdatePayload intentionally NOT extended).
@@ -241,6 +248,13 @@ export interface SettingsUpdatePayload {
   target_sick_leave_ratio?: number | null;
   target_fluctuation?: number | null;
   target_revenue_per_employee?: number | null;
+  // v1.55 — Sales-dashboard weekly targets (undefined = "don't change")
+  target_sales_erstkontakte?: number | null;
+  target_sales_interessenten?: number | null;
+  target_sales_besuche?: number | null;
+  target_sales_angebote_eur?: number | null;
+  // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
+  target_sales_orders_per_rep_eur?: number | null;
   // Phase 40-01 — Sensor Monitor admin writes. undefined = "don't change"
   // (mirrors Pydantic None-means-don't-change on SettingsUpdate). Decimals
   // go on the wire as strings to match Pydantic's Decimal input coercion.
@@ -516,6 +530,42 @@ export async function uploadAngeboteFile(
   const formData = new FormData();
   formData.append("file", file);
   return apiClient<AngeboteUploadResponse>("/api/upload-angebote", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// v1.53 — Umsatz (Rechnungsausgang RG/GS) upload from AswKpf_RG.txt.
+export interface RevenueUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadUmsatzFile(
+  file: File,
+): Promise<RevenueUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<RevenueUploadResponse>("/api/upload-umsatz", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+// v1.54 — Aufträge (order book) upload from AswKpf_AUF.txt.
+export interface AuftraegeUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadAuftraegeFile(
+  file: File,
+): Promise<AuftraegeUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<AuftraegeUploadResponse>("/api/upload-auftraege", {
     method: "POST",
     body: formData,
   });

@@ -20,6 +20,13 @@ export const DEFAULT_SETTINGS: Settings = {
   target_sick_leave_ratio: null,
   target_fluctuation: null,
   target_revenue_per_employee: null,
+  // v1.55 Sales-dashboard weekly targets
+  target_sales_erstkontakte: null,
+  target_sales_interessenten: null,
+  target_sales_besuche: null,
+  target_sales_angebote_eur: null,
+  // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
+  target_sales_orders_per_rep_eur: null,
   // Phase 38 sensor globals (v1.15): 60s poll matches scheduler baseline;
   // null thresholds = "no threshold set" (matches useSensorDraft
   // buildGlobalsPayload empty-string early-exit contract).

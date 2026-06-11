@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useContactsWeekly } from "@/hooks/useContactsWeekly";
+import { useSettings } from "@/hooks/useSettings";
 import type {
   ContactsWeeklyEmployeeBucket,
   ContactsWeeklyResponse,
@@ -27,7 +28,7 @@ interface Props {
 // KPI mode determines how each chart pulls + renders its data:
 //   "per-rep-count"  — sum int across employees (e.g. Erstkontakte)
 //   "global-count"   — week-level int (e.g. Interessenten — no rep)
-//   "per-rep-eur"    — sum € across employees (Angebote, € formatted)
+//   "per-rep-eur"    — sum € across employees (Angebote, Aufträge € — €-formatted)
 //   "besuche-stack"  — two-segment stacked bar: visits (ORT) + onl (ONL)
 type KpiMode =
   | "per-rep-count"
@@ -35,20 +36,77 @@ type KpiMode =
   | "per-rep-eur"
   | "besuche-stack";
 
-type KpiKey = keyof ContactsWeeklyEmployeeBucket | "interessenten";
+type KpiKey =
+  | "erstkontakte"
+  | "interessenten"
+  | "visits"
+  | "angebote"
+  | "orders_per_rep";
+
+// Y-axis zoom presets — applied to every chart now (v1.56-b). Each chart
+// keeps its own zoom state. Index 0 = Auto (Recharts default: scale to
+// the largest weekly value). Zoom-in steps step through ever smaller
+// caps. Bars exceeding the cap are clipped at the top.
+type ZoomLevel = { cap: number | null; label: string };
+
+const EUR_ZOOM_LEVELS: ZoomLevel[] = [
+  { cap: null, label: "Auto" },
+  { cap: 8_000_000, label: "8 Mio. €" },
+  { cap: 4_000_000, label: "4 Mio. €" },
+  { cap: 2_000_000, label: "2 Mio. €" },
+  { cap: 1_000_000, label: "1 Mio. €" },
+  { cap: 500_000, label: "500 Tsd. €" },
+  { cap: 250_000, label: "250 Tsd. €" },
+  { cap: 100_000, label: "100 Tsd. €" },
+  { cap: 50_000, label: "50 Tsd. €" },
+  { cap: 25_000, label: "25 Tsd. €" },
+];
+
+const COUNT_ZOOM_LEVELS: ZoomLevel[] = [
+  { cap: null, label: "Auto" },
+  { cap: 200, label: "200" },
+  { cap: 100, label: "100" },
+  { cap: 50, label: "50" },
+  { cap: 30, label: "30" },
+  { cap: 20, label: "20" },
+  { cap: 10, label: "10" },
+  { cap: 5, label: "5" },
+];
+
+function zoomLevelsFor(mode: KpiMode): ZoomLevel[] {
+  return mode === "per-rep-eur" ? EUR_ZOOM_LEVELS : COUNT_ZOOM_LEVELS;
+}
+
+// Baked-in fallbacks used when the corresponding `target_sales_*` field
+// on /api/settings is null (= "no target set"). The Vertrieb-Settings
+// page lets an admin override each value per KPI.
+const DEFAULT_TARGETS = {
+  erstkontakte: 50,
+  interessenten: 5,
+  visits: 3,
+  angebote: 25_000,
+  orders_per_rep: 50_000,
+} as const;
 
 // `target` is the weekly team-wide goal — drives the dashed reference
 // line + the "Ziel {{value}} / Woche" header label. For per-rep-eur
-// charts (Angebote) the value is interpreted in EUR; everywhere else
-// it's a row count.
-const KPIS: { key: KpiKey; titleKey: string; mode: KpiMode; target: number }[] = [
-  { key: "erstkontakte", titleKey: "sales.kpi.erstkontakte", mode: "per-rep-count", target: 50 },
-  { key: "interessenten", titleKey: "sales.kpi.interessenten", mode: "global-count", target: 5 },
-  { key: "visits", titleKey: "sales.kpi.visits", mode: "besuche-stack", target: 3 },
-  { key: "angebote", titleKey: "sales.kpi.angebote", mode: "per-rep-eur", target: 25000 },
+// charts (Angebote, Aufträge €) the value is interpreted in EUR;
+// everywhere else it's a row count. ``bucketField`` is the property on
+// ``ContactsWeeklyEmployeeBucket`` to read for per-rep charts.
+const KPIS_BASE: {
+  key: KpiKey;
+  titleKey: string;
+  mode: KpiMode;
+  bucketField?: keyof ContactsWeeklyEmployeeBucket;
+}[] = [
+  { key: "erstkontakte", titleKey: "sales.kpi.erstkontakte", mode: "per-rep-count", bucketField: "erstkontakte" },
+  { key: "interessenten", titleKey: "sales.kpi.interessenten", mode: "global-count" },
+  { key: "visits", titleKey: "sales.kpi.visits", mode: "besuche-stack" },
+  { key: "angebote", titleKey: "sales.kpi.angebote", mode: "per-rep-eur", bucketField: "angebote" },
+  { key: "orders_per_rep", titleKey: "sales.kpi.orders_per_rep", mode: "per-rep-eur", bucketField: "orders_eur" },
 ];
 
-// Simple-row shape used for the three non-stacked charts.
+// Simple-row shape used for the non-stacked charts.
 type Row = { label: string; total: number; perRep: Record<string, number> };
 // Stacked-row shape for Besuche: separate ORT/ONL counts + per-rep breakdown.
 type StackedRow = {
@@ -63,14 +121,14 @@ type StackedRow = {
 function buildPerRepSeries(
   data: ContactsWeeklyResponse,
   tokens: string[],
-  kpi: "erstkontakte" | "visits" | "angebote",
+  bucketField: keyof ContactsWeeklyEmployeeBucket,
 ): Row[] {
   return data.weeks.map((w) => {
     const label = `KW ${String(w.iso_week).padStart(2, "0")}`;
     const rep: Record<string, number> = {};
     let total = 0;
     for (const tk of tokens) {
-      const v = w.per_employee[tk]?.[kpi] ?? 0;
+      const v = (w.per_employee[tk]?.[bucketField] as number | undefined) ?? 0;
       rep[tk] = v;
       total += v;
     }
@@ -129,28 +187,6 @@ const eurFormatter = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 0,
 });
 const intFormatter = new Intl.NumberFormat("de-DE");
-
-// Weekly team-wide targets live on the KPIS config (above) so each chart
-// renders a dashed reference line at its own goal. Hardcoded for now; if
-// they ever need to be admin-configurable, move them to AppSettings to
-// mirror the existing HR target_* fields.
-
-// Y-axis zoom presets for the Angebote chart. Default index 0 = Auto
-// (Recharts default behaviour: scale to the largest weekly value).
-// Zoom-in steps step through ever smaller caps so small weeks become
-// readable when a single mega-offer would otherwise flatten them.
-// Bars exceeding the cap are clipped at the top.
-const ANGEBOTE_ZOOM_LEVELS: { cap: number | null; label: string }[] = [
-  { cap: null, label: "Auto" },
-  { cap: 8_000_000, label: "8 Mio. €" },
-  { cap: 4_000_000, label: "4 Mio. €" },
-  { cap: 2_000_000, label: "2 Mio. €" },
-  { cap: 1_000_000, label: "1 Mio. €" },
-  { cap: 500_000, label: "500 Tsd. €" },
-  { cap: 250_000, label: "250 Tsd. €" },
-  { cap: 100_000, label: "100 Tsd. €" },
-  { cap: 50_000, label: "50 Tsd. €" },
-];
 
 function fmt(value: number, isCurrency: boolean): string {
   return isCurrency ? eurFormatter.format(value) : intFormatter.format(value);
@@ -254,9 +290,45 @@ function BesucheTooltip({
 export function SalesActivityCard({ startDate, endDate }: Props) {
   const { t } = useTranslation();
   const q = useContactsWeekly(startDate ?? "", endDate ?? "");
-  // Zoom state for the Angebote Y axis — default = Auto.
-  const [angeboteZoomIdx, setAngeboteZoomIdx] = useState(0);
-  const angeboteZoom = ANGEBOTE_ZOOM_LEVELS[angeboteZoomIdx];
+  const { data: settings } = useSettings();
+  // One zoom index per chart — default 0 (Auto). Keyed by KpiKey so each
+  // chart's zoom is independent.
+  const [zoomIdxByKpi, setZoomIdxByKpi] = useState<Record<KpiKey, number>>({
+    erstkontakte: 0,
+    interessenten: 0,
+    visits: 0,
+    angebote: 0,
+    orders_per_rep: 0,
+  });
+  const bumpZoom = (key: KpiKey, delta: number, max: number) => {
+    setZoomIdxByKpi((prev) => ({
+      ...prev,
+      [key]: Math.max(0, Math.min(max, prev[key] + delta)),
+    }));
+  };
+
+  // Merge admin-configured targets (fallback = baked-in defaults).
+  const KPIS = useMemo(() => {
+    const t1 = settings?.target_sales_erstkontakte ?? DEFAULT_TARGETS.erstkontakte;
+    const t2 = settings?.target_sales_interessenten ?? DEFAULT_TARGETS.interessenten;
+    const t3 = settings?.target_sales_besuche ?? DEFAULT_TARGETS.visits;
+    const t4 = settings?.target_sales_angebote_eur ?? DEFAULT_TARGETS.angebote;
+    const t5 =
+      settings?.target_sales_orders_per_rep_eur ?? DEFAULT_TARGETS.orders_per_rep;
+    return KPIS_BASE.map((k) => ({
+      ...k,
+      target:
+        k.key === "erstkontakte"
+          ? t1
+          : k.key === "interessenten"
+            ? t2
+            : k.key === "visits"
+              ? t3
+              : k.key === "angebote"
+                ? t4
+                : t5,
+    }));
+  }, [settings]);
 
   const tokens = useMemo(
     () => (q.data ? collectTokens(q.data.weeks) : []),
@@ -323,6 +395,42 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
             />
           );
 
+          // Per-chart zoom (v1.56-b: applied to every chart, not just Angebote).
+          const levels = zoomLevelsFor(k.mode);
+          const zoomIdx = zoomIdxByKpi[k.key];
+          const zoom = levels[zoomIdx];
+          const zoomControls = (
+            <span className="ml-auto flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t("sales.activity.zoom_out_aria")}
+                disabled={zoomIdx === 0}
+                onClick={() => bumpZoom(k.key, -1, levels.length - 1)}
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground min-w-[64px] text-center tabular-nums">
+                {zoom.label}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t("sales.activity.zoom_in_aria")}
+                disabled={zoomIdx === levels.length - 1}
+                onClick={() => bumpZoom(k.key, +1, levels.length - 1)}
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+            </span>
+          );
+          const yDomain: [number, number] | undefined =
+            zoom.cap !== null ? [0, zoom.cap] : undefined;
+
           if (k.mode === "besuche-stack") {
             const data = buildBesucheStackedSeries(q.data!, tokens);
             return (
@@ -346,12 +454,18 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
                       {t("sales.kpi.visits.legend.onl")}
                     </span>
                   </span>
+                  {zoomControls}
                 </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data}>
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11 }}
+                        domain={yDomain}
+                        allowDataOverflow={zoom.cap !== null}
+                      />
                       <Tooltip
                         cursor={{ fill: "var(--color-muted)", opacity: 0.5 }}
                         content={<BesucheTooltip />}
@@ -380,54 +494,14 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
           if (k.mode === "global-count") {
             data = buildGlobalInteressentenSeries(q.data!);
           } else {
-            data = buildPerRepSeries(
-              q.data!,
-              tokens,
-              k.key as "erstkontakte" | "visits" | "angebote",
-            );
+            data = buildPerRepSeries(q.data!, tokens, k.bucketField!);
           }
           return (
             <div key={k.key} className="flex flex-col">
               <div className="text-sm font-medium mb-2 flex items-center gap-4 flex-wrap">
                 <span>{t(k.titleKey)}</span>
                 {targetLabel}
-                {k.key === "angebote" && (
-                  <span className="ml-auto flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      aria-label={t("sales.kpi.angebote.zoom_out_aria")}
-                      disabled={angeboteZoomIdx === 0}
-                      onClick={() =>
-                        setAngeboteZoomIdx((i) => Math.max(0, i - 1))
-                      }
-                    >
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground min-w-[64px] text-center tabular-nums">
-                      {angeboteZoom.label}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      aria-label={t("sales.kpi.angebote.zoom_in_aria")}
-                      disabled={
-                        angeboteZoomIdx === ANGEBOTE_ZOOM_LEVELS.length - 1
-                      }
-                      onClick={() =>
-                        setAngeboteZoomIdx((i) =>
-                          Math.min(ANGEBOTE_ZOOM_LEVELS.length - 1, i + 1),
-                        )
-                      }
-                    >
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </span>
-                )}
+                {zoomControls}
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -440,14 +514,8 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
                         isCurrency ? eurFormatter.format(v) : intFormatter.format(v)
                       }
                       width={isCurrency ? 80 : 40}
-                      domain={
-                        k.key === "angebote" && angeboteZoom.cap !== null
-                          ? [0, angeboteZoom.cap]
-                          : undefined
-                      }
-                      allowDataOverflow={
-                        k.key === "angebote" && angeboteZoom.cap !== null
-                      }
+                      domain={yDomain}
+                      allowDataOverflow={zoom.cap !== null}
                     />
                     <Tooltip
                       cursor={{ fill: "var(--color-muted)", opacity: 0.5 }}

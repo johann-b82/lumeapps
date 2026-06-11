@@ -1,7 +1,12 @@
 import { useLocation } from "wouter";
 import type { SettingsSection } from "@/contexts/SettingsDraftContext";
 
-const KNOWN: ReadonlySet<SettingsSection> = new Set(["general", "hr", "sensors"]);
+const KNOWN: ReadonlySet<SettingsSection> = new Set([
+  "general",
+  "hr",
+  "sensors",
+  "sales",
+]);
 
 interface UseSettingsSectionReturn {
   section: SettingsSection;

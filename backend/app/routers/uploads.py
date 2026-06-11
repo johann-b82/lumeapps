@@ -18,17 +18,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
-from app.models import Interessent, Offer, QualityRecord, SalesContact, SalesRecord, UploadBatch
+from app.models import (
+    Auftrag,
+    Interessent,
+    Offer,
+    QualityRecord,
+    Revenue,
+    SalesContact,
+    SalesRecord,
+    UploadBatch,
+)
 from app.parsing.angebote_parser import parse_angebote_file
+from app.parsing.auftraege_parser import parse_auftraege_file
 from app.parsing.erp_parser import parse_erp_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
 from app.parsing.quality_parser import parse_quality_file
+from app.parsing.revenue_parser import parse_revenue_file
 from app.schemas import (
     AngeboteUploadResponse,
+    AuftraegeUploadResponse,
     ContactsUploadResponse,
     InteressentenUploadResponse,
     QualityUploadResponse,
+    RevenueUploadResponse,
     UploadResponse,
     ValidationErrorDetail,
 )
@@ -517,6 +530,203 @@ async def upload_angebote(
     await db.commit()
 
     return AngeboteUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                       column=e.get("field", ""),
+                                       message=e.get("message", "")) for e in errors],
+    )
+
+
+# ── v1.53 — Umsatz (Rechnungsausgang RG/GS) ingestion ───────────────────
+
+
+@admin_router.post("/upload-umsatz", response_model=RevenueUploadResponse)
+async def upload_umsatz(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> RevenueUploadResponse:
+    """Upsert of the AswKpf_RG.txt revenue / credit-note dump.
+
+    Idempotent: ``ON CONFLICT (vorgang_nr) DO UPDATE`` so a re-upload of
+    the same file is a no-op on the data and only refreshes
+    ``upload_batch_id`` and ``imported_at``.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Umsatz uploads.",
+        )
+
+    contents = await file.read()
+    rows, errors = parse_revenue_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="revenues",
+            )
+        )
+        await db.commit()
+        return RevenueUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                           column=e.get("field", ""),
+                                           message=e.get("message", "")) for e in errors],
+        )
+
+    incoming = [r["vorgang_nr"] for r in rows]
+    existing_stmt = sa.select(sa.func.count()).select_from(Revenue).where(
+        Revenue.vorgang_nr.in_(incoming)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="revenues",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+        r["imported_at"] = now
+
+    update_cols = [
+        c.name for c in Revenue.__table__.columns if c.name != "vorgang_nr"
+    ]
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(Revenue).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["vorgang_nr"],
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return RevenueUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                       column=e.get("field", ""),
+                                       message=e.get("message", "")) for e in errors],
+    )
+
+
+# ── v1.54 — Aufträge (AswKpf_AUF.txt order book) ────────────────────────
+
+
+@admin_router.post("/upload-auftraege", response_model=AuftraegeUploadResponse)
+async def upload_auftraege(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AuftraegeUploadResponse:
+    """Upsert of the AswKpf_AUF.txt order-book dump (18-col .txt).
+
+    Idempotent: ``ON CONFLICT (vorgang_nr) DO UPDATE`` so a re-upload of
+    the same file is a no-op on the data and only refreshes
+    ``upload_batch_id`` and ``imported_at``.
+
+    Supersedes the legacy 60-col ``POST /api/upload`` (sales_records) as
+    the data source for the Sales-dashboard order-side KPIs.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Aufträge uploads.",
+        )
+
+    contents = await file.read()
+    rows, errors = parse_auftraege_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="auftraege",
+            )
+        )
+        await db.commit()
+        return AuftraegeUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(row=e.get("row", 0),
+                                           column=e.get("field", ""),
+                                           message=e.get("message", "")) for e in errors],
+        )
+
+    incoming = [r["vorgang_nr"] for r in rows]
+    existing_stmt = sa.select(sa.func.count()).select_from(Auftrag).where(
+        Auftrag.vorgang_nr.in_(incoming)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="auftraege",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+        r["imported_at"] = now
+
+    update_cols = [
+        c.name for c in Auftrag.__table__.columns if c.name != "vorgang_nr"
+    ]
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(Auftrag).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["vorgang_nr"],
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return AuftraegeUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
         errors=[ValidationErrorDetail(row=e.get("row", 0),

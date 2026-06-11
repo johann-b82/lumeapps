@@ -1,6 +1,5 @@
 import { CustomerShareCard } from "@/components/dashboard/CustomerShareCard";
 import { KpiCardGrid } from "@/components/dashboard/KpiCardGrid";
-import { OrdersDistributionCard } from "@/components/dashboard/OrdersDistributionCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesActivityCard } from "@/components/dashboard/SalesActivityCard";
 import { SalesTable } from "@/components/dashboard/SalesTable";
@@ -20,17 +19,20 @@ export function DashboardPage() {
         preset={preset}
         range={range}
       />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-        <OrdersDistributionCard
+      {/* v1.56-b: OrdersDistributionCard (€/week/rep tile) moved into
+          SalesActivityCard as the 5th bar chart.
+          v1.56-c: two CustomerShareCards — one per data source (Aufträge
+          + Rechnungen) side by side. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <CustomerShareCard
           startDate={startDate}
           endDate={endDate}
-          preset={preset}
-          range={range}
+          source="auftraege"
         />
         <CustomerShareCard
           startDate={startDate}
           endDate={endDate}
-          className="lg:col-span-2"
+          source="revenues"
         />
       </div>
       <RevenueChart

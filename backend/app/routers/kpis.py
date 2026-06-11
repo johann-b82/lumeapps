@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user
-from app.models import SalesRecord, UploadBatch
+from app.models import Revenue, SalesRecord, UploadBatch
 from app.schemas import (
     ChartPoint,
     ChartResponse,
@@ -20,7 +20,10 @@ from app.schemas import (
     KpiSummaryComparison,
     LatestUploadResponse,
 )
-from app.services.kpi_aggregation import aggregate_kpi_summary
+from app.services.kpi_aggregation import (
+    aggregate_kpi_summary,
+    aggregate_revenue_summary,
+)
 
 _TRUNC_MAP: dict[str, str] = {"daily": "day", "weekly": "week", "monthly": "month"}
 
@@ -58,29 +61,46 @@ async def get_kpi_summary(
     and the simpler code is more robust. See 08-02 SUMMARY for details.
     """
 
-    async def _maybe_aggregate(s: date | None, e: date | None) -> dict | None:
-        # Both bounds required — a half-specified window is ignored (None).
+    async def _maybe_orders(s: date | None, e: date | None) -> dict | None:
         if s is None or e is None:
             return None
         return await aggregate_kpi_summary(db, s, e)
 
-    current = await aggregate_kpi_summary(db, start_date, end_date)
-    prev_period = await _maybe_aggregate(prev_period_start, prev_period_end)
-    prev_year = await _maybe_aggregate(prev_year_start, prev_year_end)
+    async def _maybe_umsatz(s: date | None, e: date | None) -> Decimal | None:
+        if s is None or e is None:
+            return None
+        return await aggregate_revenue_summary(db, s, e)
 
-    # Current-window fallback: legacy behavior is zero-filled top-level fields
-    # when no rows match (distinct from comparison fields which go null).
-    if current is None:
-        current = {
-            "total_revenue": Decimal("0"),
-            "avg_order_value": Decimal("0"),
-            "total_orders": 0,
+    # avg_order_value + total_orders stay sourced from sales_records.
+    # total_revenue (= Umsatz) moves to the revenues table (v1.53).
+    current_orders = await aggregate_kpi_summary(db, start_date, end_date)
+    current_umsatz = await aggregate_revenue_summary(db, start_date, end_date)
+    prev_period_orders = await _maybe_orders(prev_period_start, prev_period_end)
+    prev_period_umsatz = await _maybe_umsatz(prev_period_start, prev_period_end)
+    prev_year_orders = await _maybe_orders(prev_year_start, prev_year_end)
+    prev_year_umsatz = await _maybe_umsatz(prev_year_start, prev_year_end)
+
+    if current_orders is None:
+        current_orders = {"avg_order_value": Decimal("0"), "total_orders": 0}
+
+    def _merge(orders: dict | None, umsatz: Decimal | None) -> dict | None:
+        # Mirror the legacy DELTA-05 null-safety: a comparison window is
+        # only emitted when at least one of its two sources has data.
+        if orders is None and umsatz is None:
+            return None
+        return {
+            "total_revenue": umsatz if umsatz is not None else Decimal("0"),
+            "avg_order_value": (orders or {}).get("avg_order_value", Decimal("0")),
+            "total_orders": (orders or {}).get("total_orders", 0),
         }
 
+    prev_period = _merge(prev_period_orders, prev_period_umsatz)
+    prev_year = _merge(prev_year_orders, prev_year_umsatz)
+
     return KpiSummary(
-        total_revenue=current["total_revenue"],
-        avg_order_value=current["avg_order_value"],
-        total_orders=current["total_orders"],
+        total_revenue=current_umsatz if current_umsatz is not None else Decimal("0"),
+        avg_order_value=current_orders["avg_order_value"],
+        total_orders=current_orders["total_orders"],
         previous_period=KpiSummaryComparison(**prev_period) if prev_period else None,
         previous_year=KpiSummaryComparison(**prev_year) if prev_year else None,
     )
@@ -92,24 +112,22 @@ async def _bucketed_series(
     end: date | None,
     granularity: Literal["daily", "weekly", "monthly"],
 ) -> list[tuple[date, Decimal]]:
-    """Run the bucketed chart SQL and return ordered (bucket_date, revenue) tuples.
+    """Bucketed Umsatzwachstum series from the ``revenues`` table.
 
-    Preserves the legacy WHERE ``total_value > 0`` AND ``order_date IS NOT NULL``
-    filters so the chart series can never drift from the summary aggregation
-    (Phase 8 SC5 / CHART-02). Bounds are applied only when provided.
+    v1.53: re-sourced from ``revenues`` (RG + GS) to match the renamed
+    Umsatz / Umsatzwachstum KPI tiles. GS rows have negative wert_eur,
+    so the SUM is net revenue per bucket.
     """
-    bucket = func.date_trunc(_TRUNC_MAP[granularity], SalesRecord.order_date).label("bucket")
+    bucket = func.date_trunc(_TRUNC_MAP[granularity], Revenue.datum).label("bucket")
     stmt = (
-        select(bucket, func.sum(SalesRecord.total_value).label("revenue"))
-        .where(SalesRecord.total_value > 0)
-        .where(SalesRecord.order_date.isnot(None))
+        select(bucket, func.sum(Revenue.wert_eur).label("revenue"))
         .group_by(bucket)
         .order_by(bucket)
     )
     if start is not None:
-        stmt = stmt.where(SalesRecord.order_date >= start)
+        stmt = stmt.where(Revenue.datum >= start)
     if end is not None:
-        stmt = stmt.where(SalesRecord.order_date <= end)
+        stmt = stmt.where(Revenue.datum <= end)
 
     result = await db.execute(stmt)
     return [(row.bucket.date(), row.revenue or Decimal("0")) for row in result.all()]

@@ -172,6 +172,16 @@ class AppSettings(Base):
     target_fluctuation: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     target_revenue_per_employee: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
 
+    # v1.55 — Sales-dashboard weekly target values (drive the dashed
+    # reference lines on the Vertriebsaktivität card). NULL = "no target
+    # set" — the frontend falls back to a baked-in default.
+    target_sales_erstkontakte: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    target_sales_interessenten: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    target_sales_besuche: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    target_sales_angebote_eur: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+    # v1.56 — €/week/rep goal for the OrdersDistributionCard headline tile.
+    target_sales_orders_per_rep_eur: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+
     # --- v1.15 Sensor Monitor (Phase 38) ---
     sensor_poll_interval_s: Mapped[int] = mapped_column(
         Integer, nullable=False, default=60
@@ -531,6 +541,79 @@ class Offer(Base):
     adr_nr: Mapped[str | None] = mapped_column(String(50), nullable=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ort: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    upload_batch_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Revenue(Base):
+    """Invoice / credit-note row from the AswKpf_RG.txt ERP export.
+
+    One row per Vorgang Nr.. ``typ`` is 'RG' (Rechnung) or 'GS'
+    (Gutschrift). GS rows carry a NEGATIVE ``wert_eur`` so a simple
+    SUM(wert_eur) over a date window yields the net Umsatz.
+
+    Deliberately separate from sales_records (orders, AUF) and offers
+    (ANG): three distinct ERP exports, three tables. The Sales dashboard
+    sources the "Umsatz" card + "Umsatzwachstum" chart from this table.
+    """
+
+    __tablename__ = "revenues"
+    __table_args__ = (
+        Index("ix_revenues_datum", "datum"),
+        Index("ix_revenues_customer", "customer_name"),
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), primary_key=True)
+    typ: Mapped[str] = mapped_column(String(8), nullable=False)
+    datum: Mapped[date] = mapped_column(Date, nullable=False)
+    adr_nr: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    wert_eur: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    upload_batch_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Auftrag(Base):
+    """Order-book row from the AswKpf_AUF.txt ERP export (v1.54).
+
+    Same 18-col shape as the ANG (offers) and RG (revenue) dumps —
+    keyed by Vorgang Nr.. ``erfasser`` is the ERP "Erfasst durch" column,
+    used as the rep token for the orders/wk/rep KPI.
+
+    Supersedes ``sales_records`` as the source for the Sales-dashboard
+    order-side KPIs (avg_order_value, total_orders, orders-distribution).
+    The legacy table stays for back-compat but is no longer queried by
+    the dashboard.
+    """
+
+    __tablename__ = "auftraege"
+    __table_args__ = (
+        Index("ix_auftraege_datum", "datum"),
+        Index("ix_auftraege_erfasser_datum", "erfasser", "datum"),
+        Index("ix_auftraege_customer", "customer_name"),
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), primary_key=True)
+    typ: Mapped[str] = mapped_column(String(8), nullable=False)
+    datum: Mapped[date] = mapped_column(Date, nullable=False)
+    adr_nr: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    erfasser: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wert_eur: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     upload_batch_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("upload_batches.id", ondelete="SET NULL"),

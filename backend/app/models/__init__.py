@@ -24,6 +24,8 @@ from app.models._base import (  # noqa: F401
     QualityRecord,
     Interessent,
     Offer,
+    Revenue,
+    Auftrag,
 )
 
 # Signage models (added in Task 2 of this plan)
@@ -50,6 +52,8 @@ __all__ = [
     "QualityRecord",
     "Interessent",
     "Offer",
+    "Revenue",
+    "Auftrag",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
     "SignageDevice", "SignageDeviceTag", "SignageDeviceTagMap",

@@ -1,11 +1,19 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
-import { useOrdersDistribution } from "@/hooks/useOrdersDistribution";
+import { Button } from "@/components/ui/button";
+import {
+  useCustomerShare,
+  type CustomerShareEntry,
+  type CustomerShareSource,
+} from "@/hooks/useCustomerShare";
 
 interface Props {
   startDate?: string;
   endDate?: string;
+  source: CustomerShareSource;
   className?: string;
 }
 
@@ -21,10 +29,17 @@ function formatPct(n: number): string {
   return `${n.toFixed(1).replace(".", ",")} %`;
 }
 
-export function CustomerShareCard({ startDate, endDate, className }: Props) {
+export function CustomerShareCard({
+  startDate,
+  endDate,
+  source,
+  className,
+}: Props) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language || "de-DE";
-  const q = useOrdersDistribution(startDate ?? "", endDate ?? "");
+  const q = useCustomerShare(source, startDate ?? "", endDate ?? "", 14);
+  // Default = Top-3 only. Toggle reveals positions 4-14.
+  const [expanded, setExpanded] = useState(false);
 
   const formatCurrency = (n: number) =>
     new Intl.NumberFormat(locale, {
@@ -34,56 +49,92 @@ export function CustomerShareCard({ startDate, endDate, className }: Props) {
     }).format(n);
 
   const data = q.data;
+  const titleKey =
+    source === "auftraege"
+      ? "sales.customer_share.title_auftraege"
+      : "sales.customer_share.title_revenues";
 
   return (
     <Card className={`p-6 h-full flex flex-col ${className ?? ""}`}>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {t("sales.orders_distribution.share_title")}
+        {t(titleKey)}
       </p>
       {q.isLoading ? (
         <div className="mt-4 h-48 w-full bg-muted animate-pulse" />
       ) : (() => {
-        const top3 = data?.top3_customers ?? [];
-        const top3Sum = top3.reduce((s, c) => s + c.total_value, 0);
-        const totalAll =
-          data && data.top3_share_pct > 0
-            ? top3Sum / (data.top3_share_pct / 100)
-            : 0;
-        if (totalAll <= 0) {
+        const allCustomers: CustomerShareEntry[] = data?.top_customers ?? [];
+        const totalAll = data?.total_value ?? 0;
+        if (totalAll <= 0 || allCustomers.length === 0) {
           return (
             <p className="mt-4 text-sm text-muted-foreground italic">
-              {t("sales.orders_distribution.top3_empty")}
+              {t("sales.customer_share.empty")}
             </p>
           );
         }
-        const colors = [
+
+        // Always at most 14 customers (backend cap). Default view: Top-3.
+        const visible = expanded ? allCustomers : allCustomers.slice(0, 3);
+        const visibleSum = visible.reduce((s, c) => s + c.total_value, 0);
+        const remainingValue = Math.max(0, totalAll - visibleSum);
+
+        const baseColors = [
           "var(--primary)",
-          "var(--color-chart-3)",
-          "var(--color-chart-2)",
-          "var(--muted)",
+          "var(--color-chart-3, #f59e0b)",
+          "var(--color-chart-2, #10b981)",
         ];
-        const segments: WaterfallSegment[] = top3.map((c, i) => ({
+        const segments: WaterfallSegment[] = visible.map((c, i) => ({
           label: c.name,
           short: `${i + 1}. ${c.name}`,
           value: c.total_value,
-          pct: (c.total_value / totalAll) * 100,
-          color: colors[i],
+          pct: c.share_pct,
+          // Cycle through the 3 base colors for visual rhythm.
+          color: baseColors[i % baseColors.length],
         }));
-        const remainingValue = totalAll - top3Sum;
         if (remainingValue > 0) {
           segments.push({
-            label: t("sales.orders_distribution.remaining"),
-            short: t("sales.orders_distribution.remaining"),
+            label: t("sales.customer_share.remaining"),
+            short: t("sales.customer_share.remaining"),
             value: remainingValue,
             pct: (remainingValue / totalAll) * 100,
-            color: colors[3],
+            color: "var(--muted)",
           });
         }
+
+        const canToggle = allCustomers.length > 3;
         return (
-          <Waterfall
-            segments={segments}
-            formatCurrency={formatCurrency}
-          />
+          <>
+            <Waterfall segments={segments} formatCurrency={formatCurrency} />
+            {canToggle && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  aria-label={t(
+                    expanded
+                      ? "sales.customer_share.collapse_aria"
+                      : "sales.customer_share.expand_aria",
+                  )}
+                  onClick={() => setExpanded((v) => !v)}
+                >
+                  {expanded ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                      {t("sales.customer_share.collapse_label")}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      {t("sales.customer_share.expand_label", {
+                        count: Math.min(allCustomers.length - 3, 11),
+                      })}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
         );
       })()}
     </Card>
@@ -97,13 +148,13 @@ function Waterfall({
   segments: WaterfallSegment[];
   formatCurrency: (n: number) => string;
 }) {
-  // Horizontal waterfall: bars stack top-to-bottom; x-axis runs 0–100%.
-  // Each customer's floating bar starts where the previous one ended.
+  // Horizontal waterfall: each row's floating bar starts where the
+  // previous ended. The "Restkunden" row pads cumulative to 100 %.
   const rowCount = segments.length;
-  const rowH = 28;
-  const rowGap = 8;
-  const padL = 250; // left-aligned name column — sized to fit longest label
-  const padR = 56;  // room for right-side pct labels
+  const rowH = 26;
+  const rowGap = 6;
+  const padL = 240;
+  const padR = 60;
   const padT = 28;
   const padB = 12;
   const W = 720;
@@ -179,7 +230,7 @@ function Waterfall({
         })}
         {/* Floating segment bars + labels */}
         {rows.map((r) => (
-          <g key={r.seg.label}>
+          <g key={`${r.rowIdx}-${r.seg.label}`}>
             <rect
               x={r.xStart}
               y={r.y}

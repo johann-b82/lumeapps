@@ -5,6 +5,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { DeltaBadgeStack } from "@/components/dashboard/DeltaBadgeStack";
 import type { DateRangeValue } from "@/components/dashboard/DateRangeFilter";
 import { useOrdersDistribution } from "@/hooks/useOrdersDistribution";
+import { useSettings } from "@/hooks/useSettings";
 import { computePrevBounds } from "@/lib/prevBounds";
 import { computeDelta } from "@/lib/delta";
 import { formatPrevPeriodDeltaLabels } from "@/lib/periodLabels";
@@ -72,13 +73,35 @@ export function OrdersDistributionCard({
   const data = q.data;
   const isLoading = q.isLoading;
 
+  const eurFormatter = new Intl.NumberFormat(
+    shortLocale === "de" ? "de-DE" : "en-US",
+    { style: "currency", currency: "EUR", maximumFractionDigits: 0 },
+  );
+
+  // v1.56 — admin-configured weekly €/rep target. Null = "no target set"
+  // → no subtitle is rendered (consistent with HR target cards when the
+  // value is null).
+  const { data: settings } = useSettings();
+  const target = settings?.target_sales_orders_per_rep_eur ?? null;
+  const subtitle =
+    target != null && data
+      ? (data.orders_per_week_per_rep >= target
+          ? `✓ ${t("sales.orders_distribution.per_rep_target_met", {
+              value: eurFormatter.format(target),
+            })}`
+          : t("sales.orders_distribution.per_rep_target_miss", {
+              value: eurFormatter.format(target),
+            }))
+      : undefined;
+
   return (
     <KpiCard
       label={t("sales.orders_distribution.per_rep")}
       isLoading={isLoading}
       value={
-        data ? data.orders_per_week_per_rep.toFixed(1).replace(".", ",") : undefined
+        data ? eurFormatter.format(data.orders_per_week_per_rep) : undefined
       }
+      subtitle={subtitle}
       delta={
         data && showBadges ? (
           <DeltaBadgeStack

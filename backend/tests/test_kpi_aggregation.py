@@ -19,30 +19,38 @@ import pytest
 from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
-from app.models import SalesRecord, UploadBatch
-from app.services.kpi_aggregation import aggregate_kpi_summary
+from app.models import Auftrag, Revenue, UploadBatch
+from app.services.kpi_aggregation import (
+    aggregate_kpi_summary,
+    aggregate_revenue_summary,
+)
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _seed(session, prefix: str, rows: list[tuple[date, Decimal]]) -> int:
-    """Insert an UploadBatch + N SalesRecords, return batch id for cleanup."""
+    """v1.54: seed Auftrag rows (was SalesRecord pre-v1.54). Returns batch
+    id for cleanup."""
     batch = UploadBatch(
-        filename=f"{prefix}.csv",
+        filename=f"{prefix}.txt",
         uploaded_at=datetime.now(timezone.utc),
         row_count=len(rows),
         error_count=0,
         status="success",
+        kind="auftraege",
     )
     session.add(batch)
     await session.flush()
+    now = datetime.now(timezone.utc)
     for idx, (d, v) in enumerate(rows):
         session.add(
-            SalesRecord(
+            Auftrag(
+                vorgang_nr=f"{prefix}-{idx}",
+                typ="AUF",
+                datum=d,
+                wert_eur=v,
                 upload_batch_id=batch.id,
-                order_number=f"{prefix}-{idx}",
-                order_date=d,
-                total_value=v,
+                imported_at=now,
             )
         )
     await session.commit()
@@ -51,7 +59,7 @@ async def _seed(session, prefix: str, rows: list[tuple[date, Decimal]]) -> int:
 
 async def _cleanup(session, batch_id: int) -> None:
     await session.execute(
-        delete(SalesRecord).where(SalesRecord.upload_batch_id == batch_id)
+        delete(Auftrag).where(Auftrag.upload_batch_id == batch_id)
     )
     await session.execute(delete(UploadBatch).where(UploadBatch.id == batch_id))
     await session.commit()
@@ -164,3 +172,103 @@ async def test_zero_or_negative_total_value_excluded():
             assert result["avg_order_value"] == Decimal("250")
         finally:
             await _cleanup(session, bid)
+
+
+# ── v1.53 — Umsatz from revenues table ────────────────────────────────
+
+
+async def _seed_revenues(prefix: str, rows: list[tuple[str, date, Decimal]]) -> int:
+    """Seed (typ, datum, wert_eur) revenue rows under one batch. Returns
+    batch id for cleanup."""
+    async with AsyncSessionLocal() as session:
+        batch = UploadBatch(
+            filename=f"{prefix}.txt",
+            uploaded_at=datetime.now(timezone.utc),
+            row_count=len(rows),
+            error_count=0,
+            status="success",
+            kind="revenues",
+        )
+        session.add(batch)
+        await session.flush()
+        now = datetime.now(timezone.utc)
+        for idx, (typ, d, v) in enumerate(rows):
+            session.add(
+                Revenue(
+                    vorgang_nr=f"{prefix}-{idx}",
+                    typ=typ,
+                    datum=d,
+                    wert_eur=v,
+                    upload_batch_id=batch.id,
+                    imported_at=now,
+                )
+            )
+        await session.commit()
+        return batch.id
+
+
+async def _cleanup_revenues(batch_id: int) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(Revenue).where(Revenue.upload_batch_id == batch_id)
+        )
+        await session.execute(delete(UploadBatch).where(UploadBatch.id == batch_id))
+        await session.commit()
+
+
+async def test_revenue_summary_sums_RG_minus_GS():
+    """Net Umsatz = SUM(wert_eur) — GS rows carry negative wert and reduce
+    the total."""
+    bid = await _seed_revenues(
+        "rev-net",
+        [
+            ("RG", date(2099, 5, 5), Decimal("1000")),
+            ("RG", date(2099, 5, 10), Decimal("500")),
+            ("GS", date(2099, 5, 12), Decimal("-200")),
+        ],
+    )
+    try:
+        async with AsyncSessionLocal() as session:
+            total = await aggregate_revenue_summary(
+                session, date(2099, 5, 1), date(2099, 5, 31)
+            )
+        assert total == Decimal("1300")  # 1000 + 500 - 200
+    finally:
+        await _cleanup_revenues(bid)
+
+
+async def test_revenue_summary_empty_window_returns_none():
+    """Zero matching rows -> None (DELTA-05 null-safety)."""
+    bid = await _seed_revenues(
+        "rev-empty",
+        [("RG", date(2099, 5, 5), Decimal("100"))],
+    )
+    try:
+        async with AsyncSessionLocal() as session:
+            total = await aggregate_revenue_summary(
+                session, date(2099, 6, 1), date(2099, 6, 30)
+            )
+        assert total is None
+    finally:
+        await _cleanup_revenues(bid)
+
+
+async def test_revenue_summary_respects_date_window():
+    """Only rows inside the window are summed."""
+    bid = await _seed_revenues(
+        "rev-window",
+        [
+            (("RG", date(2099, 4, 30), Decimal("999"))),  # outside (before)
+            (("RG", date(2099, 5, 5), Decimal("100"))),
+            (("RG", date(2099, 5, 25), Decimal("200"))),
+            (("RG", date(2099, 6, 1), Decimal("888"))),  # outside (after)
+        ],
+    )
+    try:
+        async with AsyncSessionLocal() as session:
+            total = await aggregate_revenue_summary(
+                session, date(2099, 5, 1), date(2099, 5, 31)
+            )
+        assert total == Decimal("300")
+    finally:
+        await _cleanup_revenues(bid)

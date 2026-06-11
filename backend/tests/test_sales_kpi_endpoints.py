@@ -11,6 +11,7 @@ from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
 from app.models import (
+    Auftrag,
     Interessent,
     Offer,
     SalesContact,
@@ -25,6 +26,7 @@ async def _wipe() -> None:
     async with AsyncSessionLocal() as s:
         await s.execute(delete(SalesContact))
         await s.execute(delete(SalesRecord))
+        await s.execute(delete(Auftrag))
         await s.execute(delete(Interessent))
         await s.execute(delete(Offer))
         await s.execute(delete(UploadBatch))
@@ -112,6 +114,20 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
                   erfasser="KARRER", wert_eur=Decimal("999999"),
                   imported_at=now),
         ])
+        # v1.56-b: two Aufträge in KW 18 / 2026 by KARRER
+        # → orders_eur = 12000 + 8000 = 20000
+        s.add_all([
+            Auftrag(vorgang_nr="AUF-1", typ="AUF", datum=date(2026, 4, 28),
+                    erfasser="KARRER", wert_eur=Decimal("12000"),
+                    imported_at=now),
+            Auftrag(vorgang_nr="AUF-2", typ="AUF", datum=date(2026, 5, 2),
+                    erfasser="KARRER", wert_eur=Decimal("8000"),
+                    imported_at=now),
+            # Outside the window — should not count.
+            Auftrag(vorgang_nr="AUF-3", typ="AUF", datum=date(2026, 5, 5),
+                    erfasser="KARRER", wert_eur=Decimal("999999"),
+                    imported_at=now),
+        ])
         await s.commit()
 
     r = await viewer_client.get(
@@ -127,6 +143,7 @@ async def test_contacts_weekly_one_rep_one_week(viewer_client):
     assert bucket["visits"] == 1  # only ORT counts here
     assert bucket["onl"] == 1     # ONL is its own field, stacked in the chart
     assert bucket["angebote"] == 406611.16
+    assert bucket["orders_eur"] == 20000  # v1.56-b: AUF-1 + AUF-2 in window
     # interessenten is a week-global total — 3 inside the window.
     assert week["interessenten"] == 3
 
@@ -167,11 +184,12 @@ async def test_orders_distribution_top3_share(viewer_client):
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as s:
         batch = UploadBatch(
-            filename="t.csv",
+            filename="t.txt",
             uploaded_at=now,
             row_count=5,
             error_count=0,
             status="success",
+            kind="auftraege",
         )
         s.add(batch)
         await s.flush()
@@ -179,14 +197,15 @@ async def test_orders_distribution_top3_share(viewer_client):
             [("A", 50), ("B", 30), ("C", 10), ("D", 5), ("E", 5)]
         ):
             s.add(
-                SalesRecord(
-                    upload_batch_id=batch.id,
-                    order_number=f"O{i}",
-                    order_date=date(2026, 4, 27),
+                Auftrag(
+                    vorgang_nr=f"O{i}",
+                    typ="AUF",
+                    datum=date(2026, 4, 27),
                     customer_name=cust,
-                    total_value=Decimal(tot),
-                    # v1.44: rep is the ERP "Benutzer" column.
-                    created_by_user="X",
+                    wert_eur=Decimal(tot),
+                    erfasser="X",
+                    upload_batch_id=batch.id,
+                    imported_at=now,
                 )
             )
         await s.commit()
@@ -203,8 +222,8 @@ async def test_orders_distribution_top3_share(viewer_client):
     values = [c["total_value"] for c in body["top3_customers"]]
     assert names == ["A", "B", "C"]
     assert values == [50.0, 30.0, 10.0]
-    # 5 attributed orders / 1 week / 1 rep → 5.0
-    assert body["orders_per_week_per_rep"] == 5.0
+    # v1.54-b: € volume — 50+30+10+5+5 = 100 € / 1 week / 1 rep = 100.0
+    assert body["orders_per_week_per_rep"] == 100.0
 
 
 async def test_orders_distribution_empty_range(viewer_client):

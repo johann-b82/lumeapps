@@ -85,6 +85,12 @@ def _build_read(row: AppSettings) -> SettingsRead:
         target_sick_leave_ratio=float(row.target_sick_leave_ratio) if row.target_sick_leave_ratio is not None else None,
         target_fluctuation=float(row.target_fluctuation) if row.target_fluctuation is not None else None,
         target_revenue_per_employee=float(row.target_revenue_per_employee) if row.target_revenue_per_employee is not None else None,
+        # v1.55 Sales-dashboard weekly targets
+        target_sales_erstkontakte=float(row.target_sales_erstkontakte) if row.target_sales_erstkontakte is not None else None,
+        target_sales_interessenten=float(row.target_sales_interessenten) if row.target_sales_interessenten is not None else None,
+        target_sales_besuche=float(row.target_sales_besuche) if row.target_sales_besuche is not None else None,
+        target_sales_angebote_eur=float(row.target_sales_angebote_eur) if row.target_sales_angebote_eur is not None else None,
+        target_sales_orders_per_rep_eur=float(row.target_sales_orders_per_rep_eur) if row.target_sales_orders_per_rep_eur is not None else None,
         # Phase 39-02 — Sensor config read-only surfaces (columns exist since Phase 38 migration).
         # Admin write endpoints arrive in Phase 40 (SettingsUpdate unchanged here).
         sensor_poll_interval_s=row.sensor_poll_interval_s,
@@ -243,6 +249,17 @@ async def put_settings(
         row.target_fluctuation = payload.target_fluctuation
     if payload.target_revenue_per_employee is not None:
         row.target_revenue_per_employee = payload.target_revenue_per_employee
+    # v1.55 — Sales-dashboard targets
+    if payload.target_sales_erstkontakte is not None:
+        row.target_sales_erstkontakte = payload.target_sales_erstkontakte
+    if payload.target_sales_interessenten is not None:
+        row.target_sales_interessenten = payload.target_sales_interessenten
+    if payload.target_sales_besuche is not None:
+        row.target_sales_besuche = payload.target_sales_besuche
+    if payload.target_sales_angebote_eur is not None:
+        row.target_sales_angebote_eur = payload.target_sales_angebote_eur
+    if payload.target_sales_orders_per_rep_eur is not None:
+        row.target_sales_orders_per_rep_eur = payload.target_sales_orders_per_rep_eur
 
     # v1.15 Sensor Monitor — interval + global thresholds (Phase 40-01)
     if payload.sensor_poll_interval_s is not None:

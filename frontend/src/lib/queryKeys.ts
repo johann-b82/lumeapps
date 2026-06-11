@@ -105,5 +105,7 @@ export const salesKeys = {
     ["sales", "contacts-weekly", from, to] as const,
   ordersDistribution: (from: string, to: string) =>
     ["sales", "orders-distribution", from, to] as const,
+  customerShare: (source: "auftraege" | "revenues", from: string, to: string) =>
+    ["sales", "customer-share", source, from, to] as const,
   aliases: () => ["sales", "aliases"] as const,
 };

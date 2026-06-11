@@ -12,6 +12,9 @@ export interface ContactsWeeklyEmployeeBucket {
   // alongside ``visits`` (ORT) in the Besuche chart.
   onl?: number;
   angebote: number;
+  // v1.56-b: weekly €-volume per rep from the auftraege table — rendered
+  // as the 5th bar chart in the Vertriebsaktivität card.
+  orders_eur?: number;
 }
 
 export interface ContactsWeeklyWeek {

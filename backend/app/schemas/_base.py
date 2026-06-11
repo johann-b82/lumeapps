@@ -144,6 +144,15 @@ class SettingsUpdate(BaseModel):
     target_sick_leave_ratio: float | None = None
     target_fluctuation: float | None = None
     target_revenue_per_employee: float | None = None
+    # v1.55 — Sales-dashboard targets (None means "don't change"). Use a
+    # sentinel "clear" path later if explicit unset is needed; current
+    # frontend treats missing key as "don't change" and falls back to a
+    # baked-in default when the DB value is NULL.
+    target_sales_erstkontakte: float | None = None
+    target_sales_interessenten: float | None = None
+    target_sales_besuche: float | None = None
+    target_sales_angebote_eur: float | None = None
+    target_sales_orders_per_rep_eur: float | None = None
     # v1.15 Sensor Monitor — admin writes (Phase 40-01)
     # None means "don't change" (same pattern as Personio / HR targets above).
     # Known limitation (40-01): there is no sentinel for "clear threshold back
@@ -180,6 +189,12 @@ class SettingsRead(BaseModel):
     target_sick_leave_ratio: float | None = None
     target_fluctuation: float | None = None
     target_revenue_per_employee: float | None = None
+    # v1.55 — Sales-dashboard targets
+    target_sales_erstkontakte: float | None = None
+    target_sales_interessenten: float | None = None
+    target_sales_besuche: float | None = None
+    target_sales_angebote_eur: float | None = None
+    target_sales_orders_per_rep_eur: float | None = None
     # Phase 39-02 — Sensor config surfaced read-only (admin writes arrive Phase 40).
     # Decimal serializes as string; frontend parses via Number().
     sensor_poll_interval_s: int = 60
@@ -447,6 +462,9 @@ class ContactsWeeklyEmployeeBucket(BaseModel):
     # table), not a count. Float so JSON cleanly carries non-int decimals
     # like 322611.16.
     angebote: float
+    # v1.56-b: weekly €-volume per rep from the auftraege table, plotted
+    # as the 5th bar chart in the Vertriebsaktivität card.
+    orders_eur: float = 0
 
 
 class ContactsWeeklyWeek(BaseModel):
@@ -476,6 +494,32 @@ class OrdersDistributionResponse(BaseModel):
     top3_share_pct: float
     remaining_share_pct: float
     top3_customers: list[TopCustomer]
+
+
+# v1.56-c — Customer-share waterfall for the two-source Kundenanteil cards.
+
+
+class CustomerShareEntry(BaseModel):
+    name: str
+    total_value: float
+    share_pct: float
+
+
+class CustomerShareResponse(BaseModel):
+    """Top-N customer share for either the Aufträge or Umsatz card.
+
+    ``source`` is round-tripped from the query param so the frontend can
+    label the card without re-deriving from the URL. ``top_share_pct`` is
+    the cumulative share of the first ``top_n`` rows; the long-tail rest
+    is ``remaining_share_pct = 100 − top_share_pct``.
+    """
+
+    source: str
+    top_n: int
+    total_value: float
+    top_share_pct: float
+    remaining_share_pct: float
+    top_customers: list[CustomerShareEntry]
 
 
 # --------------------------------------------------------------------------
@@ -508,6 +552,30 @@ class AngeboteUploadResponse(BaseModel):
     Mirrors the InteressentenUploadResponse upsert shape — the offers
     file is keyed by Vorgang Nr., so re-uploads update rather than
     inserting duplicates.
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class RevenueUploadResponse(BaseModel):
+    """Response from POST /api/upload-umsatz.
+
+    Same upsert shape — the AswKpf_RG dump is keyed by Vorgang Nr., so
+    re-uploads update rather than inserting duplicates.
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class AuftraegeUploadResponse(BaseModel):
+    """Response from POST /api/upload-auftraege.
+
+    The AswKpf_AUF dump is keyed by Vorgang Nr.; same upsert shape as the
+    ANG and RG dumps.
     """
 
     rows_inserted: int
@@ -572,6 +640,8 @@ __all__ = [
     "QualityUploadResponse",
     "InteressentenUploadResponse",
     "AngeboteUploadResponse",
+    "RevenueUploadResponse",
+    "AuftraegeUploadResponse",
     "AuditFindingsValue",
     "AuditFindingRow",
     "AuditFindingsHistoryPoint",
@@ -608,4 +678,6 @@ __all__ = [
     "ContactsWeeklyResponse",
     "TopCustomer",
     "OrdersDistributionResponse",
+    "CustomerShareEntry",
+    "CustomerShareResponse",
 ]

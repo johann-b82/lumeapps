@@ -38,7 +38,7 @@ from datetime import date
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Interessent, Offer, SalesContact, SalesRecord
+from app.models import Auftrag, Interessent, Offer, Revenue, SalesContact, SalesRecord  # noqa: F401
 
 
 async def compute_contacts_weekly(
@@ -64,7 +64,15 @@ async def compute_contacts_weekly(
     ).scalars().all()
 
     agg: dict[tuple[int, int, str], dict[str, float]] = defaultdict(
-        lambda: {"erstkontakte": 0, "visits": 0, "onl": 0, "angebote": 0.0}
+        lambda: {
+            "erstkontakte": 0,
+            "visits": 0,
+            "onl": 0,
+            "angebote": 0.0,
+            # v1.56-b: weekly €-volume per rep from the auftraege table,
+            # plotted as the 5th bar chart in the Vertriebsaktivität card.
+            "orders_eur": 0.0,
+        }
     )
     for r in contacts:
         token = r.employee_token
@@ -160,9 +168,62 @@ async def compute_contacts_weekly(
             },
         )
         bucket = w["per_employee"].setdefault(
-            token, {"erstkontakte": 0, "visits": 0, "onl": 0, "angebote": 0.0}
+            token,
+            {
+                "erstkontakte": 0,
+                "visits": 0,
+                "onl": 0,
+                "angebote": 0.0,
+                "orders_eur": 0.0,
+            },
         )
         bucket["angebote"] = float(r.eur or 0)
+
+    # v1.56-b: orders €-volume per (iso-week, erfasser) from the
+    # auftraege table — 5th bar chart in the Vertriebsaktivität card.
+    auftraege_rows = (
+        await session.execute(
+            select(
+                func.extract("isoyear", Auftrag.datum).label("iso_year"),
+                func.extract("week", Auftrag.datum).label("iso_week"),
+                Auftrag.erfasser.label("erfasser"),
+                func.sum(Auftrag.wert_eur).label("eur"),
+            )
+            .where(
+                and_(
+                    Auftrag.datum >= date_from,
+                    Auftrag.datum <= date_to,
+                )
+            )
+            .group_by("iso_year", "iso_week", Auftrag.erfasser)
+        )
+    ).all()
+    for r in auftraege_rows:
+        token = (r.erfasser or "").strip()
+        if not token:
+            continue
+        key = (int(r.iso_year), int(r.iso_week))
+        w = weeks.setdefault(
+            key,
+            {
+                "iso_year": key[0],
+                "iso_week": key[1],
+                "label": f"KW {key[1]:02d} / {key[0]}",
+                "interessenten": 0,
+                "per_employee": {},
+            },
+        )
+        bucket = w["per_employee"].setdefault(
+            token,
+            {
+                "erstkontakte": 0,
+                "visits": 0,
+                "onl": 0,
+                "angebote": 0.0,
+                "orders_eur": 0.0,
+            },
+        )
+        bucket["orders_eur"] = float(r.eur or 0)
 
     sorted_weeks = sorted(weeks.values(), key=lambda w: (w["iso_year"], w["iso_week"]))
     return {"weeks": sorted_weeks}
@@ -171,22 +232,26 @@ async def compute_contacts_weekly(
 async def compute_orders_distribution(
     session: AsyncSession, date_from: date, date_to: date,
 ) -> dict:
-    """Orders/wk/rep + top-3 customer share + remaining share.
+    """€ / week / rep + top-3 customer share + remaining share.
 
-    ``orders_per_week_per_rep`` excludes €0 orders (consistent with the
-    revenue cards above) and divides by the number of distinct sales
-    reps that *created* any non-zero order in the range. v1.44: rep is
-    taken from ``sales_records.created_by_user`` (ERP "Benutzer"
-    column). When no rep can be resolved (e.g. legacy rows uploaded
-    before v1.44) the metric is 0.0.
+    v1.54: re-sourced from the ``auftraege`` table (18-col
+    ``AswKpf_AUF.txt`` export). Rep attribution uses ``Erfasst durch``
+    (``Auftrag.erfasser``); customer grouping uses ``customer_name``.
+
+    v1.54-b: ``orders_per_week_per_rep`` is now a €-volume metric
+    (SUM(wert_eur) / rep_count / weeks), not an order count. The wire
+    field name stays for backward compat — frontend renders it as
+    currency in the card.
+
+    €0 rows are excluded from both the rate metric and the customer
+    share so storno / null-value rows can't distort the dashboard.
     """
     orders = (
         await session.execute(
-            select(SalesRecord).where(
+            select(Auftrag).where(
                 and_(
-                    SalesRecord.order_date.is_not(None),
-                    SalesRecord.order_date >= date_from,
-                    SalesRecord.order_date <= date_to,
+                    Auftrag.datum >= date_from,
+                    Auftrag.datum <= date_to,
                 )
             )
         )
@@ -200,26 +265,24 @@ async def compute_orders_distribution(
             "top3_customers": [],
         }
 
-    # Exclude €0 (NULL counts as 0) orders from both the rate metric
-    # and the customer-share metrics — matches the "Aufträge mit Wert
-    # 0 € werden ausgeschlossen" disclaimer below the per_rep tile.
-    nonzero = [o for o in orders if float(o.total_value or 0) > 0]
+    nonzero = [o for o in orders if float(o.wert_eur or 0) > 0]
 
     creators = {
-        (o.created_by_user or "").strip()
+        (o.erfasser or "").strip()
         for o in nonzero
-        if (o.created_by_user or "").strip()
+        if (o.erfasser or "").strip()
     }
     rep_count = len(creators)
     weeks = max(1, ((date_to - date_from).days // 7) + 1)
     if rep_count == 0:
         orders_per_week_per_rep = 0.0
     else:
-        orders_per_week_per_rep = round(len(nonzero) / rep_count / weeks, 2)
+        total_value = sum(float(o.wert_eur or 0) for o in nonzero)
+        orders_per_week_per_rep = round(total_value / rep_count / weeks, 2)
 
     by_customer: dict[str, float] = defaultdict(float)
     for o in nonzero:
-        by_customer[o.customer_name or ""] += float(o.total_value or 0)
+        by_customer[o.customer_name or ""] += float(o.wert_eur or 0)
     sorted_cust = sorted(by_customer.items(), key=lambda kv: kv[1], reverse=True)
     total = sum(by_customer.values()) or 1.0
     top3 = sorted_cust[:3]
@@ -230,4 +293,80 @@ async def compute_orders_distribution(
         "top3_share_pct": top3_pct,
         "remaining_share_pct": round(100.0 - top3_pct, 2),
         "top3_customers": [{"name": c, "total_value": round(v, 2)} for c, v in top3],
+    }
+
+
+async def compute_customer_share(
+    session: AsyncSession,
+    source: str,
+    date_from: date,
+    date_to: date,
+    top_n: int = 14,
+) -> dict:
+    """Top-N customer share for the Kundenanteil waterfall card.
+
+    Source switch:
+      - ``"auftraege"`` → group ``auftraege.customer_name`` by SUM(wert_eur)
+      - ``"revenues"``  → group ``revenues.customer_name`` by SUM(wert_eur),
+        which includes GS (Gutschrift) rows with negative wert and is
+        therefore net revenue.
+
+    Returns:
+        {
+            "total_value": float,                    # denominator
+            "top_share_pct": float,                  # top-N % of total
+            "remaining_share_pct": float,            # 100 − top_share_pct
+            "top_customers": [{"name": str,
+                               "total_value": float,
+                               "share_pct": float}, ...]
+        }
+    """
+    if source not in {"auftraege", "revenues"}:
+        raise ValueError(f"invalid source: {source!r}")
+
+    model = Auftrag if source == "auftraege" else Revenue
+    date_col = model.datum
+    value_col = model.wert_eur
+
+    # Single grouped query — let Postgres do the heavy lifting.
+    stmt = (
+        select(model.customer_name, func.sum(value_col).label("total_value"))
+        .where(and_(date_col >= date_from, date_col <= date_to))
+        .group_by(model.customer_name)
+        .order_by(func.sum(value_col).desc())
+    )
+    rows = (await session.execute(stmt)).all()
+
+    if not rows:
+        return {
+            "total_value": 0.0,
+            "top_share_pct": 0.0,
+            "remaining_share_pct": 0.0,
+            "top_customers": [],
+        }
+
+    total = sum(float(r.total_value or 0) for r in rows)
+    if total <= 0:
+        return {
+            "total_value": 0.0,
+            "top_share_pct": 0.0,
+            "remaining_share_pct": 0.0,
+            "top_customers": [],
+        }
+
+    top = rows[:top_n]
+    top_sum = sum(float(r.total_value or 0) for r in top)
+    top_pct = round(top_sum / total * 100, 2)
+    return {
+        "total_value": round(total, 2),
+        "top_share_pct": top_pct,
+        "remaining_share_pct": round(100.0 - top_pct, 2),
+        "top_customers": [
+            {
+                "name": r.customer_name or "",
+                "total_value": round(float(r.total_value or 0), 2),
+                "share_pct": round(float(r.total_value or 0) / total * 100, 2),
+            }
+            for r in top
+        ],
     }

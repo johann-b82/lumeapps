@@ -31,6 +31,15 @@ export interface DraftFields {
   target_sick_leave_ratio: number | null;
   target_fluctuation: number | null;
   target_revenue_per_employee: number | null;
+  // v1.55 Sales-dashboard weekly targets — stored as plain numbers
+  // (no percent-conversion; the 3 counts are integers in practice and
+  // angebote_eur is a € amount).
+  target_sales_erstkontakte: number | null;
+  target_sales_interessenten: number | null;
+  target_sales_besuche: number | null;
+  target_sales_angebote_eur: number | null;
+  // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
+  target_sales_orders_per_rep_eur: number | null;
 }
 
 export interface UseSettingsDraftReturn {
@@ -76,6 +85,11 @@ function settingsToDraft(s: Settings): DraftFields {
     target_sick_leave_ratio: s.target_sick_leave_ratio,
     target_fluctuation: s.target_fluctuation,
     target_revenue_per_employee: s.target_revenue_per_employee,
+    target_sales_erstkontakte: s.target_sales_erstkontakte,
+    target_sales_interessenten: s.target_sales_interessenten,
+    target_sales_besuche: s.target_sales_besuche,
+    target_sales_angebote_eur: s.target_sales_angebote_eur,
+    target_sales_orders_per_rep_eur: s.target_sales_orders_per_rep_eur,
   };
 }
 
@@ -105,6 +119,11 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     target_sick_leave_ratio: draft.target_sick_leave_ratio,
     target_fluctuation: draft.target_fluctuation,
     target_revenue_per_employee: draft.target_revenue_per_employee,
+    target_sales_erstkontakte: draft.target_sales_erstkontakte,
+    target_sales_interessenten: draft.target_sales_interessenten,
+    target_sales_besuche: draft.target_sales_besuche,
+    target_sales_angebote_eur: draft.target_sales_angebote_eur,
+    target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
   };
 }
 
@@ -131,6 +150,11 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     target_sick_leave_ratio: draft.target_sick_leave_ratio,
     target_fluctuation: draft.target_fluctuation,
     target_revenue_per_employee: draft.target_revenue_per_employee,
+    target_sales_erstkontakte: draft.target_sales_erstkontakte,
+    target_sales_interessenten: draft.target_sales_interessenten,
+    target_sales_besuche: draft.target_sales_besuche,
+    target_sales_angebote_eur: draft.target_sales_angebote_eur,
+    target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
   };
   // Only send credentials if user typed something (non-empty)
   if (draft.personio_client_id) {
@@ -142,7 +166,7 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
   return payload;
 }
 
-export type SettingsSlice = "general" | "hr";
+export type SettingsSlice = "general" | "hr" | "sales";
 
 const GENERAL_FIELDS = [
   "app_name",
@@ -167,8 +191,18 @@ const HR_FIELDS = [
   "target_revenue_per_employee",
 ] as const satisfies readonly (keyof DraftFields)[];
 
+const SALES_FIELDS = [
+  "target_sales_erstkontakte",
+  "target_sales_interessenten",
+  "target_sales_besuche",
+  "target_sales_angebote_eur",
+  "target_sales_orders_per_rep_eur",
+] as const satisfies readonly (keyof DraftFields)[];
+
 function fieldsForSlice(slice: SettingsSlice): readonly (keyof DraftFields)[] {
-  return slice === "general" ? GENERAL_FIELDS : HR_FIELDS;
+  if (slice === "general") return GENERAL_FIELDS;
+  if (slice === "hr") return HR_FIELDS;
+  return SALES_FIELDS;
 }
 
 function eqField<K extends keyof DraftFields>(
