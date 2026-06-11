@@ -713,7 +713,7 @@ frontend/src/docs/{en,de}/admin-guide/digital-signage.md
 
 This is a requirements text typo, not an implementation error. The intent of SGN-OPS-01 — "bilingual admin guide covering Pi onboarding, media upload, playlist building, offline behavior, PPTX best practices" — is fully satisfied by the files at the corrected paths.
 
-**Plan 48-05's `48-VERIFICATION.md` formalizes this amendment.** This note is here for documentation authors and future plan writers who reference the literal path in REQUIREMENTS.md.
+This note is here for documentation authors and future plan writers who reference the literal path in REQUIREMENTS.md.
 
 ---
 
@@ -722,7 +722,6 @@ This is a requirements text typo, not an implementation error. The intent of SGN
 - `scripts/README-pi.md` — Quick-start provisioning guide
 - `frontend/src/docs/en/admin-guide/digital-signage.md` — User-facing admin guide (EN)
 - `frontend/src/docs/de/admin-guide/digital-signage.md` — User-facing admin guide (DE)
-- `.planning/phases/48-pi-provisioning-e2e-docs/48-E2E-RESULTS.md` — E2E walkthrough results (Plan 48-05)
 
 ---
 
@@ -944,3 +943,151 @@ would need to be reverted manually (out of scope).
 - Composite-PK Directus collections (`signage_playlist_tag_map`,
   `signage_device_tag_map`) return 403 to admin REST queries on the v1.22
   forward state too — this is unrelated to rollback.
+
+---
+
+## 17. Database Restore from Nightly Backup (verified 2026-06-11)
+
+Nightly dumps are written by the `kpi-backup` service (compose service `backup`, container name `kpi-backup`) at **02:00 Europe/Berlin** to:
+
+```
+./backups/kpi-YYYY-MM-DD.sql.gz
+```
+
+The dump command (`backup/dump.sh`) is `pg_dump --clean --if-exists --no-owner --no-acl -Fp | gzip`, with 14-day retention. The `kpi-backup` container already carries `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env, so all `psql`/`pg_dump` commands below run inside it without extra flags.
+
+**This procedure was executed successfully on 2026-06-11** to recover from a full production data wipe (see Section 18 for the cause).
+
+### 17.1 Procedure
+
+1. **Snapshot the current (broken) state first** — even a wiped database may hold rows newer than the nightly dump:
+
+   ```bash
+   docker exec kpi-backup sh -c \
+     "pg_dump --clean --if-exists --no-owner --no-acl -Fp | gzip -c > /backups/pre-restore-snapshot-$(date +%F).sql.gz"
+   ```
+
+2. **Stop everything that talks to the database** (the `db` and `backup` services stay up):
+
+   ```bash
+   docker compose stop api directus caddy frontend
+   ```
+
+3. **Verify zero remaining connections** to the application database:
+
+   ```bash
+   docker exec kpi-backup psql -c \
+     "SELECT count(*) FROM pg_stat_activity WHERE datname = 'acm_kpi' AND pid <> pg_backend_pid();"
+   # Expected: 0
+   ```
+
+4. **Drop and recreate the schema.** Do NOT rely on the dump's `--clean` section alone — when the live schema contains Alembic migrations newer than the dump, the `DROP ... IF EXISTS` statements run in dump order and **fail with FK dependency errors** against objects the dump doesn't know about. A schema-level drop sidesteps this entirely:
+
+   ```bash
+   docker exec kpi-backup psql -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+   ```
+
+5. **Restore the chosen dump** (replace the filename):
+
+   ```bash
+   docker exec kpi-backup sh -c \
+     "gunzip -c /backups/kpi-YYYY-MM-DD.sql.gz | psql -v ON_ERROR_STOP=1 -q"
+   ```
+
+6. **Re-apply Alembic migrations newer than the dump.** The restored `alembic_version` row points at whatever revision was head when the dump ran:
+
+   ```bash
+   docker compose run --rm migrate
+   ```
+
+7. **Bring the stack back up:**
+
+   ```bash
+   docker compose up -d
+   ```
+
+8. **Verify row counts** against expectations:
+
+   ```bash
+   docker exec kpi-backup psql -c \
+     "SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 15;"
+   ```
+
+If restored signage device rows exist but kiosks fall back to the pairing screen, do **not** re-claim them via the dashboard — follow Section 19 to re-bind each kiosk to its original device row.
+
+---
+
+## 18. WARNING — Never Run pytest Against the Production Database
+
+**Rule: never run the backend test suite in any shell where the real `POSTGRES_*` variables are set — in particular, never `docker compose exec api pytest`.**
+
+`backend/tests/conftest.py` only uses `os.environ.setdefault(...)` for `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_HOST`. `setdefault` does NOT override variables that are already set. Inside the `api` container (or any shell sourcing `.env`), the real values win, and the suite connects to the **live `acm_kpi` database**.
+
+The test fixtures are destructive by design:
+
+- Upload/KPI test setup issues whole-table deletes: `upload_batches` (cascading to `sales_records`, `revenues`, `auftraege`, `offers`, `interessenten`), plus `sales_contacts` and `quality_records` (e.g. `backend/tests/test_sales_kpi_endpoints.py`, `test_quality_kpi_endpoints.py`, `test_revenue_upload.py`).
+- Signage tests wipe `signage_pairing_sessions`, `signage_device_tag_map`, `signage_playlist_tag_map`, `signage_playlist_items`, `signage_playlists`, `signage_media`, `signage_devices` (e.g. `backend/tests/test_signage_admin_router.py`).
+- Directus integration tests delete signage devices, playlists, and media **via the live Directus REST API** at `DIRECTUS_BASE_URL` (defaults to `http://directus:8055` — the production container on the compose network; see `backend/tests/signage/test_admin_directus_crud_smoke.py`, `test_pg_listen_sse.py`).
+
+**This caused a full production data wipe on 2026-06-11**, recovered via the nightly backup using the procedure in Section 17.
+
+**Safe ways to run the suite:**
+
+- Run pytest on the host in a shell where no real `POSTGRES_*` vars are exported — conftest's defaults (`test`/`test`/`test`@`localhost`) then apply and the connection simply fails fast for DB-bound tests.
+- Or point `POSTGRES_*`/`DIRECTUS_BASE_URL` explicitly at a disposable database/instance before invoking pytest.
+
+---
+
+## 19. Re-pair Kiosks to Their Existing Device Rows After a Restore
+
+**Scenario:** device rows were restored (Section 17), but the kiosks 401'd during the outage, wiped their tokens, and dropped to the pairing screen.
+
+**Do NOT claim the codes via the dashboard.** `POST /api/signage/pair/claim` always **creates a new device row** (`backend/app/routers/signage_pair.py`), losing the original device's tags, playlist assignments, and settings, and leaving an orphaned row behind.
+
+Instead, bind each kiosk's pending pairing session directly to its **original** device row:
+
+1. List the restored device rows and note each UUID:
+
+   ```bash
+   docker exec kpi-backup psql -c "SELECT id, name FROM signage_devices ORDER BY name;"
+   ```
+
+2. Read the pairing code from the physical screen (displayed as `XXX-XXX`).
+
+3. Claim the session by SQL, binding it to the original device UUID. **Strip the dash** — codes are stored undashed/uppercase:
+
+   ```bash
+   docker exec kpi-backup psql -c \
+     "UPDATE signage_pairing_sessions
+      SET claimed_at = now(), device_id = '<original-device-uuid>'
+      WHERE code = '<CODE>' AND claimed_at IS NULL AND expires_at > now();"
+   # Expected: UPDATE 1
+   ```
+
+4. The kiosk polls `/api/signage/pair/status` every **3 seconds**; on the next poll it receives a JWT minted for its original device identity and resumes playback with all tags/playlists intact.
+
+**Act quickly after reading a code:** pairing sessions expire after 10 minutes, and the player proactively requests a fresh code 5 seconds before expiry (`frontend/src/player/PairingScreen.tsx`) — so the code on screen rotates roughly every 10 minutes. If `UPDATE 0` comes back, the code on the screen has already rotated; re-read it and retry.
+
+The original device row must not be revoked (`revoked_at IS NULL`), otherwise the kiosk's first authenticated request 401s and it falls straight back to pairing.
+
+---
+
+## 20. Stirling-PDF v2 Login Regression (401s on /pdf/)
+
+**Symptom:** the `stirling` container goes unhealthy; its healthcheck (`curl http://localhost:8080/pdf/`) and browser requests to `/pdf/` return 401 / a Stirling login screen, even though Caddy `forward_auth` is the intended gate.
+
+**Cause:** the `stirlingtools/stirling-pdf:latest` image (v2.x) **ignores the old `DOCKER_ENABLE_SECURITY` flag**. Login is now controlled by `security.enableLogin` in the persisted `./stirling_data/configs/settings.yml`, which survives container recreation — so a v2 image pull can silently turn the internal login screen on.
+
+**Fix:** ensure the env override is present on the `stirling` service in `docker-compose.yml` (it takes precedence over the persisted `settings.yml`):
+
+```yaml
+SECURITY_ENABLELOGIN: "false"
+```
+
+Then recreate the container (env changes require `up -d`, not `restart` — same rule as Section 14):
+
+```bash
+docker compose up -d stirling
+```
+
+This override is already committed in `docker-compose.yml` as of 2026-06-11. If 401s recur after an image update, check `./stirling_data/configs/settings.yml` for a `security.enableLogin: true` that a new Stirling version may have started honoring through a different key.

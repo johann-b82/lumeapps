@@ -25,6 +25,7 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **Personio Integration** — Fernet-encrypted API credentials, configurable sync interval (manual/1h/6h/24h), auto-sync via APScheduler, credential test, on-demand refresh
 - **Multi-Select Config** — Checkbox lists for sick leave absence types, production departments, and skill attribute keys
 - **HR KPI Targets** — Set target values (Sollwerte) displayed as dashed reference lines on HR trend charts
+- **World Cup Embed** — Write-only Fernet-encrypted football-data.org API key + feed refresh interval (30–3600 s) at `/settings/worldcup`, feeding the signage embed
 - **Language** — DE/EN toggle stored in localStorage (no server round-trip)
 - **Dark Mode** — Sun/moon toggle in navbar; OS `prefers-color-scheme` default + localStorage override; pre-hydration IIFE avoids flash-of-unstyled-content
 
@@ -46,6 +47,7 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **Pi Kiosk Provisioning** — Single `scripts/provision-pi.sh` brings a fresh Bookworm Lite 64-bit Pi to a paired, playing kiosk; dedicated non-root `signage` user; systemd user services with labwc + Chromium kiosk flags
 - **Offline-Resilient Sidecar** — `pi-sidecar/` FastAPI service on the Pi proxy-caches `/api/signage/player/playlist` and media bytes to `/var/lib/signage/`; 5-minute Wi-Fi drop keeps the loop running; auto-reconnect within 30s
 - **Analytics-Lite (v1.18)** — Devices table shows `Uptime 24 h` and `Missed windows 24 h` badges, computed from a 25 h-retention `signage_heartbeat_event` log; 30 s polling + focus refetch
+- **World Cup Live-Results Embed (v1.57)** — Public kiosk page at `/embed/worldcup` (no auth, German default, `?lang=en`) shows today's World Cup matches in an auto-fit 1–6 match grid with no scrolling and a full-screen goal overlay when a score increases between polls (restart/correction-guarded diff). The backend proxies football-data.org server-side, so the API key never leaves the server; a module-level TTL cache means one upstream call per refresh interval regardless of screen count, with stale-since fallback so the screen never goes blank
 - **Bilingual Admin Guide + Operator Runbook** — `frontend/src/docs/{en,de}/admin-guide/digital-signage.md` covers onboarding, media, playlists, schedules, analytics, offline behavior, PPTX font-embed tips; `docs/operator-runbook.md` carries the systemd units, Chromium flag set, and recovery procedures
 
 ### Sensor Monitoring (v1.15+)
@@ -68,7 +70,7 @@ The launcher exposes three third-party apps, all gated by a Caddy `forward_auth`
   - Postgres backend on the shared `db` service (`paperless` database, no SQLite); `redis:7-alpine` broker sidecar
   - German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify ingestion
 - **PDF Tools — Stirling-PDF** (v1.48, mounted at `/pdf/*`)
-  - Community edition with internal login disabled (`security.enableLogin=false`); auth handled exclusively by the Caddy gate
+  - Community edition with internal login disabled (`SECURITY_ENABLELOGIN=false` — Stirling v2 ignores the old `DOCKER_ENABLE_SECURITY` flag); auth handled exclusively by the Caddy gate
   - Stateless app; `./stirling_data/` bind mount holds settings + custom config only
 - **Projects — OpenProject Community** (v1.48, mounted at `/op/*`)
   - Caddy gate keeps unauthenticated users off the OP login page; community edition has no header SSO so users still sign into OP separately on first visit
@@ -108,7 +110,7 @@ The launcher exposes three third-party apps, all gated by a Caddy `forward_auth`
 | State | TanStack Query v5 |
 | i18n | react-i18next (flat dotted keys, `keySeparator: false`) |
 | Scheduler | APScheduler (in-process) |
-| External | Personio API (employees, attendances, absences) |
+| External | Personio API (employees, attendances, absences), football-data.org (World Cup signage embed) |
 | Document Mgmt | Paperless-ngx 2.20 (Postgres backend, Redis broker), Caddy `forward_auth` SSO |
 | PDF Tools | Stirling-PDF community (Caddy `forward_auth` SSO) |
 | Project Mgmt | OpenProject community (Postgres backend, Caddy `forward_auth` gate) |
@@ -228,12 +230,14 @@ kpi-light/
 │   │   │   ├── sensors.py       # Sensor CRUD, SNMP probe/walk, polling endpoints
 │   │   │   ├── signage_admin/   # Compute-only signage surface (v1.22): playlist DELETE, bulk playlist-items PUT, device calibration PATCH, resolved/{device_id}, analytics
 │   │   │   ├── signage_player.py # Kiosk-facing playlist + asset + SSE stream
-│   │   │   └── signage_pair.py  # Device JWT minting + pairing flow
+│   │   │   ├── signage_pair.py  # Device JWT minting + pairing flow
+│   │   │   └── worldcup.py      # Public World Cup feed for the signage embed (v1.57)
 │   │   └── services/
 │   │       ├── kpi_aggregation.py
 │   │       ├── hr_kpi_aggregation.py
 │   │       ├── snmp_poller.py   # SNMP polling, walk, probe utilities
-│   │       └── signage_pg_listen.py # Postgres LISTEN/NOTIFY → SSE bridge (v1.22)
+│   │       ├── signage_pg_listen.py # Postgres LISTEN/NOTIFY → SSE bridge (v1.22)
+│   │       └── worldcup_feed.py # football-data.org fetch + TTL cache + stale fallback (v1.57)
 │   ├── alembic/                 # Migration chain
 │   └── requirements.txt
 │
@@ -266,8 +270,7 @@ kpi-light/
 | POST | `/api/settings/logo` | Upload logo |
 | GET | `/api/settings/personio-options` | Available absence types, departments, skill attributes |
 | POST | `/api/upload` | Upload ERP sales file |
-| GET | `/api/uploads` | List upload batches |
-| DELETE | `/api/uploads/{id}` | Delete upload batch |
+| DELETE | `/api/uploads/{id}` | Delete upload batch (list via Directus, v1.23) |
 | GET | `/api/kpis` | Sales KPI summary with comparison periods |
 | GET | `/api/kpis/chart` | Sales chart data (monthly, with prior-period overlay) |
 | GET | `/api/kpis/latest-upload` | Latest upload timestamp |
@@ -290,7 +293,7 @@ kpi-light/
 | GET | `/api/signage/pair/status` | Kiosk polls until admin claims (unauthenticated) |
 | POST | `/api/signage/pair/claim` | Admin claims a pairing code → binds device JWT (admin-only) |
 | POST | `/api/signage/pair/devices/{id}/revoke` | Revoke a device token (admin-only) |
-| GET,POST,PATCH,DELETE | `/api/signage/media` | Admin media CRUD (admin-only) |
+| PATCH,DELETE | `/api/signage/media/{id}` | Media update/delete; PPTX upload via `POST /api/signage/media/pptx` (admin-only; media list/create via Directus, v1.23) |
 | DELETE | `/api/signage/playlists/{id}` | Delete playlist; structured `409 {detail, schedule_ids}` when referenced (admin-only; CRUD list/create/update via Directus, v1.22) |
 | PUT | `/api/signage/playlists/{id}/items` | Atomic bulk DELETE+INSERT of playlist items (admin-only; items GET via Directus, v1.22) |
 | PATCH | `/api/signage/devices/{id}/calibration` | Update rotation/HDMI mode/audio (admin-only; device CRUD list/create/rename/delete/tags via Directus, v1.22) |
@@ -300,6 +303,7 @@ kpi-light/
 | GET | `/api/signage/player/stream` | SSE stream of playlist-change events (device-auth, `?token=` query) |
 | POST | `/api/signage/player/heartbeat` | Kiosk presence beacon (device-auth) |
 | GET | `/api/signage/analytics/devices` | Per-device uptime + missed-window counts over the last 24 h (admin-only, v1.18) |
+| GET | `/api/worldcup/embed/today` | Today's World Cup matches + next-matchday fallback for the `/embed/worldcup` signage page (public, no auth; server-side football-data.org proxy with TTL cache + stale fallback, v1.57) |
 
 **Migrated to Directus (v1.22):** `signage_tags`, `signage_schedules`, `signage_playlists` (list/create/rename/re-tag), `signage_playlist_items` (GET), `signage_devices` (list/get/rename/tags/delete), `sales_records`, `personio_employees`, current-user `readMe`. Frontend reaches these via the Directus SDK (same-origin at `/directus/*` through Caddy); the surviving FastAPI surface above is compute-only.
 

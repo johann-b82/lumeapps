@@ -16,13 +16,13 @@ out of scope for this milestone.
 
 | Path         | Upstream          | Prefix handling              | Notes                                                                      |
 | ------------ | ----------------- | ---------------------------- | -------------------------------------------------------------------------- |
-| `/`          | `frontend:5173`   | Preserved                    | Admin SPA (login, launcher, dashboards, signage admin).                    |
+| `/`          | `frontend:5173`   | Preserved                    | Admin SPA (login, launcher, dashboards, signage admin). Public `/embed/*` kiosk routes (birthdays, joiners, worldcup) also ride this catch-all — they render without a Directus session. |
 | `/api/*`     | `api:8000`        | Preserved                    | FastAPI routes live at `/api/...`. SSE passthrough via `flush_interval -1` + 24h `read_timeout`. |
 | `/directus/*`| `directus:8055`   | **Stripped** (`handle_path`) | Directus doesn't know it's behind a subpath; it expects bare `/auth`, `/items`, `/assets`, `/server`. |
-| `/player/*`  | `frontend:5173`   | Preserved                    | Kiosk bundle. Vite dev serves `/player/` as a separate entry; prod build writes to `dist/player/`. |
+| `/player/*`  | `api:8000`        | Preserved                    | Kiosk bundle. Built into `frontend/dist/player/` and served by FastAPI as a StaticFiles mount (see `backend/app/main.py`). Vite dev does NOT serve the player entry — routing through FastAPI means the Pi always gets the built bundle. Rebuild with `npm run build:player`. |
 | `/paperless/*`| `paperless:8000` | Preserved                    | Paperless-ngx UI/API. Subpath via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`. Each request first hits `forward_auth → api:8000/api/auth/forward`; on 200, Caddy lifts `X-Remote-User` onto the upstream request. |
-| `/pdf/*`     | `stirling:8080`   | Preserved                    | Stirling-PDF community edition. Caddy `forward_auth` is the only auth gate; internal Stirling login is disabled (`security.enableLogin=false` in `./stirling_data/settings.yml`). |
-| `/op/*`      | `openproject:80`  | Preserved                    | OpenProject community. Caddy `forward_auth` keeps unauthenticated browsers off the OP login page; community edition has no header SSO so users still authenticate against OP separately on first visit. |
+| `/pdf/*`     | `stirling:8080`   | Preserved                    | Stirling-PDF (v2 image). Caddy `forward_auth` is the only auth gate; internal Stirling login is disabled via the `SECURITY_ENABLELOGIN=false` env var in `docker-compose.yml` (Stirling v2 ignores the obsolete `DOCKER_ENABLE_SECURITY` flag). Subpath via `SERVER_SERVLET_CONTEXT_PATH=/pdf`. |
+| `/op/*`      | `openproject:8080`| Preserved                    | OpenProject community. Caddy `forward_auth` keeps unauthenticated browsers off the OP login page; community edition has no header SSO so users still authenticate against OP separately on first visit. |
 
 **Why Caddy, why this shape:**
 
@@ -50,10 +50,6 @@ out of scope for this milestone.
 to same-origin `"/directus"` as of Phase 64. `VITE_DIRECTUS_URL` still
 overrides for dev workflows that want to bypass the proxy.
 
-**Verification:** `scripts/verify-phase-64-proxy.sh` smoke-tests the four
-routes plus a 65-second hold probe that asserts the proxy does not close
-long-lived connections. Run it after any compose or Caddyfile change.
-
 ---
 
 ## Components
@@ -72,7 +68,7 @@ docker compose up
                                                   Postgres-backed, Redis broker, Directus SSO via Caddy forward_auth
   +-- stirling                                --> :8080 (v1.48)
                                                   Caddy forward_auth gate, internal login disabled
-  +-- openproject                             --> :80   (v1.48)
+  +-- openproject                             --> :8080 (v1.48)
                                                   Dedicated `openproject` Postgres DB on shared db service
 ```
 
@@ -110,11 +106,18 @@ into OP separately on first visit).
 
 ### Stirling-PDF (v1.48+)
 
-Single `stirling` container running `frooodle/s-pdf:latest` on internal
-port 8080, mounted at `/pdf/*` via Caddy. `./stirling_data/` bind mount
-holds `settings.yml` (with `security.enableLogin=false`) plus any custom
-config — the app itself is stateless. Comes up with the rest of the stack
-on `docker compose up`.
+Single `stirling` container running `stirlingtools/stirling-pdf:latest`
+(the Stirling v2 image — the old `frooodle/s-pdf` name is retired) on
+internal port 8080, mounted at `/pdf/*` via Caddy. Subpath deployment via
+`SERVER_SERVLET_CONTEXT_PATH=/pdf`, so Caddy preserves the prefix.
+Internal login is disabled with the `SECURITY_ENABLELOGIN=false` env var
+in `docker-compose.yml` — Stirling v2 ignores the obsolete
+`DOCKER_ENABLE_SECURITY` flag, and login is controlled by
+`security.enableLogin` (settings.yml), overridden here via env. Caddy
+`forward_auth` remains the only auth gate for `/pdf`. Bind mounts under
+`./stirling_data/` (`configs`, `custom-files`, `logs`, `pipeline`) hold
+config and scratch state — the app itself is stateless. Comes up with the
+rest of the stack on `docker compose up`.
 
 ### OpenProject Community (v1.48+)
 
@@ -156,6 +159,67 @@ canonical boundary: **Directus = shape, FastAPI = compute**.
   rows only.
 
 Decision recorded in [ADR-0001](./adr/0001-directus-fastapi-split.md).
+
+---
+
+## Sales Ingestion Tables (v1.53 / v1.54)
+
+The Sales dashboard now sources from two ERP-export ingestion tables
+(Alembic head is `v1_57_worldcup`):
+
+- **`revenues`** (migration `v1_53_revenues`) — Umsatz rows (RG/GS —
+  Rechnungsausgang / Gutschrift) from the `AswKpf_RG.txt` ERP export
+  (18-col tab-separated, Latin-1), keyed by `Vorgang Nr.` so re-uploads
+  upsert on PK. Drives the "Umsatz" KPI card and "Umsatzwachstum" chart;
+  GS (credit note) rows carry a negative `wert_eur` and naturally reduce
+  the summed total.
+- **`auftraege`** (migration `v1_54_auftraege`) — orders from the
+  `AswKpf_AUF.txt` export (same shape as the ANG/RG dumps). Drives the
+  order-side KPIs (`avg_order_value`, `total_orders`, orders/wk/rep,
+  top-3 customer share), replacing the legacy 60-col `Aufträge.txt`
+  format. The legacy `sales_records` table stays in place for back-compat
+  but no longer drives the dashboard.
+
+Both extend the `upload_batches.kind` check constraint with their
+respective discriminator and flow through the FastAPI upload + KPI
+aggregation pipeline (compute side of the ADR-0001 boundary).
+
+---
+
+## World Cup Signage Embed (v1.57)
+
+A public kiosk page at `/embed/worldcup` shows today's World Cup matches
+with live scores and a full-screen goal overlay. Like the other
+`/embed/*` routes (birthdays, joiners), it short-circuits in the
+frontend `RootRouter` before the auth-gated AppShell — kiosks carry no
+Directus session.
+
+- **Feed endpoint:** `GET /api/worldcup/embed/today`
+  (`backend/app/routers/worldcup.py`) is public (listed in the
+  admin-gate allowlist, same rationale as the HR embeds). Compute-
+  justified: it proxies football-data.org v4 server-side so the API key
+  never leaves the server.
+- **Caching:** `backend/app/services/worldcup_feed.py` keeps a
+  module-level TTL cache, so one upstream call per refresh interval
+  serves every kiosk regardless of screen count. On upstream failure the
+  last good data keeps being served with `stale_since` set — a signage
+  screen must never go blank.
+- **Settings:** migration `v1_57_worldcup` adds two `app_settings`
+  columns: `worldcup_api_key_enc` (Fernet-encrypted, like the Personio
+  credentials) and `worldcup_refresh_seconds` (default 60). The admin
+  settings API exposes `worldcup_has_api_key` (boolean — the key itself
+  is write-only via `worldcup_api_key`) and the refresh interval; the
+  SPA edits both in the World Cup settings section.
+- **Goal detection:** client-side score diff between polls
+  (`frontend/src/components/worldcup/goalDetection.ts`). Never fires on
+  the first poll after page load (a kiosk restart must not replay old
+  goals), skips matches absent from the previous poll (day rollover),
+  and ignores downward corrections. Detected goals queue up and play
+  sequentially as a 6-second `GoalOverlay`.
+- **Polling:** the page polls at the server-configured interval
+  (clamped to ≥30 s client-side) via TanStack Query
+  `refetchInterval`, so the feed's `refresh_seconds` round-trips into
+  the next poll delay.
 
 ---
 

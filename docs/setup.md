@@ -195,7 +195,7 @@ Use `./scripts/restore.sh` to restore a dump produced by the backup sidecar. Pos
 - **Warning:** the restore replaces all data in `$POSTGRES_DB` — the dump is produced with `pg_dump --clean --if-exists`, so every object is dropped and recreated. A 5-second countdown before streaming begins gives you a chance to Ctrl-C out.
 - The stack must be up (`docker compose up -d`) before running restore — the script uses `docker compose exec -T db psql ...` inside the existing `db` container.
 
-This exact restore path was exercised end-to-end during Phase 30 execution; the cycle (dump → restore → tables verified) is recorded in `.planning/phases/30-bring-up-docs-backup/30-01-SUMMARY.md`.
+This exact restore path was exercised end-to-end during Phase 30 execution (dump → restore → tables verified).
 
 ---
 
@@ -262,7 +262,7 @@ Generate a fresh random value with `openssl rand -base64 24`. The bootstrap admi
 
 If you want to skip one of these apps on a given host, use `docker compose up -d --scale paperless=0 --scale paperless-broker=0` (or `--scale stirling=0`, `--scale openproject=0`) — the service stays in the compose file but no container is started.
 
-**Stirling-PDF login.** Internal Stirling login is disabled by config (`./stirling_data/settings.yml` sets `security.enableLogin=false`); the Caddy `forward_auth` gate is the only auth boundary. Do not flip that flag unless you also want a second login wall.
+**Stirling-PDF login.** Internal Stirling login is disabled via the `SECURITY_ENABLELOGIN: "false"` environment variable on the `stirling` service in `docker-compose.yml`; the Caddy `forward_auth` gate is the only auth boundary. Stirling v2 ignores the old `DOCKER_ENABLE_SECURITY` flag — without `SECURITY_ENABLELOGIN=false`, Stirling enables its login screen and the container's healthcheck fails with 401s. The env var also overrides whatever `./stirling_data/configs/settings.yml` says about `security.enableLogin`, so the YAML file does not need editing. Do not remove the env var unless you also want a second login wall.
 
 ---
 
@@ -281,3 +281,20 @@ It expires every `directus_*` cookie on the response and 303-redirects to
 `/login`. New browsers (no prior cookie) are unaffected — they go straight
 to the SPA login form and pick up the new session-mode cookie
 (`directus_session_token`) automatically.
+
+---
+
+## World Cup signage feed
+
+The signage kiosk page at `/embed/worldcup` shows live FIFA World Cup results pulled from [football-data.org](https://www.football-data.org/).
+
+**No new `.env` entry is required.** The football-data.org API key is configured at runtime: sign in to the app as an Admin, open **Settings**, and paste the key into the World Cup section (refresh interval is configured there too). The key is stored Fernet-encrypted in the database (`app_settings`), not in `.env`.
+
+The only prerequisite is the existing `FERNET_KEY` variable in `.env` — the same key already used for Personio credentials. The installer (`./scripts/install.sh`) generates it automatically. On a manual install, if `FERNET_KEY` is missing (it is not listed in `.env.example`), saving the API key fails with a server error; add it and recreate the api container:
+
+```bash
+# Generate a Fernet key
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Add to .env as FERNET_KEY=<value>, then:
+docker compose up -d api
+```
