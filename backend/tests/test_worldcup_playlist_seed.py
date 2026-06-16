@@ -22,6 +22,8 @@ async def test_wm2026_playlist_seeded():
             )
         ).scalars().all()
         assert len(items) == 5
+        assert pl.enabled is True
+        assert [it.duration_s for it in items] == [30, 15, 20, 20, 20]
         uris = []
         for it in items:
             media = (
