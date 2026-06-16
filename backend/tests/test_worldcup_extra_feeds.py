@@ -77,3 +77,35 @@ def test_build_knockout_filters_and_orders_stages():
     feed = wcf.build_knockout(raws, 60)
     assert [s.stage for s in feed.stages] == ["LAST_16", "FINAL"]
     assert [m.id for m in feed.stages[0].matches] == [2]
+
+
+def test_build_scorers_ranks_and_maps():
+    raw = [
+        {"player": {"name": "Kylian Mbappé"},
+         "team": {"name": "France", "shortName": "France", "tla": "FRA",
+                  "crest": "https://crests.football-data.org/fra.png"},
+         "goals": 6},
+        {"player": {"name": "Harry Kane"},
+         "team": {"name": "England", "shortName": "England", "tla": "ENG", "crest": None},
+         "goals": 4},
+    ]
+    feed = wcf.build_scorers(raw, 60)
+    assert [s.rank for s in feed.scorers] == [1, 2]
+    assert feed.scorers[0].player_name == "Kylian Mbappé"
+    assert feed.scorers[0].team.name == "France"
+    assert feed.scorers[0].goals == 6
+
+
+@pytest.mark.asyncio
+async def test_get_scorers_caches_within_ttl(monkeypatch):
+    calls = []
+
+    async def fake(api_key):
+        calls.append(1)
+        return [{"player": {"name": "X"}, "team": {"name": "Y"}, "goals": 1}]
+
+    monkeypatch.setattr(wcf, "_fetch_scorers", fake)
+    monkeypatch.setattr(wcf, "_utcnow", lambda: datetime(2026, 6, 11, 12, tzinfo=timezone.utc))
+    await wcf.get_scorers("k", 60)
+    await wcf.get_scorers("k", 60)
+    assert len(calls) == 1

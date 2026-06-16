@@ -353,6 +353,63 @@ async def get_knockout(api_key: str, refresh_seconds: int) -> KnockoutFeed:
     return feed
 
 
+SCORERS_LIMIT = 10
+
+
+class ScorerRow(BaseModel):
+    rank: int
+    player_name: str
+    team: WorldCupTeam
+    goals: int
+
+
+class ScorersFeed(BaseModel):
+    refresh_seconds: int
+    stale_since: datetime | None = None
+    error: str | None = None
+    scorers: list[ScorerRow] = []
+
+
+def build_scorers(raw: list[dict[str, Any]], refresh_seconds: int) -> ScorersFeed:
+    rows = [
+        ScorerRow(
+            rank=i + 1,
+            player_name=(s.get("player") or {}).get("name") or "?",
+            team=WorldCupTeam(
+                name=(s.get("team") or {}).get("name") or "?",
+                short_name=(s.get("team") or {}).get("shortName")
+                or (s.get("team") or {}).get("tla"),
+                crest=(s.get("team") or {}).get("crest"),
+            ),
+            goals=s.get("goals") or 0,
+        )
+        for i, s in enumerate(raw)
+    ]
+    return ScorersFeed(refresh_seconds=refresh_seconds, scorers=rows)
+
+
+async def _fetch_scorers(api_key: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{FOOTBALL_DATA_BASE}/competitions/{COMPETITION_CODE}/scorers",
+            params={"limit": SCORERS_LIMIT},
+            headers={"X-Auth-Token": api_key},
+        )
+        resp.raise_for_status()
+        return resp.json().get("scorers", [])
+
+
+async def get_scorers(api_key: str, refresh_seconds: int) -> ScorersFeed:
+    raw, stale = await _cached_raw(
+        "scorers", refresh_seconds, lambda: _fetch_scorers(api_key)
+    )
+    if raw is None:
+        return ScorersFeed(refresh_seconds=refresh_seconds, error="upstream_unavailable")
+    feed = build_scorers(raw, refresh_seconds)
+    feed.stale_since = stale
+    return feed
+
+
 async def get_feed(api_key: str, refresh_seconds: int, tz_name: str) -> WorldCupFeed:
     """Cached feed for 'today' in tz_name. At most one upstream attempt per
     refresh interval — failures also count as attempts so a dead upstream
