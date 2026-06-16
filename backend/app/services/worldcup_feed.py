@@ -294,6 +294,65 @@ async def get_matches_window(
     return feed
 
 
+# Knockout stages in display order. LAST_32 included for the 48-team format;
+# absent stages simply produce no group.
+KNOCKOUT_STAGES = [
+    "LAST_32",
+    "LAST_16",
+    "QUARTER_FINALS",
+    "SEMI_FINALS",
+    "THIRD_PLACE",
+    "FINAL",
+]
+
+
+class KnockoutStage(BaseModel):
+    stage: str
+    matches: list[WorldCupMatch] = []
+
+
+class KnockoutFeed(BaseModel):
+    refresh_seconds: int
+    stale_since: datetime | None = None
+    error: str | None = None
+    stages: list[KnockoutStage] = []
+
+
+def build_knockout(raw_matches: list[dict[str, Any]], refresh_seconds: int) -> KnockoutFeed:
+    by_stage: dict[str, list[WorldCupMatch]] = {}
+    for raw in raw_matches:
+        stage = raw.get("stage")
+        if stage in KNOCKOUT_STAGES:
+            by_stage.setdefault(stage, []).append(map_match(raw))
+    stages = [
+        KnockoutStage(stage=s, matches=sorted(by_stage[s], key=lambda m: m.kickoff_utc))
+        for s in KNOCKOUT_STAGES
+        if s in by_stage
+    ]
+    return KnockoutFeed(refresh_seconds=refresh_seconds, stages=stages)
+
+
+async def _fetch_all_matches(api_key: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{FOOTBALL_DATA_BASE}/competitions/{COMPETITION_CODE}/matches",
+            headers={"X-Auth-Token": api_key},
+        )
+        resp.raise_for_status()
+        return resp.json().get("matches", [])
+
+
+async def get_knockout(api_key: str, refresh_seconds: int) -> KnockoutFeed:
+    raw, stale = await _cached_raw(
+        "knockout", refresh_seconds, lambda: _fetch_all_matches(api_key)
+    )
+    if raw is None:
+        return KnockoutFeed(refresh_seconds=refresh_seconds, error="upstream_unavailable")
+    feed = build_knockout(raw, refresh_seconds)
+    feed.stale_since = stale
+    return feed
+
+
 async def get_feed(api_key: str, refresh_seconds: int, tz_name: str) -> WorldCupFeed:
     """Cached feed for 'today' in tz_name. At most one upstream attempt per
     refresh interval — failures also count as attempts so a dead upstream

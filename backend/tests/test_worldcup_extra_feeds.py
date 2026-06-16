@@ -66,3 +66,14 @@ def test_build_matches_window_splits_by_local_day():
     assert [m.id for m in feed.yesterday] == [1]
     assert [m.id for m in feed.today] == [2]
     assert [m.id for m in feed.tomorrow] == [3]
+
+
+def test_build_knockout_filters_and_orders_stages():
+    raws = [
+        _raw_match(1, "2026-07-05T19:00:00Z", stage="FINAL"),
+        _raw_match(2, "2026-07-01T19:00:00Z", stage="LAST_16"),
+        _raw_match(3, "2026-06-20T19:00:00Z", stage="GROUP_STAGE"),  # dropped
+    ]
+    feed = wcf.build_knockout(raws, 60)
+    assert [s.stage for s in feed.stages] == ["LAST_16", "FINAL"]
+    assert [m.id for m in feed.stages[0].matches] == [2]
