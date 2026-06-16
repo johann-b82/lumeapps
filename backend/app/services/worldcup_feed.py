@@ -47,6 +47,29 @@ class WorldCupFeed(BaseModel):
     next_matches: list[WorldCupMatch] = []
 
 
+class StandingsRow(BaseModel):
+    position: int
+    team: WorldCupTeam
+    played: int
+    won: int
+    draw: int
+    lost: int
+    goal_difference: int
+    points: int
+
+
+class StandingsGroup(BaseModel):
+    group: str
+    table: list[StandingsRow] = []
+
+
+class StandingsFeed(BaseModel):
+    refresh_seconds: int
+    stale_since: datetime | None = None
+    error: str | None = None
+    groups: list[StandingsGroup] = []
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -124,10 +147,98 @@ class _Cache:
 
 _cache = _Cache()
 
+# Extra feeds (standings/matches/knockout/scorers) each get their own cache
+# entry so one upstream call per resource per interval serves every kiosk.
+_caches: dict[str, _Cache] = {}
+
 
 def reset_cache() -> None:
     global _cache
     _cache = _Cache()
+    _caches.clear()
+
+
+async def _cached_raw(key: str, refresh_seconds: int, fetch):
+    """Return (raw, stale_since) for `key`, fetching at most once per interval.
+    `fetch` is a zero-arg async callable returning the upstream payload.
+    On failure the last good raw is kept and stale_since is set."""
+    now = _utcnow()
+    cache = _caches.setdefault(key, _Cache())
+    async with cache.lock:
+        due = (
+            cache.attempted_at is None
+            or (now - cache.attempted_at).total_seconds() >= refresh_seconds
+        )
+        if due:
+            cache.attempted_at = now
+            try:
+                cache.raw = await fetch()
+                cache.fetched_at = now
+            except (httpx.HTTPError, ValueError):
+                pass
+        stale = None
+        if (
+            cache.fetched_at is not None
+            and cache.attempted_at is not None
+            and cache.fetched_at < cache.attempted_at
+        ):
+            stale = cache.fetched_at
+        return cache.raw, stale
+
+
+def _group_label(raw_group: str | None) -> str:
+    # "GROUP_A" -> "Group A"; pass through anything unexpected.
+    if not raw_group:
+        return "?"
+    return raw_group.replace("_", " ").title()
+
+
+def build_standings(raw: list[dict[str, Any]], refresh_seconds: int) -> StandingsFeed:
+    groups: list[StandingsGroup] = []
+    for block in raw:
+        if block.get("type") != "TOTAL":
+            continue
+        rows = [
+            StandingsRow(
+                position=r["position"],
+                team=WorldCupTeam(
+                    name=(r.get("team") or {}).get("name") or "?",
+                    short_name=(r.get("team") or {}).get("shortName")
+                    or (r.get("team") or {}).get("tla"),
+                    crest=(r.get("team") or {}).get("crest"),
+                ),
+                played=r.get("playedGames") or 0,
+                won=r.get("won") or 0,
+                draw=r.get("draw") or 0,
+                lost=r.get("lost") or 0,
+                goal_difference=r.get("goalDifference") or 0,
+                points=r.get("points") or 0,
+            )
+            for r in block.get("table", [])
+        ]
+        groups.append(StandingsGroup(group=_group_label(block.get("group")), table=rows))
+    return StandingsFeed(refresh_seconds=refresh_seconds, groups=groups)
+
+
+async def _fetch_standings(api_key: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{FOOTBALL_DATA_BASE}/competitions/{COMPETITION_CODE}/standings",
+            headers={"X-Auth-Token": api_key},
+        )
+        resp.raise_for_status()
+        return resp.json().get("standings", [])
+
+
+async def get_standings(api_key: str, refresh_seconds: int) -> StandingsFeed:
+    raw, stale = await _cached_raw(
+        "standings", refresh_seconds, lambda: _fetch_standings(api_key)
+    )
+    if raw is None:
+        return StandingsFeed(refresh_seconds=refresh_seconds, error="upstream_unavailable")
+    feed = build_standings(raw, refresh_seconds)
+    feed.stale_since = stale
+    return feed
 
 
 async def get_feed(api_key: str, refresh_seconds: int, tz_name: str) -> WorldCupFeed:
