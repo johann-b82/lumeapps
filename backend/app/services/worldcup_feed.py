@@ -71,6 +71,15 @@ class StandingsFeed(BaseModel):
     groups: list[StandingsGroup] = []
 
 
+class MatchesWindowFeed(BaseModel):
+    refresh_seconds: int
+    stale_since: datetime | None = None
+    error: str | None = None
+    yesterday: list[WorldCupMatch] = []
+    today: list[WorldCupMatch] = []
+    tomorrow: list[WorldCupMatch] = []
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -242,6 +251,45 @@ async def get_standings(api_key: str, refresh_seconds: int) -> StandingsFeed:
     if raw is None:
         return StandingsFeed(refresh_seconds=refresh_seconds, error="upstream_unavailable")
     feed = build_standings(raw, refresh_seconds)
+    feed.stale_since = stale
+    return feed
+
+
+def build_matches_window(
+    raw_matches: list[dict[str, Any]], tz_name: str, today: date, refresh_seconds: int
+) -> MatchesWindowFeed:
+    tz = ZoneInfo(tz_name)
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
+    buckets: dict[date, list[WorldCupMatch]] = {yesterday: [], today: [], tomorrow: []}
+    for raw in raw_matches:
+        m = map_match(raw)
+        local_day = m.kickoff_utc.astimezone(tz).date()
+        if local_day in buckets:
+            buckets[local_day].append(m)
+    for v in buckets.values():
+        v.sort(key=lambda m: m.kickoff_utc)
+    return MatchesWindowFeed(
+        refresh_seconds=refresh_seconds,
+        yesterday=buckets[yesterday],
+        today=buckets[today],
+        tomorrow=buckets[tomorrow],
+    )
+
+
+async def get_matches_window(
+    api_key: str, refresh_seconds: int, tz_name: str
+) -> MatchesWindowFeed:
+    now = _utcnow()
+    today = now.astimezone(ZoneInfo(tz_name)).date()
+    raw, stale = await _cached_raw(
+        "matches_window",
+        refresh_seconds,
+        lambda: _fetch_upstream(api_key, today - timedelta(days=1), today + timedelta(days=1)),
+    )
+    if raw is None:
+        return MatchesWindowFeed(refresh_seconds=refresh_seconds, error="upstream_unavailable")
+    feed = build_matches_window(raw, tz_name, today, refresh_seconds)
     feed.stale_since = stale
     return feed
 

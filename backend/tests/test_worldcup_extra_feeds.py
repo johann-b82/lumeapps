@@ -44,3 +44,25 @@ def test_build_standings_maps_groups_and_skips_non_total():
     assert (row.played, row.won, row.draw, row.lost) == (3, 3, 0, 0)
     assert row.goal_difference == 5
     assert row.points == 9
+
+
+def _raw_match(id, utc, status="FINISHED", home=2, away=1, stage="GROUP_STAGE"):
+    return {
+        "id": id, "utcDate": utc, "status": status, "minute": None, "stage": stage,
+        "homeTeam": {"name": "A", "shortName": "A", "tla": "AAA", "crest": None},
+        "awayTeam": {"name": "B", "shortName": "B", "tla": "BBB", "crest": None},
+        "score": {"fullTime": {"home": home, "away": away}},
+    }
+
+
+def test_build_matches_window_splits_by_local_day():
+    raws = [
+        _raw_match(1, "2026-06-10T15:00:00Z"),   # yesterday
+        _raw_match(2, "2026-06-11T19:00:00Z", status="IN_PLAY"),  # today
+        _raw_match(3, "2026-06-12T15:00:00Z", status="TIMED"),    # tomorrow
+        _raw_match(4, "2026-06-09T15:00:00Z"),   # out of window -> dropped
+    ]
+    feed = wcf.build_matches_window(raws, "Europe/Berlin", date(2026, 6, 11), 60)
+    assert [m.id for m in feed.yesterday] == [1]
+    assert [m.id for m in feed.today] == [2]
+    assert [m.id for m in feed.tomorrow] == [3]
