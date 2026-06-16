@@ -43,7 +43,7 @@ export function DateRangeFilter({
   // first open, which prevents auto-label-tracking. Map value→label
   // explicitly so the trigger always shows the translated text.
   const renderLabel = (v: Preset) =>
-    segments.find((s) => s.value === v)?.label ?? v;
+    segments.find((s) => s.value === v)?.label ?? t(`dashboard.filter.${v}`);
 
   return (
     <Select<Preset> value={preset} onValueChange={selectPreset}>

@@ -120,6 +120,17 @@ export const qualityKeys = {
     ["quality", "complaints", "list", { from, to, complaintType }] as const,
 };
 
+// v1.60 — Einkauf (procurement): Liefertermintreue / OTD.
+export const procurementKeys = {
+  all: ["procurement"] as const,
+  otd: (from?: string, to?: string) =>
+    ["procurement", "otd", { from, to }] as const,
+  otdHistory: (from?: string, to?: string, granularity?: string) =>
+    ["procurement", "otd", "history", { from, to, granularity }] as const,
+  otdList: (from?: string, to?: string) =>
+    ["procurement", "otd", "list", { from, to }] as const,
+};
+
 // v1.41 — Sales activity / orders distribution.
 export const salesKeys = {
   all: ["sales"] as const,

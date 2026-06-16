@@ -648,6 +648,62 @@ class ComplaintRateHistoryPoint(BaseModel):
     delivered_qty: float
 
 
+class DeliveryReliabilityUploadResponse(BaseModel):
+    """Response from POST /api/upload-delivery-reliability.
+
+    Upsert on (auftrag, pos, upos). ``period_from`` / ``period_to`` echo the
+    Auswertung range parsed from the file's title row (ISO dates, or null
+    when the export carried no title line).
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    period_from: str | None = None
+    period_to: str | None = None
+    errors: list[ValidationErrorDetail]
+
+
+class OtdValue(BaseModel):
+    """Liefertermintreue / OTD KPI for a window.
+
+    ``rate`` is a fraction (0.92 → 92 %) = punctual / total. NULL when the
+    window had no delivery positions. Higher is better.
+    """
+
+    rate: float | None = None
+    punctual_count: int
+    total_count: int
+    avg_delay: float | None = None
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class OtdHistoryPoint(BaseModel):
+    month: str
+    rate: float | None = None
+    punctual_count: int
+    total_count: int
+
+
+class OtdRow(BaseModel):
+    """One row of the OTD verification table."""
+
+    auftrag: str
+    pos: int
+    upos: int
+    adr_nr: str | None = None
+    supplier_name: str | None = None
+    delivered_date: date | None = None
+    target_date: date | None = None
+    verzug_tage: int | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    article_number: str | None = None
+    article_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class CustomerComplaintRow(BaseModel):
     """One row of the customer-complaint verification table."""
 
@@ -699,6 +755,10 @@ __all__ = [
     "ComplaintRateValue",
     "ComplaintRateHistoryPoint",
     "CustomerComplaintRow",
+    "DeliveryReliabilityUploadResponse",
+    "OtdValue",
+    "OtdHistoryPoint",
+    "OtdRow",
     "KpiSummaryComparison",
     "KpiSummary",
     "ChartPoint",

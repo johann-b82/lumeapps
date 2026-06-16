@@ -550,6 +550,51 @@ class DeliveryRecord(Base):
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+class DeliveryReliabilityRecord(Base):
+    """One supplier delivery position from the Liefertreue (Einkauf) export.
+
+    Drives the OTD / Liefertermintreue KPI: a position is *punctual* when
+    ``verzug_tage <= 0``. The rate is ``count(punctual) / count(total)`` over
+    the window filtered on ``delivered_date`` (actual goods-receipt date).
+    Business key ``(auftrag, pos, upos)`` makes re-uploads idempotent; the
+    UNIQUE constraint is created in migration v1.60.
+    """
+
+    __tablename__ = "delivery_reliability"
+    __table_args__ = (
+        Index("ix_delivery_reliability_delivered_date", "delivered_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    auftrag: Mapped[str] = mapped_column(String(50), nullable=False)
+    pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    upos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    adr_nr: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    supplier_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Actual goods-receipt date — drives the OTD window/buckets (indexed).
+    delivered_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Confirmed target date (Lieferdatum) — kept for the verification table.
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Signed delay in days; the on-time classifier (≤ 0 = punctual).
+    verzug_tage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    article_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
 class Interessent(Base):
     """Prospect master-data row from the Adressen / Interessenten ERP export.
 

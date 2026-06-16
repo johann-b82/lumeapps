@@ -21,6 +21,7 @@ from app.security.directus_auth import get_current_user, require_admin
 from app.models import (
     Auftrag,
     DeliveryRecord,
+    DeliveryReliabilityRecord,
     Interessent,
     Offer,
     QualityRecord,
@@ -32,6 +33,9 @@ from app.models import (
 from app.parsing.angebote_parser import parse_angebote_file
 from app.parsing.auftraege_parser import parse_auftraege_file
 from app.parsing.delivery_parser import parse_delivery_file
+from app.parsing.delivery_reliability_parser import (
+    parse_delivery_reliability_file,
+)
 from app.parsing.erp_parser import parse_erp_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
@@ -41,6 +45,7 @@ from app.schemas import (
     AngeboteUploadResponse,
     AuftraegeUploadResponse,
     ContactsUploadResponse,
+    DeliveryReliabilityUploadResponse,
     DeliveryUploadResponse,
     InteressentenUploadResponse,
     QualityUploadResponse,
@@ -447,6 +452,112 @@ async def upload_deliveries(
     return DeliveryUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+@admin_router.post(
+    "/upload-delivery-reliability",
+    response_model=DeliveryReliabilityUploadResponse,
+)
+async def upload_delivery_reliability(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> DeliveryReliabilityUploadResponse:
+    """Upsert of the dev_excel_Liefertreue_Einkauf.txt export.
+
+    Composite business key ``(auftrag, pos, upos)`` identifies one delivery
+    position; ``ON CONFLICT DO UPDATE`` overwrites all data columns on
+    re-upload. The Auswertung period parsed from the file title is echoed
+    back so the dashboard can show the data-coverage range.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for delivery-reliability uploads.",
+        )
+    contents = await file.read()
+    rows, errors, period = parse_delivery_reliability_file(contents, filename)
+    period_from = period[0].isoformat() if period else None
+    period_to = period[1].isoformat() if period else None
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="delivery_reliability",
+            )
+        )
+        await db.commit()
+        return DeliveryReliabilityUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            period_from=period_from,
+            period_to=period_to,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    incoming_keys = [(r["auftrag"], r["pos"], r["upos"]) for r in rows]
+    existing_stmt = sa.select(sa.func.count(DeliveryReliabilityRecord.id)).where(
+        sa.tuple_(
+            DeliveryReliabilityRecord.auftrag,
+            DeliveryReliabilityRecord.pos,
+            DeliveryReliabilityRecord.upos,
+        ).in_(incoming_keys)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="delivery_reliability",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    table = DeliveryReliabilityRecord.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "auftrag", "pos", "upos")
+    ]
+
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(DeliveryReliabilityRecord).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_delivery_reliability_auftrag_pos",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return DeliveryReliabilityUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        period_from=period_from,
+        period_to=period_to,
         errors=[ValidationErrorDetail(**e) for e in errors],
     )
 

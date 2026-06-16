@@ -14,6 +14,7 @@ import { EmbedWorldCupMatchesPage } from "./pages/EmbedWorldCupMatchesPage";
 import { EmbedWorldCupKnockoutPage } from "./pages/EmbedWorldCupKnockoutPage";
 import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
 import { QualityPage } from "./pages/QualityPage";
+import { ProcurementPage } from "./pages/ProcurementPage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SensorsSettingsPage } from "./pages/SensorsSettingsPage";
@@ -60,6 +61,7 @@ function AppShell() {
           <Route path="/upload" component={UploadPage} />
           <Route path="/hr" component={HRPage} />
           <Route path="/quality" component={QualityPage} />
+          <Route path="/procurement" component={ProcurementPage} />
           <Route path="/sensors" component={SensorsPage} />
           {/* Phase 46 — signage routes (specific → general per wouter first-match). */}
           {/* Plan 46-05 — /signage/playlists/:id MUST precede /signage/playlists (Pitfall 1). */}

@@ -28,6 +28,7 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
   // Dashboards
   { pattern: "/sales", trail: [{ labelKey: "nav.sales", href: "/sales" }] },
   { pattern: "/hr", trail: [{ labelKey: "nav.hr", href: "/hr" }] },
+  { pattern: "/procurement", trail: [{ labelKey: "nav.procurement", href: "/procurement" }] },
   // Upload
   { pattern: "/upload", trail: [{ labelKey: "nav.upload", href: "/upload" }] },
   // Sensors dashboard

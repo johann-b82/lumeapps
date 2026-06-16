@@ -105,10 +105,19 @@ export function SubHeader() {
   if (location === "/") return null;
 
   const isDashboard =
-    location === "/sales" || location === "/hr" || location === "/quality";
+    location === "/sales" ||
+    location === "/hr" ||
+    location === "/quality" ||
+    location === "/procurement";
 
-  const dashboardPath: "/sales" | "/hr" | "/quality" =
-    location === "/hr" ? "/hr" : location === "/quality" ? "/quality" : "/sales";
+  const dashboardPath: "/sales" | "/hr" | "/quality" | "/procurement" =
+    location === "/hr"
+      ? "/hr"
+      : location === "/quality"
+      ? "/quality"
+      : location === "/procurement"
+      ? "/procurement"
+      : "/sales";
 
   // Signage admin routes share a 4-tab pill. /signage/pair is a standalone
   // pairing screen and keeps the default SubHeader layout (no tabs).
@@ -148,6 +157,8 @@ export function SubHeader() {
                       ? t("nav.hr")
                       : p === "/quality"
                       ? t("nav.quality")
+                      : p === "/procurement"
+                      ? t("nav.procurement")
                       : t("nav.sales")
                   }
                 </SelectValue>
@@ -156,6 +167,7 @@ export function SubHeader() {
                 <SelectItem value="/sales">{t("nav.sales")}</SelectItem>
                 <SelectItem value="/hr">{t("nav.hr")}</SelectItem>
                 <SelectItem value="/quality">{t("nav.quality")}</SelectItem>
+                <SelectItem value="/procurement">{t("nav.procurement")}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -200,7 +212,9 @@ export function SubHeader() {
           {location.startsWith("/settings") && <SettingsSectionPicker />}
         </div>
         <div className="flex items-center gap-3">
-          {(location === "/sales" || location === "/quality") && (
+          {(location === "/sales" ||
+            location === "/quality" ||
+            location === "/procurement") && (
             <AdminOnly>
               <Link
                 href="/upload"

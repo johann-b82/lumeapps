@@ -140,7 +140,8 @@ export function formatPrevPeriodDeltaLabels(
   locale: SupportedLocale,
   t: ChartLabelT,
 ): DeltaPeriodLabels | null {
-  if (preset === null || preset === "allTime") return null;
+  if (preset === null || preset === "allTime" || preset === "custom")
+    return null;
 
   const anchor = range.to ?? new Date();
   const currentYear = anchor.getFullYear();

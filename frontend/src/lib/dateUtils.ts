@@ -5,7 +5,12 @@ import {
   format,
 } from "date-fns";
 
-export type Preset = "thisMonth" | "thisQuarter" | "thisYear" | "allTime";
+export type Preset =
+  | "thisMonth"
+  | "thisQuarter"
+  | "thisYear"
+  | "allTime"
+  | "custom";
 
 /**
  * Resolve a preset name to an actual date range.
@@ -31,6 +36,10 @@ export function getPresetRange(
     case "thisYear":
       return { from: startOfYear(today), to: today };
     case "allTime":
+      return { from: undefined, to: undefined };
+    case "custom":
+      // Custom ranges are entered directly via the von/bis inputs and passed
+      // straight to handleFilterChange — never resolved from a preset name.
       return { from: undefined, to: undefined };
   }
 }
