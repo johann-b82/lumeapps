@@ -178,22 +178,60 @@ bleibt unverändert.
 - **Torschützen** (`/embed/worldcup/scorers`): rangierte Liste mit Rang, Flagge +
   Spielername, Toranzahl.
 
-## Einbindung in die Digital-Signage-Section (reine Konfiguration)
+## Einbindung in die Digital-Signage-Section
 
-Kein Code in `signage_admin`/`player`. Der Admin macht im bestehenden UI:
+Kein Code in `signage_admin`/`player`. Damit der Admin **nicht** fünf URLs von
+Hand registrieren und eine Playlist zusammenbauen muss, wird eine fertige
+**„WM 2026"-Playlist mitgeliefert** (Seed, siehe unten). Der Admin muss sie dann
+nur noch einem Gerät zuweisen:
 
-1. **Signage → Medien → „URL registrieren"**: fünf `url`-Medien anlegen
-   (`/embed/worldcup`, `/embed/worldcup/standings`, `/embed/worldcup/matches`,
-   `/embed/worldcup/knockout`, `/embed/worldcup/scorers`; optional mit `?lang=en`).
-2. **Signage → Playlists**: Playlist „WM 2026" anlegen, die 5 Medien hinzufügen,
-   Reihenfolge per Drag&Drop, je Element die **Dauer** setzen (für die Tabelle =
-   Zeit pro 6er-Seite).
-3. Der Playlist einen **Tag** geben (z. B. `lobby`); Geräte mit passendem Tag
-   spielen sie.
+1. **Signage → Playlists**: Die Playlist „WM 2026" ist bereits vorhanden (alle 5
+   Views in Reihenfolge, mit Standard-Dauern). Reihenfolge/Dauer bei Bedarf
+   anpassen.
+2. Der Playlist einen **Tag** geben (z. B. `lobby`); Geräte mit passendem Tag
+   spielen sie sofort. (Tags sind geräteabhängig und werden daher nicht
+   geseedet.)
+
+Optional bleibt der manuelle Weg möglich (Signage → Medien → „URL registrieren"
++ eigene Playlist), falls jemand eine abweichende Zusammenstellung will.
+
+### Vorbefüllte Playlist (Seed via Alembic-Datenmigration)
+
+Eine neue Datenmigration (`backend/alembic/versions/v1_61_worldcup_playlist.py`)
+legt idempotent an — mit **festen UUIDs** und `INSERT ... ON CONFLICT (id) DO
+NOTHING`, sodass ein erneuter Lauf nichts dupliziert und ein vom Admin gelöschter
+Eintrag nicht zurückkehrt:
+
+- 5 `signage_media`-Zeilen (`kind='url'`):
+
+  | Titel | uri |
+  |-------|-----|
+  | WM 2026 – Übersicht | `/embed/worldcup` |
+  | WM 2026 – Tabelle | `/embed/worldcup/standings` |
+  | WM 2026 – Spiele | `/embed/worldcup/matches` |
+  | WM 2026 – KO-Runde | `/embed/worldcup/knockout` |
+  | WM 2026 – Torschützen | `/embed/worldcup/scorers` |
+
+- 1 `signage_playlists`-Zeile: `name='WM 2026'`, `enabled=true`.
+- 5 `signage_playlist_items` (position 0–4, `transition='fade'`) mit
+  Standard-Dauern als `duration_s` (Admin überschreibbar):
+
+  | Position | View | duration_s |
+  |----------|------|-----------|
+  | 0 | Übersicht | 30 |
+  | 1 | Tabelle | 12 *(pro 6er-Seite → ~24 s gesamt)* |
+  | 2 | Spiele | 20 |
+  | 3 | KO-Runde | 20 |
+  | 4 | Torschützen | 15 |
+
+Die `uri` sind **relative** Pfade (`/embed/...`), wie bei den bestehenden
+HR-Embeds — der Player löst sie gegen den API-Host auf. **Keine** Tag-Zuordnung
+im Seed (geräteabhängig).
 
 Dokumentation: `frontend/src/docs/{de,en}/admin-guide/digital-signage.md` um einen
-kurzen Abschnitt „WM-2026-Views" ergänzen (welche URLs es gibt, dass Dauer =
-Zeit pro Screen/Tabellen-Seite ist).
+kurzen Abschnitt „WM-2026-Views" ergänzen (dass die fertige Playlist existiert,
+nur noch ein Tag nötig ist, und dass Dauer = Zeit pro Screen bzw. pro
+Tabellen-Seite bedeutet).
 
 ## Tests
 
@@ -207,6 +245,9 @@ Zeit pro Screen/Tabellen-Seite ist).
     stale-on-failure pro Resource.
   - `test_admin_gate_audit.py` bleibt grün; OpenAPI-Snapshot um die 4 Pfade
     ergänzt.
+  - Seed-Migration: nach Upgrade existieren Playlist „WM 2026" + 5 Items in
+    korrekter Reihenfolge mit den 5 Embed-URLs; erneuter Lauf bzw.
+    bereits-vorhandene IDs erzeugen keine Duplikate (ON CONFLICT DO NOTHING).
 - **Frontend:**
   - `TeamFlag`-Fallback (kein crest → kein `<img>`).
   - Übersicht: `embed-cycle-complete` wird aufgeschoben, solange die
