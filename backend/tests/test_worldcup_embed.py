@@ -74,3 +74,50 @@ async def test_today_feed_unauthenticated(client, monkeypatch):
     assert body["refresh_seconds"] == 120
     assert body["matches"][0]["home"]["name"] == "Deutschland"
     assert body["matches"][0]["status"] == "IN_PLAY"
+
+
+@pytest.mark.asyncio
+async def test_standings_endpoint_unauthenticated(client, monkeypatch):
+    await _set_worldcup(encrypt_credential("test-key"))
+
+    async def fake(api_key):
+        return [{"type": "TOTAL", "group": "GROUP_A", "table": [
+            {"position": 1,
+             "team": {"name": "Mexico", "shortName": "Mexico", "tla": "MEX", "crest": None},
+             "playedGames": 3, "won": 3, "draw": 0, "lost": 0,
+             "points": 9, "goalsFor": 7, "goalsAgainst": 2, "goalDifference": 5}]}]
+
+    monkeypatch.setattr(wcf, "_fetch_standings", fake)
+    r = await client.get("/api/worldcup/embed/standings")
+    assert r.status_code == 200
+    assert r.json()["groups"][0]["group"] == "Group A"
+
+
+@pytest.mark.asyncio
+async def test_matches_endpoint_not_configured(client):
+    await _set_worldcup(None)
+    r = await client.get("/api/worldcup/embed/matches")
+    assert r.status_code == 200
+    assert r.json()["error"] == "not_configured"
+
+
+@pytest.mark.asyncio
+async def test_knockout_and_scorers_endpoints(client, monkeypatch):
+    await _set_worldcup(encrypt_credential("test-key"))
+
+    async def fake_matches(api_key):
+        return [{"id": 1, "utcDate": "2026-07-05T19:00:00Z", "status": "TIMED",
+                 "stage": "FINAL", "minute": None,
+                 "homeTeam": {"name": "A", "tla": "AAA", "crest": None},
+                 "awayTeam": {"name": "B", "tla": "BBB", "crest": None},
+                 "score": {"fullTime": {"home": None, "away": None}}}]
+
+    async def fake_scorers(api_key):
+        return [{"player": {"name": "X"}, "team": {"name": "Y"}, "goals": 3}]
+
+    monkeypatch.setattr(wcf, "_fetch_all_matches", fake_matches)
+    monkeypatch.setattr(wcf, "_fetch_scorers", fake_scorers)
+    rk = await client.get("/api/worldcup/embed/knockout")
+    rs = await client.get("/api/worldcup/embed/scorers")
+    assert rk.json()["stages"][0]["stage"] == "FINAL"
+    assert rs.json()["scorers"][0]["rank"] == 1

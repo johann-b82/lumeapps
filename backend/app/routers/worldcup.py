@@ -16,7 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db_session
 from app.models import AppSettings
 from app.security.fernet import decrypt_credential
-from app.services.worldcup_feed import WorldCupFeed, get_feed
+from app.services.worldcup_feed import (
+    KnockoutFeed,
+    MatchesWindowFeed,
+    ScorersFeed,
+    StandingsFeed,
+    WorldCupFeed,
+    get_feed,
+    get_knockout,
+    get_matches_window,
+    get_scorers,
+    get_standings,
+)
 
 router = APIRouter(prefix="/api/worldcup", tags=["worldcup"])
 
@@ -33,3 +44,49 @@ async def embed_today(
         return WorldCupFeed(refresh_seconds=refresh, error="not_configured")
     api_key = decrypt_credential(row.worldcup_api_key_enc)
     return await get_feed(api_key, refresh, row.timezone)
+
+
+async def _settings(db: AsyncSession):
+    row = (
+        await db.execute(select(AppSettings).where(AppSettings.id == 1))
+    ).scalar_one_or_none()
+    refresh = row.worldcup_refresh_seconds if row is not None else 60
+    api_key = (
+        decrypt_credential(row.worldcup_api_key_enc)
+        if row is not None and row.worldcup_api_key_enc
+        else None
+    )
+    tz = row.timezone if row is not None else "Europe/Berlin"
+    return api_key, refresh, tz
+
+
+@router.get("/embed/standings", response_model=StandingsFeed)
+async def embed_standings(db: AsyncSession = Depends(get_async_db_session)) -> StandingsFeed:
+    api_key, refresh, _ = await _settings(db)
+    if api_key is None:
+        return StandingsFeed(refresh_seconds=refresh, error="not_configured")
+    return await get_standings(api_key, refresh)
+
+
+@router.get("/embed/matches", response_model=MatchesWindowFeed)
+async def embed_matches(db: AsyncSession = Depends(get_async_db_session)) -> MatchesWindowFeed:
+    api_key, refresh, tz = await _settings(db)
+    if api_key is None:
+        return MatchesWindowFeed(refresh_seconds=refresh, error="not_configured")
+    return await get_matches_window(api_key, refresh, tz)
+
+
+@router.get("/embed/knockout", response_model=KnockoutFeed)
+async def embed_knockout(db: AsyncSession = Depends(get_async_db_session)) -> KnockoutFeed:
+    api_key, refresh, _ = await _settings(db)
+    if api_key is None:
+        return KnockoutFeed(refresh_seconds=refresh, error="not_configured")
+    return await get_knockout(api_key, refresh)
+
+
+@router.get("/embed/scorers", response_model=ScorersFeed)
+async def embed_scorers(db: AsyncSession = Depends(get_async_db_session)) -> ScorersFeed:
+    api_key, refresh, _ = await _settings(db)
+    if api_key is None:
+        return ScorersFeed(refresh_seconds=refresh, error="not_configured")
+    return await get_scorers(api_key, refresh)

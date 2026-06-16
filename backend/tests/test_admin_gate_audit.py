@@ -35,6 +35,10 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/data/sales/contacts-weekly", frozenset({"GET"})),
     ("/api/data/sales/orders-distribution", frozenset({"GET"})),
     ("/api/data/sales/customer-share", frozenset({"GET"})),
+    # Einkauf / OTD dashboard reads — viewer role (v1.60).
+    ("/api/procurement/otd", frozenset({"GET"})),
+    ("/api/procurement/otd/history", frozenset({"GET"})),
+    ("/api/procurement/otd/list", frozenset({"GET"})),
     # Viewer-readable sync freshness (mixed-gate; see sync.py docstring).
     ("/api/sync/meta", frozenset({"GET"})),
     # Signage pair/player endpoints use device-token auth, not user/admin auth.
@@ -57,6 +61,10 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     # World Cup signage embed — public by design, mirrors the hr_embed
     # rationale (kiosks without a session). See routers/worldcup.py docstring.
     ("/api/worldcup/embed/today", frozenset({"GET"})),
+    ("/api/worldcup/embed/standings", frozenset({"GET"})),
+    ("/api/worldcup/embed/matches", frozenset({"GET"})),
+    ("/api/worldcup/embed/knockout", frozenset({"GET"})),
+    ("/api/worldcup/embed/scorers", frozenset({"GET"})),
 }
 
 
