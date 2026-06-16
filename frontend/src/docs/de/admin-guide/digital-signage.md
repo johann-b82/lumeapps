@@ -141,6 +141,23 @@ Weise der Playlist **Ziel-Tags** zu. Geräte mit mindestens einem passenden Tag 
 
 Änderungen werden innerhalb von **30 Sekunden** nach dem Speichern auf dem Kiosk wirksam (über das Polling-Intervall des Sidecars).
 
+## WM-2026-Views
+
+Für die Fußball-WM 2026 ist eine fertige Playlist **„WM 2026"** vorinstalliert
+(unter **Signage → Playlists**). Sie rotiert fünf Vollbild-Screens:
+Übersicht (heutige Spiele live mit Tor-Animation), Tabelle (Gruppen, 6 pro Seite),
+Spiele (gestern/heute/morgen), K.-o.-Runde und Torschützen.
+
+So nimmst du sie in Betrieb:
+
+1. Trage unter **Einstellungen → WM** einen football-data.org API-Schlüssel ein.
+2. Gib der Playlist „WM 2026" unter **Signage → Playlists** einen **Tag**, der zu
+   deinem Gerät passt (z. B. `lobby`).
+
+Reihenfolge und Anzeigedauer pro Screen kannst du wie bei jeder Playlist anpassen.
+Die **Dauer** ist die Zeit pro Screen — bei der Tabelle die Zeit pro 6er-Seite
+(zwei Seiten, also doppelte Gesamtzeit).
+
 ## Offline-Verhalten
 
 Auf jedem Pi läuft ein lokaler **Signage-Sidecar**, der die Playlist und alle Mediendateien zwischenspeichert. Fällt die WLAN- oder Netzwerkverbindung des Pi aus:

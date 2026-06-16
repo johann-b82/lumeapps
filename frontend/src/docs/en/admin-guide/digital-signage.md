@@ -141,6 +141,23 @@ Assign **target tags** to the playlist. Devices with at least one matching tag w
 
 Changes take effect on the kiosk within **30 seconds** of saving (via the sidecar's polling interval).
 
+## World Cup 2026 views
+
+A ready-made **"WM 2026"** playlist ships preinstalled for the 2026 FIFA World Cup
+(under **Signage → Playlists**). It rotates five full-screen views: Overview
+(today's matches live, with a goal animation), Standings (groups, 6 per page),
+Matches (yesterday/today/tomorrow), Knockout, and Top scorers.
+
+To put it on a screen:
+
+1. Enter a football-data.org API key under **Settings → World Cup**.
+2. Give the "WM 2026" playlist a **tag** under **Signage → Playlists** that matches
+   your device (e.g. `lobby`).
+
+You can reorder the screens and adjust each screen's duration like any playlist.
+The **duration** is the time per screen — for Standings it is the time per
+6-group page (two pages, so double the total time).
+
 ## Offline Behavior
 
 Each Pi runs a local **signage sidecar** that caches the playlist and all media files. If the Pi loses its Wi-Fi or network connection:
