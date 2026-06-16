@@ -96,6 +96,28 @@ export const qualityKeys = {
     ["quality", "audit-findings", "history", { from, to, types }] as const,
   auditFindingsList: (from?: string, to?: string, types?: readonly string[]) =>
     ["quality", "audit-findings", "list", { from, to, types }] as const,
+  complaintRate: (
+    from?: string,
+    to?: string,
+    qtyMode?: string,
+    complaintType?: string,
+  ) =>
+    ["quality", "complaint-rate", { from, to, qtyMode, complaintType }] as const,
+  complaintRateHistory: (
+    from?: string,
+    to?: string,
+    qtyMode?: string,
+    complaintType?: string,
+    granularity?: string,
+  ) =>
+    [
+      "quality",
+      "complaint-rate",
+      "history",
+      { from, to, qtyMode, complaintType, granularity },
+    ] as const,
+  complaintsList: (from?: string, to?: string, complaintType?: string) =>
+    ["quality", "complaints", "list", { from, to, complaintType }] as const,
 };
 
 // v1.41 — Sales activity / orders distribution.

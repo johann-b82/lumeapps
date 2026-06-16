@@ -57,16 +57,24 @@ def _validate_range(date_from: date | None, date_to: date | None) -> None:
         )
 
 
-def _bucket_windows(first: date, last: date) -> list[tuple[str, date, date]]:
+def _bucket_windows(
+    first: date,
+    last: date,
+    granularity: str | None = None,
+) -> list[tuple[str, date, date]]:
     """Return ordered [(label, bucket_first, bucket_last), ...] covering [first, last].
 
-    Bucket granularity (D-06):
+    Default (``granularity=None``) auto-picks by range length (D-06):
       length_days <= 31  -> daily   (label "YYYY-MM-DD")
       length_days <= 91  -> weekly  (label "YYYY-Www", ISO week)
       length_days <= 731 -> monthly (label "YYYY-MM")
       else               -> quarterly (label "YYYY-Qn")
 
-    Bucket edges are clipped to [first, last]. Order is oldest-first.
+    Explicit ``granularity`` overrides the auto-pick:
+      "daily" / "weekly" / "monthly" / "quarterly" / "yearly"
+
+    Yearly label: "YYYY". Bucket edges are always clipped to [first, last].
+    Order is oldest-first.
     """
     length_days = (last - first).days + 1
     buckets: list[tuple[str, date, date]] = []
@@ -74,19 +82,27 @@ def _bucket_windows(first: date, last: date) -> list[tuple[str, date, date]]:
     if length_days <= 0:
         return buckets
 
-    if length_days <= 31:
-        # Daily
+    if granularity is None:
+        if length_days <= 31:
+            granularity = "daily"
+        elif length_days <= 91:
+            granularity = "weekly"
+        elif length_days <= 731:
+            granularity = "monthly"
+        else:
+            granularity = "quarterly"
+
+    if granularity == "daily":
         d = first
         while d <= last:
             buckets.append((d.isoformat(), d, d))
             d += timedelta(days=1)
         return buckets
 
-    if length_days <= 91:
-        # Weekly (ISO week, Mon-Sun)
+    if granularity == "weekly":
+        # ISO week, Mon-Sun
         d = first
         while d <= last:
-            # Walk back to Monday
             weekday = d.weekday()  # Mon=0
             week_start = d - timedelta(days=weekday)
             week_end = week_start + timedelta(days=6)
@@ -95,12 +111,10 @@ def _bucket_windows(first: date, last: date) -> list[tuple[str, date, date]]:
             iso_year, iso_week, _ = d.isocalendar()
             label = f"{iso_year}-W{iso_week:02d}"
             buckets.append((label, bucket_first, bucket_last))
-            # Advance to the Monday of next week
             d = week_end + timedelta(days=1)
         return buckets
 
-    if length_days <= 731:
-        # Monthly
+    if granularity == "monthly":
         y, m = first.year, first.month
         while (y, m) <= (last.year, last.month):
             mf, ml = _month_bounds(y, m)
@@ -114,24 +128,42 @@ def _bucket_windows(first: date, last: date) -> list[tuple[str, date, date]]:
                 m += 1
         return buckets
 
-    # Quarterly
-    y = first.year
-    q = (first.month - 1) // 3 + 1
-    while True:
-        q_first_month = (q - 1) * 3 + 1
-        q_last_month = q_first_month + 2
-        qf, _ = _month_bounds(y, q_first_month)
-        _, ql = _month_bounds(y, q_last_month)
-        if qf > last:
-            break
-        bucket_first = max(qf, first)
-        bucket_last = min(ql, last)
-        label = f"{y}-Q{q}"
-        buckets.append((label, bucket_first, bucket_last))
-        if q == 4:
-            y, q = y + 1, 1
-        else:
-            q += 1
+    if granularity == "quarterly":
+        y = first.year
+        q = (first.month - 1) // 3 + 1
+        while True:
+            q_first_month = (q - 1) * 3 + 1
+            q_last_month = q_first_month + 2
+            qf, _ = _month_bounds(y, q_first_month)
+            _, ql = _month_bounds(y, q_last_month)
+            if qf > last:
+                break
+            bucket_first = max(qf, first)
+            bucket_last = min(ql, last)
+            label = f"{y}-Q{q}"
+            buckets.append((label, bucket_first, bucket_last))
+            if q == 4:
+                y, q = y + 1, 1
+            else:
+                q += 1
+        return buckets
+
+    if granularity == "yearly":
+        for y in range(first.year, last.year + 1):
+            yf = date(y, 1, 1)
+            yl = date(y, 12, 31)
+            bucket_first = max(yf, first)
+            bucket_last = min(yl, last)
+            buckets.append((str(y), bucket_first, bucket_last))
+        return buckets
+
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"Unknown granularity={granularity!r}. "
+            "Allowed: daily, weekly, monthly, quarterly, yearly"
+        ),
+    )
     return buckets
 
 

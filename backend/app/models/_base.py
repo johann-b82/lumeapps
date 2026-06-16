@@ -486,6 +486,67 @@ class QualityRecord(Base):
     status_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     problem_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # v1.51 — Spalte K (Menge) and L (akzeptierte Menge) from the 8D file.
+    # Together they drive the customer-complaint rate numerator with the
+    # qty_mode=total|accepted switch on the dashboard.
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    accepted_quantity: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 3), nullable=True
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+# ── v1.50 — Delivery records (LS export from AswKpf_LS.xlsx) ───────────
+
+
+class DeliveryRecord(Base):
+    """One line-item on a customer delivery note (Lieferschein).
+
+    Multiple rows share the same ``vorgang_nr`` (= Lieferschein-Nr); each
+    line carries its own (pos, upos) within that delivery, so the unique
+    business key is the three-column composite. Quantities feed the
+    customer-complaint rate denominator (``Σ delivered / Σ complained``
+    over the selected window).
+    """
+
+    __tablename__ = "delivery_records"
+    __table_args__ = (
+        Index("ix_delivery_records_delivery_date", "delivery_date"),
+        Index("ix_delivery_records_customer_date", "customer_id", "delivery_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), nullable=False)
+    pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    upos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    typ: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    entry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_city: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    article_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    price: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    position_value: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+
+    external_order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 

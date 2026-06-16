@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { AuftraegeDropZone } from "@/components/AuftraegeDropZone";
 import { ContactsDropZone } from "@/components/ContactsDropZone";
 import { QualityDropZone } from "@/components/QualityDropZone";
+import { DeliveriesDropZone } from "@/components/DeliveriesDropZone";
 import { InteressentenDropZone } from "@/components/InteressentenDropZone";
 import { AngeboteDropZone } from "@/components/AngeboteDropZone";
 import { UmsatzDropZone } from "@/components/UmsatzDropZone";
@@ -54,6 +55,15 @@ export function UploadPage() {
             {t("upload.quality_title")}
           </p>
           <QualityDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.deliveries_title")}
+          </p>
+          <DeliveriesDropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(errs) => setErrors(errs)}
           />

@@ -20,6 +20,7 @@ from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
 from app.models import (
     Auftrag,
+    DeliveryRecord,
     Interessent,
     Offer,
     QualityRecord,
@@ -30,6 +31,7 @@ from app.models import (
 )
 from app.parsing.angebote_parser import parse_angebote_file
 from app.parsing.auftraege_parser import parse_auftraege_file
+from app.parsing.delivery_parser import parse_delivery_file
 from app.parsing.erp_parser import parse_erp_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
@@ -39,6 +41,7 @@ from app.schemas import (
     AngeboteUploadResponse,
     AuftraegeUploadResponse,
     ContactsUploadResponse,
+    DeliveryUploadResponse,
     InteressentenUploadResponse,
     QualityUploadResponse,
     RevenueUploadResponse,
@@ -338,6 +341,110 @@ async def upload_quality(
     await db.commit()
 
     return QualityUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+# ── v1.58 — Deliveries (AswKpf_LS.xlsx Lieferschein export) ────────────
+
+
+@admin_router.post("/upload-deliveries", response_model=DeliveryUploadResponse)
+async def upload_deliveries(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> DeliveryUploadResponse:
+    """Upsert of a Lieferschein xlsx export.
+
+    Composite business key ``(vorgang_nr, pos, upos)`` identifies a single
+    LS line; ``ON CONFLICT DO UPDATE`` overwrites all data columns when
+    the user re-exports an edited file. Re-pointing ``upload_batch_id``
+    to the latest batch matches the v1.49 Quality pattern.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .xlsx files are accepted for delivery uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_delivery_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="deliveries",
+            )
+        )
+        await db.commit()
+        return DeliveryUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    # Count how many incoming (vorgang, pos, upos) tuples already exist —
+    # one EXISTS-style query using a value-list join.
+    incoming_keys = [(r["vorgang_nr"], r["pos"], r["upos"]) for r in rows]
+    # Postgres tuple-IN: SELECT count(*) FROM ... WHERE (a,b,c) IN ((...)).
+    # asyncpg + SQLAlchemy support this via sa.tuple_(...).in_.
+    existing_stmt = sa.select(sa.func.count(DeliveryRecord.id)).where(
+        sa.tuple_(
+            DeliveryRecord.vorgang_nr,
+            DeliveryRecord.pos,
+            DeliveryRecord.upos,
+        ).in_(incoming_keys)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="deliveries",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    table = DeliveryRecord.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "vorgang_nr", "pos", "upos")
+    ]
+
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(DeliveryRecord).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_delivery_records_vorgang_pos",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return DeliveryUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
         errors=[ValidationErrorDetail(**e) for e in errors],

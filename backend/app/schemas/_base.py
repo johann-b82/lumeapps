@@ -539,6 +539,12 @@ class QualityUploadResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
+class DeliveryUploadResponse(BaseModel):
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
 class InteressentenUploadResponse(BaseModel):
     """Response from POST /api/upload-interessenten.
 
@@ -621,6 +627,44 @@ class AuditFindingRow(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ComplaintRateValue(BaseModel):
+    """Customer-complaint rate KPI for a window.
+
+    ``rate`` is a fraction (0.0327 → 3.27 %). NULL if the window had no
+    deliveries (division-by-zero guard).
+    """
+
+    rate: float | None = None
+    complaint_qty: float
+    delivered_qty: float
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class ComplaintRateHistoryPoint(BaseModel):
+    month: str
+    rate: float | None = None
+    complaint_qty: float
+    delivered_qty: float
+
+
+class CustomerComplaintRow(BaseModel):
+    """One row of the customer-complaint verification table."""
+
+    report_nr: str
+    report_date: date | None = None
+    art: str | None = None
+    issuer: str | None = None
+    customer_name: str | None = None
+    customer_id: str | None = None
+    designation: str | None = None
+    status_code: str | None = None
+    quantity: float | None = None
+    accepted_quantity: float | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class AuditFindingsHistoryPoint(BaseModel):
     """Per-bucket finding counts for the history chart.
 
@@ -644,6 +688,7 @@ __all__ = [
     "UploadResponse",
     "UploadBatchSummary",
     "QualityUploadResponse",
+    "DeliveryUploadResponse",
     "InteressentenUploadResponse",
     "AngeboteUploadResponse",
     "RevenueUploadResponse",
@@ -651,6 +696,9 @@ __all__ = [
     "AuditFindingsValue",
     "AuditFindingRow",
     "AuditFindingsHistoryPoint",
+    "ComplaintRateValue",
+    "ComplaintRateHistoryPoint",
+    "CustomerComplaintRow",
     "KpiSummaryComparison",
     "KpiSummary",
     "ChartPoint",

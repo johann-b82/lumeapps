@@ -22,9 +22,31 @@ from __future__ import annotations
 import io
 import re
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pandas as pd
+
+
+def _parse_decimal(val: str) -> Decimal | None:
+    """Parse a German-formatted numeric cell to Decimal.
+
+    Accepts both German format (1.234,56) and plain (1234.56). Returns
+    None on empty / unparseable input — the rate calc treats None as
+    "unknown quantity, exclude from the sum".
+    """
+    s = (val or "").strip()
+    if not s:
+        return None
+    # Heuristic: if both '.' and ',' present, '.' is thousands and ',' is decimal.
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return None
 
 # "Audit Major Level 1" / "Audit Minor Level 2" — match by descriptor +
 # explicit level token so trailing whitespace, casing tweaks or stray
@@ -166,6 +188,13 @@ def parse_quality_file(
             "status_code": _clean(raw.get("Status", "")) or None,
             "problem_description": _clean(raw.get("Problembeschreibung", "")) or None,
             "root_cause": _clean(raw.get("Ursache", "")) or None,
+            # v1.59: Mengen (Spalten K + L). Both columns are optional in
+            # older 8D exports; missing = NULL = excluded from the
+            # complaint-rate sum (the rate ignores rows without a number).
+            "quantity": _parse_decimal(_clean(raw.get("Menge", ""))),
+            "accepted_quantity": _parse_decimal(
+                _clean(raw.get("akzeptierte Menge", ""))
+            ),
             "raw": {k: _clean(v) for k, v in raw.items()},
         })
 

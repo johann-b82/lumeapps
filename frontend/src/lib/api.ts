@@ -670,6 +670,121 @@ export async function fetchAuditFindingsList(params?: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// v1.58 — Customer complaint rate
+// ---------------------------------------------------------------------------
+
+export type QtyMode = "total" | "accepted";
+export type ComplaintType = "customer" | "internal";
+export type BucketGranularity =
+  | "weekly"
+  | "monthly"
+  | "quarterly"
+  | "yearly";
+
+export interface DeliveryUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export interface ComplaintRateValue {
+  rate: number | null;
+  complaint_qty: number;
+  delivered_qty: number;
+  previous_period: number | null;
+  previous_year: number | null;
+}
+
+export interface ComplaintRateHistoryPoint {
+  month: string;
+  rate: number | null;
+  complaint_qty: number;
+  delivered_qty: number;
+}
+
+export interface CustomerComplaintRow {
+  report_nr: string;
+  report_date: string | null;
+  art: string | null;
+  issuer: string | null;
+  customer_name: string | null;
+  customer_id: string | null;
+  designation: string | null;
+  status_code: string | null;
+  quantity: number | null;
+  accepted_quantity: number | null;
+}
+
+export async function uploadDeliveryFile(file: File): Promise<DeliveryUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<DeliveryUploadResponse>("/api/upload-deliveries", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+function _buildComplaintQuery(params?: {
+  date_from?: string;
+  date_to?: string;
+  qty_mode?: QtyMode;
+  complaint_type?: ComplaintType;
+}): string {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.qty_mode) q.set("qty_mode", params.qty_mode);
+  if (params?.complaint_type) q.set("complaint_type", params.complaint_type);
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchComplaintRate(params?: {
+  date_from?: string;
+  date_to?: string;
+  qty_mode?: QtyMode;
+  complaint_type?: ComplaintType;
+}): Promise<ComplaintRateValue> {
+  return apiClient<ComplaintRateValue>(
+    `/api/quality/complaint-rate${_buildComplaintQuery(params)}`,
+  );
+}
+
+export async function fetchComplaintRateHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  qty_mode?: QtyMode;
+  complaint_type?: ComplaintType;
+  granularity?: BucketGranularity;
+}): Promise<ComplaintRateHistoryPoint[]> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.qty_mode) q.set("qty_mode", params.qty_mode);
+  if (params?.complaint_type) q.set("complaint_type", params.complaint_type);
+  if (params?.granularity) q.set("granularity", params.granularity);
+  const qs = q.toString();
+  return apiClient<ComplaintRateHistoryPoint[]>(
+    `/api/quality/complaint-rate/history${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function fetchCustomerComplaintsList(params?: {
+  date_from?: string;
+  date_to?: string;
+  complaint_type?: ComplaintType;
+}): Promise<CustomerComplaintRow[]> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.complaint_type) q.set("complaint_type", params.complaint_type);
+  const qs = q.toString();
+  return apiClient<CustomerComplaintRow[]>(
+    `/api/quality/complaints/list${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // --------------------------------------------------------------------------
 // Data table types and fetchers
 // --------------------------------------------------------------------------
