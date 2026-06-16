@@ -9,6 +9,10 @@ import { HRPage } from "./pages/HRPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
 import { EmbedWorldCupPage } from "./pages/EmbedWorldCupPage";
+import { EmbedWorldCupStandingsPage } from "./pages/EmbedWorldCupStandingsPage";
+import { EmbedWorldCupMatchesPage } from "./pages/EmbedWorldCupMatchesPage";
+import { EmbedWorldCupKnockoutPage } from "./pages/EmbedWorldCupKnockoutPage";
+import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
 import { QualityPage } from "./pages/QualityPage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -119,6 +123,10 @@ function RootRouter() {
     <Switch>
       <Route path="/embed/birthdays" component={EmbedBirthdaysPage} />
       <Route path="/embed/joiners" component={EmbedJoinersPage} />
+      <Route path="/embed/worldcup/standings" component={EmbedWorldCupStandingsPage} />
+      <Route path="/embed/worldcup/matches" component={EmbedWorldCupMatchesPage} />
+      <Route path="/embed/worldcup/knockout" component={EmbedWorldCupKnockoutPage} />
+      <Route path="/embed/worldcup/scorers" component={EmbedWorldCupScorersPage} />
       <Route path="/embed/worldcup" component={EmbedWorldCupPage} />
       <Route>
         <AuthProvider>
