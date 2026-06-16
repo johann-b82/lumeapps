@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timedelta, timezone
+from collections.abc import Awaitable, Callable
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -158,7 +159,11 @@ def reset_cache() -> None:
     _caches.clear()
 
 
-async def _cached_raw(key: str, refresh_seconds: int, fetch):
+async def _cached_raw(
+    key: str,
+    refresh_seconds: int,
+    fetch: Callable[[], Awaitable[list[dict[str, Any]]]],
+) -> tuple[list[dict[str, Any]] | None, datetime | None]:
     """Return (raw, stale_since) for `key`, fetching at most once per interval.
     `fetch` is a zero-arg async callable returning the upstream payload.
     On failure the last good raw is kept and stale_since is set."""
@@ -200,7 +205,7 @@ def build_standings(raw: list[dict[str, Any]], refresh_seconds: int) -> Standing
             continue
         rows = [
             StandingsRow(
-                position=r["position"],
+                position=r.get("position") or 0,
                 team=WorldCupTeam(
                     name=(r.get("team") or {}).get("name") or "?",
                     short_name=(r.get("team") or {}).get("shortName")
