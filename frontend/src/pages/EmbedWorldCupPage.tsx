@@ -18,6 +18,13 @@ import { MatchCard } from "@/components/worldcup/MatchCard";
 import { GoalOverlay } from "@/components/worldcup/GoalOverlay";
 
 const GOAL_OVERLAY_MS = 6000;
+const DEFAULT_CYCLE_S = 30;
+
+/** Post embed-cycle-complete only once the display time has elapsed AND no
+ *  goal overlay is currently queued (so we never cut a goal animation off). */
+export function shouldPostCycle(timerElapsed: boolean, goalQueueLength: number): boolean {
+  return timerElapsed && goalQueueLength === 0;
+}
 
 function gridClass(count: number): string {
   if (count <= 1) return "grid-cols-1";
@@ -61,6 +68,27 @@ export function EmbedWorldCupPage() {
     const timer = setTimeout(() => setGoalQueue((q) => q.slice(1)), GOAL_OVERLAY_MS);
     return () => clearTimeout(timer);
   }, [currentGoal]);
+
+  const [timerElapsed, setTimerElapsed] = useState(false);
+  const postedRef = useRef(false);
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("duration");
+    const parsed = raw != null ? parseInt(raw, 10) : NaN;
+    const seconds = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CYCLE_S;
+    const id = window.setTimeout(() => setTimerElapsed(true), seconds * 1000);
+    return () => window.clearTimeout(id);
+  }, []);
+  useEffect(() => {
+    if (postedRef.current) return;
+    if (shouldPostCycle(timerElapsed, goalQueue.length)) {
+      postedRef.current = true;
+      try {
+        window.parent.postMessage({ type: "embed-cycle-complete" }, "*");
+      } catch {
+        /* cross-origin post can throw — harmless when standalone */
+      }
+    }
+  }, [timerElapsed, goalQueue.length]);
 
   const matches = data?.matches ?? [];
   const staleTime = data?.stale_since
