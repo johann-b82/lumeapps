@@ -175,8 +175,10 @@ bleibt unverändert.
   (Achtel → Viertel → Halb → Finale). Noch nicht ausgespielte Paarungen als
   „noch offen". Während der Gruppenphase (keine KO-Spiele) ein ruhiger
   „noch nicht entschieden"-Zustand.
-- **Torschützen** (`/embed/worldcup/scorers`): rangierte Liste mit Rang, Flagge +
-  Spielername, Toranzahl.
+- **Torschützen** (`/embed/worldcup/scorers`): die **Top 10** (Upstream
+  `?limit=10`), als 2 Spalten à 5 Einträge — Rang, Flagge + Spielername,
+  Toranzahl. Liefert der Upstream weniger (frühe Turnierphase), werden nur die
+  vorhandenen gezeigt.
 
 ## Einbindung in die Digital-Signage-Section
 
@@ -219,10 +221,10 @@ Eintrag nicht zurückkehrt:
   | Position | View | duration_s |
   |----------|------|-----------|
   | 0 | Übersicht | 30 |
-  | 1 | Tabelle | 12 *(pro 6er-Seite → ~24 s gesamt)* |
+  | 1 | Tabelle | 15 *(pro 6er-Seite → ~30 s gesamt)* |
   | 2 | Spiele | 20 |
   | 3 | KO-Runde | 20 |
-  | 4 | Torschützen | 15 |
+  | 4 | Torschützen | 20 |
 
 Die `uri` sind **relative** Pfade (`/embed/...`), wie bei den bestehenden
 HR-Embeds — der Player löst sie gegen den API-Host auf. **Keine** Tag-Zuordnung
