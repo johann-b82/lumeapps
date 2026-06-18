@@ -133,7 +133,7 @@ export function PlaybackShell() {
       return {
         id: `${it.media_id}-${it.position}`,
         kind: it.kind,
-        uri: resolveMediaUrl({ id: it.media_id, uri: it.uri }, token),
+        uri: resolveMediaUrl({ id: it.media_id, uri: it.uri, kind: it.kind }, token),
         html: it.html ?? null,
         slide_paths: slidePaths,
         duration_s: it.duration_ms > 0 ? it.duration_ms / 1000 : 0,

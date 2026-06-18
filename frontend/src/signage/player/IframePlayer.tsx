@@ -15,17 +15,35 @@ export interface IframePlayerProps {
   onCycleEnd?: () => void;
 }
 
+// Last-resort backstop: if an embed item never posts `embed-cycle-complete`
+// (a stale, broken, or non-paginating page), advance anyway after this long so
+// a single item can never freeze the whole playlist. Deliberately generous so
+// it never truncates a legitimately paginating embed; the real postMessage
+// (which arrives far sooner) wins in the normal case.
+const EMBED_SAFETY_FLOOR_MS = 120_000;
+
 export function IframePlayer({ uri, durationS, onCycleEnd }: IframePlayerProps) {
   useEffect(() => {
     if (!onCycleEnd) return;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      onCycleEnd();
+    };
     const handler = (event: MessageEvent) => {
       if (event.data && (event.data as { type?: string }).type === "embed-cycle-complete") {
-        onCycleEnd();
+        finish();
       }
     };
     window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [onCycleEnd]);
+    const safetyMs = Math.max(EMBED_SAFETY_FLOOR_MS, (durationS ?? 0) * 1000 * 3);
+    const safety = window.setTimeout(finish, safetyMs);
+    return () => {
+      window.removeEventListener("message", handler);
+      window.clearTimeout(safety);
+    };
+  }, [onCycleEnd, durationS]);
 
   if (!uri) return null;
   const src = (() => {

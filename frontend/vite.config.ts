@@ -95,6 +95,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
+      // Allow any Host header. The signage URL renderer (headless Chromium in
+      // the api container) loads internal /embed pages via the `frontend`
+      // service host; Vite's default host check would 403 those. This is an
+      // internal LAN tool behind Caddy, so DNS-rebinding risk is acceptable.
+      allowedHosts: true,
       // Bind-mount fs events from the Windows host into the Linux container don't
       // propagate reliably through Docker Desktop's gRPC FUSE — Vite's inotify-based
       // watcher silently misses edits and serves stale transforms until the dev server

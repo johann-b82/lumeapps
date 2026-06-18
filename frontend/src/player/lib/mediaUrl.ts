@@ -10,6 +10,7 @@ declare global {
 export interface MediaForUrl {
   id: string;
   uri: string;
+  kind?: string;
 }
 
 /**
@@ -18,9 +19,12 @@ export interface MediaForUrl {
  * (added in Plan 47-03 per Pitfall P10).
  */
 export function resolveMediaUrl(media: MediaForUrl, token?: string | null): string {
-  // DEFECT-11: url/html items carry non-file uris (absolute URL or empty).
-  // Only file-backed kinds (image/video/pdf/pptx) route through the asset
-  // passthrough. Absolute URLs pass through verbatim.
+  // url media (websites + internal /embed pages) are shown as a LIVE iframe of
+  // the page itself, so dynamic content keeps updating. The raw uri is used
+  // verbatim: absolute http(s) URLs load directly; site-relative uris like
+  // /embed/worldcup resolve against the player's origin — which is Caddy, where
+  // /embed/* is served by the frontend and self-refreshes via /api polling.
+  if (media.kind === "url") return media.uri;
   if (/^https?:\/\//i.test(media.uri)) return media.uri;
   if (!media.uri) return "";
 
