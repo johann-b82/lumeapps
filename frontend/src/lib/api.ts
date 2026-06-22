@@ -563,6 +563,20 @@ export const fetchWorldCupKnockoutPublic = () =>
 export const fetchWorldCupScorersPublic = () =>
   fetchWorldCupPublic<ScorersFeed>("/api/worldcup/embed/scorers");
 
+export interface TippspielRankRow {
+  rank: number;
+  department: string;
+  last_points: number;
+  total_points: number;
+}
+export interface TippspielFeed {
+  refresh_seconds: number;
+  error: string | null;
+  ranking: TippspielRankRow[];
+}
+export const fetchWorldCupTippspielPublic = () =>
+  fetchWorldCupPublic<TippspielFeed>("/api/worldcup/embed/tippspiel");
+
 // ---------------------------------------------------------------------------
 // v1.49 — Quality (8D audit findings)
 // ---------------------------------------------------------------------------

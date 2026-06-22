@@ -353,6 +353,47 @@ async def get_knockout(api_key: str, refresh_seconds: int) -> KnockoutFeed:
     return feed
 
 
+async def get_finished_results(
+    api_key: str, refresh_seconds: int
+) -> list[dict[str, Any]]:
+    """All FINISHED matches as ``{home, away, score_home, score_away, date}``.
+
+    Shares the ``knockout`` cache (same upstream call) so the Tippspiel ranking
+    costs no extra request. Used by the scoring service.
+    """
+    raw, _ = await _cached_raw(
+        "knockout", refresh_seconds, lambda: _fetch_all_matches(api_key)
+    )
+    out: list[dict[str, Any]] = []
+    for m in raw or []:
+        if m.get("status") != "FINISHED":
+            continue
+        ft = (m.get("score") or {}).get("fullTime") or {}
+        if ft.get("home") is None or ft.get("away") is None:
+            continue
+        home = (m.get("homeTeam") or {}).get("name")
+        away = (m.get("awayTeam") or {}).get("name")
+        if not home or not away:
+            continue
+        match_date = None
+        ud = m.get("utcDate")
+        if ud:
+            try:
+                match_date = datetime.fromisoformat(
+                    str(ud).replace("Z", "+00:00")
+                ).date()
+            except ValueError:
+                match_date = None
+        out.append({
+            "home": home,
+            "away": away,
+            "score_home": ft["home"],
+            "score_away": ft["away"],
+            "date": match_date,
+        })
+    return out
+
+
 SCORERS_LIMIT = 10
 
 

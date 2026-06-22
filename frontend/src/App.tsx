@@ -13,6 +13,7 @@ import { EmbedWorldCupStandingsPage } from "./pages/EmbedWorldCupStandingsPage";
 import { EmbedWorldCupMatchesPage } from "./pages/EmbedWorldCupMatchesPage";
 import { EmbedWorldCupKnockoutPage } from "./pages/EmbedWorldCupKnockoutPage";
 import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
+import { EmbedWorldCupTippspielPage } from "./pages/EmbedWorldCupTippspielPage";
 import { QualityPage } from "./pages/QualityPage";
 import { ProcurementPage } from "./pages/ProcurementPage";
 import { SensorsPage } from "./pages/SensorsPage";
@@ -129,6 +130,7 @@ function RootRouter() {
       <Route path="/embed/worldcup/matches" component={EmbedWorldCupMatchesPage} />
       <Route path="/embed/worldcup/knockout" component={EmbedWorldCupKnockoutPage} />
       <Route path="/embed/worldcup/scorers" component={EmbedWorldCupScorersPage} />
+      <Route path="/embed/worldcup/tippspiel" component={EmbedWorldCupTippspielPage} />
       <Route path="/embed/worldcup" component={EmbedWorldCupPage} />
       <Route>
         <AuthProvider>

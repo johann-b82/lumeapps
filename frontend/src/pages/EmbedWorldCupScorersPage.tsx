@@ -28,12 +28,12 @@ export function EmbedWorldCupScorersPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background flex flex-col p-6 gap-4">
-      <h1 className="text-3xl font-bold shrink-0">{t("worldcup.scorers_title")}</h1>
-      <div className="grid flex-1 min-h-0 grid-cols-2 gap-x-12 gap-y-1 content-start text-2xl overflow-hidden">
+      <h1 className="text-5xl font-bold shrink-0">{t("worldcup.scorers_title")}</h1>
+      <div className="grid flex-1 min-h-0 grid-cols-2 gap-x-16 gap-y-2 content-start text-4xl overflow-hidden">
         {scorers.map((s) => (
-          <div key={s.rank} className="flex items-center gap-3 py-2 border-b border-border/50">
-            <span className="text-muted-foreground w-8 tabular-nums">{s.rank}.</span>
-            <TeamFlag team={s.team} className="h-5 w-7" />
+          <div key={s.rank} className="flex items-center gap-5 py-4 border-b border-border/50">
+            <span className="text-muted-foreground w-14 tabular-nums">{s.rank}.</span>
+            <TeamFlag team={s.team} className="h-10 w-14" />
             <span className="truncate flex-1">{s.player_name}</span>
             <span className="font-bold tabular-nums">{s.goals}</span>
           </div>

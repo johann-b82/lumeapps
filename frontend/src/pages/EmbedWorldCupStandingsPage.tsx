@@ -10,7 +10,7 @@ import { fetchWorldCupStandingsPublic, type StandingsFeed } from "@/lib/api";
 import { TeamFlag } from "@/components/worldcup/TeamFlag";
 import { useEmbedPaging } from "@/components/dashboard/useEmbedPaging";
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 4;
 
 export function EmbedWorldCupStandingsPage() {
   const { t, i18n } = useTranslation();
@@ -32,21 +32,21 @@ export function EmbedWorldCupStandingsPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background flex flex-col p-6 gap-4">
-      <h1 className="text-3xl font-bold shrink-0">{t("worldcup.standings_title")}</h1>
-      <div className="grid flex-1 min-h-0 grid-cols-3 grid-rows-2 gap-4">
+      <h1 className="text-4xl font-bold shrink-0">{t("worldcup.standings_title")}</h1>
+      <div className="grid flex-1 min-h-0 grid-cols-2 grid-rows-2 gap-6">
         {shown.map((g) => (
-          <div key={g.group} className="rounded-2xl border-2 border-border bg-card p-3 flex flex-col min-h-0">
-            <div className="text-xl font-semibold mb-2">{g.group}</div>
-            <table className="w-full text-lg tabular-nums">
+          <div key={g.group} className="rounded-2xl border-2 border-border bg-card p-6 flex flex-col min-h-0">
+            <div className="text-3xl font-semibold mb-3">{g.group}</div>
+            <table className="w-full text-3xl tabular-nums">
               <tbody>
                 {g.table.map((r) => (
                   <tr key={r.position} className="border-b border-border/50 last:border-0">
-                    <td className="py-1 pr-2 text-muted-foreground">{r.position}</td>
-                    <td className="py-1 pr-2"><TeamFlag team={r.team} className="h-4 w-6 inline-block" /></td>
-                    <td className="py-1 truncate">{r.team.name}</td>
-                    <td className="py-1 px-1 text-center text-muted-foreground">{r.played}</td>
-                    <td className="py-1 px-1 text-center text-muted-foreground">{r.goal_difference > 0 ? `+${r.goal_difference}` : r.goal_difference}</td>
-                    <td className="py-1 pl-1 text-right font-semibold">{r.points}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{r.position}</td>
+                    <td className="py-2 pr-3"><TeamFlag team={r.team} className="h-8 w-12 inline-block" /></td>
+                    <td className="py-2 truncate">{r.team.name}</td>
+                    <td className="py-2 px-2 text-center text-muted-foreground">{r.played}</td>
+                    <td className="py-2 px-2 text-center text-muted-foreground">{r.goal_difference > 0 ? `+${r.goal_difference}` : r.goal_difference}</td>
+                    <td className="py-2 pl-2 text-right font-semibold">{r.points}</td>
                   </tr>
                 ))}
               </tbody>

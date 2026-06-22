@@ -595,6 +595,39 @@ class DeliveryReliabilityRecord(Base):
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+class TippspielTip(Base):
+    """One department's score tip for one WM match (internal betting game).
+
+    Team names are stored as the football-data feed names (mapped from the
+    German Excel) so the scoring service can join a tip to its real result.
+    Business key ``(home_team, away_team, department)`` makes re-uploads
+    idempotent — each pairing plays once in the group stage.
+    """
+
+    __tablename__ = "tippspiel_tips"
+    __table_args__ = (
+        Index("ix_tippspiel_tips_match", "home_team", "away_team"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    gruppe: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    home_team: Mapped[str] = mapped_column(String(80), nullable=False)
+    away_team: Mapped[str] = mapped_column(String(80), nullable=False)
+    match_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    department: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    tip_home: Mapped[int] = mapped_column(Integer, nullable=False)
+    tip_away: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
 class Interessent(Base):
     """Prospect master-data row from the Adressen / Interessenten ERP export.
 

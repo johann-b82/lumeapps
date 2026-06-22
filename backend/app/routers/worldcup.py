@@ -14,8 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import AppSettings
+from app.models import AppSettings, TippspielTip
+from app.schemas import TippspielFeed, TippspielRankRow
 from app.security.fernet import decrypt_credential
+from app.services.tippspiel_scoring import compute_ranking
 from app.services.worldcup_feed import (
     KnockoutFeed,
     MatchesWindowFeed,
@@ -23,6 +25,7 @@ from app.services.worldcup_feed import (
     StandingsFeed,
     WorldCupFeed,
     get_feed,
+    get_finished_results,
     get_knockout,
     get_matches_window,
     get_scorers,
@@ -90,3 +93,35 @@ async def embed_scorers(db: AsyncSession = Depends(get_async_db_session)) -> Sco
     if api_key is None:
         return ScorersFeed(refresh_seconds=refresh, error="not_configured")
     return await get_scorers(api_key, refresh)
+
+
+@router.get("/embed/tippspiel", response_model=TippspielFeed)
+async def embed_tippspiel(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> TippspielFeed:
+    """Department ranking for the internal Tippspiel — stored tips scored
+    against the live FINISHED results."""
+    api_key, refresh, _ = await _settings(db)
+    tip_rows = list((await db.execute(select(TippspielTip))).scalars().all())
+    if not tip_rows:
+        return TippspielFeed(refresh_seconds=refresh, ranking=[])
+
+    departments = sorted({t.department for t in tip_rows})
+    finished = (
+        await get_finished_results(api_key, refresh) if api_key is not None else []
+    )
+    tips = [
+        {
+            "home": t.home_team,
+            "away": t.away_team,
+            "department": t.department,
+            "tip_home": t.tip_home,
+            "tip_away": t.tip_away,
+        }
+        for t in tip_rows
+    ]
+    ranking = compute_ranking(tips, finished, departments)
+    return TippspielFeed(
+        refresh_seconds=refresh,
+        ranking=[TippspielRankRow(**r) for r in ranking],
+    )

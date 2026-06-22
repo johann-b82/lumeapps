@@ -9,7 +9,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      # Tolerate Postgres crash recovery + fsync on the Windows bind mount.
+      # An unclean shutdown forces a full data-dir sync that can take ~40s
+      # before connections are accepted; 10s let compose abort mid-recovery.
+      start_period: 90s
 
   migrate:
     build: ./backend

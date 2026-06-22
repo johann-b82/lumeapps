@@ -65,12 +65,14 @@
   "/api/upload-delivery-reliability",
   "/api/upload-interessenten",
   "/api/upload-quality",
+  "/api/upload-tippspiel",
   "/api/upload-umsatz",
   "/api/uploads/{batch_id}",
   "/api/worldcup/embed/knockout",
   "/api/worldcup/embed/matches",
   "/api/worldcup/embed/scorers",
   "/api/worldcup/embed/standings",
+  "/api/worldcup/embed/tippspiel",
   "/api/worldcup/embed/today",
   "/health"
 ]

@@ -28,6 +28,7 @@ from app.models import (
     Revenue,
     SalesContact,
     SalesRecord,
+    TippspielTip,
     UploadBatch,
 )
 from app.parsing.angebote_parser import parse_angebote_file
@@ -40,6 +41,7 @@ from app.parsing.erp_parser import parse_erp_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
 from app.parsing.quality_parser import parse_quality_file
+from app.parsing.tippspiel_parser import parse_tippspiel_file
 from app.parsing.revenue_parser import parse_revenue_file
 from app.schemas import (
     AngeboteUploadResponse,
@@ -50,6 +52,7 @@ from app.schemas import (
     InteressentenUploadResponse,
     QualityUploadResponse,
     RevenueUploadResponse,
+    TippspielUploadResponse,
     UploadResponse,
     ValidationErrorDetail,
 )
@@ -558,6 +561,113 @@ async def upload_delivery_reliability(
         rows_updated=rows_updated,
         period_from=period_from,
         period_to=period_to,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+@admin_router.post("/upload-tippspiel", response_model=TippspielUploadResponse)
+async def upload_tippspiel(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> TippspielUploadResponse:
+    """Upsert of the WM-Tippspiel xlsx — one row per (match, department).
+
+    Composite key ``(home_team, away_team, department)``; team names are stored
+    as the football-data feed names so scoring can join to real results.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .xlsx files are accepted for Tippspiel uploads.",
+        )
+    contents = await file.read()
+    rows, errors, departments = parse_tippspiel_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="tippspiel",
+            )
+        )
+        await db.commit()
+        return TippspielUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            departments=departments,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    incoming = [(r["home"], r["away"], r["department"]) for r in rows]
+    existing_stmt = sa.select(sa.func.count(TippspielTip.id)).where(
+        sa.tuple_(
+            TippspielTip.home_team,
+            TippspielTip.away_team,
+            TippspielTip.department,
+        ).in_(incoming)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="tippspiel",
+    )
+    db.add(batch)
+    await db.flush()
+
+    values = [
+        {
+            "upload_batch_id": batch.id,
+            "gruppe": r["gruppe"],
+            "home_team": r["home"],
+            "away_team": r["away"],
+            "match_date": r["match_date"],
+            "department": r["department"],
+            "tip_home": r["tip_home"],
+            "tip_away": r["tip_away"],
+            "raw": r["raw"],
+        }
+        for r in rows
+    ]
+    table = TippspielTip.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "home_team", "away_team", "department")
+    ]
+    cols_per_row = max(1, len(values[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(values), chunk_size):
+        chunk = values[start : start + chunk_size]
+        stmt = pg_insert(TippspielTip).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_tippspiel_tips_match_dept",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return TippspielUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        departments=departments,
         errors=[ValidationErrorDetail(**e) for e in errors],
     )
 

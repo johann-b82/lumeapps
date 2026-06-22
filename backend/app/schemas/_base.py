@@ -704,6 +704,32 @@ class OtdRow(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TippspielUploadResponse(BaseModel):
+    """Response from POST /api/upload-tippspiel."""
+
+    rows_inserted: int
+    rows_updated: int = 0
+    departments: list[str]
+    errors: list[ValidationErrorDetail]
+
+
+class TippspielRankRow(BaseModel):
+    """One department row of the Tippspiel ranking."""
+
+    rank: int
+    department: str
+    last_points: int
+    total_points: int
+
+
+class TippspielFeed(BaseModel):
+    """Tippspiel ranking feed for the signage embed."""
+
+    refresh_seconds: int
+    error: str | None = None
+    ranking: list[TippspielRankRow] = []
+
+
 class CustomerComplaintRow(BaseModel):
     """One row of the customer-complaint verification table."""
 
@@ -759,6 +785,9 @@ __all__ = [
     "OtdValue",
     "OtdHistoryPoint",
     "OtdRow",
+    "TippspielUploadResponse",
+    "TippspielRankRow",
+    "TippspielFeed",
     "KpiSummaryComparison",
     "KpiSummary",
     "ChartPoint",

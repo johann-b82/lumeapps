@@ -65,6 +65,7 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/worldcup/embed/matches", frozenset({"GET"})),
     ("/api/worldcup/embed/knockout", frozenset({"GET"})),
     ("/api/worldcup/embed/scorers", frozenset({"GET"})),
+    ("/api/worldcup/embed/tippspiel", frozenset({"GET"})),
 }
 
 
