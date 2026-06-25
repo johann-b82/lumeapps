@@ -23,8 +23,6 @@ from app.schemas import (
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.atr_lieferschein import parse_lieferschein
 from app.services.atr_match import MatchedDelivery, match_positions
-from app.services.atr_generate_xlsx import build_atr_xlsx, convert_xlsx_to_pdf
-from app.services.atr_generate_docx import build_containerbeschriftung
 
 log = logging.getLogger(__name__)
 
@@ -182,36 +180,14 @@ _MEDIA = {
 @router.post("/{delivery_id}/generate", response_model=AtrGenerateManifest)
 async def generate(delivery_id: int,
                    db: AsyncSession = Depends(get_async_db_session)) -> AtrGenerateManifest:
+    from app.models import AppSettings
+    from app.services.atr_deliver import generate_and_deliver
     row = await _get(db, delivery_id)
-    items = list(row.items)
-    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one_or_none()
-    if tmpl is None or tmpl.structure_xlsx is None:
-        raise HTTPException(400, "no structural template set (upload one in ATR → Template)")
-
-    warnings: list[str] = []
-    xlsx = build_atr_xlsx(tmpl.structure_xlsx, row, items)
-    docx = build_containerbeschriftung(row, items)
-    pdf: bytes | None = None
+    settings_row = (await db.execute(select(AppSettings).where(AppSettings.id == 1))).scalar_one()
     try:
-        pdf = await convert_xlsx_to_pdf(xlsx)
-    except Exception as exc:  # noqa: BLE001 — never lose xlsx/docx over the PDF step
-        log.warning("atr generate: pdf conversion failed for delivery %s: %s", delivery_id, exc)
-        warnings.append("PDF conversion failed; the .xlsx and .docx are still available.")
-
-    row.atr_xlsx = xlsx
-    row.atr_pdf = pdf
-    row.label_docx = docx
-    row.status = "generated"
-    row.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    files = ["atr_xlsx", "label_docx"] + (["atr_pdf"] if pdf else [])
-    unmatched = sum(1 for i in items if i.match_status != "matched")
-    if unmatched:
-        warnings.append(f"{unmatched} unmatched part(s) marked red in the ATR — fix in Excel.")
-    return AtrGenerateManifest(delivery_id=delivery_id, files=files,
-                               pdf_available=pdf is not None,
-                               unmatched_count=unmatched, warnings=warnings)
+        return await generate_and_deliver(db, row, settings_row)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/{delivery_id}/files/{kind}")
