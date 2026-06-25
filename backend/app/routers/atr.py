@@ -12,13 +12,22 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import File, UploadFile
+from fastapi import File, Form, UploadFile
 
 from app.database import get_async_db_session
 from app.models import AtrPart, AtrTemplate
-from app.schemas import AtrPartCreate, AtrPartRead, AtrPartUpdate, AtrTemplateRead, AtrTemplateUpdate
+from app.schemas import (
+    AtrImportPartPreview,
+    AtrImportPreview,
+    AtrImportResult,
+    AtrPartCreate,
+    AtrPartRead,
+    AtrPartUpdate,
+    AtrTemplateRead,
+    AtrTemplateUpdate,
+)
 from app.security.directus_auth import get_current_user, require_admin
-from app.services.atr_reference_import import norm_partno, parse_workbook
+from app.services.atr_reference_import import ParsedWorkbook, norm_partno, parse_workbook
 
 router = APIRouter(
     prefix="/api/atr",
@@ -172,3 +181,130 @@ async def set_template_structure(
     await db.commit()
     await db.refresh(tmpl)
     return _template_read(tmpl)
+
+
+def _header_dict(pw: ParsedWorkbook) -> dict:
+    h = pw.header
+    return {
+        "customer": h.customer, "ac_programme": h.ac_programme,
+        "work_package": h.work_package, "purchaser_spec": h.purchaser_spec,
+        "atp": h.atp, "supplier_spec": h.supplier_spec,
+        "reference_no": h.reference_no, "supplier": h.supplier,
+        "customer_spec": h.customer_spec, "nscm_code": h.nscm_code,
+        "ata_chapter": h.ata_chapter, "weighing_equipment": h.weighing_equipment,
+    }
+
+
+def _value_fields(part) -> tuple:
+    """The fields an import overwrites — used to classify new/updated/unchanged."""
+    return (
+        part.supplier_article_code, part.part_name, part.drawing_number_issue,
+        part.default_weight_kg, part.qty, part.category,
+    )
+
+
+@router.post("/import/preview", response_model=list[AtrImportPreview])
+async def import_preview(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[AtrImportPreview]:
+    existing = {
+        p.part_number_norm: p
+        for p in (await db.execute(select(AtrPart))).scalars().all()
+    }
+    out: list[AtrImportPreview] = []
+    for f in files:
+        raw = await f.read()
+        try:
+            pw = parse_workbook(raw, f.filename or "upload.xlsx")
+        except ValueError as exc:
+            raise HTTPException(400, f"{f.filename}: {exc}") from exc
+        parts, new, upd, unch = [], 0, 0, 0
+        for p in pw.parts:
+            prev = existing.get(p.part_number_norm)
+            if prev is None:
+                status = "new"; new += 1
+            elif _value_fields(prev) != _value_fields(p):
+                status = "updated"; upd += 1
+            else:
+                status = "unchanged"; unch += 1
+            parts.append(AtrImportPartPreview(
+                part_number=p.part_number, part_number_norm=p.part_number_norm,
+                supplier_article_code=p.supplier_article_code, part_name=p.part_name,
+                drawing_number_issue=p.drawing_number_issue,
+                default_weight_kg=p.default_weight_kg, qty=p.qty,
+                category=p.category, status=status,
+            ))
+        out.append(AtrImportPreview(
+            source_filename=pw.source_filename, header=_header_dict(pw),
+            parts=parts, new_count=new, updated_count=upd,
+            unchanged_count=unch, warnings=pw.warnings,
+        ))
+    return out
+
+
+@router.post("/import/commit", response_model=list[AtrImportResult])
+async def import_commit(
+    files: list[UploadFile] = File(...),
+    update_template: bool = Form(default=False),
+    set_structure: bool = Form(default=False),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[AtrImportResult]:
+    now = datetime.now(timezone.utc)
+    results: list[AtrImportResult] = []
+    for f in files:
+        raw = await f.read()
+        try:
+            pw = parse_workbook(raw, f.filename or "upload.xlsx")
+        except ValueError as exc:
+            raise HTTPException(400, f"{f.filename}: {exc}") from exc
+        existing = {
+            p.part_number_norm: p
+            for p in (await db.execute(select(AtrPart))).scalars().all()
+        }
+        created = updated = 0
+        for p in pw.parts:
+            prev = existing.get(p.part_number_norm)
+            if prev is None:
+                db.add(AtrPart(
+                    part_number=p.part_number, part_number_norm=p.part_number_norm,
+                    supplier_article_code=p.supplier_article_code,
+                    part_name=p.part_name, drawing_number_issue=p.drawing_number_issue,
+                    default_weight_kg=p.default_weight_kg, qty=p.qty,
+                    category=p.category, po_pos=None,
+                    source_filename=pw.source_filename, imported_at=now, updated_at=now,
+                ))
+                created += 1
+            else:
+                prev.supplier_article_code = p.supplier_article_code
+                prev.part_name = p.part_name
+                prev.drawing_number_issue = p.drawing_number_issue
+                prev.default_weight_kg = p.default_weight_kg
+                prev.qty = p.qty
+                prev.category = p.category
+                prev.source_filename = pw.source_filename
+                prev.imported_at = now
+                prev.updated_at = now
+                updated += 1
+
+        tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
+        template_updated = False
+        if update_template:
+            for k, v in _header_dict(pw).items():
+                setattr(tmpl, k, v)
+            tmpl.updated_at = now
+            template_updated = True
+        structure_set = False
+        if set_structure:
+            tmpl.structure_xlsx = raw
+            tmpl.structure_filename = pw.source_filename
+            tmpl.updated_at = now
+            structure_set = True
+
+        await db.commit()
+        results.append(AtrImportResult(
+            source_filename=pw.source_filename, created=created, updated=updated,
+            template_updated=template_updated, structure_set=structure_set,
+            warnings=pw.warnings,
+        ))
+    return results
