@@ -96,6 +96,9 @@ class AtrDelivery(Base):
     label_docx: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    origin: Mapped[str] = mapped_column(String(8), nullable=False, default="upload")
+    source_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    output_written_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     items: Mapped[list["AtrDeliveryItem"]] = relationship(
         "AtrDeliveryItem", back_populates="delivery",

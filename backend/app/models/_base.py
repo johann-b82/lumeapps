@@ -206,6 +206,18 @@ class AppSettings(Base):
         Integer, nullable=False, default=60
     )
 
+    # --- v1.65 ATR fileserver (Phase C) ---
+    atr_smb_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    atr_smb_share: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    atr_smb_domain: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    atr_smb_user: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    atr_smb_password_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    atr_input_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_output_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_archive_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_scan_interval_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    atr_auto_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
 
 class PersonioEmployee(Base):
     __tablename__ = "personio_employees"

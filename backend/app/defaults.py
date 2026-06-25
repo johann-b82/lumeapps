@@ -10,7 +10,7 @@ Per D-19: frontend never reads this module; it is backend-only.
 """
 from typing import Final
 
-DEFAULT_SETTINGS: Final[dict[str, str]] = {
+DEFAULT_SETTINGS: Final[dict[str, object]] = {
     "color_primary": "oklch(0.55 0.15 250)",
     "color_accent": "oklch(0.70 0.18 150)",
     "color_background": "oklch(1.00 0 0)",
@@ -18,4 +18,13 @@ DEFAULT_SETTINGS: Final[dict[str, str]] = {
     "color_muted": "oklch(0.90 0 0)",
     "color_destructive": "oklch(0.55 0.22 25)",
     "app_name": "KPI Dashboard",
+    "atr_smb_host": None,
+    "atr_smb_share": None,
+    "atr_smb_domain": None,
+    "atr_smb_user": None,
+    "atr_input_path": "0900 - EDV/Test_ATR/Input",
+    "atr_output_path": "0900 - EDV/Test_ATR/Output",
+    "atr_archive_path": "0900 - EDV/Test_ATR/Archiv",
+    "atr_scan_interval_s": 0,
+    "atr_auto_mode": False,
 }
