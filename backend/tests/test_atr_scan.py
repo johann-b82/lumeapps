@@ -66,3 +66,26 @@ def test_reschedule_atr_scan_removes_on_zero():
     from app.scheduler import reschedule_atr_scan, ATR_SCAN_JOB_ID, scheduler
     reschedule_atr_scan(0)
     assert scheduler.get_job(ATR_SCAN_JOB_ID) is None
+
+
+async def test_scan_auto_failure_retries(client, monkeypatch):
+    # configure SMB + auto, but DO NOT set a structural template → generate fails
+    from app.database import AsyncSessionLocal
+    from app.models import AppSettings, AtrDelivery
+    from sqlalchemy import update, select, func
+    from app.security.fernet import encrypt_credential
+    async with AsyncSessionLocal() as db:
+        await db.execute(update(AppSettings).where(AppSettings.id==1).values(
+            atr_smb_host="h", atr_smb_share="s", atr_smb_user="u",
+            atr_smb_password_enc=encrypt_credential("p"),
+            atr_scan_interval_s=60, atr_auto_mode=True))
+        await db.commit()
+    from app.services import atr_fileserver as fs
+    monkeypatch.setattr(fs, "list_input_pdfs", lambda cfg: ["LS.pdf"])
+    monkeypatch.setattr(fs, "read_input", lambda cfg, name: make_text_pdf(_LS))
+    from app.scheduler import _run_atr_scan
+    await _run_atr_scan()  # generation fails (no template) → draft deleted
+    async with AsyncSessionLocal() as db:
+        n = (await db.execute(select(func.count()).select_from(AtrDelivery).where(
+            AtrDelivery.source_filename=="LS.pdf"))).scalar_one()
+    assert n == 0  # stuck draft was removed so the file will be retried

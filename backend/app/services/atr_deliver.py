@@ -60,16 +60,27 @@ async def generate_and_deliver(db: AsyncSession, delivery, settings_row) -> AtrG
             if pdf is not None:
                 await asyncio.to_thread(fs.write_output, cfg, f"{base}.pdf", pdf)
             await asyncio.to_thread(fs.write_output, cfg, f"{base}_Container.docx", docx)
-            if delivery.source_path:
-                await asyncio.to_thread(fs.archive_input, cfg, delivery.source_path.rsplit("/", 1)[-1])
-            delivery.output_written_at = datetime.now(timezone.utc)
-            delivery.status = "delivered"
         except fs.AtrFileserverError as exc:
-            log.warning("atr deliver: share write/archive failed for delivery %s: %s", delivery.id, exc)
+            log.warning("atr deliver: share write failed for delivery %s: %s", delivery.id, exc)
             warnings.append(f"writing to the fileserver failed: {exc}")
-
+            await db.commit()  # status stays 'generated'; not delivered, source NOT archived
+            return _manifest(delivery, items, pdf, warnings)
+        # writes succeeded → record delivered, COMMIT, THEN archive
+        delivery.output_written_at = datetime.now(timezone.utc)
+        delivery.status = "delivered"
+        await db.commit()
+        if delivery.source_path:
+            try:
+                await asyncio.to_thread(fs.archive_input, cfg, delivery.source_path.rsplit("/", 1)[-1])
+            except fs.AtrFileserverError as exc:
+                log.warning("atr deliver: archive failed for delivery %s: %s", delivery.id, exc)
+                warnings.append(f"archiving the source failed: {exc}")
+        return _manifest(delivery, items, pdf, warnings)
     await db.commit()
+    return _manifest(delivery, items, pdf, warnings)
 
+
+def _manifest(delivery, items, pdf, warnings) -> AtrGenerateManifest:
     files = ["atr_xlsx", "label_docx"] + (["atr_pdf"] if pdf else [])
     unmatched = sum(1 for i in items if i.match_status != "matched")
     if unmatched:

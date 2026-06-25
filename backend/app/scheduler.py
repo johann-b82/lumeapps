@@ -321,9 +321,9 @@ async def _run_atr_scan() -> None:
         if cfg is None:
             return
         try:
-            names = await asyncio.to_thread(fs.list_input_pdfs, cfg)
-        except fs.AtrFileserverError:
-            log.warning("atr_scan: list_input_pdfs failed", exc_info=True)
+            names = await asyncio.wait_for(asyncio.to_thread(fs.list_input_pdfs, cfg), timeout=60)
+        except (fs.AtrFileserverError, asyncio.TimeoutError):
+            log.warning("atr_scan: list_input_pdfs failed/timed out", exc_info=True)
             return
         # names already linked to a scan-origin delivery → skip
         linked = set((await session.execute(
@@ -333,7 +333,7 @@ async def _run_atr_scan() -> None:
             if name in linked:
                 continue
             try:
-                raw = await asyncio.to_thread(fs.read_input, cfg, name)
+                raw = await asyncio.wait_for(asyncio.to_thread(fs.read_input, cfg, name), timeout=60)
                 parsed = await parse_lieferschein(raw)
                 if not parsed.positions:
                     log.warning("atr_scan: no positions in %s; skipping", name)
@@ -345,11 +345,16 @@ async def _run_atr_scan() -> None:
                 delivery.source_path = f"{cfg.input_path}/{name}"
                 await session.commit()
                 if row.atr_auto_mode:
-                    from sqlalchemy.orm import selectinload
-                    d = (await session.execute(
-                        select(AtrDelivery).options(selectinload(AtrDelivery.items)).where(AtrDelivery.id == delivery.id)
-                    )).scalar_one()
-                    await generate_and_deliver(session, d, row)
+                    try:
+                        from sqlalchemy.orm import selectinload
+                        d = (await session.execute(
+                            select(AtrDelivery).options(selectinload(AtrDelivery.items)).where(AtrDelivery.id == delivery.id)
+                        )).scalar_one()
+                        await generate_and_deliver(session, d, row)
+                    except Exception:
+                        log.exception("atr_scan: auto-generate failed for %s; deleting draft to retry next scan", name)
+                        await session.delete(delivery)
+                        await session.commit()
             except Exception:
                 log.exception("atr_scan: failed processing %s", name)
                 await session.rollback()

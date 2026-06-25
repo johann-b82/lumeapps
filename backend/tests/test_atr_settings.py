@@ -49,3 +49,11 @@ async def test_test_endpoint_admin_gated(client):
     r = await client.post("/api/atr/fileserver/test",
                           headers={"Authorization": f"Bearer {mint(VIEWER_UUID)}"})
     assert r.status_code == 403
+
+
+async def test_fileserver_test_unconfigured(client):
+    r = await client.post("/api/atr/fileserver/test",
+                          headers={"Authorization": f"Bearer {mint(ADMIN_UUID)}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False and body["error"]
