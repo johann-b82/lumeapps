@@ -755,5 +755,34 @@
   "sales.customer_share.collapse_label": "Top 4–14 ausblenden",
   "sales.customer_share.expand_aria": "Top 4 bis 14 einblenden",
   "sales.customer_share.collapse_aria": "Top 4 bis 14 ausblenden",
-  "sales.orders_distribution.top3_customers_title": "TOP-3 Kunden"
+  "sales.orders_distribution.top3_customers_title": "TOP-3 Kunden",
+  "atr": {
+    "title": "ATR Referenz",
+    "tile": "ATR Referenz",
+    "nav": { "parts": "Teilekatalog", "import": "Import", "template": "Vorlage" },
+    "parts": {
+      "heading": "Teilekatalog",
+      "search": "Teilenummer, Bezeichnung, Artikel suchen…",
+      "col": { "part_number": "Teilenummer", "name": "Bezeichnung", "category": "Kategorie", "drawing": "Zeichnung / Index", "weight": "Gewicht [kg]", "po_pos": "PO Pos", "source": "Quelldatei" },
+      "empty": "Noch keine Teile — bitte eine Referenzdatei importieren.",
+      "save": "Speichern", "edit": "Bearbeiten", "delete": "Löschen"
+    },
+    "import": {
+      "heading": "Referenzdatei importieren",
+      "choose": ".xlsx-Datei(en) wählen",
+      "preview": "Vorschau",
+      "commit": "Importieren",
+      "update_template": "Auch Vorlagen-Kopfdaten aktualisieren",
+      "set_structure": "Diese Datei als Struktur-Vorlage verwenden",
+      "new": "Neu", "updated": "Aktualisiert", "unchanged": "Unverändert",
+      "warnings": "Warnungen"
+    },
+    "template": {
+      "heading": "Struktur-Vorlage & Kopfdaten",
+      "structure": "Struktur-Arbeitsmappe",
+      "no_structure": "Keine Struktur-Vorlage hinterlegt",
+      "upload_structure": "Struktur-Arbeitsmappe hochladen",
+      "save": "Kopfdaten speichern"
+    }
+  }
 }
