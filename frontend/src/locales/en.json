@@ -817,5 +817,20 @@
   "atr.deliveries.generate": "Generate",
   "atr.deliveries.download_xlsx": "Download .xlsx",
   "atr.deliveries.download_pdf": "Download PDF",
-  "atr.deliveries.download_docx": "Download label"
+  "atr.deliveries.download_docx": "Download label",
+  "atr.fileserver.heading": "ATR fileserver",
+  "atr.fileserver.host": "SMB host",
+  "atr.fileserver.share": "Share",
+  "atr.fileserver.domain": "AD domain",
+  "atr.fileserver.user": "Service account user",
+  "atr.fileserver.password": "Service account password",
+  "atr.fileserver.password_set": "(password set — leave blank to keep)",
+  "atr.fileserver.input_path": "Input directory",
+  "atr.fileserver.output_path": "Output directory",
+  "atr.fileserver.archive_path": "Archive directory",
+  "atr.fileserver.interval": "Scan interval (seconds, 0 = off)",
+  "atr.fileserver.auto_mode": "Auto mode (generate without review)",
+  "atr.fileserver.test": "Test connection",
+  "atr.fileserver.test_ok": "Connection OK",
+  "atr.fileserver.save": "Save"
 }

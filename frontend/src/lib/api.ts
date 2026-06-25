@@ -219,6 +219,17 @@ export interface Settings {
   // v1.57 World Cup signage — key is write-only, only the boolean is exposed.
   worldcup_has_api_key: boolean;
   worldcup_refresh_seconds: number;
+  // ATR fileserver — password is write-only, only the boolean is exposed.
+  atr_smb_host: string | null;
+  atr_smb_share: string | null;
+  atr_smb_domain: string | null;
+  atr_smb_user: string | null;
+  atr_smb_has_password: boolean;
+  atr_input_path: string | null;
+  atr_output_path: string | null;
+  atr_archive_path: string | null;
+  atr_scan_interval_s: number;
+  atr_auto_mode: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -269,6 +280,17 @@ export interface SettingsUpdatePayload {
   // v1.57 World Cup signage. undefined = "don't change".
   worldcup_api_key?: string;
   worldcup_refresh_seconds?: number;
+  // ATR fileserver. undefined = "don't change". Password is write-only.
+  atr_smb_host?: string | null;
+  atr_smb_share?: string | null;
+  atr_smb_domain?: string | null;
+  atr_smb_user?: string | null;
+  atr_smb_password?: string;
+  atr_input_path?: string | null;
+  atr_output_path?: string | null;
+  atr_archive_path?: string | null;
+  atr_scan_interval_s?: number;
+  atr_auto_mode?: boolean;
 }
 
 /**
@@ -1366,4 +1388,12 @@ export async function runSnmpWalk(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+// ---------------------------------------------------------------------------
+// ATR Phase C — fileserver connection test
+// ---------------------------------------------------------------------------
+
+export async function testAtrFileserver(): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/atr/fileserver/test", { method: "POST" });
 }

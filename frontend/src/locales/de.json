@@ -817,5 +817,20 @@
   "atr.deliveries.generate": "Generieren",
   "atr.deliveries.download_xlsx": "Excel herunterladen",
   "atr.deliveries.download_pdf": "PDF herunterladen",
-  "atr.deliveries.download_docx": "Etikett herunterladen"
+  "atr.deliveries.download_docx": "Etikett herunterladen",
+  "atr.fileserver.heading": "ATR-Dateiserver",
+  "atr.fileserver.host": "SMB-Host",
+  "atr.fileserver.share": "Freigabe",
+  "atr.fileserver.domain": "AD-Domäne",
+  "atr.fileserver.user": "Servicekonto-Benutzer",
+  "atr.fileserver.password": "Servicekonto-Passwort",
+  "atr.fileserver.password_set": "(Passwort gesetzt — leer lassen zum Beibehalten)",
+  "atr.fileserver.input_path": "Eingangsverzeichnis",
+  "atr.fileserver.output_path": "Ausgangsverzeichnis",
+  "atr.fileserver.archive_path": "Archivverzeichnis",
+  "atr.fileserver.interval": "Scan-Intervall (Sekunden, 0 = aus)",
+  "atr.fileserver.auto_mode": "Automatik (ohne Prüfung generieren)",
+  "atr.fileserver.test": "Verbindung testen",
+  "atr.fileserver.test_ok": "Verbindung OK",
+  "atr.fileserver.save": "Speichern"
 }
