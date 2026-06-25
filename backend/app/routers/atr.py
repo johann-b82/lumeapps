@@ -12,11 +12,13 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import File, UploadFile
+
 from app.database import get_async_db_session
-from app.models import AtrPart
-from app.schemas import AtrPartCreate, AtrPartRead, AtrPartUpdate
+from app.models import AtrPart, AtrTemplate
+from app.schemas import AtrPartCreate, AtrPartRead, AtrPartUpdate, AtrTemplateRead, AtrTemplateUpdate
 from app.security.directus_auth import get_current_user, require_admin
-from app.services.atr_reference_import import norm_partno
+from app.services.atr_reference_import import norm_partno, parse_workbook
 
 router = APIRouter(
     prefix="/api/atr",
@@ -117,3 +119,56 @@ async def delete_part(
     if result.rowcount == 0:
         raise HTTPException(404, "part not found")
     await db.commit()
+
+
+def _template_read(tmpl: AtrTemplate) -> AtrTemplateRead:
+    return AtrTemplateRead(
+        id=tmpl.id, customer=tmpl.customer, ac_programme=tmpl.ac_programme,
+        work_package=tmpl.work_package, purchaser_spec=tmpl.purchaser_spec,
+        atp=tmpl.atp, supplier_spec=tmpl.supplier_spec, reference_no=tmpl.reference_no,
+        supplier=tmpl.supplier, customer_spec=tmpl.customer_spec,
+        nscm_code=tmpl.nscm_code, ata_chapter=tmpl.ata_chapter,
+        weighing_equipment=tmpl.weighing_equipment,
+        qa_signer_default=tmpl.qa_signer_default,
+        structure_filename=tmpl.structure_filename,
+        has_structure=tmpl.structure_xlsx is not None,
+        updated_at=tmpl.updated_at,
+    )
+
+
+@router.get("/template", response_model=AtrTemplateRead)
+async def get_template(db: AsyncSession = Depends(get_async_db_session)) -> AtrTemplateRead:
+    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
+    return _template_read(tmpl)
+
+
+@router.patch("/template", response_model=AtrTemplateRead)
+async def patch_template(
+    payload: AtrTemplateUpdate, db: AsyncSession = Depends(get_async_db_session)
+) -> AtrTemplateRead:
+    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(tmpl, k, v)
+    tmpl.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(tmpl)
+    return _template_read(tmpl)
+
+
+@router.post("/template/structure", response_model=AtrTemplateRead)
+async def set_template_structure(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AtrTemplateRead:
+    raw = await file.read()
+    try:
+        parse_workbook(raw, file.filename or "structure.xlsx")  # validate it parses
+    except ValueError as exc:
+        raise HTTPException(400, f"{file.filename}: {exc}") from exc
+    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
+    tmpl.structure_xlsx = raw
+    tmpl.structure_filename = file.filename
+    tmpl.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(tmpl)
+    return _template_read(tmpl)
