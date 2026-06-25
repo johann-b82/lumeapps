@@ -48,3 +48,14 @@ async def test_preview_then_commit_then_merge(client):
     # template defaults were seeded from the import
     r = await client.get("/api/atr/template", headers=_auth())
     assert r.json()["nscm_code"] == "C9312"
+
+
+async def test_preview_trailing_zero_weight_is_unchanged(client):
+    base = [("6060", "VR11S 1010 016 000", "X", "N/A", "VR11S 1010-10/D", 1, "0.41")]
+    await client.post("/api/atr/import/commit", headers=_auth(),
+                      files=_file(parts=base))
+    tz = [("6060", "VR11S 1010 016 000", "X", "N/A", "VR11S 1010-10/D", 1, "0.410")]
+    r = await client.post("/api/atr/import/preview", headers=_auth(),
+                          files=_file(name="tz.xlsx", parts=tz))
+    pv = r.json()[0]
+    assert pv["unchanged_count"] == 1 and pv["updated_count"] == 0, pv

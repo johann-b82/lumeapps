@@ -6,6 +6,7 @@ in tests/test_atr_admin_gate.py enforces this.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, or_, select
@@ -195,11 +196,15 @@ def _header_dict(pw: ParsedWorkbook) -> dict:
     }
 
 
+def _norm_weight(w):
+    return None if w is None else Decimal(w).quantize(Decimal("0.001"))
+
+
 def _value_fields(part) -> tuple:
     """The fields an import overwrites — used to classify new/updated/unchanged."""
     return (
         part.supplier_article_code, part.part_name, part.drawing_number_issue,
-        part.default_weight_kg, part.qty, part.category,
+        _norm_weight(part.default_weight_kg), part.qty, part.category,
     )
 
 
@@ -287,19 +292,20 @@ async def import_commit(
                 prev.updated_at = now
                 updated += 1
 
-        tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
         template_updated = False
-        if update_template:
-            for k, v in _header_dict(pw).items():
-                setattr(tmpl, k, v)
-            tmpl.updated_at = now
-            template_updated = True
         structure_set = False
-        if set_structure:
-            tmpl.structure_xlsx = raw
-            tmpl.structure_filename = pw.source_filename
-            tmpl.updated_at = now
-            structure_set = True
+        if update_template or set_structure:
+            tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one()
+            if update_template:
+                for k, v in _header_dict(pw).items():
+                    setattr(tmpl, k, v)
+                tmpl.updated_at = now
+                template_updated = True
+            if set_structure:
+                tmpl.structure_xlsx = raw
+                tmpl.structure_filename = pw.source_filename
+                tmpl.updated_at = now
+                structure_set = True
 
         await db.commit()
         results.append(AtrImportResult(
