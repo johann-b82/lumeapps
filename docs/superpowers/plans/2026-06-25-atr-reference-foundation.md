@@ -779,11 +779,8 @@ git commit -m "feat(atr): pydantic schemas"
 
 ```python
 # backend/tests/test_atr_router.py
-import pytest
-
+# pytest.ini sets asyncio_mode = auto, so plain `async def test_*` works.
 from tests._auth import ADMIN_UUID, mint
-
-pytestmark = pytest.mark.anyio if False else pytest.mark.asyncio
 
 
 def _auth():
@@ -989,12 +986,8 @@ git commit -m "feat(atr): parts catalog CRUD router"
 
 ```python
 # backend/tests/test_atr_merge.py
-import pytest
-
 from tests._atr_fixtures import build_atr_workbook_bytes
 from tests._auth import ADMIN_UUID, mint
-
-pytestmark = pytest.mark.asyncio
 
 
 def _auth():
@@ -1212,12 +1205,8 @@ git commit -m "feat(atr): xlsx import preview + commit with upsert merge"
 
 ```python
 # backend/tests/test_atr_template.py
-import pytest
-
 from tests._atr_fixtures import build_atr_workbook_bytes
 from tests._auth import ADMIN_UUID, mint
-
-pytestmark = pytest.mark.asyncio
 
 
 def _auth():
@@ -1333,14 +1322,11 @@ git commit -m "feat(atr): template singleton get/patch/structure endpoints"
 ```python
 # backend/tests/test_atr_admin_gate.py
 """Every /api/atr/* route must carry require_admin (mirrors test_sensors_admin_gate)."""
-import pytest
 from fastapi.routing import APIRoute
 
 from app.main import app
 from app.security.directus_auth import require_admin
 from tests._auth import VIEWER_UUID, mint
-
-pytestmark = pytest.mark.asyncio
 
 
 def _walk_deps(deps):
@@ -1813,17 +1799,24 @@ In `frontend/src/pages/LauncherPage.tsx`: add `FileSpreadsheet` to the lucide im
 
 ```tsx
 // frontend/src/pages/__tests__/AtrPartsPage.test.tsx
+import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { I18nextProvider } from "react-i18next";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import i18n from "@/i18n";
 import { AtrPartsPage } from "../AtrPartsPage";
 import * as atrApi from "@/lib/atrApi";
 
 vi.mock("@/lib/atrApi");
 
-function wrap(ui: React.ReactNode) {
+function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <I18nextProvider i18n={i18n}>{ui}</I18nextProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe("AtrPartsPage", () => {
@@ -1974,7 +1967,9 @@ export function AtrImportPage() {
 ```tsx
 // frontend/src/pages/__tests__/AtrImportPage.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { I18nextProvider } from "react-i18next";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import i18n from "@/i18n";
 import { AtrImportPage } from "../AtrImportPage";
 import * as atrApi from "@/lib/atrApi";
 
@@ -1993,7 +1988,11 @@ describe("AtrImportPage", () => {
         default_weight_kg: "0.413", qty: 1, category: "CARPET", status: "new",
       }],
     }]);
-    render(<AtrImportPage />);
+    render(
+      <I18nextProvider i18n={i18n}>
+        <AtrImportPage />
+      </I18nextProvider>,
+    );
     const input = screen.getByLabelText(/xlsx/i);
     const file = new File(["x"], "demo.xlsx",
       { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -2104,17 +2103,24 @@ export function AtrTemplatePage() {
 
 ```tsx
 // frontend/src/pages/__tests__/AtrTemplatePage.test.tsx
+import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { I18nextProvider } from "react-i18next";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import i18n from "@/i18n";
 import { AtrTemplatePage } from "../AtrTemplatePage";
 import * as atrApi from "@/lib/atrApi";
 
 vi.mock("@/lib/atrApi");
 
-function wrap(ui: React.ReactNode) {
+function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <I18nextProvider i18n={i18n}>{ui}</I18nextProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe("AtrTemplatePage", () => {
