@@ -29,6 +29,7 @@ import { AtrPartsPage } from "./pages/AtrPartsPage";
 import { AtrImportPage } from "./pages/AtrImportPage";
 import { AtrTemplatePage } from "./pages/AtrTemplatePage";
 import { AtrDeliveriesPage } from "./pages/AtrDeliveriesPage";
+import { AtrDeliveryReviewPage } from "./pages/AtrDeliveryReviewPage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
@@ -93,6 +94,7 @@ function AppShell() {
           </Route>
           <Route path="/atr/template"><AdminOnly><AtrTemplatePage /></AdminOnly></Route>
           <Route path="/atr/import"><AdminOnly><AtrImportPage /></AdminOnly></Route>
+          <Route path="/atr/deliveries/:id"><AdminOnly><AtrDeliveryReviewPage /></AdminOnly></Route>
           <Route path="/atr/deliveries"><AdminOnly><AtrDeliveriesPage /></AdminOnly></Route>
           <Route path="/atr"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
           {/* /settings/sensors MUST appear before /settings so wouter's first-match wins */}
