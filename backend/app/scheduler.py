@@ -307,7 +307,6 @@ async def _load_atr_interval() -> int:
 
 async def _run_atr_scan() -> None:
     """List new Lieferscheine on the SMB share and process each (Phase C)."""
-    import asyncio as _asyncio
     from app.models import AppSettings, AtrDelivery
     from app.services import atr_fileserver as fs
     from app.services.atr_deliver import generate_and_deliver
@@ -322,7 +321,7 @@ async def _run_atr_scan() -> None:
         if cfg is None:
             return
         try:
-            names = await _asyncio.to_thread(fs.list_input_pdfs, cfg)
+            names = await asyncio.to_thread(fs.list_input_pdfs, cfg)
         except fs.AtrFileserverError:
             log.warning("atr_scan: list_input_pdfs failed", exc_info=True)
             return
@@ -334,7 +333,7 @@ async def _run_atr_scan() -> None:
             if name in linked:
                 continue
             try:
-                raw = await _asyncio.to_thread(fs.read_input, cfg, name)
+                raw = await asyncio.to_thread(fs.read_input, cfg, name)
                 parsed = await parse_lieferschein(raw)
                 if not parsed.positions:
                     log.warning("atr_scan: no positions in %s; skipping", name)
@@ -369,6 +368,9 @@ def reschedule_atr_scan(new_interval_s: int) -> None:
                               coalesce=True, misfire_grace_time=30)
         else:
             scheduler.reschedule_job(ATR_SCAN_JOB_ID, trigger="interval", seconds=new_interval_s)
+        job = scheduler.get_job(ATR_SCAN_JOB_ID)
+        log.info("atr_scan rescheduled: new=%ss next_run=%s", new_interval_s,
+                 job.next_run_time.isoformat() if job and job.next_run_time else None)
     except Exception:
         log.exception("reschedule_atr_scan failed (new_interval_s=%s)", new_interval_s)
 
