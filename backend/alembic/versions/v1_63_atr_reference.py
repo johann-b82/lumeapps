@@ -33,9 +33,7 @@ def upgrade() -> None:
         sa.Column("imported_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index(
-        "ix_atr_part_norm", "atr_part", ["part_number_norm"], unique=True
-    )
+    op.create_unique_constraint("uq_atr_part_norm", "atr_part", ["part_number_norm"])
 
     op.create_table(
         "atr_template",
@@ -68,5 +66,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("atr_template")
-    op.drop_index("ix_atr_part_norm", table_name="atr_part")
+    op.drop_constraint("uq_atr_part_norm", "atr_part", type_="unique")
     op.drop_table("atr_part")

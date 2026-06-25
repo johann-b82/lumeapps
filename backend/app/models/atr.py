@@ -28,9 +28,7 @@ class AtrPart(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     part_number: Mapped[str] = mapped_column(String(60), nullable=False)
-    part_number_norm: Mapped[str] = mapped_column(
-        String(40), nullable=False, unique=True, index=True
-    )
+    part_number_norm: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     supplier_article_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     part_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     drawing_number_issue: Mapped[str | None] = mapped_column(String(60), nullable=True)
