@@ -50,6 +50,20 @@ async def test_preview_then_commit_then_merge(client):
     assert r.json()["nscm_code"] == "C9312"
 
 
+async def test_commit_dedupes_duplicate_norm_within_one_file(client):
+    dup = [
+        ("6060", "VR11S 1010 016 000", "X", "N/A", "VR11S 1010-10/D", 1, "0.40"),
+        ("6060", "VR11S 1010 016 000", "X", "N/A", "VR11S 1010-10/D", 1, "0.50"),
+    ]
+    r = await client.post("/api/atr/import/commit", headers=_auth(),
+                          files=_file(parts=dup))
+    assert r.status_code == 200, r.text
+    rows = (await client.get("/api/atr/parts?search=016%20000", headers=_auth())).json()
+    rows = [p for p in rows if p["part_number_norm"] == "111010016000"]
+    assert len(rows) == 1, rows
+    assert rows[0]["default_weight_kg"] == "0.500"
+
+
 async def test_preview_trailing_zero_weight_is_unchanged(client):
     base = [("6060", "VR11S 1010 016 000", "X", "N/A", "VR11S 1010-10/D", 1, "0.41")]
     await client.post("/api/atr/import/commit", headers=_auth(),

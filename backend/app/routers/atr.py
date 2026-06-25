@@ -271,14 +271,16 @@ async def import_commit(
         for p in pw.parts:
             prev = existing.get(p.part_number_norm)
             if prev is None:
-                db.add(AtrPart(
+                new_row = AtrPart(
                     part_number=p.part_number, part_number_norm=p.part_number_norm,
                     supplier_article_code=p.supplier_article_code,
                     part_name=p.part_name, drawing_number_issue=p.drawing_number_issue,
                     default_weight_kg=p.default_weight_kg, qty=p.qty,
                     category=p.category, po_pos=None,
                     source_filename=pw.source_filename, imported_at=now, updated_at=now,
-                ))
+                )
+                db.add(new_row)
+                existing[p.part_number_norm] = new_row
                 created += 1
             else:
                 prev.supplier_article_code = p.supplier_article_code
@@ -307,7 +309,11 @@ async def import_commit(
                 tmpl.updated_at = now
                 structure_set = True
 
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise HTTPException(409, f"{pw.source_filename}: duplicate part number conflict") from exc
         results.append(AtrImportResult(
             source_filename=pw.source_filename, created=created, updated=updated,
             template_updated=template_updated, structure_set=structure_set,
