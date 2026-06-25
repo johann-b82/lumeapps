@@ -1,6 +1,4 @@
 # backend/tests/test_atr_xlsx_to_pdf.py
-import pytest
-
 from app.services.atr_generate_xlsx import convert_xlsx_to_pdf
 from tests._atr_fixtures import build_atr_workbook_bytes
 

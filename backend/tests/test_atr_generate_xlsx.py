@@ -44,6 +44,22 @@ def test_build_writes_header_rows_and_total():
     assert totals and abs(float(totals[0][1]) - 1.631) < 0.001
 
 
+def test_build_raises_when_template_has_no_totals():
+    from io import BytesIO
+    from openpyxl import Workbook
+    import pytest
+    wb = Workbook(); ws = wb.active; ws.title = "CCRC 6 BED"
+    ws["A11"] = "SET 6 BED CCRC"
+    for i, h in enumerate(["PO Pos","Article","Part Number / Index","Part Name",
+                           "Serial","Drawing","Qty","Weight [kg]"], start=1):
+        ws.cell(13, i, h)
+    ws["A14"] = "CARPET"
+    ws.cell(15, 3, "VR11S 1010 016 000")  # a part row, but NO "Total" label anywhere
+    bio = BytesIO(); wb.save(bio)
+    with pytest.raises(ValueError):
+        build_atr_xlsx(bio.getvalue(), _delivery(), [_item()])
+
+
 def test_unmatched_row_is_red():
     items = [_item(match_status="unmatched", drawing_number_issue=None,
                    weight_kg=None, part_name="UNKNOWN")]

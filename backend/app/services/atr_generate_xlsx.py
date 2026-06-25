@@ -8,9 +8,13 @@ items get a red fill so the operator fixes them in Excel.
 """
 from __future__ import annotations
 
+import asyncio
+import shutil
+import uuid as _uuid
 from copy import copy
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
@@ -33,7 +37,7 @@ def _find_totals_row(ws) -> int:
         f = ws.cell(r, 6).value
         if f and "total" in str(f).lower():
             return r
-    return ws.max_row + 1
+    raise ValueError("ATR template has no 'Total weight' row in column F")
 
 
 def _capture_row_styles(ws, row: int) -> list:
@@ -118,22 +122,16 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
 
     # totals block shifted down by (out_rows - region_count + region_count) — re-find it
     new_totals_row = _find_totals_row(ws)
-    if new_totals_row <= ws.max_row:
-        ws.cell(new_totals_row, 8, float(total_weight))
-        # Max. Guaranteed weight on the next totals label row, if present
-        for rr in range(new_totals_row, min(new_totals_row + 4, ws.max_row + 1)):
-            if "max" in str(ws.cell(rr, 6).value or "").lower() and delivery.max_guaranteed_weight_kg is not None:
-                ws.cell(rr, 8, float(delivery.max_guaranteed_weight_kg))
+    ws.cell(new_totals_row, 8, float(total_weight))
+    # Max. Guaranteed weight on the next totals label row, if present
+    for rr in range(new_totals_row, min(new_totals_row + 4, ws.max_row + 1)):
+        if "max" in str(ws.cell(rr, 6).value or "").lower() and delivery.max_guaranteed_weight_kg is not None:
+            ws.cell(rr, 8, float(delivery.max_guaranteed_weight_kg))
 
     bio = BytesIO()
     wb.save(bio)
     return bio.getvalue()
 
-
-import asyncio
-import shutil
-import uuid as _uuid
-from pathlib import Path
 
 # Serialize LibreOffice across the single-worker api container (mirror signage_pptx).
 _LO_SEMAPHORE = asyncio.Semaphore(1)
