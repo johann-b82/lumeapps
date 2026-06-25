@@ -40,6 +40,10 @@ services:
     # and PITFALLS C-7. If horizontal scaling is ever required, extract the
     # scheduler into its own container first (see ops runbook).
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload
+    # On host reboot, depends_on conditions are NOT honored — the API can start
+    # before the DB finishes WAL recovery and fail. unless-stopped makes Docker
+    # keep retrying until the DB is reachable. See ops: reboot startup race.
+    restart: unless-stopped
     env_file: .env
     environment:
       # D-04: HS256 signing key for signage device JWTs. Separate trust domain

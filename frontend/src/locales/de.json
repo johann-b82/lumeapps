@@ -788,50 +788,5 @@
   "atr.template.structure": "Struktur-Arbeitsmappe",
   "atr.template.no_structure": "Keine Struktur-Vorlage hinterlegt",
   "atr.template.upload_structure": "Struktur-Arbeitsmappe hochladen",
-  "atr.template.save": "Kopfdaten speichern",
-  "atr": {
-    "title": "ATR Referenz",
-    "tile": "ATR Referenz",
-    "nav": {
-      "parts": "Teilekatalog",
-      "import": "Import",
-      "template": "Vorlage"
-    },
-    "parts": {
-      "heading": "Teilekatalog",
-      "search": "Teilenummer, Bezeichnung, Artikel suchen…",
-      "col": {
-        "part_number": "Teilenummer",
-        "name": "Bezeichnung",
-        "category": "Kategorie",
-        "drawing": "Zeichnung / Index",
-        "weight": "Gewicht [kg]",
-        "po_pos": "PO Pos",
-        "source": "Quelldatei"
-      },
-      "empty": "Noch keine Teile — bitte eine Referenzdatei importieren.",
-      "save": "Speichern",
-      "edit": "Bearbeiten",
-      "delete": "Löschen"
-    },
-    "import": {
-      "heading": "Referenzdatei importieren",
-      "choose": ".xlsx-Datei(en) wählen",
-      "preview": "Vorschau",
-      "commit": "Importieren",
-      "update_template": "Auch Vorlagen-Kopfdaten aktualisieren",
-      "set_structure": "Diese Datei als Struktur-Vorlage verwenden",
-      "new": "Neu",
-      "updated": "Aktualisiert",
-      "unchanged": "Unverändert",
-      "warnings": "Warnungen"
-    },
-    "template": {
-      "heading": "Struktur-Vorlage & Kopfdaten",
-      "structure": "Struktur-Arbeitsmappe",
-      "no_structure": "Keine Struktur-Vorlage hinterlegt",
-      "upload_structure": "Struktur-Arbeitsmappe hochladen",
-      "save": "Kopfdaten speichern"
-    }
-  }
+  "atr.template.save": "Kopfdaten speichern"
 }

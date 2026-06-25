@@ -788,50 +788,5 @@
   "atr.template.structure": "Structural workbook",
   "atr.template.no_structure": "No structural workbook set",
   "atr.template.upload_structure": "Upload structural workbook",
-  "atr.template.save": "Save defaults",
-  "atr": {
-    "title": "ATR Reference",
-    "tile": "ATR Reference",
-    "nav": {
-      "parts": "Parts catalog",
-      "import": "Import",
-      "template": "Template"
-    },
-    "parts": {
-      "heading": "Parts catalog",
-      "search": "Search part number, name, article…",
-      "col": {
-        "part_number": "Part number",
-        "name": "Part name",
-        "category": "Category",
-        "drawing": "Drawing / Issue",
-        "weight": "Weight [kg]",
-        "po_pos": "PO Pos",
-        "source": "Source file"
-      },
-      "empty": "No parts yet — import a reference workbook.",
-      "save": "Save",
-      "edit": "Edit",
-      "delete": "Delete"
-    },
-    "import": {
-      "heading": "Import reference workbook",
-      "choose": "Choose .xlsx file(s)",
-      "preview": "Preview",
-      "commit": "Import",
-      "update_template": "Also update template header defaults",
-      "set_structure": "Use this workbook as the structural template",
-      "new": "New",
-      "updated": "Updated",
-      "unchanged": "Unchanged",
-      "warnings": "Warnings"
-    },
-    "template": {
-      "heading": "Structural template & header defaults",
-      "structure": "Structural workbook",
-      "no_structure": "No structural workbook set",
-      "upload_structure": "Upload structural workbook",
-      "save": "Save defaults"
-    }
-  }
+  "atr.template.save": "Save defaults"
 }
