@@ -45,8 +45,8 @@ from app.models.signage import (  # noqa: F401
     SignageHeartbeatEvent,
 )
 
-# ATR module models (Phase A)
-from app.models.atr import AtrPart, AtrTemplate  # noqa: F401
+# ATR module models (Phase A + Phase B)
+from app.models.atr import AtrPart, AtrTemplate, AtrDelivery, AtrDeliveryItem  # noqa: F401
 
 __all__ = [
     "Base",
@@ -70,4 +70,5 @@ __all__ = [
     "SignageSchedule", "SignageHeartbeatEvent",
     # ATR
     "AtrPart", "AtrTemplate",
+    "AtrDelivery", "AtrDeliveryItem",
 ]
