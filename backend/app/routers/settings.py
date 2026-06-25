@@ -309,7 +309,6 @@ async def put_settings(
         if _v is not None:
             setattr(row, _f, _v)
     if payload.atr_smb_password is not None:
-        from app.security.fernet import encrypt_credential
         row.atr_smb_password_enc = encrypt_credential(payload.atr_smb_password)
     if payload.atr_scan_interval_s is not None:
         row.atr_scan_interval_s = payload.atr_scan_interval_s
