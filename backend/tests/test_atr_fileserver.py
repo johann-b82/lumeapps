@@ -59,6 +59,29 @@ def test_test_connection_returns_tuple(monkeypatch):
     assert ok is True and err is None
 
 
+def test_read_write_archive_wrap_errors(monkeypatch):
+    def boom(*a, **k):
+        raise OSError("net down")
+    fake = types.SimpleNamespace(register_session=lambda *a, **k: None,
+                                 open_file=boom, makedirs=lambda *a, **k: None, rename=boom)
+    monkeypatch.setattr(fs, "smbclient", fake)
+    with pytest.raises(AtrFileserverError):
+        fs.read_input(_cfg(), "x.pdf")
+    with pytest.raises(AtrFileserverError):
+        fs.write_output(_cfg(), "x.xlsx", b"d")
+    with pytest.raises(AtrFileserverError):
+        fs.archive_input(_cfg(), "x.pdf")
+
+
+def test_test_connection_failure(monkeypatch):
+    def boom(*a, **k):
+        raise OSError("auth failed")
+    fake = types.SimpleNamespace(register_session=boom, listdir=boom)
+    monkeypatch.setattr(fs, "smbclient", fake)
+    ok, err = fs.test_connection(_cfg())
+    assert ok is False and "auth failed" in (err or "")
+
+
 def test_config_from_settings_none_when_incomplete():
     row = types.SimpleNamespace(atr_smb_host=None, atr_smb_share="s", atr_smb_domain="d",
                                 atr_smb_user="u", atr_smb_password_enc=b"x",
