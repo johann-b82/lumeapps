@@ -113,3 +113,35 @@ async def reset_settings():
         # socket/DNS errors when no database is reachable (e.g. auth unit tests).
         pass
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_atr():
+    """Clear atr_part + reset the atr_template singleton before each test (acm_test persists)."""
+    try:
+        from sqlalchemy import delete, update
+        from app.database import AsyncSessionLocal, engine
+        from app.models import AtrPart, AtrTemplate
+    except ImportError:
+        yield
+        return
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(delete(AtrPart))
+            await db.execute(
+                update(AtrTemplate).where(AtrTemplate.id == 1).values(
+                    customer=None, ac_programme=None, work_package=None,
+                    purchaser_spec=None, atp=None, supplier_spec=None,
+                    reference_no=None, supplier=None, customer_spec=None,
+                    nscm_code=None, ata_chapter=None, weighing_equipment=None,
+                    qa_signer_default=None, structure_filename=None, structure_xlsx=None,
+                )
+            )
+            await db.commit()
+    except Exception:
+        pass
+    yield
