@@ -861,11 +861,16 @@ def _auth():
 def _pdf_like_lieferschein() -> bytes:
     # A real .pdf is needed because the upload path runs pdftotext. Build a
     # tiny one-page PDF whose text layer contains a Lieferschein position.
-    text = ("LIEFERSCHEIN Nr. 20189798 Datum 08.06.2026 "
-            "1 6060 1 STK CARPET EMERG. EXIT HATCH Bauteil-Index: D "
-            "Ihre Nr. VR11S1010016000 Auftrag Nr. 1024738 / 5 "
-            "Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett")
-    # Minimal PDF with a text object — see fixture builder in Step 3 note.
+    # One logical line per row — the parser is line-oriented.
+    text = "\n".join([
+        "LIEFERSCHEIN Nr. 20189798 Datum 08.06.2026",
+        "1 6060 1 STK",
+        "CARPET EMERG. EXIT HATCH",
+        "Bauteil-Index: D",
+        "Ihre Nr. VR11S1010016000",
+        "Auftrag Nr. 1024738 / 5",
+        "Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett",
+    ])
     from tests._atr_pdf import make_text_pdf
     return make_text_pdf(text)
 
@@ -917,13 +922,22 @@ Expected: FAIL (404 / missing module).
 
 
 def make_text_pdf(text: str) -> bytes:
-    esc = text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+    # Render each \n-separated line on its own PDF text line (decreasing Y) so
+    # `pdftotext` emits a multi-line layout the line-oriented parser can read.
+    def _esc(s: str) -> bytes:
+        return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)").encode("latin-1", "replace")
+    parts = [b"BT /F1 10 Tf 36 750 Td"]
+    for i, ln in enumerate(text.split("\n")):
+        if i:
+            parts.append(b"0 -14 Td")
+        parts.append(b"(" + _esc(ln) + b") Tj")
+    parts.append(b"ET")
+    stream = b" ".join(parts)
     objs = []
     objs.append(b"<< /Type /Catalog /Pages 2 0 R >>")
     objs.append(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
     objs.append(b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
                 b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>")
-    stream = (b"BT /F1 10 Tf 36 750 Td (" + esc.encode("latin-1", "replace") + b") Tj ET")
     objs.append(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
     objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
 
@@ -1301,7 +1315,6 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
-from openpyxl.utils import get_column_letter
 
 _RED = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
 _TABLE_HEADER_ROW = 13
@@ -1418,7 +1431,7 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     return bio.getvalue()
 ```
 
-> Note for the implementer: openpyxl's `_style` copy preserves font/border/fill from the template row. The `get_column_letter` import is available if you prefer letter addressing; numeric `cell(r, c)` is used here. Verify the produced file opens in Excel/LibreOffice without repair prompts — if `insert_rows` disturbs a merged range in the totals/cert block, unmerge those ranges before delete/insert and re-merge after (the test covers the part-row + total assertions; add an unmerge/re-merge step only if the produced file warns).
+> Note for the implementer: openpyxl's `_style` copy preserves font/border/fill from the template row. Verify the produced file opens in Excel/LibreOffice without repair prompts — if `insert_rows` disturbs a merged range in the totals/cert block, unmerge those ranges before delete/insert and re-merge after (the test covers the part-row + total assertions; add an unmerge/re-merge step only if the produced file warns).
 
 - [ ] **Step 4: Run the test**
 
@@ -1649,10 +1662,15 @@ async def _set_structure(client):
 
 
 async def _draft(client):
-    text = ("LIEFERSCHEIN Nr. 20189798 Datum 08.06.2026 "
-            "1 6060 1 STK CARPET EMERG. EXIT HATCH Bauteil-Index: D "
-            "Ihre Nr. VR11S1010016000 Auftrag Nr. 1024738 / 5 "
-            "Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett")
+    text = "\n".join([
+        "LIEFERSCHEIN Nr. 20189798 Datum 08.06.2026",
+        "1 6060 1 STK",
+        "CARPET EMERG. EXIT HATCH",
+        "Bauteil-Index: D",
+        "Ihre Nr. VR11S1010016000",
+        "Auftrag Nr. 1024738 / 5",
+        "Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett",
+    ])
     files = {"file": ("LS.pdf", make_text_pdf(text), "application/pdf")}
     return (await client.post("/api/atr/deliveries/upload", headers=_auth(), files=files)).json()
 
