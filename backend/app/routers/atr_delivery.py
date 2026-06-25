@@ -33,8 +33,7 @@ def _parse_datum(s: str | None):
     if not s:
         return None
     try:
-        from datetime import datetime as _dt
-        return _dt.strptime(s, "%d.%m.%Y").date()
+        return datetime.strptime(s, "%d.%m.%Y").date()
     except ValueError:
         return None
 
@@ -118,7 +117,10 @@ async def process_input_file(payload: dict,
     target = Path(d) / safe
     if safe != name or not target.is_file() or target.suffix.lower() != ".pdf":
         raise HTTPException(404, "file not found in input directory")
-    parsed = await parse_lieferschein(target.read_bytes())
+    try:
+        parsed = await parse_lieferschein(target.read_bytes())
+    except ValueError as exc:
+        raise HTTPException(400, f"could not read PDF: {exc}") from exc
     if not parsed.positions:
         raise HTTPException(422, "no positions found in Lieferschein")
     md = await match_positions(db, parsed, safe)
