@@ -361,7 +361,7 @@ from tests._atr_fixtures import build_atr_workbook_bytes
 
 def test_norm_partno_digits_only():
     assert norm_partno("VR11S 1010 048 000") == "111010048000"
-    assert norm_partno("VR11S1010-027/A") == "1110100271"
+    assert norm_partno("VR11S1010-027/A") == "111010027"
 
 
 def test_parse_header_and_parts():
@@ -526,7 +526,9 @@ def parse_workbook(file_bytes: bytes, source_filename: str) -> ParsedWorkbook:
     warnings: list[str] = []
     category: str | None = None
     order = 0
-    for r in range(15, ws.max_row + 1):
+    # Scan from row 14: the first section header (e.g. "SEC. LINING", "CARPET")
+    # sits on row 14 in the real files, directly under the row-13 table header.
+    for r in range(14, ws.max_row + 1):
         a = _cell(ws, f"A{r}")
         c = _cell(ws, f"C{r}")
         f = _cell(ws, f"F{r}")
