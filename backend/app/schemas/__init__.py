@@ -4,6 +4,16 @@ Keeps ``from app.schemas import X`` stable for all existing callers
 (legacy classes live in ``_base.py``; signage classes live in ``signage.py``).
 """
 from app.schemas._base import *  # noqa: F401,F403 — re-export legacy classes
+from app.schemas.atr import (  # noqa: F401
+    AtrImportPartPreview,
+    AtrImportPreview,
+    AtrImportResult,
+    AtrPartCreate,
+    AtrPartRead,
+    AtrPartUpdate,
+    AtrTemplateRead,
+    AtrTemplateUpdate,
+)
 from app.schemas.signage import (  # noqa: F401
     SignageDeviceBase,
     SignageDeviceRead,
