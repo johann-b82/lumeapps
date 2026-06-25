@@ -50,7 +50,6 @@ services:
       # from DIRECTUS_SECRET. Generate with:
       #   python -c "import secrets; print(secrets.token_urlsafe(64))"
       SIGNAGE_DEVICE_JWT_SECRET: ${SIGNAGE_DEVICE_JWT_SECRET}
-      ATR_INPUT_DIR: ${ATR_INPUT_DIR:-}
     ports:
       - "8000:8000"
     volumes:

@@ -5,7 +5,6 @@ Generation endpoints (Wave 2): POST /{id}/generate, GET /{id}/files/{kind}.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -98,35 +97,55 @@ async def upload(file: UploadFile = File(...),
     return await _persist_draft(db, md)
 
 
+async def _smb_cfg(db):
+    from app.models import AppSettings
+    from app.services import atr_fileserver as fs
+    row = (await db.execute(select(AppSettings).where(AppSettings.id == 1))).scalar_one()
+    return fs.smb_config_from_settings(row), row
+
+
 @router.get("/input-files")
-async def input_files() -> dict:
-    d = os.environ.get("ATR_INPUT_DIR")
-    if not d or not Path(d).is_dir():
+async def input_files(db: AsyncSession = Depends(get_async_db_session)) -> dict:
+    import asyncio
+    from app.services import atr_fileserver as fs
+    cfg, _ = await _smb_cfg(db)
+    if cfg is None:
         return {"configured": False, "files": []}
-    files = sorted(p.name for p in Path(d).glob("*.pdf") if p.is_file())
+    try:
+        files = await asyncio.to_thread(fs.list_input_pdfs, cfg)
+    except fs.AtrFileserverError as exc:
+        raise HTTPException(502, f"fileserver error: {exc}") from exc
     return {"configured": True, "files": files}
 
 
 @router.post("/input-files/process", response_model=AtrDeliveryRead, status_code=201)
 async def process_input_file(payload: dict,
                              db: AsyncSession = Depends(get_async_db_session)) -> AtrDelivery:
-    d = os.environ.get("ATR_INPUT_DIR")
-    if not d or not Path(d).is_dir():
-        raise HTTPException(400, "ATR_INPUT_DIR not configured")
-    name = payload.get("filename", "")
-    # path-traversal guard: basename only, must exist in the dir
-    safe = Path(name).name
-    target = Path(d) / safe
-    if safe != name or not target.is_file() or target.suffix.lower() != ".pdf":
-        raise HTTPException(404, "file not found in input directory")
+    import asyncio
+    from app.services import atr_fileserver as fs
+    cfg, _ = await _smb_cfg(db)
+    if cfg is None:
+        raise HTTPException(400, "SMB fileserver not configured")
+    name = Path(str(payload.get("filename", ""))).name
+    if not name.lower().endswith(".pdf"):
+        raise HTTPException(404, "file not found")
     try:
-        parsed = await parse_lieferschein(target.read_bytes())
+        raw = await asyncio.to_thread(fs.read_input, cfg, name)
+    except fs.AtrFileserverError as exc:
+        raise HTTPException(502, f"fileserver error: {exc}") from exc
+    try:
+        parsed = await parse_lieferschein(raw)
     except ValueError as exc:
         raise HTTPException(400, f"could not read PDF: {exc}") from exc
     if not parsed.positions:
         raise HTTPException(422, "no positions found in Lieferschein")
-    md = await match_positions(db, parsed, safe)
-    return await _persist_draft(db, md)
+    md = await match_positions(db, parsed, name)
+    delivery = await _persist_draft(db, md)
+    # mark origin = scan + source_path
+    delivery.origin = "scan"
+    delivery.source_path = f"{cfg.input_path}/{name}"
+    await db.commit()
+    return await _get(db, delivery.id)
 
 
 @router.get("", response_model=list[AtrDeliverySummary])

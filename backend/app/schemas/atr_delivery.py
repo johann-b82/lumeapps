@@ -53,6 +53,9 @@ class AtrDeliveryRead(BaseModel):
     qa_signer: str | None
     max_guaranteed_weight_kg: Decimal | None
     status: str
+    origin: str
+    source_path: str | None
+    output_written_at: datetime | None
     created_at: datetime
     updated_at: datetime
     items: list[AtrDeliveryItemRead]
