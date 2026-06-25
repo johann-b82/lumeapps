@@ -45,6 +45,9 @@ from app.models.signage import (  # noqa: F401
     SignageHeartbeatEvent,
 )
 
+# ATR module models (Phase A)
+from app.models.atr import AtrPart, AtrTemplate  # noqa: F401
+
 __all__ = [
     "Base",
     # Legacy
@@ -65,4 +68,6 @@ __all__ = [
     "SignageDevice", "SignageDeviceTag", "SignageDeviceTagMap",
     "SignagePlaylistTagMap", "SignagePairingSession",
     "SignageSchedule", "SignageHeartbeatEvent",
+    # ATR
+    "AtrPart", "AtrTemplate",
 ]
