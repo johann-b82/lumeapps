@@ -1,27 +1,32 @@
 """/api/atr/deliveries/* — admin-gated Lieferschein ingest + review (Phase B).
 
-Generation endpoints are added in Wave 2.
+Generation endpoints (Wave 2): POST /{id}/generate, GET /{id}/files/{kind}.
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import AtrDelivery, AtrDeliveryItem
+from app.models import AtrDelivery, AtrDeliveryItem, AtrTemplate
 from app.schemas import (
     AtrDeliveryItemRead, AtrDeliveryItemUpdate, AtrDeliveryRead,
-    AtrDeliverySummary, AtrDeliveryUpdate,
+    AtrDeliverySummary, AtrDeliveryUpdate, AtrGenerateManifest,
 )
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.atr_lieferschein import parse_lieferschein
 from app.services.atr_match import MatchedDelivery, match_positions
+from app.services.atr_generate_xlsx import build_atr_xlsx, convert_xlsx_to_pdf
+from app.services.atr_generate_docx import build_containerbeschriftung
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/atr/deliveries", tags=["atr"],
@@ -52,7 +57,6 @@ async def _persist_draft(db: AsyncSession, md: MatchedDelivery) -> AtrDelivery:
         created_at=now, updated_at=now,
     )
     # default qa_signer from the template singleton, if set
-    from app.models import AtrTemplate
     tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one_or_none()
     if tmpl is not None:
         row.qa_signer = tmpl.qa_signer_default
@@ -165,3 +169,60 @@ async def patch_item(delivery_id: int, item_id: int, payload: AtrDeliveryItemUpd
     await db.commit()
     await db.refresh(row)
     return row
+
+
+_MEDIA = {
+    "atr_xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "atr.xlsx"),
+    "atr_pdf": ("application/pdf", "atr.pdf"),
+    "label_docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                   "containerbeschriftung.docx"),
+}
+
+
+@router.post("/{delivery_id}/generate", response_model=AtrGenerateManifest)
+async def generate(delivery_id: int,
+                   db: AsyncSession = Depends(get_async_db_session)) -> AtrGenerateManifest:
+    row = await _get(db, delivery_id)
+    items = list(row.items)
+    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one_or_none()
+    if tmpl is None or tmpl.structure_xlsx is None:
+        raise HTTPException(400, "no structural template set (upload one in ATR → Template)")
+
+    warnings: list[str] = []
+    xlsx = build_atr_xlsx(tmpl.structure_xlsx, row, items)
+    docx = build_containerbeschriftung(row, items)
+    pdf: bytes | None = None
+    try:
+        pdf = await convert_xlsx_to_pdf(xlsx)
+    except Exception as exc:  # noqa: BLE001 — never lose xlsx/docx over the PDF step
+        log.warning("atr generate: pdf conversion failed for delivery %s: %s", delivery_id, exc)
+        warnings.append("PDF conversion failed; the .xlsx and .docx are still available.")
+
+    row.atr_xlsx = xlsx
+    row.atr_pdf = pdf
+    row.label_docx = docx
+    row.status = "generated"
+    row.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    files = ["atr_xlsx", "label_docx"] + (["atr_pdf"] if pdf else [])
+    unmatched = sum(1 for i in items if i.match_status != "matched")
+    if unmatched:
+        warnings.append(f"{unmatched} unmatched part(s) marked red in the ATR — fix in Excel.")
+    return AtrGenerateManifest(delivery_id=delivery_id, files=files,
+                               pdf_available=pdf is not None,
+                               unmatched_count=unmatched, warnings=warnings)
+
+
+@router.get("/{delivery_id}/files/{kind}")
+async def download(delivery_id: int, kind: str,
+                   db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    if kind not in _MEDIA:
+        raise HTTPException(404, "unknown file kind")
+    row = await _get(db, delivery_id)
+    data = {"atr_xlsx": row.atr_xlsx, "atr_pdf": row.atr_pdf, "label_docx": row.label_docx}[kind]
+    if not data:
+        raise HTTPException(404, "file not generated")
+    media_type, fname = _MEDIA[kind]
+    return Response(content=bytes(data), media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
