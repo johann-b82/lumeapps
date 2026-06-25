@@ -147,3 +147,69 @@ export async function setAtrStructure(file: File): Promise<AtrTemplate> {
     body: fd,
   });
 }
+
+export interface AtrDeliveryItem {
+  id: number; pos: number | null; supplier_article_code: string | null;
+  part_number: string | null; part_number_norm: string | null;
+  matched_part_id: number | null; part_name: string | null;
+  drawing_number_issue: string | null; category: string | null; qty: number;
+  weight_kg: string | null; po_pos: string | null; match_status: string; row_order: number;
+}
+export interface AtrDelivery {
+  id: number; source_filename: string; lieferschein_nr: string | null; datum: string | null;
+  ba_auftrag: string | null; po_number: string | null; ac_programme: string | null;
+  compartment: string | null; msn: string | null; bed_config: string | null;
+  set_title: string | null; atr_number: string | null; container_number: string | null;
+  weighing_date: string | null; testing_date: string | null; qa_signer: string | null;
+  max_guaranteed_weight_kg: string | null; status: string;
+  created_at: string; updated_at: string; items: AtrDeliveryItem[];
+}
+export interface AtrDeliverySummary {
+  id: number; source_filename: string; ba_auftrag: string | null;
+  compartment: string | null; status: string; created_at: string;
+}
+export interface AtrGenerateManifest {
+  delivery_id: number; files: string[]; pdf_available: boolean;
+  unmatched_count: number; warnings: string[];
+}
+export interface AtrInputFiles { configured: boolean; files: string[]; }
+
+export async function uploadLieferschein(file: File): Promise<AtrDelivery> {
+  const fd = new FormData(); fd.append("file", file);
+  return apiClient<AtrDelivery>("/api/atr/deliveries/upload", { method: "POST", body: fd });
+}
+export async function fetchInputFiles(): Promise<AtrInputFiles> {
+  return apiClient<AtrInputFiles>("/api/atr/deliveries/input-files");
+}
+export async function processInputFile(filename: string): Promise<AtrDelivery> {
+  return apiClient<AtrDelivery>("/api/atr/deliveries/input-files/process", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename }),
+  });
+}
+export async function fetchDeliveries(): Promise<AtrDeliverySummary[]> {
+  return apiClient<AtrDeliverySummary[]>("/api/atr/deliveries");
+}
+export async function fetchDelivery(id: number): Promise<AtrDelivery> {
+  return apiClient<AtrDelivery>(`/api/atr/deliveries/${id}`);
+}
+export async function updateDelivery(id: number, body: Partial<AtrDelivery>): Promise<AtrDelivery> {
+  return apiClient<AtrDelivery>(`/api/atr/deliveries/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+export async function updateDeliveryItem(
+  did: number, iid: number, body: Partial<AtrDeliveryItem>,
+): Promise<AtrDeliveryItem> {
+  return apiClient<AtrDeliveryItem>(`/api/atr/deliveries/${did}/items/${iid}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+export async function generateDelivery(id: number): Promise<AtrGenerateManifest> {
+  return apiClient<AtrGenerateManifest>(`/api/atr/deliveries/${id}/generate`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+}
+export function atrFileUrl(id: number, kind: "atr_xlsx" | "atr_pdf" | "label_docx"): string {
+  return `/api/atr/deliveries/${id}/files/${kind}`;
+}
