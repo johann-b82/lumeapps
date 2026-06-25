@@ -121,7 +121,7 @@ async def reset_atr():
     try:
         from sqlalchemy import delete, update
         from app.database import AsyncSessionLocal, engine
-        from app.models import AtrPart, AtrTemplate
+        from app.models import AtrDelivery, AtrPart, AtrTemplate
     except ImportError:
         yield
         return
@@ -131,6 +131,7 @@ async def reset_atr():
         pass
     try:
         async with AsyncSessionLocal() as db:
+            await db.execute(delete(AtrDelivery))
             await db.execute(delete(AtrPart))
             await db.execute(
                 update(AtrTemplate).where(AtrTemplate.id == 1).values(
