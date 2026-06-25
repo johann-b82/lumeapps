@@ -16,6 +16,12 @@ depends_on = None
 _DEFAULT_INPUT = "0900 - EDV/Test_ATR/Input"
 _DEFAULT_OUTPUT = "0900 - EDV/Test_ATR/Output"
 _DEFAULT_ARCHIVE = "0900 - EDV/Test_ATR/Archiv"
+# Discovered deployment defaults (Z: -> \\acm_file\Dateiablage; AD domain ACM).
+# FQDN, not the NetBIOS name 'acm_file', because the Linux container cannot
+# resolve NetBIOS (verified) but resolves 'acm_file.acm.local' / 192.9.200.18.
+_DEFAULT_HOST = "acm_file.acm.local"
+_DEFAULT_SHARE = "Dateiablage"
+_DEFAULT_DOMAIN = "ACM"
 
 
 def upgrade() -> None:
@@ -34,11 +40,13 @@ def upgrade() -> None:
     op.add_column("atr_delivery", sa.Column("source_path", sa.String(512), nullable=True))
     op.add_column("atr_delivery", sa.Column("output_written_at", sa.DateTime(timezone=True), nullable=True))
 
-    # Seed default paths on the singleton row.
+    # Seed default paths + the discovered host/share/domain on the singleton row.
     op.execute(
         sa.text(
-            "UPDATE app_settings SET atr_input_path=:i, atr_output_path=:o, atr_archive_path=:a WHERE id=1"
-        ).bindparams(i=_DEFAULT_INPUT, o=_DEFAULT_OUTPUT, a=_DEFAULT_ARCHIVE)
+            "UPDATE app_settings SET atr_input_path=:i, atr_output_path=:o, atr_archive_path=:a, "
+            "atr_smb_host=:h, atr_smb_share=:s, atr_smb_domain=:d WHERE id=1"
+        ).bindparams(i=_DEFAULT_INPUT, o=_DEFAULT_OUTPUT, a=_DEFAULT_ARCHIVE,
+                     h=_DEFAULT_HOST, s=_DEFAULT_SHARE, d=_DEFAULT_DOMAIN)
     )
 
 
