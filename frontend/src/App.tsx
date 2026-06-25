@@ -25,6 +25,7 @@ import { SalesSettingsPage } from "@/pages/SalesSettingsPage";
 import { WorldCupSettingsPage } from "@/pages/WorldCupSettingsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { LauncherPage } from "./pages/LauncherPage";
+import { AtrPartsPage } from "./pages/AtrPartsPage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
@@ -87,6 +88,7 @@ function AppShell() {
           <Route path="/signage">
             <AdminOnly><Redirect to="/signage/media" /></AdminOnly>
           </Route>
+          <Route path="/atr"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
           {/* /settings/sensors MUST appear before /settings so wouter's first-match wins */}
           <Route path="/settings/sensors" component={SensorsSettingsPage} />
           <Route path="/settings/general" component={GeneralSettingsPage} />

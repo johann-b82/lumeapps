@@ -25,7 +25,7 @@ export interface AtrPartUpdate {
   default_weight_kg?: string | null;
   qty?: number;
   category?: string | null;
-  po_pos?: string | null;
+  po_pos?: string | null; // editable from AtrPartsPage
 }
 
 export interface AtrTemplate {
