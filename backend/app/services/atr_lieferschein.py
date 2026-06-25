@@ -139,7 +139,15 @@ async def extract_pdf_text(pdf_bytes: bytes) -> str:
             "pdftotext", "-layout", str(src), "-",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=30)
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError as exc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            await proc.wait()
+            raise ValueError("pdftotext timed out after 30s") from exc
         if proc.returncode != 0:
             raise ValueError(f"pdftotext failed: {err.decode('utf-8', 'replace')[-500:]}")
         return out.decode("utf-8", "replace")
