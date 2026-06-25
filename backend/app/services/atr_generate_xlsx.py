@@ -128,3 +128,49 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     bio = BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+import asyncio
+import shutil
+import uuid as _uuid
+from pathlib import Path
+
+# Serialize LibreOffice across the single-worker api container (mirror signage_pptx).
+_LO_SEMAPHORE = asyncio.Semaphore(1)
+_LO_TIMEOUT_S = 60
+
+
+async def convert_xlsx_to_pdf(xlsx_bytes: bytes) -> bytes:
+    async with _LO_SEMAPHORE:
+        tempdir = Path(f"/tmp/atr_{_uuid.uuid4()}")
+        lo_profile = Path(f"/tmp/lo_{_uuid.uuid4()}")
+        try:
+            tempdir.mkdir(parents=True, exist_ok=True)
+            src = tempdir / "atr.xlsx"
+            src.write_bytes(xlsx_bytes)
+            proc = await asyncio.create_subprocess_exec(
+                "soffice", "--headless",
+                f"-env:UserInstallation=file://{lo_profile}",
+                "--convert-to", "pdf", "--outdir", str(tempdir), str(src),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                _, err = await asyncio.wait_for(proc.communicate(), timeout=_LO_TIMEOUT_S)
+            except asyncio.TimeoutError as exc:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                raise RuntimeError("xlsx->pdf conversion timed out") from exc
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    f"soffice failed: {err.decode('utf-8', 'replace')[-500:]}"
+                )
+            try:
+                pdf_path = next(tempdir.glob("*.pdf"))
+            except StopIteration as exc:
+                raise RuntimeError("soffice produced no PDF") from exc
+            return pdf_path.read_bytes()
+        finally:
+            shutil.rmtree(tempdir, ignore_errors=True)
+            shutil.rmtree(lo_profile, ignore_errors=True)
