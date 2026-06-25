@@ -522,6 +522,7 @@
   "settings.section.sensors": "Sensors",
   "settings.section.sales": "Sales",
   "settings.section.worldcup": "World Cup",
+  "settings.section.atr": "ATR Fileserver",
   "settings.worldcup.title": "World Cup display",
   "settings.worldcup.description": "Live FIFA World Cup results for the signage screen (/embed/worldcup). Data source: football-data.org.",
   "settings.worldcup.api_key.label": "football-data.org API key",

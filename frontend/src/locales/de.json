@@ -522,6 +522,7 @@
   "settings.section.sensors": "Sensoren",
   "settings.section.sales": "Vertrieb",
   "settings.section.worldcup": "WM",
+  "settings.section.atr": "ATR-Dateiserver",
   "settings.worldcup.title": "WM-Anzeige",
   "settings.worldcup.description": "Live-Ergebnisse der FIFA WM für den Infobildschirm (/embed/worldcup). Datenquelle: football-data.org.",
   "settings.worldcup.api_key.label": "football-data.org API-Schlüssel",
