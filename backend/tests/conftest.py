@@ -121,7 +121,7 @@ async def reset_atr():
     try:
         from sqlalchemy import delete, update
         from app.database import AsyncSessionLocal, engine
-        from app.models import AtrDelivery, AtrPart, AtrTemplate
+        from app.models import AtrDelivery, AtrPart, AtrTemplate, AppSettings
     except ImportError:
         yield
         return
@@ -140,6 +140,11 @@ async def reset_atr():
                     reference_no=None, supplier=None, customer_spec=None,
                     nscm_code=None, ata_chapter=None, weighing_equipment=None,
                     qa_signer_default=None, structure_filename=None, structure_xlsx=None,
+                )
+            )
+            await db.execute(
+                update(AppSettings).where(AppSettings.id == 1).values(
+                    atr_smb_password_enc=None,
                 )
             )
             await db.commit()

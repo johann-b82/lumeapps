@@ -101,6 +101,17 @@ def _build_read(row: AppSettings) -> SettingsRead:
         # v1.57 World Cup signage
         worldcup_has_api_key=row.worldcup_api_key_enc is not None,
         worldcup_refresh_seconds=row.worldcup_refresh_seconds,
+        # v1.65 ATR fileserver
+        atr_smb_host=row.atr_smb_host,
+        atr_smb_share=row.atr_smb_share,
+        atr_smb_domain=row.atr_smb_domain,
+        atr_smb_user=row.atr_smb_user,
+        atr_smb_has_password=row.atr_smb_password_enc is not None,
+        atr_input_path=row.atr_input_path,
+        atr_output_path=row.atr_output_path,
+        atr_archive_path=row.atr_archive_path,
+        atr_scan_interval_s=row.atr_scan_interval_s,
+        atr_auto_mode=row.atr_auto_mode,
     )
 
 
@@ -291,6 +302,23 @@ async def put_settings(
     if payload.worldcup_refresh_seconds is not None:
         row.worldcup_refresh_seconds = payload.worldcup_refresh_seconds
 
+    # v1.65 ATR fileserver — None means "don't change"; password encrypted
+    for _f in ("atr_smb_host", "atr_smb_share", "atr_smb_domain", "atr_smb_user",
+               "atr_input_path", "atr_output_path", "atr_archive_path", "atr_auto_mode"):
+        _v = getattr(payload, _f)
+        if _v is not None:
+            setattr(row, _f, _v)
+    if payload.atr_smb_password is not None:
+        from app.security.fernet import encrypt_credential
+        row.atr_smb_password_enc = encrypt_credential(payload.atr_smb_password)
+    if payload.atr_scan_interval_s is not None:
+        row.atr_scan_interval_s = payload.atr_scan_interval_s
+        try:
+            from app.scheduler import reschedule_atr_scan
+            reschedule_atr_scan(payload.atr_scan_interval_s)
+        except Exception:  # scheduler hook lands in Task 7; never fail the PUT
+            pass
+
     # D-07: if the payload exactly matches canonical defaults, this is a
     # "reset to defaults" — also wipe the logo trio. A non-default PUT
     # (e.g. changing only app_name) preserves the logo.
@@ -394,3 +422,25 @@ async def get_logo_public(
             "Cache-Control": "public, max-age=300",
         },
     )
+
+
+# --- ATR fileserver router (admin-gated at router level) --------------------
+# Docstring: all endpoints below are admin-only.
+
+atr_fileserver_router = APIRouter(
+    prefix="/api/atr/fileserver",
+    tags=["atr"],
+    dependencies=[Depends(get_current_user), Depends(require_admin)],
+)
+
+
+@atr_fileserver_router.post("/test")
+async def atr_fileserver_test(db: AsyncSession = Depends(get_async_db_session)) -> dict:
+    from app.services import atr_fileserver as fs
+    row = await _get_singleton(db)
+    cfg = fs.smb_config_from_settings(row)
+    if cfg is None:
+        return {"ok": False, "error": "SMB not fully configured"}
+    import asyncio
+    ok, err = await asyncio.to_thread(fs.test_connection, cfg)
+    return {"ok": ok, "error": err}

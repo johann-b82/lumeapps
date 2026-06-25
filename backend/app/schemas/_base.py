@@ -166,6 +166,17 @@ class SettingsUpdate(BaseModel):
     # v1.57 World Cup signage — None means "don't change" (credential pattern).
     worldcup_api_key: str | None = None
     worldcup_refresh_seconds: int | None = Field(default=None, ge=30, le=3600)
+    # v1.65 ATR fileserver — None means "don't change"; password is write-only
+    atr_smb_host: str | None = None
+    atr_smb_share: str | None = None
+    atr_smb_domain: str | None = None
+    atr_smb_user: str | None = None
+    atr_smb_password: str | None = None
+    atr_input_path: str | None = None
+    atr_output_path: str | None = None
+    atr_archive_path: str | None = None
+    atr_scan_interval_s: int | None = None
+    atr_auto_mode: bool | None = None
 
 
 class SettingsRead(BaseModel):
@@ -208,6 +219,17 @@ class SettingsRead(BaseModel):
     # v1.57 World Cup signage — key is write-only, expose only the boolean.
     worldcup_has_api_key: bool = False
     worldcup_refresh_seconds: int = 60
+    # v1.65 ATR fileserver — password is write-only; expose only the boolean
+    atr_smb_host: str | None = None
+    atr_smb_share: str | None = None
+    atr_smb_domain: str | None = None
+    atr_smb_user: str | None = None
+    atr_smb_has_password: bool = False
+    atr_input_path: str | None = None
+    atr_output_path: str | None = None
+    atr_archive_path: str | None = None
+    atr_scan_interval_s: int = 0
+    atr_auto_mode: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.database import engine
 from app.routers.kpis import router as kpis_router
 from app.routers.sensors import router as sensors_router
-from app.routers.settings import router as settings_router, public_router as settings_public_router
+from app.routers.settings import router as settings_router, public_router as settings_public_router, atr_fileserver_router
 from app.routers.sync import router as sync_router
 from app.routers.uploads import admin_router as uploads_admin_router
 from app.routers.hr_kpis import router as hr_kpis_router
@@ -47,6 +47,7 @@ app.include_router(auth_forward_router)
 app.include_router(worldcup_router)
 app.include_router(atr_router)
 app.include_router(atr_delivery_router)
+app.include_router(atr_fileserver_router)
 
 
 # ---------------------------------------------------------------------------
