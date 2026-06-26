@@ -153,6 +153,12 @@ class SettingsUpdate(BaseModel):
     target_sales_besuche: float | None = None
     target_sales_angebote_eur: float | None = None
     target_sales_orders_per_rep_eur: float | None = None
+    # v1.60 — Quality KPI targets (None = "don't change"). Complaint rates
+    # are fractions (0.02 = 2 %); finding counts are integer thresholds.
+    target_complaint_rate_customer: float | None = None
+    target_complaint_rate_internal: float | None = None
+    target_audit_findings_level1: int | None = None
+    target_audit_findings_level2: int | None = None
     # v1.15 Sensor Monitor — admin writes (Phase 40-01)
     # None means "don't change" (same pattern as Personio / HR targets above).
     # Known limitation (40-01): there is no sentinel for "clear threshold back
@@ -209,6 +215,11 @@ class SettingsRead(BaseModel):
     target_sales_besuche: float | None = None
     target_sales_angebote_eur: float | None = None
     target_sales_orders_per_rep_eur: float | None = None
+    # v1.60 — Quality KPI targets
+    target_complaint_rate_customer: float | None = None
+    target_complaint_rate_internal: float | None = None
+    target_audit_findings_level1: int | None = None
+    target_audit_findings_level2: int | None = None
     # Phase 39-02 — Sensor config surfaced read-only (admin writes arrive Phase 40).
     # Decimal serializes as string; frontend parses via Number().
     sensor_poll_interval_s: int = 60

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, ZoomIn, ZoomOut } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,9 +18,11 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceLine,
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useSettings } from "@/hooks/useSettings";
 import {
   axisProps,
   gridProps,
@@ -60,6 +62,23 @@ const GRANULARITY_STEPS: BucketGranularity[] = [
   "monthly",
   "quarterly",
   "yearly",
+];
+
+// Y-axis zoom presets — same pattern as SalesActivityCard. Index 0 = Auto
+// (Recharts default scale to the largest bucket value); higher indices step
+// through ever-tighter caps so small bars become visible next to a large
+// target line. Caps are stored as ratios (0.02 = 2 %).
+type ZoomLevel = { cap: number | null; label: string };
+
+const PERCENT_ZOOM_LEVELS: ZoomLevel[] = [
+  { cap: null, label: "Auto" },
+  { cap: 0.10, label: "10 %" },
+  { cap: 0.05, label: "5 %" },
+  { cap: 0.02, label: "2 %" },
+  { cap: 0.01, label: "1 %" },
+  { cap: 0.005, label: "0,5 %" },
+  { cap: 0.002, label: "0,2 %" },
+  { cap: 0.001, label: "0,1 %" },
 ];
 
 function mapHrToManual(g: HrBucketGranularity): BucketGranularity {
@@ -106,6 +125,20 @@ export function ComplaintRateChart({
   const date_from = toApiDate(range.from);
   const date_to = toApiDate(range.to);
 
+  // Configurable target (from /settings/quality). Falls back to the
+  // baked-in default — same pattern as DEFAULT_TARGETS on SalesActivityCard.
+  const { data: settings } = useSettings();
+  const DEFAULT_COMPLAINT_TARGETS = {
+    customer: 0.02,
+    internal: 0.04,
+  } as const;
+  const target =
+    complaintType === "internal"
+      ? settings?.target_complaint_rate_internal ??
+        DEFAULT_COMPLAINT_TARGETS.internal
+      : settings?.target_complaint_rate_customer ??
+        DEFAULT_COMPLAINT_TARGETS.customer;
+
   // Auto-pick the granularity that best matches the active range, then let
   // the user step finer/coarser with +/−. The auto-pick re-runs whenever
   // the range changes — preserves the "useful default on landing" behavior
@@ -124,6 +157,14 @@ export function ComplaintRateChart({
   const canCoarser = stepIndex < GRANULARITY_STEPS.length - 1;
   const finer = () => canFiner && setGranularity(GRANULARITY_STEPS[stepIndex - 1]);
   const coarser = () => canCoarser && setGranularity(GRANULARITY_STEPS[stepIndex + 1]);
+
+  // Y-axis zoom — Sales-Activity pattern. Index 0 = Auto.
+  const [zoomIdx, setZoomIdx] = useState<number>(0);
+  const zoom = PERCENT_ZOOM_LEVELS[zoomIdx];
+  const canZoomOut = zoomIdx > 0;
+  const canZoomIn = zoomIdx < PERCENT_ZOOM_LEVELS.length - 1;
+  const yDomain: [number, number] | undefined =
+    zoom.cap !== null ? [0, zoom.cap] : undefined;
 
   const { data, isLoading } = useQuery({
     queryKey: qualityKeys.complaintRateHistory(
@@ -180,34 +221,73 @@ export function ComplaintRateChart({
             ? t("quality.complaintRate.chartTitleInternal")
             : t("quality.complaintRate.chartTitle")}
         </p>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={coarser}
-            disabled={!canCoarser}
-            aria-label={t("quality.granularity.coarser")}
-            title={t("quality.granularity.coarser")}
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </Button>
-          <span className="text-xs text-muted-foreground tabular-nums min-w-[64px] text-center">
-            {granularityLabel}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={finer}
-            disabled={!canFiner}
-            aria-label={t("quality.granularity.finer")}
-            title={t("quality.granularity.finer")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Granularity stepper (Woche / Monat / Quartal / Jahr) */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-7 w-7"
+              onClick={coarser}
+              disabled={!canCoarser}
+              aria-label={t("quality.granularity.coarser")}
+              title={t("quality.granularity.coarser")}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums min-w-[64px] text-center">
+              {granularityLabel}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-7 w-7"
+              onClick={finer}
+              disabled={!canFiner}
+              aria-label={t("quality.granularity.finer")}
+              title={t("quality.granularity.finer")}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          {/* Y-axis zoom (SalesActivity pattern). ZoomOut moves toward Auto;
+              ZoomIn moves toward tighter caps so small rate bars become
+              readable next to a much larger target line. */}
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={t("quality.zoom.out")}
+              title={t("quality.zoom.out")}
+              disabled={!canZoomOut}
+              onClick={() => setZoomIdx((i) => Math.max(0, i - 1))}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums min-w-[64px] text-center">
+              {zoom.label}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={t("quality.zoom.in")}
+              title={t("quality.zoom.in")}
+              disabled={!canZoomIn}
+              onClick={() =>
+                setZoomIdx((i) =>
+                  Math.min(PERCENT_ZOOM_LEVELS.length - 1, i + 1),
+                )
+              }
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
@@ -229,6 +309,8 @@ export function ComplaintRateChart({
             tick={{ ...axisProps.tick, fontSize: 11 }}
             tickFormatter={(v: number) => formatPercent(v)}
             width={60}
+            domain={yDomain}
+            allowDataOverflow={zoom.cap !== null}
           />
           <Tooltip
             contentStyle={tooltipStyle}
@@ -244,7 +326,26 @@ export function ComplaintRateChart({
                 : [formatPercent(Number(v)), t("quality.complaintRate.label")]
             }
           />
-          <Bar dataKey="rate" fill="var(--color-destructive)" />
+          {target != null && (
+            <ReferenceLine
+              y={target}
+              stroke="var(--color-destructive)"
+              strokeDasharray="6 3"
+              strokeWidth={1.5}
+              // ifOverflow=extendDomain forces the Y-axis to grow if the
+              // target is above the largest data bar — same trick the
+              // SalesActivityCard uses so a 2 % goal never disappears
+              // when bars are at 0.04 %.
+              ifOverflow="extendDomain"
+              label={{
+                value: `${t("quality.chart.target")}: ${formatPercent(target)}`,
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: "var(--color-destructive)",
+              }}
+            />
+          )}
+          <Bar dataKey="rate" fill="var(--color-chart-current)" />
         </BarChart>
       </ResponsiveContainer>
     </Card>

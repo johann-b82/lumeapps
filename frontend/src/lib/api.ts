@@ -201,6 +201,12 @@ export interface Settings {
   target_sick_leave_ratio: number | null;
   target_fluctuation: number | null;
   target_revenue_per_employee: number | null;
+  // v1.66 Quality targets — complaint rates are fractions (0.02 = 2 %),
+  // finding counts are integer thresholds shown as ReferenceLines.
+  target_complaint_rate_customer: number | null;
+  target_complaint_rate_internal: number | null;
+  target_audit_findings_level1: number | null;
+  target_audit_findings_level2: number | null;
   // v1.55 — Sales-dashboard weekly targets
   target_sales_erstkontakte: number | null;
   target_sales_interessenten: number | null;
@@ -269,6 +275,12 @@ export interface SettingsUpdatePayload {
   target_sales_angebote_eur?: number | null;
   // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
   target_sales_orders_per_rep_eur?: number | null;
+  // v1.66 — Quality targets (undefined = "don't change"). Complaint rates
+  // travel as fractions (0.02 = 2 %); finding counts as integer thresholds.
+  target_complaint_rate_customer?: number | null;
+  target_complaint_rate_internal?: number | null;
+  target_audit_findings_level1?: number | null;
+  target_audit_findings_level2?: number | null;
   // Phase 40-01 — Sensor Monitor admin writes. undefined = "don't change"
   // (mirrors Pydantic None-means-don't-change on SettingsUpdate). Decimals
   // go on the wire as strings to match Pydantic's Decimal input coercion.
@@ -743,9 +755,18 @@ export async function fetchAuditFindingsHistory(params?: {
   date_from?: string;
   date_to?: string;
   audit_types?: readonly AuditTypeCode[];
+  granularity?: BucketGranularity;
 }): Promise<AuditFindingsHistoryPoint[]> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.audit_types && params.audit_types.length > 0) {
+    q.set("audit_types", params.audit_types.join(","));
+  }
+  if (params?.granularity) q.set("granularity", params.granularity);
+  const qs = q.toString();
   return apiClient<AuditFindingsHistoryPoint[]>(
-    `/api/quality/audit-findings/history${_buildQualityQuery(params)}`,
+    `/api/quality/audit-findings/history${qs ? `?${qs}` : ""}`,
   );
 }
 

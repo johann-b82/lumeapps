@@ -40,6 +40,11 @@ export interface DraftFields {
   target_sales_angebote_eur: number | null;
   // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
   target_sales_orders_per_rep_eur: number | null;
+  // v1.66 — Quality KPI targets (complaint rates as ratios, finding counts as ints).
+  target_complaint_rate_customer: number | null;
+  target_complaint_rate_internal: number | null;
+  target_audit_findings_level1: number | null;
+  target_audit_findings_level2: number | null;
   // v1.57 World Cup signage — api key is write-only (not in Settings response)
   worldcup_api_key: string;
   worldcup_refresh_seconds: number;
@@ -93,6 +98,10 @@ function settingsToDraft(s: Settings): DraftFields {
     target_sales_besuche: s.target_sales_besuche,
     target_sales_angebote_eur: s.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: s.target_sales_orders_per_rep_eur,
+    target_complaint_rate_customer: s.target_complaint_rate_customer,
+    target_complaint_rate_internal: s.target_complaint_rate_internal,
+    target_audit_findings_level1: s.target_audit_findings_level1,
+    target_audit_findings_level2: s.target_audit_findings_level2,
     // World Cup: api key is write-only, always start empty
     worldcup_api_key: "",
     worldcup_refresh_seconds: s.worldcup_refresh_seconds ?? 60,
@@ -130,6 +139,10 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     target_sales_besuche: draft.target_sales_besuche,
     target_sales_angebote_eur: draft.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
+    target_complaint_rate_customer: draft.target_complaint_rate_customer,
+    target_complaint_rate_internal: draft.target_complaint_rate_internal,
+    target_audit_findings_level1: draft.target_audit_findings_level1,
+    target_audit_findings_level2: draft.target_audit_findings_level2,
     worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
 }
@@ -162,6 +175,10 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     target_sales_besuche: draft.target_sales_besuche,
     target_sales_angebote_eur: draft.target_sales_angebote_eur,
     target_sales_orders_per_rep_eur: draft.target_sales_orders_per_rep_eur,
+    target_complaint_rate_customer: draft.target_complaint_rate_customer,
+    target_complaint_rate_internal: draft.target_complaint_rate_internal,
+    target_audit_findings_level1: draft.target_audit_findings_level1,
+    target_audit_findings_level2: draft.target_audit_findings_level2,
     worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
   // Only send credentials if user typed something (non-empty)
@@ -177,7 +194,7 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
   return payload;
 }
 
-export type SettingsSlice = "general" | "hr" | "sales" | "worldcup";
+export type SettingsSlice = "general" | "hr" | "sales" | "worldcup" | "quality";
 
 const GENERAL_FIELDS = [
   "app_name",
@@ -215,10 +232,18 @@ const WORLDCUP_FIELDS = [
   "worldcup_refresh_seconds",
 ] as const satisfies readonly (keyof DraftFields)[];
 
+const QUALITY_FIELDS = [
+  "target_complaint_rate_customer",
+  "target_complaint_rate_internal",
+  "target_audit_findings_level1",
+  "target_audit_findings_level2",
+] as const satisfies readonly (keyof DraftFields)[];
+
 function fieldsForSlice(slice: SettingsSlice): readonly (keyof DraftFields)[] {
   if (slice === "general") return GENERAL_FIELDS;
   if (slice === "hr") return HR_FIELDS;
   if (slice === "worldcup") return WORLDCUP_FIELDS;
+  if (slice === "quality") return QUALITY_FIELDS;
   return SALES_FIELDS;
 }
 

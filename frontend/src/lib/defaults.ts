@@ -20,6 +20,11 @@ export const DEFAULT_SETTINGS: Settings = {
   target_sick_leave_ratio: null,
   target_fluctuation: null,
   target_revenue_per_employee: null,
+  // v1.66 Quality targets
+  target_complaint_rate_customer: null,
+  target_complaint_rate_internal: null,
+  target_audit_findings_level1: null,
+  target_audit_findings_level2: null,
   // v1.55 Sales-dashboard weekly targets
   target_sales_erstkontakte: null,
   target_sales_interessenten: null,
@@ -38,6 +43,17 @@ export const DEFAULT_SETTINGS: Settings = {
   // v1.57 World Cup signage
   worldcup_has_api_key: false,
   worldcup_refresh_seconds: 60,
+  // ATR fileserver defaults — null = "not configured yet".
+  atr_smb_host: null,
+  atr_smb_share: null,
+  atr_smb_domain: null,
+  atr_smb_user: null,
+  atr_smb_has_password: false,
+  atr_input_path: null,
+  atr_output_path: null,
+  atr_archive_path: null,
+  atr_scan_interval_s: 60,
+  atr_auto_mode: false,
 };
 
 export const THEME_TOKEN_MAP = {

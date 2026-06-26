@@ -172,6 +172,21 @@ class AppSettings(Base):
     target_fluctuation: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     target_revenue_per_employee: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
 
+    # v1.60 — Quality KPI targets. Rates are stored as fractions (0.02 = 2 %);
+    # finding counts are integers. NULL hides the chart's reference line.
+    target_complaint_rate_customer: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_complaint_rate_internal: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_audit_findings_level1: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    target_audit_findings_level2: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+
     # v1.55 — Sales-dashboard weekly target values (drive the dashed
     # reference lines on the Vertriebsaktivität card). NULL = "no target
     # set" — the frontend falls back to a baked-in default.

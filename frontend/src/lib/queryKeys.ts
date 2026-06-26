@@ -92,8 +92,18 @@ export const qualityKeys = {
   all: ["quality"] as const,
   auditFindings: (from?: string, to?: string, types?: readonly string[]) =>
     ["quality", "audit-findings", { from, to, types }] as const,
-  auditFindingsHistory: (from?: string, to?: string, types?: readonly string[]) =>
-    ["quality", "audit-findings", "history", { from, to, types }] as const,
+  auditFindingsHistory: (
+    from?: string,
+    to?: string,
+    types?: readonly string[],
+    granularity?: string,
+  ) =>
+    [
+      "quality",
+      "audit-findings",
+      "history",
+      { from, to, types, granularity },
+    ] as const,
   auditFindingsList: (from?: string, to?: string, types?: readonly string[]) =>
     ["quality", "audit-findings", "list", { from, to, types }] as const,
   complaintRate: (

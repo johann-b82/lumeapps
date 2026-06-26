@@ -91,6 +91,11 @@ def _build_read(row: AppSettings) -> SettingsRead:
         target_sales_besuche=float(row.target_sales_besuche) if row.target_sales_besuche is not None else None,
         target_sales_angebote_eur=float(row.target_sales_angebote_eur) if row.target_sales_angebote_eur is not None else None,
         target_sales_orders_per_rep_eur=float(row.target_sales_orders_per_rep_eur) if row.target_sales_orders_per_rep_eur is not None else None,
+        # v1.60 — Quality KPI targets
+        target_complaint_rate_customer=float(row.target_complaint_rate_customer) if row.target_complaint_rate_customer is not None else None,
+        target_complaint_rate_internal=float(row.target_complaint_rate_internal) if row.target_complaint_rate_internal is not None else None,
+        target_audit_findings_level1=row.target_audit_findings_level1,
+        target_audit_findings_level2=row.target_audit_findings_level2,
         # Phase 39-02 — Sensor config read-only surfaces (columns exist since Phase 38 migration).
         # Admin write endpoints arrive in Phase 40 (SettingsUpdate unchanged here).
         sensor_poll_interval_s=row.sensor_poll_interval_s,
@@ -263,6 +268,15 @@ async def put_settings(
         row.target_fluctuation = payload.target_fluctuation
     if payload.target_revenue_per_employee is not None:
         row.target_revenue_per_employee = payload.target_revenue_per_employee
+    # v1.60 — Quality targets
+    if payload.target_complaint_rate_customer is not None:
+        row.target_complaint_rate_customer = payload.target_complaint_rate_customer
+    if payload.target_complaint_rate_internal is not None:
+        row.target_complaint_rate_internal = payload.target_complaint_rate_internal
+    if payload.target_audit_findings_level1 is not None:
+        row.target_audit_findings_level1 = payload.target_audit_findings_level1
+    if payload.target_audit_findings_level2 is not None:
+        row.target_audit_findings_level2 = payload.target_audit_findings_level2
     # v1.55 — Sales-dashboard targets
     if payload.target_sales_erstkontakte is not None:
         row.target_sales_erstkontakte = payload.target_sales_erstkontakte
