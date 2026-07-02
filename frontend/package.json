@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/fetch-tesseract-assets.mjs",
     "dev": "vite",
     "dev:player": "vite --mode player",
+    "prebuild": "node scripts/fetch-tesseract-assets.mjs",
     "build": "tsc -b && vite build && vite build --mode player && node -e \"require('fs').renameSync('dist/player/player.html','dist/player/index.html')\"",
     "build:admin": "vite build",
     "build:player": "vite build --mode player && node -e \"require('fs').renameSync('dist/player/player.html','dist/player/index.html')\"",
