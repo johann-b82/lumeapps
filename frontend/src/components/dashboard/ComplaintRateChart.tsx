@@ -64,21 +64,21 @@ const GRANULARITY_STEPS: BucketGranularity[] = [
   "yearly",
 ];
 
-// Y-axis zoom presets — same pattern as SalesActivityCard. Index 0 = Auto
-// (Recharts default scale to the largest bucket value); higher indices step
-// through ever-tighter caps so small bars become visible next to a large
-// target line. Caps are stored as ratios (0.02 = 2 %).
-type ZoomLevel = { cap: number | null; label: string };
+// Y-axis zoom presets — On Quality variant. Headline is now 100 % − defect,
+// so "zoom in" means tightening the LOWER bound of the Y-axis (toward 100 %),
+// not the upper. Each level defines [min, max] where max is always 1.0
+// (= 100 %) and min steps from 0 toward 1.
+type ZoomLevel = { domain: [number, number] | null; label: string };
 
-const PERCENT_ZOOM_LEVELS: ZoomLevel[] = [
-  { cap: null, label: "Auto" },
-  { cap: 0.10, label: "10 %" },
-  { cap: 0.05, label: "5 %" },
-  { cap: 0.02, label: "2 %" },
-  { cap: 0.01, label: "1 %" },
-  { cap: 0.005, label: "0,5 %" },
-  { cap: 0.002, label: "0,2 %" },
-  { cap: 0.001, label: "0,1 %" },
+const ON_QUALITY_ZOOM_LEVELS: ZoomLevel[] = [
+  { domain: null, label: "Auto" },
+  { domain: [0.90, 1.0], label: "90 %" },
+  { domain: [0.95, 1.0], label: "95 %" },
+  { domain: [0.98, 1.0], label: "98 %" },
+  { domain: [0.99, 1.0], label: "99 %" },
+  { domain: [0.995, 1.0], label: "99,5 %" },
+  { domain: [0.998, 1.0], label: "99,8 %" },
+  { domain: [0.999, 1.0], label: "99,9 %" },
 ];
 
 function mapHrToManual(g: HrBucketGranularity): BucketGranularity {
@@ -125,19 +125,43 @@ export function ComplaintRateChart({
   const date_from = toApiDate(range.from);
   const date_to = toApiDate(range.to);
 
-  // Configurable target (from /settings/quality). Falls back to the
-  // baked-in default — same pattern as DEFAULT_TARGETS on SalesActivityCard.
+  // Configurable target (from /settings/quality). Falls back to baked-in
+  // defaults — same pattern as DEFAULT_TARGETS on SalesActivityCard.
+  // Defects are stored as fractions (0.02 = 2 % Fehler = 98 % On Quality).
+  // Supplier + subcontractor have no DB column yet; the defaults below
+  // are the threshold-line that renders until the admin overrides them
+  // via the (future) settings-page wiring.
   const { data: settings } = useSettings();
   const DEFAULT_COMPLAINT_TARGETS = {
     customer: 0.02,
     internal: 0.04,
+    supplier: 0.02,
+    subcontractor: 0.05,
   } as const;
-  const target =
-    complaintType === "internal"
-      ? settings?.target_complaint_rate_internal ??
+  const target: number = (() => {
+    if (complaintType === "internal") {
+      return (
+        settings?.target_complaint_rate_internal ??
         DEFAULT_COMPLAINT_TARGETS.internal
-      : settings?.target_complaint_rate_customer ??
-        DEFAULT_COMPLAINT_TARGETS.customer;
+      );
+    }
+    if (complaintType === "customer") {
+      return (
+        settings?.target_complaint_rate_customer ??
+        DEFAULT_COMPLAINT_TARGETS.customer
+      );
+    }
+    if (complaintType === "supplier") {
+      return (
+        settings?.target_complaint_rate_supplier ??
+        DEFAULT_COMPLAINT_TARGETS.supplier
+      );
+    }
+    return (
+      settings?.target_complaint_rate_subcontractor ??
+      DEFAULT_COMPLAINT_TARGETS.subcontractor
+    );
+  })();
 
   // Auto-pick the granularity that best matches the active range, then let
   // the user step finer/coarser with +/−. The auto-pick re-runs whenever
@@ -158,13 +182,12 @@ export function ComplaintRateChart({
   const finer = () => canFiner && setGranularity(GRANULARITY_STEPS[stepIndex - 1]);
   const coarser = () => canCoarser && setGranularity(GRANULARITY_STEPS[stepIndex + 1]);
 
-  // Y-axis zoom — Sales-Activity pattern. Index 0 = Auto.
+  // Y-axis zoom — On-Quality variant. Index 0 = Auto.
   const [zoomIdx, setZoomIdx] = useState<number>(0);
-  const zoom = PERCENT_ZOOM_LEVELS[zoomIdx];
+  const zoom = ON_QUALITY_ZOOM_LEVELS[zoomIdx];
   const canZoomOut = zoomIdx > 0;
-  const canZoomIn = zoomIdx < PERCENT_ZOOM_LEVELS.length - 1;
-  const yDomain: [number, number] | undefined =
-    zoom.cap !== null ? [0, zoom.cap] : undefined;
+  const canZoomIn = zoomIdx < ON_QUALITY_ZOOM_LEVELS.length - 1;
+  const yDomain: [number, number] | undefined = zoom.domain ?? undefined;
 
   const { data, isLoading } = useQuery({
     queryKey: qualityKeys.complaintRateHistory(
@@ -195,31 +218,38 @@ export function ComplaintRateChart({
 
   if (!data || data.length === 0) return null;
 
-  const formatPercent = (n: number) =>
+  const formatOnQualityPercent = (n: number) =>
     new Intl.NumberFormat(locale, {
       style: "percent",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
     }).format(n);
 
-  // Recharts wants a stable shape — drop nulls to undefined so the bar is empty
-  // rather than rendering a 0-height ghost bar.
+  // Map defect rate → On Quality for the bars + ref line. NULL stays
+  // NULL so empty buckets render as gaps, not as zero-height ghost bars.
   const chartData = data.map((p) => ({
     month: p.month,
-    rate: p.rate ?? null,
+    on_quality: p.rate == null ? null : 1 - p.rate,
+    rate: p.rate ?? null, // kept for the tooltip's "(Fehler: X%)" hint
     complaint_qty: p.complaint_qty,
     delivered_qty: p.delivered_qty,
   }));
 
+  // Target on the settings record is stored as a defect-rate fraction
+  // (e.g. 0.02 = "max 2 % Fehler"); render it as the corresponding lower
+  // bound on the On-Quality axis (= 1 − target). Target is always a
+  // number now (the per-type defaults guarantee it), so no null branch
+  // is needed at render time.
+  const onQualityTarget = 1 - target;
+
   const granularityLabel = t(`quality.granularity.${granularity}`);
+  const onQualityLabel = t(`quality.onQuality.labelByType.${complaintType}`);
 
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold">
-          {complaintType === "internal"
-            ? t("quality.complaintRate.chartTitleInternal")
-            : t("quality.complaintRate.chartTitle")}
+          {t(`quality.onQuality.chartTitleByType.${complaintType}`)}
         </p>
         <div className="flex flex-wrap items-center gap-4">
           {/* Granularity stepper (Woche / Monat / Quartal / Jahr) */}
@@ -281,7 +311,7 @@ export function ComplaintRateChart({
               disabled={!canZoomIn}
               onClick={() =>
                 setZoomIdx((i) =>
-                  Math.min(PERCENT_ZOOM_LEVELS.length - 1, i + 1),
+                  Math.min(ON_QUALITY_ZOOM_LEVELS.length - 1, i + 1),
                 )
               }
             >
@@ -307,10 +337,10 @@ export function ComplaintRateChart({
           <YAxis
             {...axisProps}
             tick={{ ...axisProps.tick, fontSize: 11 }}
-            tickFormatter={(v: number) => formatPercent(v)}
-            width={60}
+            tickFormatter={(v: number) => formatOnQualityPercent(v)}
+            width={70}
             domain={yDomain}
-            allowDataOverflow={zoom.cap !== null}
+            allowDataOverflow={zoom.domain !== null}
           />
           <Tooltip
             contentStyle={tooltipStyle}
@@ -322,30 +352,29 @@ export function ComplaintRateChart({
             }
             formatter={(v) =>
               v == null
-                ? ["—", t("quality.complaintRate.label")]
-                : [formatPercent(Number(v)), t("quality.complaintRate.label")]
+                ? ["—", onQualityLabel]
+                : [formatOnQualityPercent(Number(v)), onQualityLabel]
             }
           />
-          {target != null && (
-            <ReferenceLine
-              y={target}
-              stroke="var(--color-destructive)"
-              strokeDasharray="6 3"
-              strokeWidth={1.5}
-              // ifOverflow=extendDomain forces the Y-axis to grow if the
-              // target is above the largest data bar — same trick the
-              // SalesActivityCard uses so a 2 % goal never disappears
-              // when bars are at 0.04 %.
-              ifOverflow="extendDomain"
-              label={{
-                value: `${t("quality.chart.target")}: ${formatPercent(target)}`,
-                position: "insideTopRight",
-                fontSize: 10,
-                fill: "var(--color-destructive)",
-              }}
-            />
-          )}
-          <Bar dataKey="rate" fill="var(--color-chart-current)" />
+          <ReferenceLine
+            y={onQualityTarget}
+            stroke="var(--color-destructive)"
+            strokeDasharray="6 3"
+            strokeWidth={1.5}
+            // ifOverflow=extendDomain keeps the threshold visible when
+            // the data sits far above (or far below) the target — same
+            // trick the SalesActivityCard uses for its target lines.
+            ifOverflow="extendDomain"
+            label={{
+              value: t("quality.onQuality.minTarget", {
+                value: formatOnQualityPercent(onQualityTarget),
+              }),
+              position: "insideBottomRight",
+              fontSize: 10,
+              fill: "var(--color-destructive)",
+            }}
+          />
+          <Bar dataKey="on_quality" fill="var(--color-chart-current)" />
         </BarChart>
       </ResponsiveContainer>
     </Card>

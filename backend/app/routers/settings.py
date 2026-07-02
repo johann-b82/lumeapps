@@ -94,8 +94,13 @@ def _build_read(row: AppSettings) -> SettingsRead:
         # v1.60 — Quality KPI targets
         target_complaint_rate_customer=float(row.target_complaint_rate_customer) if row.target_complaint_rate_customer is not None else None,
         target_complaint_rate_internal=float(row.target_complaint_rate_internal) if row.target_complaint_rate_internal is not None else None,
+        target_complaint_rate_supplier=float(row.target_complaint_rate_supplier) if row.target_complaint_rate_supplier is not None else None,
+        target_complaint_rate_subcontractor=float(row.target_complaint_rate_subcontractor) if row.target_complaint_rate_subcontractor is not None else None,
         target_audit_findings_level1=row.target_audit_findings_level1,
         target_audit_findings_level2=row.target_audit_findings_level2,
+        # v1.71 / v1.72 — Finance KPI targets
+        target_material_cost_ratio=float(row.target_material_cost_ratio) if row.target_material_cost_ratio is not None else None,
+        target_personnel_cost_ratio=float(row.target_personnel_cost_ratio) if row.target_personnel_cost_ratio is not None else None,
         # Phase 39-02 — Sensor config read-only surfaces (columns exist since Phase 38 migration).
         # Admin write endpoints arrive in Phase 40 (SettingsUpdate unchanged here).
         sensor_poll_interval_s=row.sensor_poll_interval_s,
@@ -273,10 +278,19 @@ async def put_settings(
         row.target_complaint_rate_customer = payload.target_complaint_rate_customer
     if payload.target_complaint_rate_internal is not None:
         row.target_complaint_rate_internal = payload.target_complaint_rate_internal
+    if payload.target_complaint_rate_supplier is not None:
+        row.target_complaint_rate_supplier = payload.target_complaint_rate_supplier
+    if payload.target_complaint_rate_subcontractor is not None:
+        row.target_complaint_rate_subcontractor = payload.target_complaint_rate_subcontractor
     if payload.target_audit_findings_level1 is not None:
         row.target_audit_findings_level1 = payload.target_audit_findings_level1
     if payload.target_audit_findings_level2 is not None:
         row.target_audit_findings_level2 = payload.target_audit_findings_level2
+    # v1.71 / v1.72 — Finance targets
+    if payload.target_material_cost_ratio is not None:
+        row.target_material_cost_ratio = payload.target_material_cost_ratio
+    if payload.target_personnel_cost_ratio is not None:
+        row.target_personnel_cost_ratio = payload.target_personnel_cost_ratio
     # v1.55 — Sales-dashboard targets
     if payload.target_sales_erstkontakte is not None:
         row.target_sales_erstkontakte = payload.target_sales_erstkontakte

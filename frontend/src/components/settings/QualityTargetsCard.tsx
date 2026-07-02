@@ -27,6 +27,18 @@ const TARGET_FIELDS = [
     isInteger: false,
   },
   {
+    key: "target_complaint_rate_supplier" as const,
+    labelKey: "settings.targets.quality.supplier",
+    isPercent: true,
+    isInteger: false,
+  },
+  {
+    key: "target_complaint_rate_subcontractor" as const,
+    labelKey: "settings.targets.quality.subcontractor",
+    isPercent: true,
+    isInteger: false,
+  },
+  {
     key: "target_audit_findings_level1" as const,
     labelKey: "settings.targets.quality.level1",
     isPercent: false,

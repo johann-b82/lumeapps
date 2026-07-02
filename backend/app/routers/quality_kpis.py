@@ -148,7 +148,7 @@ async def get_audit_findings_history(
 
 
 _ALLOWED_QTY_MODES = {"total", "accepted"}
-_ALLOWED_COMPLAINT_TYPES = {"customer", "internal"}
+_ALLOWED_COMPLAINT_TYPES = {"customer", "internal", "supplier", "subcontractor"}
 
 
 def _validate_qty_mode(mode: str) -> str:
