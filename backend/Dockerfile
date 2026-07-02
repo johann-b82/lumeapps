@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt && \
         libreoffice-impress \
         libreoffice-calc \
         libreoffice-core \
+        python3-uno \
         poppler-utils \
         fonts-crosextra-carlito \
         fonts-crosextra-caladea \

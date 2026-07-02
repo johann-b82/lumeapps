@@ -12,17 +12,28 @@ import asyncio
 import shutil
 import uuid as _uuid
 from copy import copy
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+from openpyxl.worksheet.properties import PageSetupProperties
 
 _RED = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
 _TABLE_HEADER_ROW = 13
 _FIRST_PART_ROW = 14
 _NCOLS = 14  # A..N
+_DE_NUM = "[$-407]0.00"  # force German decimal comma regardless of LibreOffice locale
+
+
+def _de_date(d) -> str:
+    """German TT.MM.JJJJ for date/datetime; passthrough for anything else."""
+    try:
+        return d.strftime("%d.%m.%Y")
+    except AttributeError:
+        return str(d)
 
 
 def _visible_sheet(wb):
@@ -58,9 +69,9 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     if delivery.ba_auftrag is not None:
         ws["D9"] = delivery.ba_auftrag
     if getattr(delivery, "weighing_date", None):
-        ws["C12"] = str(delivery.weighing_date)
+        ws["C12"] = _de_date(delivery.weighing_date)
     if getattr(delivery, "testing_date", None):
-        ws["L12"] = str(delivery.testing_date)
+        ws["L12"] = _de_date(delivery.testing_date)
     # Doc-No lives in the print header (not a cell).
     if delivery.atr_number:
         ws.oddHeader.right.text = f"Doc-No.: {delivery.atr_number}"
@@ -71,6 +82,12 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
 
     totals_row = _find_totals_row(ws)
     region_count = max(0, totals_row - _FIRST_PART_ROW)
+
+    # openpyxl delete_rows/insert_rows move cell CONTENT but leave merged-cell
+    # ranges (and their wide legend/certification blocks) where they were.
+    # Snapshot the merges now so we can realign them after the row surgery.
+    _orig_merges = [(m.min_row, m.min_col, m.max_row, m.max_col)
+                    for m in ws.merged_cells.ranges]
 
     # group items by category in first-seen order
     grouped: list[tuple[str | None, list]] = []
@@ -91,6 +108,18 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     if out_rows:
         ws.insert_rows(_FIRST_PART_ROW, out_rows)
 
+    # Realign merged cells to the shifted content: header block (above the part
+    # region) stays; merges that were inside the rewritten region are dropped;
+    # everything at/below the totals row shifts by the net row delta.
+    delta = out_rows - region_count
+    ws.merged_cells.ranges = []  # drop all stale ranges; re-add correctly below
+    for (r1, c1, r2, c2) in _orig_merges:
+        if r1 < _FIRST_PART_ROW:
+            ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+        elif r1 >= totals_row:
+            ws.merge_cells(start_row=r1 + delta, start_column=c1,
+                           end_row=r2 + delta, end_column=c2)
+
     r = _FIRST_PART_ROW
     total_weight = Decimal("0")
     for cat, lst in grouped:
@@ -110,7 +139,8 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
             ws.cell(r, 6, it.drawing_number_issue or "")
             ws.cell(r, 7, it.qty)
             if it.weight_kg is not None:
-                ws.cell(r, 8, float(it.weight_kg))
+                wc = ws.cell(r, 8, float(it.weight_kg))
+                wc.number_format = _DE_NUM
                 total_weight += it.weight_kg
             for c, mark in zip(range(9, 14), ("P", "P", "P", "P", "P")):
                 ws.cell(r, c, mark)
@@ -122,11 +152,23 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
 
     # totals block shifted down by (out_rows - region_count + region_count) — re-find it
     new_totals_row = _find_totals_row(ws)
-    ws.cell(new_totals_row, 8, float(total_weight))
+    tw = ws.cell(new_totals_row, 8, float(total_weight))
+    tw.number_format = _DE_NUM
     # Max. Guaranteed weight on the next totals label row, if present
     for rr in range(new_totals_row, min(new_totals_row + 4, ws.max_row + 1)):
         if "max" in str(ws.cell(rr, 6).value or "").lower() and delivery.max_guaranteed_weight_kg is not None:
-            ws.cell(rr, 8, float(delivery.max_guaranteed_weight_kg))
+            mg = ws.cell(rr, 8, float(delivery.max_guaranteed_weight_kg))
+            mg.number_format = _DE_NUM
+
+    # Fit to one page WIDE (kills the horizontal overflow that doubled the page
+    # count); height flows to as many pages as needed. Constrain print_area to
+    # A..N so stray far-right cells don't spawn extra pages.
+    ws.print_area = f"A1:N{ws.max_row}"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_setup.scale = None  # scale and fitToPage are mutually exclusive
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
 
     bio = BytesIO()
     wb.save(bio)
@@ -138,18 +180,26 @@ _LO_SEMAPHORE = asyncio.Semaphore(1)
 _LO_TIMEOUT_S = 60
 
 
-async def convert_xlsx_to_pdf(xlsx_bytes: bytes) -> bytes:
+# Constant Doc-No per ACM (always the same for this report family); the header
+# date is the report generation date. Applied via LibreOffice UNO because
+# openpyxl mangles the print header — see atr_uno_header.py.
+_ATR_DOC_NO = "ACM-A350CRC-ATR-4545-01 / Issue: 01"
+_UNO_SCRIPT = str(Path(__file__).with_name("atr_uno_header.py"))
+
+
+async def convert_xlsx_to_pdf(xlsx_bytes: bytes, doc_no: str = _ATR_DOC_NO,
+                              date_str: str | None = None) -> bytes:
+    if date_str is None:
+        date_str = date.today().strftime("%d.%m.%Y")
     async with _LO_SEMAPHORE:
         tempdir = Path(f"/tmp/atr_{_uuid.uuid4()}")
-        lo_profile = Path(f"/tmp/lo_{_uuid.uuid4()}")
         try:
             tempdir.mkdir(parents=True, exist_ok=True)
             src = tempdir / "atr.xlsx"
             src.write_bytes(xlsx_bytes)
+            out = tempdir / "atr.pdf"
             proc = await asyncio.create_subprocess_exec(
-                "soffice", "--headless",
-                f"-env:UserInstallation=file://{lo_profile}",
-                "--convert-to", "pdf", "--outdir", str(tempdir), str(src),
+                "/usr/bin/python3", _UNO_SCRIPT, str(src), str(out), doc_no, date_str,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
             try:
@@ -160,15 +210,10 @@ async def convert_xlsx_to_pdf(xlsx_bytes: bytes) -> bytes:
                 except ProcessLookupError:
                     pass
                 raise RuntimeError("xlsx->pdf conversion timed out") from exc
-            if proc.returncode != 0:
+            if proc.returncode != 0 or not out.exists():
                 raise RuntimeError(
-                    f"soffice failed: {err.decode('utf-8', 'replace')[-500:]}"
+                    f"uno header/pdf failed: {err.decode('utf-8', 'replace')[-500:]}"
                 )
-            try:
-                pdf_path = next(tempdir.glob("*.pdf"))
-            except StopIteration as exc:
-                raise RuntimeError("soffice produced no PDF") from exc
-            return pdf_path.read_bytes()
+            return out.read_bytes()
         finally:
             shutil.rmtree(tempdir, ignore_errors=True)
-            shutil.rmtree(lo_profile, ignore_errors=True)
