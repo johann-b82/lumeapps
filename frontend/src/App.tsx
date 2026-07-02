@@ -16,12 +16,14 @@ import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
 import { EmbedWorldCupTippspielPage } from "./pages/EmbedWorldCupTippspielPage";
 import { QualityPage } from "./pages/QualityPage";
 import { ProcurementPage } from "./pages/ProcurementPage";
+import { FinancePage } from "./pages/FinancePage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SensorsSettingsPage } from "./pages/SensorsSettingsPage";
 import { GeneralSettingsPage } from "@/pages/GeneralSettingsPage";
 import { HrSettingsPage } from "@/pages/HrSettingsPage";
 import { QualitySettingsPage } from "@/pages/QualitySettingsPage";
+import { FinanceSettingsPage } from "@/pages/FinanceSettingsPage";
 import { SalesSettingsPage } from "@/pages/SalesSettingsPage";
 import { WorldCupSettingsPage } from "@/pages/WorldCupSettingsPage";
 import { AtrSettingsPage } from "@/pages/AtrSettingsPage";
@@ -39,6 +41,11 @@ import { NavBar } from "./components/NavBar";
 import { AdminOnly } from "./auth/AdminOnly";
 
 const DocsPage = lazy(() => import("./pages/DocsPage"));
+// v1.73 FAIR — lazy so the signage /embed pages (and the rest of the app) don't
+// load the heavy OCR (tesseract) / PDF (pdf-lib) modules until /fair is opened.
+const FairPage = lazy(() =>
+  import("./pages/FairPage").then((m) => ({ default: m.FairPage })),
+);
 import { SubHeader } from "./components/SubHeader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { SettingsDraftProvider } from "./contexts/SettingsDraftContext";
@@ -70,6 +77,24 @@ function AppShell() {
           <Route path="/hr" component={HRPage} />
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
+          {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
+              Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
+              main bundle used by the signage /embed pages. */}
+          <Route path="/fair/:id">
+            <AdminOnly>
+              <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading FAIR" /></div>}>
+                <FairPage />
+              </Suspense>
+            </AdminOnly>
+          </Route>
+          <Route path="/fair">
+            <AdminOnly>
+              <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading FAIR" /></div>}>
+                <FairPage />
+              </Suspense>
+            </AdminOnly>
+          </Route>
+          <Route path="/finance" component={FinancePage} />
           <Route path="/sensors" component={SensorsPage} />
           {/* Phase 46 — signage routes (specific → general per wouter first-match). */}
           {/* Plan 46-05 — /signage/playlists/:id MUST precede /signage/playlists (Pitfall 1). */}
@@ -104,6 +129,7 @@ function AppShell() {
           <Route path="/settings/general" component={GeneralSettingsPage} />
           <Route path="/settings/hr" component={HrSettingsPage} />
           <Route path="/settings/quality" component={QualitySettingsPage} />
+          <Route path="/settings/finance" component={FinanceSettingsPage} />
           <Route path="/settings/sales" component={SalesSettingsPage} />
           <Route path="/settings/worldcup" component={WorldCupSettingsPage} />
           <Route path="/settings/atr" component={AtrSettingsPage} />

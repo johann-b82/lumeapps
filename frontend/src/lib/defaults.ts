@@ -23,8 +23,13 @@ export const DEFAULT_SETTINGS: Settings = {
   // v1.66 Quality targets
   target_complaint_rate_customer: null,
   target_complaint_rate_internal: null,
+  target_complaint_rate_supplier: null,
+  target_complaint_rate_subcontractor: null,
   target_audit_findings_level1: null,
   target_audit_findings_level2: null,
+  // v1.71 / v1.72 Finance targets (cost ratios)
+  target_material_cost_ratio: null,
+  target_personnel_cost_ratio: null,
   // v1.55 Sales-dashboard weekly targets
   target_sales_erstkontakte: null,
   target_sales_interessenten: null,

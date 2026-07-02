@@ -141,6 +141,30 @@ export const procurementKeys = {
     ["procurement", "otd", "list", { from, to }] as const,
 };
 
+// v1.70 — Finanzperspektive: Materialkostenquote.
+export const financeKeys = {
+  all: ["finance"] as const,
+  materialCostRatio: (from?: string, to?: string) =>
+    ["finance", "material-cost-ratio", { from, to }] as const,
+  materialCostRatioHistory: (from?: string, to?: string, granularity?: string) =>
+    ["finance", "material-cost-ratio", "history", { from, to, granularity }] as const,
+  materialCostRatioList: (from?: string, to?: string) =>
+    ["finance", "material-cost-ratio", "list", { from, to }] as const,
+  personnelCostRatio: (from?: string, to?: string) =>
+    ["finance", "personnel-cost-ratio", { from, to }] as const,
+  personnelCostRatioHistory: (from?: string, to?: string, granularity?: string) =>
+    ["finance", "personnel-cost-ratio", "history", { from, to, granularity }] as const,
+  personnelCostRatioList: (from?: string, to?: string) =>
+    ["finance", "personnel-cost-ratio", "list", { from, to }] as const,
+};
+
+// v1.73 — FAIR drawing ballooning (Erstmusterprüfung).
+export const fairKeys = {
+  all: ["fair"] as const,
+  projects: () => ["fair", "projects"] as const,
+  project: (id: string) => ["fair", "projects", id] as const,
+};
+
 // v1.41 — Sales activity / orders distribution.
 export const salesKeys = {
   all: ["sales"] as const,

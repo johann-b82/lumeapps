@@ -108,15 +108,23 @@ export function SubHeader() {
     location === "/sales" ||
     location === "/hr" ||
     location === "/quality" ||
-    location === "/procurement";
+    location === "/procurement" ||
+    location === "/finance";
 
-  const dashboardPath: "/sales" | "/hr" | "/quality" | "/procurement" =
+  const dashboardPath:
+    | "/sales"
+    | "/hr"
+    | "/quality"
+    | "/procurement"
+    | "/finance" =
     location === "/hr"
       ? "/hr"
       : location === "/quality"
       ? "/quality"
       : location === "/procurement"
       ? "/procurement"
+      : location === "/finance"
+      ? "/finance"
       : "/sales";
 
   // Signage admin routes share a 4-tab pill. /signage/pair is a standalone
@@ -159,6 +167,8 @@ export function SubHeader() {
                       ? t("nav.quality")
                       : p === "/procurement"
                       ? t("nav.procurement")
+                      : p === "/finance"
+                      ? t("nav.finance")
                       : t("nav.sales")
                   }
                 </SelectValue>
@@ -168,6 +178,7 @@ export function SubHeader() {
                 <SelectItem value="/hr">{t("nav.hr")}</SelectItem>
                 <SelectItem value="/quality">{t("nav.quality")}</SelectItem>
                 <SelectItem value="/procurement">{t("nav.procurement")}</SelectItem>
+                <SelectItem value="/finance">{t("nav.finance")}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -214,7 +225,8 @@ export function SubHeader() {
         <div className="flex items-center gap-3">
           {(location === "/sales" ||
             location === "/quality" ||
-            location === "/procurement") && (
+            location === "/procurement" ||
+            location === "/finance") && (
             <AdminOnly>
               <Link
                 href="/upload"

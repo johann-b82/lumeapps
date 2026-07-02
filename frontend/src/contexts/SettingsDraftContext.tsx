@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
-export type SettingsSection = "general" | "hr" | "sensors" | "sales" | "worldcup" | "atr" | "quality";
+export type SettingsSection = "general" | "hr" | "sensors" | "sales" | "worldcup" | "atr" | "quality" | "finance";
 
 interface SettingsDraftStatus {
   isDirty: boolean;
