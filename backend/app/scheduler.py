@@ -47,6 +47,7 @@ SENSOR_POLL_JOB_ID = "sensor_poll"  # NEW (v1.15)
 SENSOR_RETENTION_JOB_ID = "sensor_retention_cleanup"  # NEW (v1.15)
 PAIRING_CLEANUP_JOB_ID = "signage_pairing_cleanup"  # NEW (v1.16 Phase 42-03)
 HEARTBEAT_SWEEPER_JOB_ID = "signage_heartbeat_sweeper"  # NEW (v1.16 Phase 43-04)
+ATR_SCAN_JOB_ID = "atr_scan"  # NEW (Phase C)
 
 # OQ-5 fixed retention; not admin-configurable in v1.15 (SEN-SCH-06 / SEN-FUTURE-01).
 SENSOR_RETENTION_DAYS = 90
@@ -296,6 +297,89 @@ async def _run_pptx_stuck_reset() -> None:
             await session.rollback()
 
 
+async def _load_atr_interval() -> int:
+    async with AsyncSessionLocal() as session:
+        v = (await session.execute(
+            select(AppSettings.atr_scan_interval_s).where(AppSettings.id == 1)
+        )).scalar_one_or_none()
+    return int(v) if v is not None else 0
+
+
+async def _run_atr_scan() -> None:
+    """List new Lieferscheine on the SMB share and process each (Phase C)."""
+    from app.models import AppSettings, AtrDelivery
+    from app.services import atr_fileserver as fs
+    from app.services.atr_deliver import generate_and_deliver
+    from app.services.atr_lieferschein import parse_lieferschein
+    from app.services.atr_match import match_positions
+
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(select(AppSettings).where(AppSettings.id == 1))).scalar_one_or_none()
+        if row is None or row.atr_scan_interval_s == 0:
+            return
+        cfg = fs.smb_config_from_settings(row)
+        if cfg is None:
+            return
+        try:
+            names = await asyncio.wait_for(asyncio.to_thread(fs.list_input_pdfs, cfg), timeout=60)
+        except (fs.AtrFileserverError, asyncio.TimeoutError):
+            log.warning("atr_scan: list_input_pdfs failed/timed out", exc_info=True)
+            return
+        # names already linked to a scan-origin delivery → skip
+        linked = set((await session.execute(
+            select(AtrDelivery.source_filename).where(AtrDelivery.origin == "scan")
+        )).scalars().all())
+        for name in names:
+            if name in linked:
+                continue
+            try:
+                raw = await asyncio.wait_for(asyncio.to_thread(fs.read_input, cfg, name), timeout=60)
+                parsed = await parse_lieferschein(raw)
+                if not parsed.positions:
+                    log.warning("atr_scan: no positions in %s; skipping", name)
+                    continue
+                md = await match_positions(session, parsed, name)
+                from app.routers.atr_delivery import _persist_draft  # reuse the draft builder
+                delivery = await _persist_draft(session, md)
+                delivery.origin = "scan"
+                delivery.source_path = f"{cfg.input_path}/{name}"
+                await session.commit()
+                if row.atr_auto_mode:
+                    try:
+                        from sqlalchemy.orm import selectinload
+                        d = (await session.execute(
+                            select(AtrDelivery).options(selectinload(AtrDelivery.items)).where(AtrDelivery.id == delivery.id)
+                        )).scalar_one()
+                        await generate_and_deliver(session, d, row)
+                    except Exception:
+                        log.exception("atr_scan: auto-generate failed for %s; deleting draft to retry next scan", name)
+                        await session.delete(delivery)
+                        await session.commit()
+            except Exception:
+                log.exception("atr_scan: failed processing %s", name)
+                await session.rollback()
+
+
+def reschedule_atr_scan(new_interval_s: int) -> None:
+    try:
+        existing = scheduler.get_job(ATR_SCAN_JOB_ID)
+        if new_interval_s <= 0:
+            if existing is not None:
+                scheduler.remove_job(ATR_SCAN_JOB_ID)
+            return
+        if existing is None:
+            scheduler.add_job(_run_atr_scan, trigger="interval", seconds=new_interval_s,
+                              id=ATR_SCAN_JOB_ID, replace_existing=True, max_instances=1,
+                              coalesce=True, misfire_grace_time=30)
+        else:
+            scheduler.reschedule_job(ATR_SCAN_JOB_ID, trigger="interval", seconds=new_interval_s)
+        job = scheduler.get_job(ATR_SCAN_JOB_ID)
+        log.info("atr_scan rescheduled: new=%ss next_run=%s", new_interval_s,
+                 job.next_run_time.isoformat() if job and job.next_run_time else None)
+    except Exception:
+        log.exception("reschedule_atr_scan failed (new_interval_s=%s)", new_interval_s)
+
+
 def reschedule_sensor_poll(new_interval_s: int) -> None:
     """Phase 40 admin-settings hook — re-pins sensor_poll to a new interval.
 
@@ -393,6 +477,13 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             misfire_grace_time=30,
         )
+
+    # --- ATR scan (Phase C) ---
+    atr_interval_s = await _load_atr_interval()
+    if atr_interval_s > 0:
+        scheduler.add_job(_run_atr_scan, trigger="interval", seconds=atr_interval_s,
+                          id=ATR_SCAN_JOB_ID, replace_existing=True, max_instances=1,
+                          coalesce=True, misfire_grace_time=30)
 
     # --- Sensor retention cleanup (daily at 03:00 UTC — v1.15) ---
     scheduler.add_job(

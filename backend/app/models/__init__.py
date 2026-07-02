@@ -24,11 +24,14 @@ from app.models._base import (  # noqa: F401
     QualityRecord,
     DeliveryRecord,
     DeliveryReliabilityRecord,
+    GoodsReceiptRecord,
     TippspielTip,
     Interessent,
     Offer,
     Revenue,
     Auftrag,
+    MaterialMovement,
+    MaterialPrice,
 )
 
 # Signage models (added in Task 2 of this plan)
@@ -45,6 +48,12 @@ from app.models.signage import (  # noqa: F401
     SignageHeartbeatEvent,
 )
 
+# ATR module models (Phase A + Phase B)
+from app.models.atr import AtrPart, AtrTemplate, AtrDelivery, AtrDeliveryItem  # noqa: F401
+
+# FAIR models (v1.73 — drawing ballooning / Erstmusterprüfung)
+from app.models.fair import FairProject, FairBalloon  # noqa: F401
+
 __all__ = [
     "Base",
     # Legacy
@@ -55,14 +64,22 @@ __all__ = [
     "QualityRecord",
     "DeliveryRecord",
     "DeliveryReliabilityRecord",
+    "GoodsReceiptRecord",
     "TippspielTip",
     "Interessent",
     "Offer",
     "Revenue",
     "Auftrag",
+    "MaterialMovement",
+    "MaterialPrice",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
     "SignageDevice", "SignageDeviceTag", "SignageDeviceTagMap",
     "SignagePlaylistTagMap", "SignagePairingSession",
     "SignageSchedule", "SignageHeartbeatEvent",
+    # ATR
+    "AtrPart", "AtrTemplate",
+    "AtrDelivery", "AtrDeliveryItem",
+    # FAIR
+    "FairProject", "FairBalloon",
 ]

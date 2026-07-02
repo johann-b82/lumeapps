@@ -22,7 +22,10 @@ from app.models import (
     Auftrag,
     DeliveryRecord,
     DeliveryReliabilityRecord,
+    GoodsReceiptRecord,
     Interessent,
+    MaterialMovement,
+    MaterialPrice,
     Offer,
     QualityRecord,
     Revenue,
@@ -38,6 +41,9 @@ from app.parsing.delivery_reliability_parser import (
     parse_delivery_reliability_file,
 )
 from app.parsing.erp_parser import parse_erp_file
+from app.parsing.goods_receipt_parser import parse_goods_receipt_file
+from app.parsing.material_prices_parser import parse_material_prices_file
+from app.parsing.material_movements_parser import parse_material_movements_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
 from app.parsing.quality_parser import parse_quality_file
@@ -49,7 +55,10 @@ from app.schemas import (
     ContactsUploadResponse,
     DeliveryReliabilityUploadResponse,
     DeliveryUploadResponse,
+    GoodsReceiptUploadResponse,
     InteressentenUploadResponse,
+    MaterialMovementsUploadResponse,
+    MaterialPricesUploadResponse,
     QualityUploadResponse,
     RevenueUploadResponse,
     TippspielUploadResponse,
@@ -453,6 +462,106 @@ async def upload_deliveries(
     await db.commit()
 
     return DeliveryUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+# ── v1.67 — Goods receipts (AswKpf_WE Wareneingänge) ───────────────────
+
+
+@admin_router.post(
+    "/upload-goods-receipts", response_model=GoodsReceiptUploadResponse
+)
+async def upload_goods_receipts(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> GoodsReceiptUploadResponse:
+    """Upsert of a Wareneingang .txt export (AswKpf_WE).
+
+    Same composite-key upsert pattern as ``/upload-deliveries`` — only the
+    target table (and the parser) differ.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith((".txt", ".tsv", ".csv")):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt / .tsv / .csv files are accepted for goods-receipt uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_goods_receipt_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="goods_receipts",
+            )
+        )
+        await db.commit()
+        return GoodsReceiptUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    incoming_keys = [(r["vorgang_nr"], r["pos"], r["upos"]) for r in rows]
+    existing_stmt = sa.select(sa.func.count(GoodsReceiptRecord.id)).where(
+        sa.tuple_(
+            GoodsReceiptRecord.vorgang_nr,
+            GoodsReceiptRecord.pos,
+            GoodsReceiptRecord.upos,
+        ).in_(incoming_keys)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="goods_receipts",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    table = GoodsReceiptRecord.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "vorgang_nr", "pos", "upos")
+    ]
+
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(GoodsReceiptRecord).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_goods_receipt_records_vorgang_pos",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return GoodsReceiptUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
         errors=[ValidationErrorDetail(**e) for e in errors],
@@ -1060,4 +1169,201 @@ async def upload_auftraege(
         errors=[ValidationErrorDetail(row=e.get("row", 0),
                                        column=e.get("field", ""),
                                        message=e.get("message", "")) for e in errors],
+    )
+
+
+# ── v1.70 — Finanzperspektive: Materialkostenquote ──────────────────────
+
+
+@admin_router.post(
+    "/upload-material-movements",
+    response_model=MaterialMovementsUploadResponse,
+)
+async def upload_material_movements(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> MaterialMovementsUploadResponse:
+    """Replace-by-date-range insert of an AswLagBew.txt Lagerbewegung dump.
+
+    The source has no clean business key, so idempotency mirrors the Kontakte
+    pattern: every existing ``material_movements`` row whose ``buch_datum``
+    falls inside the uploaded file's date range is deleted first, then the new
+    rows are bulk-inserted. Re-uploading the same file is a no-op.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for material-movements uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_material_movements_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="material_movements",
+            )
+        )
+        await db.commit()
+        return MaterialMovementsUploadResponse(
+            rows_inserted=0,
+            rows_replaced=0,
+            date_range_from=None,
+            date_range_to=None,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    date_from = min(r["buch_datum"] for r in rows)
+    date_to = max(r["buch_datum"] for r in rows)
+
+    deleted = await db.execute(
+        sa.delete(MaterialMovement).where(
+            MaterialMovement.buch_datum >= date_from,
+            MaterialMovement.buch_datum <= date_to,
+        )
+    )
+    rows_replaced = deleted.rowcount or 0
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="material_movements",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+        r["imported_at"] = now
+
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    inserted_total = 0
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        result = await db.execute(pg_insert(MaterialMovement).values(chunk))
+        inserted_total += result.rowcount or 0
+
+    batch.row_count = inserted_total
+    if errors and inserted_total == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return MaterialMovementsUploadResponse(
+        rows_inserted=inserted_total,
+        rows_replaced=rows_replaced,
+        date_range_from=date_from,
+        date_range_to=date_to,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+@admin_router.post(
+    "/upload-material-prices",
+    response_model=MaterialPricesUploadResponse,
+)
+async def upload_material_prices(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> MaterialPricesUploadResponse:
+    """Upsert of an AswKpf_WE.txt Wareneingang dump (finance-scoped prices).
+
+    Composite business key ``(vorgang_nr, pos, upos)`` identifies one WE
+    position; ``ON CONFLICT DO UPDATE`` overwrites all data columns on
+    re-upload. Supplies the purchase price for the Materialkostenquote.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for material-prices uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_material_prices_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="material_prices",
+            )
+        )
+        await db.commit()
+        return MaterialPricesUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    incoming_keys = [(r["vorgang_nr"], r["pos"], r["upos"]) for r in rows]
+    existing_stmt = sa.select(sa.func.count(MaterialPrice.id)).where(
+        sa.tuple_(
+            MaterialPrice.vorgang_nr,
+            MaterialPrice.pos,
+            MaterialPrice.upos,
+        ).in_(incoming_keys)
+    )
+    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="material_prices",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    table = MaterialPrice.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "vorgang_nr", "pos", "upos")
+    ]
+
+    cols_per_row = max(1, len(rows[0]))
+    chunk_size = max(1, 32767 // cols_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(MaterialPrice).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_material_prices_vorgang_pos",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return MaterialPricesUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
     )

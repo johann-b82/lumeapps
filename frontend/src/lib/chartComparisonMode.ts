@@ -22,5 +22,10 @@ export function selectComparisonMode(preset: Preset): ComparisonMode {
       return "previous_year";
     case "allTime":
       return "none";
+    case "custom":
+      // Phase 9-03 removed the custom-range UI path; a custom value can
+      // still arrive from saved state, so we fall through to "no overlay"
+      // rather than throwing on the chart render.
+      return "none";
   }
 }

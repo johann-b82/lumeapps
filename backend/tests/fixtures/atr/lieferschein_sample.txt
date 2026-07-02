@@ -1,0 +1,23 @@
+                                                                       LIEFERSCHEIN
+                                                                       Nr.                        20189798
+                                                                       Datum                          08.06.2026
+                                                                       Kunden Nr.                            10005
+                                                                       Bearbeiter                            Ralf Zettler
+
+Pos Artikel                       Menge ME
+         Bezeichnung
+
+1 6060                            1 STK
+CARPET EMERG. EXIT HATCH
+Bauteil-Index: D
+Ihre Nr. VR11S1010016000
+Auftrag Nr. 1024738 / 5
+Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett
+
+2 11395                           1 STK
+CARPET BEDS FWD
+TEPPICH BETTEN VORNE
+Bauteilindex: A
+Ihre Nr. VR11S1010048000
+Auftrag Nr. 1024738 / 30
+Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett

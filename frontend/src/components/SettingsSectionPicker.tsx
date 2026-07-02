@@ -13,7 +13,7 @@ import {
 } from "@/contexts/SettingsDraftContext";
 import { useSettingsSection } from "@/hooks/useSettingsSection";
 
-const SECTIONS: SettingsSection[] = ["general", "hr", "sensors", "sales", "worldcup"];
+const SECTIONS: SettingsSection[] = ["general", "hr", "sensors", "sales", "worldcup", "atr", "quality", "finance"];
 
 export function SettingsSectionPicker() {
   const { t } = useTranslation();

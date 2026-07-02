@@ -92,8 +92,18 @@ export const qualityKeys = {
   all: ["quality"] as const,
   auditFindings: (from?: string, to?: string, types?: readonly string[]) =>
     ["quality", "audit-findings", { from, to, types }] as const,
-  auditFindingsHistory: (from?: string, to?: string, types?: readonly string[]) =>
-    ["quality", "audit-findings", "history", { from, to, types }] as const,
+  auditFindingsHistory: (
+    from?: string,
+    to?: string,
+    types?: readonly string[],
+    granularity?: string,
+  ) =>
+    [
+      "quality",
+      "audit-findings",
+      "history",
+      { from, to, types, granularity },
+    ] as const,
   auditFindingsList: (from?: string, to?: string, types?: readonly string[]) =>
     ["quality", "audit-findings", "list", { from, to, types }] as const,
   complaintRate: (
@@ -129,6 +139,30 @@ export const procurementKeys = {
     ["procurement", "otd", "history", { from, to, granularity }] as const,
   otdList: (from?: string, to?: string) =>
     ["procurement", "otd", "list", { from, to }] as const,
+};
+
+// v1.70 — Finanzperspektive: Materialkostenquote.
+export const financeKeys = {
+  all: ["finance"] as const,
+  materialCostRatio: (from?: string, to?: string) =>
+    ["finance", "material-cost-ratio", { from, to }] as const,
+  materialCostRatioHistory: (from?: string, to?: string, granularity?: string) =>
+    ["finance", "material-cost-ratio", "history", { from, to, granularity }] as const,
+  materialCostRatioList: (from?: string, to?: string) =>
+    ["finance", "material-cost-ratio", "list", { from, to }] as const,
+  personnelCostRatio: (from?: string, to?: string) =>
+    ["finance", "personnel-cost-ratio", { from, to }] as const,
+  personnelCostRatioHistory: (from?: string, to?: string, granularity?: string) =>
+    ["finance", "personnel-cost-ratio", "history", { from, to, granularity }] as const,
+  personnelCostRatioList: (from?: string, to?: string) =>
+    ["finance", "personnel-cost-ratio", "list", { from, to }] as const,
+};
+
+// v1.73 — FAIR drawing ballooning (Erstmusterprüfung).
+export const fairKeys = {
+  all: ["fair"] as const,
+  projects: () => ["fair", "projects"] as const,
+  project: (id: string) => ["fair", "projects", id] as const,
 };
 
 // v1.41 — Sales activity / orders distribution.

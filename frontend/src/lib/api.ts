@@ -28,7 +28,20 @@ export interface UploadBatchSummary {
   row_count: number;
   error_count: number;
   status: "success" | "partial" | "failed";
-  kind: "orders" | "contacts" | "quality" | "interessenten" | "offers" | "revenues" | "auftraege";
+  kind:
+    | "orders"
+    | "contacts"
+    | "quality"
+    | "interessenten"
+    | "offers"
+    | "revenues"
+    | "auftraege"
+    | "deliveries"
+    | "delivery_reliability"
+    | "tippspiel"
+    | "goods_receipts"
+    | "material_movements"
+    | "material_prices";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -201,6 +214,17 @@ export interface Settings {
   target_sick_leave_ratio: number | null;
   target_fluctuation: number | null;
   target_revenue_per_employee: number | null;
+  // v1.66 Quality targets — complaint rates are fractions (0.02 = 2 %),
+  // finding counts are integer thresholds shown as ReferenceLines.
+  target_complaint_rate_customer: number | null;
+  target_complaint_rate_internal: number | null;
+  target_complaint_rate_supplier: number | null;
+  target_complaint_rate_subcontractor: number | null;
+  target_audit_findings_level1: number | null;
+  target_audit_findings_level2: number | null;
+  // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
+  target_material_cost_ratio: number | null;
+  target_personnel_cost_ratio: number | null;
   // v1.55 — Sales-dashboard weekly targets
   target_sales_erstkontakte: number | null;
   target_sales_interessenten: number | null;
@@ -219,6 +243,17 @@ export interface Settings {
   // v1.57 World Cup signage — key is write-only, only the boolean is exposed.
   worldcup_has_api_key: boolean;
   worldcup_refresh_seconds: number;
+  // ATR fileserver — password is write-only, only the boolean is exposed.
+  atr_smb_host: string | null;
+  atr_smb_share: string | null;
+  atr_smb_domain: string | null;
+  atr_smb_user: string | null;
+  atr_smb_has_password: boolean;
+  atr_input_path: string | null;
+  atr_output_path: string | null;
+  atr_archive_path: string | null;
+  atr_scan_interval_s: number;
+  atr_auto_mode: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -258,6 +293,17 @@ export interface SettingsUpdatePayload {
   target_sales_angebote_eur?: number | null;
   // v1.56 — €/week/rep goal on the OrdersDistributionCard tile.
   target_sales_orders_per_rep_eur?: number | null;
+  // v1.66 — Quality targets (undefined = "don't change"). Complaint rates
+  // travel as fractions (0.02 = 2 %); finding counts as integer thresholds.
+  target_complaint_rate_customer?: number | null;
+  target_complaint_rate_internal?: number | null;
+  target_complaint_rate_supplier?: number | null;
+  target_complaint_rate_subcontractor?: number | null;
+  target_audit_findings_level1?: number | null;
+  target_audit_findings_level2?: number | null;
+  // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
+  target_material_cost_ratio?: number | null;
+  target_personnel_cost_ratio?: number | null;
   // Phase 40-01 — Sensor Monitor admin writes. undefined = "don't change"
   // (mirrors Pydantic None-means-don't-change on SettingsUpdate). Decimals
   // go on the wire as strings to match Pydantic's Decimal input coercion.
@@ -269,6 +315,17 @@ export interface SettingsUpdatePayload {
   // v1.57 World Cup signage. undefined = "don't change".
   worldcup_api_key?: string;
   worldcup_refresh_seconds?: number;
+  // ATR fileserver. undefined = "don't change". Password is write-only.
+  atr_smb_host?: string | null;
+  atr_smb_share?: string | null;
+  atr_smb_domain?: string | null;
+  atr_smb_user?: string | null;
+  atr_smb_password?: string;
+  atr_input_path?: string | null;
+  atr_output_path?: string | null;
+  atr_archive_path?: string | null;
+  atr_scan_interval_s?: number;
+  atr_auto_mode?: boolean;
 }
 
 /**
@@ -721,9 +778,18 @@ export async function fetchAuditFindingsHistory(params?: {
   date_from?: string;
   date_to?: string;
   audit_types?: readonly AuditTypeCode[];
+  granularity?: BucketGranularity;
 }): Promise<AuditFindingsHistoryPoint[]> {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.audit_types && params.audit_types.length > 0) {
+    q.set("audit_types", params.audit_types.join(","));
+  }
+  if (params?.granularity) q.set("granularity", params.granularity);
+  const qs = q.toString();
   return apiClient<AuditFindingsHistoryPoint[]>(
-    `/api/quality/audit-findings/history${_buildQualityQuery(params)}`,
+    `/api/quality/audit-findings/history${qs ? `?${qs}` : ""}`,
   );
 }
 
@@ -754,7 +820,11 @@ export async function fetchAuditFindingsList(params?: {
 // ---------------------------------------------------------------------------
 
 export type QtyMode = "total" | "accepted";
-export type ComplaintType = "customer" | "internal";
+export type ComplaintType =
+  | "customer"
+  | "internal"
+  | "supplier"
+  | "subcontractor";
 export type BucketGranularity =
   | "weekly"
   | "monthly"
@@ -793,6 +863,23 @@ export interface CustomerComplaintRow {
   status_code: string | null;
   quantity: number | null;
   accepted_quantity: number | null;
+}
+
+export interface GoodsReceiptUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadGoodsReceiptFile(
+  file: File,
+): Promise<GoodsReceiptUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<GoodsReceiptUploadResponse>("/api/upload-goods-receipts", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export async function uploadDeliveryFile(file: File): Promise<DeliveryUploadResponse> {
@@ -954,6 +1041,163 @@ export async function fetchOtdList(params?: {
 }): Promise<OtdRow[]> {
   return apiClient<OtdRow[]>(
     `/api/procurement/otd/list${_buildOtdQuery(params)}`,
+  );
+}
+
+// --------------------------------------------------------------------------
+// Finanzperspektive / Materialkostenquote — v1.70
+// --------------------------------------------------------------------------
+
+export interface MaterialMovementsUploadResponse {
+  rows_inserted: number;
+  rows_replaced: number;
+  date_range_from: string | null;
+  date_range_to: string | null;
+  errors: ValidationErrorDetail[];
+}
+
+export interface MaterialPricesUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export interface MaterialCostRatioValue {
+  ratio: number | null;
+  material_cost: number;
+  revenue: number;
+  matched_articles: number;
+  unmatched_articles: number;
+  previous_period: number | null;
+  previous_year: number | null;
+}
+
+export interface MaterialCostRatioHistoryPoint {
+  month: string;
+  ratio: number | null;
+  material_cost: number;
+  revenue: number;
+}
+
+export interface MaterialCostRatioRow {
+  artikelnr: string;
+  article_name: string | null;
+  consumed_qty: number;
+  unit_price: number | null;
+  material_cost: number | null;
+  has_price: boolean;
+}
+
+export async function uploadMaterialMovementsFile(
+  file: File,
+): Promise<MaterialMovementsUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<MaterialMovementsUploadResponse>(
+    "/api/upload-material-movements",
+    { method: "POST", body: formData },
+  );
+}
+
+export async function uploadMaterialPricesFile(
+  file: File,
+): Promise<MaterialPricesUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<MaterialPricesUploadResponse>(
+    "/api/upload-material-prices",
+    { method: "POST", body: formData },
+  );
+}
+
+function _buildFinanceQuery(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): string {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.granularity) q.set("granularity", params.granularity);
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchMaterialCostRatio(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<MaterialCostRatioValue> {
+  return apiClient<MaterialCostRatioValue>(
+    `/api/finance/material-cost-ratio${_buildFinanceQuery(params)}`,
+  );
+}
+
+export async function fetchMaterialCostRatioHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): Promise<MaterialCostRatioHistoryPoint[]> {
+  return apiClient<MaterialCostRatioHistoryPoint[]>(
+    `/api/finance/material-cost-ratio/history${_buildFinanceQuery(params)}`,
+  );
+}
+
+export async function fetchMaterialCostRatioList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<MaterialCostRatioRow[]> {
+  return apiClient<MaterialCostRatioRow[]>(
+    `/api/finance/material-cost-ratio/list${_buildFinanceQuery(params)}`,
+  );
+}
+
+export interface PersonnelCostRatioValue {
+  ratio: number | null;
+  personnel_cost: number;
+  revenue: number;
+  headcount: number;
+  previous_period: number | null;
+  previous_year: number | null;
+}
+
+export interface PersonnelCostRatioHistoryPoint {
+  month: string;
+  ratio: number | null;
+  personnel_cost: number;
+  revenue: number;
+}
+
+export interface PersonnelCostRatioRow {
+  department: string;
+  headcount: number;
+  personnel_cost: number;
+}
+
+export async function fetchPersonnelCostRatio(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<PersonnelCostRatioValue> {
+  return apiClient<PersonnelCostRatioValue>(
+    `/api/finance/personnel-cost-ratio${_buildFinanceQuery(params)}`,
+  );
+}
+
+export async function fetchPersonnelCostRatioHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): Promise<PersonnelCostRatioHistoryPoint[]> {
+  return apiClient<PersonnelCostRatioHistoryPoint[]>(
+    `/api/finance/personnel-cost-ratio/history${_buildFinanceQuery(params)}`,
+  );
+}
+
+export async function fetchPersonnelCostRatioList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<PersonnelCostRatioRow[]> {
+  return apiClient<PersonnelCostRatioRow[]>(
+    `/api/finance/personnel-cost-ratio/list${_buildFinanceQuery(params)}`,
   );
 }
 
@@ -1366,4 +1610,12 @@ export async function runSnmpWalk(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+// ---------------------------------------------------------------------------
+// ATR Phase C — fileserver connection test
+// ---------------------------------------------------------------------------
+
+export async function testAtrFileserver(): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/atr/fileserver/test", { method: "POST" });
 }

@@ -7,6 +7,9 @@ const KNOWN: ReadonlySet<SettingsSection> = new Set([
   "sensors",
   "sales",
   "worldcup",
+  "atr",
+  "quality",
+  "finance",
 ]);
 
 interface UseSettingsSectionReturn {

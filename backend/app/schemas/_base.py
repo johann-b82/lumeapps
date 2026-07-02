@@ -153,6 +153,17 @@ class SettingsUpdate(BaseModel):
     target_sales_besuche: float | None = None
     target_sales_angebote_eur: float | None = None
     target_sales_orders_per_rep_eur: float | None = None
+    # v1.60 — Quality KPI targets (None = "don't change"). Complaint rates
+    # are fractions (0.02 = 2 %); finding counts are integer thresholds.
+    target_complaint_rate_customer: float | None = None
+    target_complaint_rate_internal: float | None = None
+    target_complaint_rate_supplier: float | None = None
+    target_complaint_rate_subcontractor: float | None = None
+    target_audit_findings_level1: int | None = None
+    target_audit_findings_level2: int | None = None
+    # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
+    target_material_cost_ratio: float | None = None
+    target_personnel_cost_ratio: float | None = None
     # v1.15 Sensor Monitor — admin writes (Phase 40-01)
     # None means "don't change" (same pattern as Personio / HR targets above).
     # Known limitation (40-01): there is no sentinel for "clear threshold back
@@ -166,6 +177,17 @@ class SettingsUpdate(BaseModel):
     # v1.57 World Cup signage — None means "don't change" (credential pattern).
     worldcup_api_key: str | None = None
     worldcup_refresh_seconds: int | None = Field(default=None, ge=30, le=3600)
+    # v1.65 ATR fileserver — None means "don't change"; password is write-only
+    atr_smb_host: str | None = None
+    atr_smb_share: str | None = None
+    atr_smb_domain: str | None = None
+    atr_smb_user: str | None = None
+    atr_smb_password: str | None = None
+    atr_input_path: str | None = None
+    atr_output_path: str | None = None
+    atr_archive_path: str | None = None
+    atr_scan_interval_s: int | None = None
+    atr_auto_mode: bool | None = None
 
 
 class SettingsRead(BaseModel):
@@ -198,6 +220,16 @@ class SettingsRead(BaseModel):
     target_sales_besuche: float | None = None
     target_sales_angebote_eur: float | None = None
     target_sales_orders_per_rep_eur: float | None = None
+    # v1.60 — Quality KPI targets
+    target_complaint_rate_customer: float | None = None
+    target_complaint_rate_internal: float | None = None
+    target_complaint_rate_supplier: float | None = None
+    target_complaint_rate_subcontractor: float | None = None
+    target_audit_findings_level1: int | None = None
+    target_audit_findings_level2: int | None = None
+    # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
+    target_material_cost_ratio: float | None = None
+    target_personnel_cost_ratio: float | None = None
     # Phase 39-02 — Sensor config surfaced read-only (admin writes arrive Phase 40).
     # Decimal serializes as string; frontend parses via Number().
     sensor_poll_interval_s: int = 60
@@ -208,6 +240,17 @@ class SettingsRead(BaseModel):
     # v1.57 World Cup signage — key is write-only, expose only the boolean.
     worldcup_has_api_key: bool = False
     worldcup_refresh_seconds: int = 60
+    # v1.65 ATR fileserver — password is write-only; expose only the boolean
+    atr_smb_host: str | None = None
+    atr_smb_share: str | None = None
+    atr_smb_domain: str | None = None
+    atr_smb_user: str | None = None
+    atr_smb_has_password: bool = False
+    atr_input_path: str | None = None
+    atr_output_path: str | None = None
+    atr_archive_path: str | None = None
+    atr_scan_interval_s: int = 0
+    atr_auto_mode: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -545,6 +588,12 @@ class DeliveryUploadResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
+class GoodsReceiptUploadResponse(BaseModel):
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
 class InteressentenUploadResponse(BaseModel):
     """Response from POST /api/upload-interessenten.
 
@@ -704,6 +753,107 @@ class OtdRow(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── v1.70 — Finanzperspektive: Materialkostenquote ──────────────────────
+
+
+class MaterialMovementsUploadResponse(BaseModel):
+    """Response from POST /api/upload-material-movements.
+
+    Replace-by-date-range insert (no business key in the source). Every
+    existing row whose ``buch_datum`` falls inside the file's date range is
+    deleted first, so re-uploading the same file is a no-op. ``date_range_*``
+    echo the min/max BuchDatum of the uploaded rows.
+    """
+
+    rows_inserted: int
+    rows_replaced: int = 0
+    date_range_from: date | None = None
+    date_range_to: date | None = None
+    errors: list[ValidationErrorDetail]
+
+
+class MaterialPricesUploadResponse(BaseModel):
+    """Response from POST /api/upload-material-prices.
+
+    Upsert on (vorgang_nr, pos, upos); ``ON CONFLICT DO UPDATE`` overwrites
+    every data column on re-upload.
+    """
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class MaterialCostRatioValue(BaseModel):
+    """Materialkostenquote KPI for a window.
+
+    ``ratio`` is a fraction (0.34 → 34 %) = material_cost / revenue. NULL when
+    the window had no revenue. Lower is better. ``unmatched_articles`` counts
+    consumed articles that had no WE purchase price (excluded from the cost).
+    """
+
+    ratio: float | None = None
+    material_cost: float
+    revenue: float
+    matched_articles: int
+    unmatched_articles: int
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class MaterialCostRatioHistoryPoint(BaseModel):
+    month: str
+    ratio: float | None = None
+    material_cost: float
+    revenue: float
+
+
+class MaterialCostRatioRow(BaseModel):
+    """One row of the Materialkostenquote verification table (per article)."""
+
+    artikelnr: str
+    article_name: str | None = None
+    consumed_qty: float
+    unit_price: float | None = None
+    material_cost: float | None = None
+    has_price: bool
+
+
+class PersonnelCostRatioValue(BaseModel):
+    """Personalkostenquote KPI for a window.
+
+    ``ratio`` is a fraction (0.30 → 30 %) = personnel_cost / revenue. NULL when
+    the window had no revenue. Lower is better. ``personnel_cost`` is gross
+    salary (no employer overhead); ``headcount`` is the number of employees
+    that contributed cost in the window.
+    """
+
+    ratio: float | None = None
+    personnel_cost: float
+    revenue: float
+    headcount: int
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class PersonnelCostRatioHistoryPoint(BaseModel):
+    month: str
+    ratio: float | None = None
+    personnel_cost: float
+    revenue: float
+
+
+class PersonnelCostRatioRow(BaseModel):
+    """One row of the Personalkostenquote verification table (per department).
+
+    Aggregated per department — individual salaries are never exposed.
+    """
+
+    department: str
+    headcount: int
+    personnel_cost: float
+
+
 class TippspielUploadResponse(BaseModel):
     """Response from POST /api/upload-tippspiel."""
 
@@ -771,6 +921,7 @@ __all__ = [
     "UploadBatchSummary",
     "QualityUploadResponse",
     "DeliveryUploadResponse",
+    "GoodsReceiptUploadResponse",
     "InteressentenUploadResponse",
     "AngeboteUploadResponse",
     "RevenueUploadResponse",
@@ -785,6 +936,15 @@ __all__ = [
     "OtdValue",
     "OtdHistoryPoint",
     "OtdRow",
+    # v1.70 Finanzperspektive — Materialkostenquote
+    "MaterialMovementsUploadResponse",
+    "MaterialPricesUploadResponse",
+    "MaterialCostRatioValue",
+    "MaterialCostRatioHistoryPoint",
+    "MaterialCostRatioRow",
+    "PersonnelCostRatioValue",
+    "PersonnelCostRatioHistoryPoint",
+    "PersonnelCostRatioRow",
     "TippspielUploadResponse",
     "TippspielRankRow",
     "TippspielFeed",

@@ -5,10 +5,13 @@ import { AuftraegeDropZone } from "@/components/AuftraegeDropZone";
 import { ContactsDropZone } from "@/components/ContactsDropZone";
 import { QualityDropZone } from "@/components/QualityDropZone";
 import { DeliveriesDropZone } from "@/components/DeliveriesDropZone";
+import { GoodsReceiptsDropZone } from "@/components/GoodsReceiptsDropZone";
 import { DeliveryReliabilityDropZone } from "@/components/DeliveryReliabilityDropZone";
 import { InteressentenDropZone } from "@/components/InteressentenDropZone";
 import { AngeboteDropZone } from "@/components/AngeboteDropZone";
 import { UmsatzDropZone } from "@/components/UmsatzDropZone";
+import { MaterialMovementsDropZone } from "@/components/MaterialMovementsDropZone";
+import { MaterialPricesDropZone } from "@/components/MaterialPricesDropZone";
 import { ErrorList } from "@/components/ErrorList";
 import { UploadHistory } from "@/components/UploadHistory";
 import type { ValidationErrorDetail } from "@/lib/api";
@@ -71,6 +74,15 @@ export function UploadPage() {
         </Card>
         <Card className="p-6 space-y-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.goods_receipts_title")}
+          </p>
+          <GoodsReceiptsDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t("upload.otd_title")}
           </p>
           <DeliveryReliabilityDropZone
@@ -101,6 +113,24 @@ export function UploadPage() {
             {t("upload.umsatz_title")}
           </p>
           <UmsatzDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.material_movements_title")}
+          </p>
+          <MaterialMovementsDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.material_prices_title")}
+          </p>
+          <MaterialPricesDropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(errs) => setErrors(errs)}
           />

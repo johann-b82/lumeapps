@@ -123,6 +123,14 @@ async def get_audit_findings_history(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     audit_types: str | None = Query(None),
+    granularity: str | None = Query(
+        None,
+        description=(
+            "Override the auto-picked bucket granularity. "
+            "Allowed: weekly, monthly, quarterly, yearly. "
+            "Omit for auto (length-based)."
+        ),
+    ),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[AuditFindingsHistoryPoint]:
     _validate_range(date_from, date_to)
@@ -131,7 +139,7 @@ async def get_audit_findings_history(
         date_from, date_to = _month_bounds(today.year, today.month)
 
     art_filter = _parse_audit_types(audit_types)
-    buckets = _bucket_windows(date_from, date_to)
+    buckets = _bucket_windows(date_from, date_to, granularity)
     points = await compute_audit_findings_history(db, buckets, art_filter)
     return [AuditFindingsHistoryPoint(**p) for p in points]
 
@@ -140,7 +148,7 @@ async def get_audit_findings_history(
 
 
 _ALLOWED_QTY_MODES = {"total", "accepted"}
-_ALLOWED_COMPLAINT_TYPES = {"customer", "internal"}
+_ALLOWED_COMPLAINT_TYPES = {"customer", "internal", "supplier", "subcontractor"}
 
 
 def _validate_qty_mode(mode: str) -> str:

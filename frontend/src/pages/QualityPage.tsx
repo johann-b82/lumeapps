@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Toggle } from "@/components/ui/toggle";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { QualityKpiCardGrid } from "@/components/dashboard/QualityKpiCardGrid";
 import { QualityKpiCharts } from "@/components/dashboard/QualityKpiCharts";
 import { QualityFindingsTable } from "@/components/dashboard/QualityFindingsTable";
@@ -50,15 +51,18 @@ export function QualityPage() {
           <AuditTypeFilter selected={auditTypes} onChange={setAuditTypes} />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <Toggle<ComplaintType>
+            {/* Four complaint sources — the 2-segment Toggle component
+                can't host them, so we use the radio-group SegmentedControl. */}
+            <SegmentedControl<ComplaintType>
               segments={[
                 { value: "customer", label: t("quality.complaintType.customer") },
                 { value: "internal", label: t("quality.complaintType.internal") },
-              ] as const}
+                { value: "supplier", label: t("quality.complaintType.supplier") },
+                { value: "subcontractor", label: t("quality.complaintType.subcontractor") },
+              ]}
               value={complaintType}
               onChange={setComplaintType}
               aria-label={t("quality.complaintType.toggleLabel")}
-              variant="muted"
             />
             <Toggle<QtyMode>
               segments={[

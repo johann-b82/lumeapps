@@ -91,6 +91,16 @@ def _build_read(row: AppSettings) -> SettingsRead:
         target_sales_besuche=float(row.target_sales_besuche) if row.target_sales_besuche is not None else None,
         target_sales_angebote_eur=float(row.target_sales_angebote_eur) if row.target_sales_angebote_eur is not None else None,
         target_sales_orders_per_rep_eur=float(row.target_sales_orders_per_rep_eur) if row.target_sales_orders_per_rep_eur is not None else None,
+        # v1.60 — Quality KPI targets
+        target_complaint_rate_customer=float(row.target_complaint_rate_customer) if row.target_complaint_rate_customer is not None else None,
+        target_complaint_rate_internal=float(row.target_complaint_rate_internal) if row.target_complaint_rate_internal is not None else None,
+        target_complaint_rate_supplier=float(row.target_complaint_rate_supplier) if row.target_complaint_rate_supplier is not None else None,
+        target_complaint_rate_subcontractor=float(row.target_complaint_rate_subcontractor) if row.target_complaint_rate_subcontractor is not None else None,
+        target_audit_findings_level1=row.target_audit_findings_level1,
+        target_audit_findings_level2=row.target_audit_findings_level2,
+        # v1.71 / v1.72 — Finance KPI targets
+        target_material_cost_ratio=float(row.target_material_cost_ratio) if row.target_material_cost_ratio is not None else None,
+        target_personnel_cost_ratio=float(row.target_personnel_cost_ratio) if row.target_personnel_cost_ratio is not None else None,
         # Phase 39-02 — Sensor config read-only surfaces (columns exist since Phase 38 migration).
         # Admin write endpoints arrive in Phase 40 (SettingsUpdate unchanged here).
         sensor_poll_interval_s=row.sensor_poll_interval_s,
@@ -101,6 +111,17 @@ def _build_read(row: AppSettings) -> SettingsRead:
         # v1.57 World Cup signage
         worldcup_has_api_key=row.worldcup_api_key_enc is not None,
         worldcup_refresh_seconds=row.worldcup_refresh_seconds,
+        # v1.65 ATR fileserver
+        atr_smb_host=row.atr_smb_host,
+        atr_smb_share=row.atr_smb_share,
+        atr_smb_domain=row.atr_smb_domain,
+        atr_smb_user=row.atr_smb_user,
+        atr_smb_has_password=row.atr_smb_password_enc is not None,
+        atr_input_path=row.atr_input_path,
+        atr_output_path=row.atr_output_path,
+        atr_archive_path=row.atr_archive_path,
+        atr_scan_interval_s=row.atr_scan_interval_s,
+        atr_auto_mode=row.atr_auto_mode,
     )
 
 
@@ -252,6 +273,24 @@ async def put_settings(
         row.target_fluctuation = payload.target_fluctuation
     if payload.target_revenue_per_employee is not None:
         row.target_revenue_per_employee = payload.target_revenue_per_employee
+    # v1.60 — Quality targets
+    if payload.target_complaint_rate_customer is not None:
+        row.target_complaint_rate_customer = payload.target_complaint_rate_customer
+    if payload.target_complaint_rate_internal is not None:
+        row.target_complaint_rate_internal = payload.target_complaint_rate_internal
+    if payload.target_complaint_rate_supplier is not None:
+        row.target_complaint_rate_supplier = payload.target_complaint_rate_supplier
+    if payload.target_complaint_rate_subcontractor is not None:
+        row.target_complaint_rate_subcontractor = payload.target_complaint_rate_subcontractor
+    if payload.target_audit_findings_level1 is not None:
+        row.target_audit_findings_level1 = payload.target_audit_findings_level1
+    if payload.target_audit_findings_level2 is not None:
+        row.target_audit_findings_level2 = payload.target_audit_findings_level2
+    # v1.71 / v1.72 — Finance targets
+    if payload.target_material_cost_ratio is not None:
+        row.target_material_cost_ratio = payload.target_material_cost_ratio
+    if payload.target_personnel_cost_ratio is not None:
+        row.target_personnel_cost_ratio = payload.target_personnel_cost_ratio
     # v1.55 — Sales-dashboard targets
     if payload.target_sales_erstkontakte is not None:
         row.target_sales_erstkontakte = payload.target_sales_erstkontakte
@@ -290,6 +329,22 @@ async def put_settings(
         row.worldcup_api_key_enc = encrypt_credential(payload.worldcup_api_key)
     if payload.worldcup_refresh_seconds is not None:
         row.worldcup_refresh_seconds = payload.worldcup_refresh_seconds
+
+    # v1.65 ATR fileserver — None means "don't change"; password encrypted
+    for _f in ("atr_smb_host", "atr_smb_share", "atr_smb_domain", "atr_smb_user",
+               "atr_input_path", "atr_output_path", "atr_archive_path", "atr_auto_mode"):
+        _v = getattr(payload, _f)
+        if _v is not None:
+            setattr(row, _f, _v)
+    if payload.atr_smb_password is not None:
+        row.atr_smb_password_enc = encrypt_credential(payload.atr_smb_password)
+    if payload.atr_scan_interval_s is not None:
+        row.atr_scan_interval_s = payload.atr_scan_interval_s
+        try:
+            from app.scheduler import reschedule_atr_scan
+            reschedule_atr_scan(payload.atr_scan_interval_s)
+        except Exception:  # scheduler hook lands in Task 7; never fail the PUT
+            pass
 
     # D-07: if the payload exactly matches canonical defaults, this is a
     # "reset to defaults" — also wipe the logo trio. A non-default PUT
@@ -394,3 +449,25 @@ async def get_logo_public(
             "Cache-Control": "public, max-age=300",
         },
     )
+
+
+# --- ATR fileserver router (admin-gated at router level) --------------------
+# Docstring: all endpoints below are admin-only.
+
+atr_fileserver_router = APIRouter(
+    prefix="/api/atr/fileserver",
+    tags=["atr"],
+    dependencies=[Depends(get_current_user), Depends(require_admin)],
+)
+
+
+@atr_fileserver_router.post("/test")
+async def atr_fileserver_test(db: AsyncSession = Depends(get_async_db_session)) -> dict:
+    from app.services import atr_fileserver as fs
+    row = await _get_singleton(db)
+    cfg = fs.smb_config_from_settings(row)
+    if cfg is None:
+        return {"ok": False, "error": "SMB not fully configured"}
+    import asyncio
+    ok, err = await asyncio.to_thread(fs.test_connection, cfg)
+    return {"ok": ok, "error": err}

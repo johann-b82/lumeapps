@@ -144,9 +144,7 @@ export function CustomerComplaintsTable({
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
         <p className="text-xl font-semibold">
-          {complaintType === "internal"
-            ? t("quality.complaintsTable.titleInternal")
-            : t("quality.complaintsTable.title")}
+          {t(`quality.complaintsTable.titleByType.${complaintType}`)}
         </p>
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

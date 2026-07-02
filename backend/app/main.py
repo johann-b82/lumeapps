@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.database import engine
 from app.routers.kpis import router as kpis_router
 from app.routers.sensors import router as sensors_router
-from app.routers.settings import router as settings_router, public_router as settings_public_router
+from app.routers.settings import router as settings_router, public_router as settings_public_router, atr_fileserver_router
 from app.routers.sync import router as sync_router
 from app.routers.uploads import admin_router as uploads_admin_router
 from app.routers.hr_kpis import router as hr_kpis_router
@@ -20,8 +20,12 @@ from app.routers.signage_admin import router as signage_admin_router
 from app.routers.sales_kpis import router as sales_kpis_router
 from app.routers.quality_kpis import router as quality_kpis_router
 from app.routers.procurement_kpis import router as procurement_kpis_router
+from app.routers.finance_kpis import router as finance_kpis_router
 from app.routers.auth_forward import router as auth_forward_router
 from app.routers.worldcup import router as worldcup_router
+from app.routers.atr import router as atr_router
+from app.routers.atr_delivery import router as atr_delivery_router
+from app.routers.fair import router as fair_router
 from app.scheduler import lifespan
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
@@ -41,8 +45,13 @@ app.include_router(signage_admin_router)
 app.include_router(sales_kpis_router)
 app.include_router(quality_kpis_router)
 app.include_router(procurement_kpis_router)
+app.include_router(finance_kpis_router)
 app.include_router(auth_forward_router)
 app.include_router(worldcup_router)
+app.include_router(atr_router)
+app.include_router(atr_delivery_router)
+app.include_router(atr_fileserver_router)
+app.include_router(fair_router)
 
 
 # ---------------------------------------------------------------------------

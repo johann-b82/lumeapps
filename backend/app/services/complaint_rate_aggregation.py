@@ -24,11 +24,32 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DeliveryRecord, QualityRecord
+from app.models import (
+    DeliveryRecord,
+    GoodsReceiptRecord,
+    QualityRecord,
+)
 from app.services.hr_kpi_aggregation import (
     prior_window_same_length,
     same_window_prior_year,
 )
+
+
+# Per-spec the goods-receipt denominator is scoped by "Klasse 1":
+#   * Lieferanten-Quote (LIE RE)      → Klasse 1 = 'MAT' (Material)
+#   * Unterauftragnehmer-Quote (UA RE) → Klasse 1 = 'FMD' (Fremdleistung)
+# The AswKpf_WE export carries this distinction in the WGR (Warengruppe)
+# column — physical material groups (STOFF, METALL, LEDER, A350, …)
+# count as MAT; service/dienstleistung WGR codes count as FMD. Anything
+# else is excluded from both. The two WGR sets live here so they can be
+# extended without touching the aggregation body.
+FMD_WGR_CODES: frozenset[str] = frozenset({"DIENST", "SERVIC"})
+
+# When True (default) supplier denominator = all WE rows whose WGR is
+# NOT in FMD_WGR_CODES (= the residual "material" partition). When the
+# ERP later adds a fully tagged Klasse-1 export, swap this for an
+# explicit MAT_WGR_CODES allowlist.
+SUPPLIER_USES_FMD_COMPLEMENT: bool = True
 
 # Both spellings observed in the ERP — see /api/quality/audit-findings
 # diagnostic from earlier. We treat them as a single "Kundenreklamation"
@@ -43,14 +64,26 @@ CUSTOMER_COMPLAINT_ART_CODES: tuple[str, ...] = ("KUNRE", "KUN RE")
 # changes needed.
 INTERNAL_COMPLAINT_ART_CODES: tuple[str, ...] = ("INT RE", "INRE")
 
+# Supplier complaints — 25 + 183 reports in the live data.
+SUPPLIER_COMPLAINT_ART_CODES: tuple[str, ...] = ("LIE RE", "LIERE")
 
-ComplaintType = str  # "customer" | "internal"
+# Subcontractor (Unterauftragnehmer) complaints — 15 reports under
+# 'UA RE'. 'UARE' (packed) is not observed in the current data but kept
+# as a safety net, same robustness pattern as the three pairs above.
+SUBCONTRACTOR_COMPLAINT_ART_CODES: tuple[str, ...] = ("UA RE", "UARE")
+
+
+ComplaintType = str  # "customer" | "internal" | "supplier" | "subcontractor"
 QtyMode = str  # "total" | "accepted"
 
 
 def _art_codes_for(complaint_type: ComplaintType) -> tuple[str, ...]:
     if complaint_type == "internal":
         return INTERNAL_COMPLAINT_ART_CODES
+    if complaint_type == "supplier":
+        return SUPPLIER_COMPLAINT_ART_CODES
+    if complaint_type == "subcontractor":
+        return SUBCONTRACTOR_COMPLAINT_ART_CODES
     # Default — customer complaints.
     return CUSTOMER_COMPLAINT_ART_CODES
 
@@ -64,6 +97,49 @@ def _complaint_qty_column(mode: QtyMode):
     return QualityRecord.quantity
 
 
+async def _denominator_sum_for_window(
+    db: AsyncSession,
+    first: date,
+    last: date,
+    complaint_type: ComplaintType,
+) -> float:
+    """Compute the denominator (Bezugsmenge) for the active complaint type.
+
+    * customer / internal — Σ DeliveryRecord.quantity over Lieferungen
+      to customers (LS) in the window. Both downstream KPIs measure
+      complaints AGAINST those outgoing deliveries, so the denominator
+      stays unchanged from the v1.58 design.
+
+    * supplier — Σ GoodsReceiptRecord.quantity where WGR is NOT in
+      FMD_WGR_CODES (the Material residual; "Klasse 1 = MAT" per spec).
+    * subcontractor — Σ GoodsReceiptRecord.quantity where WGR IS in
+      FMD_WGR_CODES (Fremdleistung; "Klasse 1 = FMD").
+    """
+    if complaint_type in ("customer", "internal"):
+        stmt = select(func.coalesce(func.sum(DeliveryRecord.quantity), 0)).where(
+            DeliveryRecord.delivery_date >= first,
+            DeliveryRecord.delivery_date <= last,
+        )
+        return float((await db.execute(stmt)).scalar_one() or 0)
+
+    # supplier / subcontractor — Wareneingänge with WGR filter.
+    stmt = select(func.coalesce(func.sum(GoodsReceiptRecord.quantity), 0)).where(
+        GoodsReceiptRecord.receipt_date >= first,
+        GoodsReceiptRecord.receipt_date <= last,
+    )
+    if complaint_type == "subcontractor":
+        stmt = stmt.where(GoodsReceiptRecord.material_group.in_(FMD_WGR_CODES))
+    elif complaint_type == "supplier":
+        # Material = WE rows that are NOT Fremdleistung. Rows whose WGR
+        # is NULL are also counted as material — the WGR column is only
+        # mandatory on service positions in the ERP export.
+        stmt = stmt.where(
+            (GoodsReceiptRecord.material_group.notin_(FMD_WGR_CODES))
+            | (GoodsReceiptRecord.material_group.is_(None))
+        )
+    return float((await db.execute(stmt)).scalar_one() or 0)
+
+
 async def _sums_for_window(
     db: AsyncSession,
     first: date,
@@ -71,7 +147,11 @@ async def _sums_for_window(
     qty_mode: QtyMode,
     complaint_type: ComplaintType,
 ) -> tuple[float, float]:
-    """Return (complaint_qty_sum, delivered_qty_sum) — both NULL → 0."""
+    """Return (complaint_qty_sum, denominator_qty_sum) — both NULL → 0.
+
+    The numerator (complaints) always comes from QualityRecord; the
+    denominator routes by complaint_type — see _denominator_sum_for_window.
+    """
     complaint_col = _complaint_qty_column(qty_mode)
     art_codes = _art_codes_for(complaint_type)
 
@@ -80,15 +160,10 @@ async def _sums_for_window(
         QualityRecord.report_date <= last,
         QualityRecord.art.in_(art_codes),
     )
-    delivered_stmt = select(
-        func.coalesce(func.sum(DeliveryRecord.quantity), 0)
-    ).where(
-        DeliveryRecord.delivery_date >= first,
-        DeliveryRecord.delivery_date <= last,
-    )
-
     complaint_qty = float((await db.execute(complaint_stmt)).scalar_one() or 0)
-    delivered_qty = float((await db.execute(delivered_stmt)).scalar_one() or 0)
+    delivered_qty = await _denominator_sum_for_window(
+        db, first, last, complaint_type
+    )
     return complaint_qty, delivered_qty
 
 

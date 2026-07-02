@@ -66,10 +66,24 @@ export function ComplaintRateCardGrid({
       maximumFractionDigits: 2,
     }).format(n);
 
+  // On Quality % uses one more decimal than the defect rate — a 0.319 %
+  // defect renders 99,681 % which compresses to "99,68 %" at 2 decimals
+  // and loses interesting digits. 3 decimals keeps the spec-rounding.
+  const formatOnQualityPercent = (n: number) =>
+    new Intl.NumberFormat(locale, {
+      style: "percent",
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
+    }).format(n);
+
   const formatQty = (n: number) =>
     new Intl.NumberFormat(locale, {
       maximumFractionDigits: 0,
     }).format(n);
+
+  // Defect rate → On Quality. NULL stays NULL (no deliveries → no quote).
+  const toOnQuality = (rate: number | null): number | null =>
+    rate == null ? null : 1 - rate;
 
   if (isError) {
     return (
@@ -84,11 +98,17 @@ export function ComplaintRateCardGrid({
     );
   }
 
-  // Rate-card delta logic
+  // Card shows On Quality (= 1 − defect rate) as the headline. Deltas
+  // are computed in the On-Quality space so "+0,1 %" reads as "quality
+  // improved by 0.1 percentage points" — same sign convention as Sales.
+  const onQuality = toOnQuality(data?.rate ?? null);
+  const onQualityPrevPeriod = toOnQuality(data?.previous_period ?? null);
+  const onQualityPrevYear = toOnQuality(data?.previous_year ?? null);
+
   const rawPrevPeriod =
-    data?.rate != null ? computeDelta(data.rate, data.previous_period) : null;
+    onQuality != null ? computeDelta(onQuality, onQualityPrevPeriod) : null;
   const rawPrevYear =
-    data?.rate != null ? computeDelta(data.rate, data.previous_year) : null;
+    onQuality != null ? computeDelta(onQuality, onQualityPrevYear) : null;
   const prevPeriodDelta =
     preset === "thisYear" ? rawPrevYear : rawPrevPeriod;
   const prevYearDelta = preset === "thisYear" ? null : rawPrevYear;
@@ -96,26 +116,24 @@ export function ComplaintRateCardGrid({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <KpiCard
-        label={
-          complaintType === "internal"
-            ? t("quality.complaintRate.labelInternal")
-            : t("quality.complaintRate.label")
-        }
+        label={t(`quality.onQuality.labelByType.${complaintType}`)}
         subtitle={
-          qtyMode === "accepted"
-            ? t("quality.complaintRate.subtitleAccepted")
-            : t("quality.complaintRate.subtitleTotal")
+          data?.rate != null
+            ? t("quality.onQuality.subtitleFehler", {
+                rate: formatPercent(data.rate),
+              })
+            : undefined
         }
         value={
           isLoading
             ? undefined
-            : data?.rate != null
-            ? formatPercent(data.rate)
+            : onQuality != null
+            ? formatOnQualityPercent(onQuality)
             : "—"
         }
         isLoading={isLoading}
         delta={
-          showBadges && data?.rate != null ? (
+          showBadges && onQuality != null ? (
             <DeltaBadgeStack
               prevPeriodDelta={prevPeriodDelta}
               prevYearDelta={prevYearDelta}

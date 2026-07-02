@@ -172,6 +172,38 @@ class AppSettings(Base):
     target_fluctuation: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     target_revenue_per_employee: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
 
+    # v1.60 — Quality KPI targets. Rates are stored as fractions (0.02 = 2 %);
+    # finding counts are integers. NULL hides the chart's reference line.
+    target_complaint_rate_customer: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_complaint_rate_internal: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    # v1.69: same pattern for the supplier (LIE RE) + subcontractor
+    # (UA RE / Werkbänke) On-Quality target lines.
+    target_complaint_rate_supplier: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_complaint_rate_subcontractor: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_audit_findings_level1: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    target_audit_findings_level2: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+
+    # v1.71 / v1.72 — Finance KPI targets. Stored as fractions (0.15 = 15 %);
+    # NULL hides the chart's reference line.
+    target_material_cost_ratio: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+    target_personnel_cost_ratio: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
+
     # v1.55 — Sales-dashboard weekly target values (drive the dashed
     # reference lines on the Vertriebsaktivität card). NULL = "no target
     # set" — the frontend falls back to a baked-in default.
@@ -205,6 +237,18 @@ class AppSettings(Base):
     worldcup_refresh_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=60
     )
+
+    # --- v1.65 ATR fileserver (Phase C) ---
+    atr_smb_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    atr_smb_share: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    atr_smb_domain: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    atr_smb_user: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    atr_smb_password_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    atr_input_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_output_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_archive_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    atr_scan_interval_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    atr_auto_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class PersonioEmployee(Base):
@@ -550,6 +594,67 @@ class DeliveryRecord(Base):
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+# ── v1.67 — Goods-receipt records (AswKpf_WE Wareneingänge) ────────────
+
+
+class GoodsReceiptRecord(Base):
+    """One line-item on a supplier goods receipt (Wareneingang).
+
+    Mirrors ``DeliveryRecord`` on the outgoing side: composite key
+    ``(vorgang_nr, pos, upos)``, ``receipt_date`` is the bucket date,
+    ``supplier_id`` is the join field to ``SupplierClassification``.
+    Quantities feed the supplier-complaint rate denominator (filtered
+    to MAT-classified suppliers via JOIN).
+    """
+
+    __tablename__ = "goods_receipt_records"
+    __table_args__ = (
+        Index("ix_goods_receipt_records_receipt_date", "receipt_date"),
+        Index(
+            "ix_goods_receipt_records_supplier_date",
+            "supplier_id",
+            "receipt_date",
+        ),
+        Index("ix_goods_receipt_records_material_group", "material_group"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), nullable=False)
+    pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    upos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    typ: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    entry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    receipt_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    supplier_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    supplier_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    supplier_city: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    article_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    price: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    position_value: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+
+    order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    order_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    material_group: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    purchase_account: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
 class DeliveryReliabilityRecord(Base):
     """One supplier delivery position from the Liefertreue (Einkauf) export.
 
@@ -768,4 +873,97 @@ class Auftrag(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+# ── v1.70 — Finanzperspektive: Materialkostenquote ──────────────────────
+
+
+class MaterialMovement(Base):
+    """One stock-movement line from the AswLagBew.txt export (Lagerbewegung).
+
+    Feeds the Materialkostenquote: material *consumed* in a window is the
+    net of material issues (``buchtyp='M'``, negative Bewegungsmenge) and
+    their reversals (``buchtyp='SM'``, positive). Consumed qty per article
+    is therefore ``-SUM(bewegungsmenge)`` over ``buchtyp IN ('M','SM')``.
+
+    No clean business key exists in the source, so re-uploads are made
+    idempotent the Kontakte way: the upload handler deletes every row whose
+    ``buch_datum`` falls in the new file's date range, then bulk-inserts —
+    re-uploading the same file is a no-op. ``buch_datum`` is indexed since it
+    drives both the delete and the KPI window.
+    """
+
+    __tablename__ = "material_movements"
+    __table_args__ = (
+        Index("ix_material_movements_buch_datum", "buch_datum"),
+        Index("ix_material_movements_artikelnr", "artikelnr"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    artikelnr: Mapped[str] = mapped_column(String(50), nullable=False)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    buch_datum: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Signed movement quantity; M issues are negative, SM reversals positive.
+    bewegungsmenge: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    buchtyp: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    kommentar: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class MaterialPrice(Base):
+    """One goods-receipt (Wareneingang) line from AswKpf_WE.txt, finance-scoped.
+
+    Supplies the purchase price for the Materialkostenquote: for each
+    consumed article we take the *newest* WE row (by ``datum``) and use the
+    effective unit price ``pos_wert / menge`` — robust against the source's
+    price-unit (the raw ``preis`` column can be per-100/1000, while
+    ``pos_wert / menge`` is always the real per-unit cost).
+
+    Owned by the Finanzperspektive (self-contained, like every other KPI
+    domain); deliberately distinct from the complaint-rate
+    ``goods_receipt_records`` table. Business key ``(vorgang_nr, pos, upos)``
+    makes re-uploads idempotent via ``ON CONFLICT DO UPDATE``; the UNIQUE
+    constraint is created in v1.70.
+    """
+
+    __tablename__ = "material_prices"
+    __table_args__ = (
+        Index("ix_material_prices_artnr", "artnr"),
+        Index("ix_material_prices_datum", "datum"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), nullable=False)
+    pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    upos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    typ: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    datum: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    artnr: Mapped[str] = mapped_column(String(50), nullable=False)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    menge: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    preis: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    pos_wert: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

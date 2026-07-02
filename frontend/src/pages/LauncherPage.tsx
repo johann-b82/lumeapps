@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, ShieldCheck, Users, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, ShieldCheck, Users, ShoppingCart, FileSpreadsheet, Coins, Ruler } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -103,6 +103,26 @@ export function LauncherPage() {
           </span>
         </div>
 
+        {/* v1.70: Finanzperspektive tile — viewer-visible sibling of Einkauf / HR. */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocation("/finance")}
+            aria-label={t("launcher.tile.finance")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-lime-500 to-green-600
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Coins className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("launcher.tile.finance")}
+          </span>
+        </div>
+
         {/* v1.15 SEN-LNCH: Sensors tile (admin-only, replaces first coming-soon slot) */}
         <AdminOnly>
           <div className="flex flex-col items-center gap-2">
@@ -145,6 +165,48 @@ export function LauncherPage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">
               {t("launcher.tiles.signage")}
+            </span>
+          </div>
+        </AdminOnly>
+
+        {/* ATR parts catalog tile (admin-only) */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/atr")}
+              aria-label={t("atr.tile")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-slate-500 to-gray-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FileSpreadsheet className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">{t("atr.tile")}</span>
+          </div>
+        </AdminOnly>
+
+        {/* v1.73: FAIR (Erstmusterprüfung / drawing ballooning) tile — admin-only. */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/fair")}
+              aria-label={t("launcher.tile.fair")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-teal-500 to-emerald-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Ruler className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("launcher.tile.fair")}
             </span>
           </div>
         </AdminOnly>

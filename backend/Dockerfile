@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt && \
     apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libreoffice-impress \
+        libreoffice-calc \
         libreoffice-core \
         poppler-utils \
         fonts-crosextra-carlito \
