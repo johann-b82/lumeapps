@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // v1.71 / v1.72 Finance targets (cost ratios)
   target_material_cost_ratio: null,
   target_personnel_cost_ratio: null,
+  target_produktion_verzug: null,
   // v1.55 Sales-dashboard weekly targets
   target_sales_erstkontakte: null,
   target_sales_interessenten: null,

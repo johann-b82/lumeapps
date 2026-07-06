@@ -25,6 +25,7 @@ import { GeneralSettingsPage } from "@/pages/GeneralSettingsPage";
 import { HrSettingsPage } from "@/pages/HrSettingsPage";
 import { QualitySettingsPage } from "@/pages/QualitySettingsPage";
 import { FinanceSettingsPage } from "@/pages/FinanceSettingsPage";
+import { ProductionSettingsPage } from "@/pages/ProductionSettingsPage";
 import { SalesSettingsPage } from "@/pages/SalesSettingsPage";
 import { WorldCupSettingsPage } from "@/pages/WorldCupSettingsPage";
 import { AtrSettingsPage } from "@/pages/AtrSettingsPage";
@@ -132,6 +133,7 @@ function AppShell() {
           <Route path="/settings/hr" component={HrSettingsPage} />
           <Route path="/settings/quality" component={QualitySettingsPage} />
           <Route path="/settings/finance" component={FinanceSettingsPage} />
+          <Route path="/settings/production" component={ProductionSettingsPage} />
           <Route path="/settings/sales" component={SalesSettingsPage} />
           <Route path="/settings/worldcup" component={WorldCupSettingsPage} />
           <Route path="/settings/atr" component={AtrSettingsPage} />

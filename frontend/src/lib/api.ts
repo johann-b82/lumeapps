@@ -225,6 +225,7 @@ export interface Settings {
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
+  target_produktion_verzug: number | null;
   // v1.55 — Sales-dashboard weekly targets
   target_sales_erstkontakte: number | null;
   target_sales_interessenten: number | null;
@@ -304,6 +305,7 @@ export interface SettingsUpdatePayload {
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio?: number | null;
   target_personnel_cost_ratio?: number | null;
+  target_produktion_verzug?: number | null;
   // Phase 40-01 — Sensor Monitor admin writes. undefined = "don't change"
   // (mirrors Pydantic None-means-don't-change on SettingsUpdate). Decimals
   // go on the wire as strings to match Pydantic's Decimal input coercion.

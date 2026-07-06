@@ -204,6 +204,11 @@ class AppSettings(Base):
     target_personnel_cost_ratio: Mapped[float | None] = mapped_column(
         Numeric(8, 4), nullable=True
     )
+    # v1.77 — Produktion Verzug target (max Verzugsquote as fraction, 0.20 = 20 %);
+    # NULL hides the chart's reference line.
+    target_produktion_verzug: Mapped[float | None] = mapped_column(
+        Numeric(8, 4), nullable=True
+    )
 
     # v1.55 — Sales-dashboard weekly target values (drive the dashed
     # reference lines on the Vertriebsaktivität card). NULL = "no target

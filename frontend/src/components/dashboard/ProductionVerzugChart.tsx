@@ -18,6 +18,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceLine,
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +40,7 @@ import {
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { toApiDate } from "@/lib/dateUtils";
 import { productionKeys } from "@/lib/queryKeys";
+import { useSettings } from "@/hooks/useSettings";
 
 const CHART_HEIGHT = 280;
 
@@ -113,6 +115,11 @@ export function ProductionVerzugChart() {
     queryFn: () =>
       fetchProductionVerzugHistory({ date_from, date_to, granularity }),
   });
+
+  // Configurable target line from /settings/production (fraction, e.g. 0.20 =
+  // 20 %). NULL = no target set → the reference line is hidden.
+  const { data: settings } = useSettings();
+  const target = settings?.target_produktion_verzug ?? null;
 
   if (isLoading) {
     return (
@@ -229,6 +236,21 @@ export function ProductionVerzugChart() {
             }
           />
           <Bar dataKey="rate" fill="var(--color-destructive)" />
+          {target != null && (
+            <ReferenceLine
+              y={target}
+              stroke="var(--color-primary)"
+              strokeDasharray="6 3"
+              strokeWidth={1.5}
+              ifOverflow="extendDomain"
+              label={{
+                value: `${t("production.verzug.target")} ${formatPercent(target)}`,
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: "var(--color-primary)",
+              }}
+            />
+          )}
         </BarChart>
       </ResponsiveContainer>
     </Card>

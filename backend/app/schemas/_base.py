@@ -164,6 +164,8 @@ class SettingsUpdate(BaseModel):
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
+    # v1.77 — Produktion Verzug target (max Verzugsquote as fraction)
+    target_produktion_verzug: float | None = None
     # v1.15 Sensor Monitor — admin writes (Phase 40-01)
     # None means "don't change" (same pattern as Personio / HR targets above).
     # Known limitation (40-01): there is no sentinel for "clear threshold back
@@ -230,6 +232,8 @@ class SettingsRead(BaseModel):
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
+    # v1.77 — Produktion Verzug target (max Verzugsquote as fraction)
+    target_produktion_verzug: float | None = None
     # Phase 39-02 — Sensor config surfaced read-only (admin writes arrive Phase 40).
     # Decimal serializes as string; frontend parses via Number().
     sensor_poll_interval_s: int = 60

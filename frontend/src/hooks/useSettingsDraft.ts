@@ -50,6 +50,8 @@ export interface DraftFields {
   // v1.71 Finance target (material-cost ratio as fraction, e.g. 0.15 = 15%)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
+  // v1.77 — Produktion Verzug target (max Verzugsquote as fraction, 0.20 = 20%)
+  target_produktion_verzug: number | null;
   // v1.57 World Cup signage — api key is write-only (not in Settings response)
   worldcup_api_key: string;
   worldcup_refresh_seconds: number;
@@ -111,6 +113,7 @@ function settingsToDraft(s: Settings): DraftFields {
     target_audit_findings_level2: s.target_audit_findings_level2,
     target_material_cost_ratio: s.target_material_cost_ratio,
     target_personnel_cost_ratio: s.target_personnel_cost_ratio,
+    target_produktion_verzug: s.target_produktion_verzug,
     // World Cup: api key is write-only, always start empty
     worldcup_api_key: "",
     worldcup_refresh_seconds: s.worldcup_refresh_seconds ?? 60,
@@ -156,6 +159,7 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     target_audit_findings_level2: draft.target_audit_findings_level2,
     target_material_cost_ratio: draft.target_material_cost_ratio,
     target_personnel_cost_ratio: draft.target_personnel_cost_ratio,
+    target_produktion_verzug: draft.target_produktion_verzug,
     worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
 }
@@ -196,6 +200,7 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     target_audit_findings_level2: draft.target_audit_findings_level2,
     target_material_cost_ratio: draft.target_material_cost_ratio,
     target_personnel_cost_ratio: draft.target_personnel_cost_ratio,
+    target_produktion_verzug: draft.target_produktion_verzug,
     worldcup_refresh_seconds: draft.worldcup_refresh_seconds,
   };
   // Only send credentials if user typed something (non-empty)
@@ -211,7 +216,7 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
   return payload;
 }
 
-export type SettingsSlice = "general" | "hr" | "sales" | "worldcup" | "quality" | "finance";
+export type SettingsSlice = "general" | "hr" | "sales" | "worldcup" | "quality" | "finance" | "production";
 
 const GENERAL_FIELDS = [
   "app_name",
@@ -263,12 +268,17 @@ const FINANCE_FIELDS = [
   "target_personnel_cost_ratio",
 ] as const satisfies readonly (keyof DraftFields)[];
 
+const PRODUCTION_FIELDS = [
+  "target_produktion_verzug",
+] as const satisfies readonly (keyof DraftFields)[];
+
 function fieldsForSlice(slice: SettingsSlice): readonly (keyof DraftFields)[] {
   if (slice === "general") return GENERAL_FIELDS;
   if (slice === "hr") return HR_FIELDS;
   if (slice === "worldcup") return WORLDCUP_FIELDS;
   if (slice === "quality") return QUALITY_FIELDS;
   if (slice === "finance") return FINANCE_FIELDS;
+  if (slice === "production") return PRODUCTION_FIELDS;
   return SALES_FIELDS;
 }
 
