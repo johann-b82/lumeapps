@@ -43,6 +43,7 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/production/verzug", frozenset({"GET"})),
     ("/api/production/verzug/history", frozenset({"GET"})),
     ("/api/production/verzug/list", frozenset({"GET"})),
+    ("/api/production/verzug/overdue", frozenset({"GET"})),
     # Viewer-readable sync freshness (mixed-gate; see sync.py docstring).
     ("/api/sync/meta", frozenset({"GET"})),
     # Signage pair/player endpoints use device-token auth, not user/admin auth.

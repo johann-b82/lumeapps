@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db_session
 from app.routers.hr_kpis import _bucket_windows, _validate_range
 from app.schemas import (
+    ProductionOverdueRow,
     ProductionVerzugHistoryPoint,
     ProductionVerzugRow,
     ProductionVerzugValue,
@@ -31,6 +32,7 @@ from app.services.hr_kpi_aggregation import _month_bounds
 from app.services.production_kpi_aggregation import (
     compute_verzug,
     compute_verzug_history,
+    list_overdue_open,
     list_verzug,
 )
 
@@ -93,3 +95,18 @@ async def get_verzug_list(
         date_from, date_to = _month_bounds(today.year, today.month)
     rows = await list_verzug(db, date_from, date_to)
     return [ProductionVerzugRow(**r) for r in rows]
+
+
+@router.get("/verzug/overdue", response_model=list[ProductionOverdueRow])
+async def get_verzug_overdue(
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[ProductionOverdueRow]:
+    """Open & overdue orders (no Lieferschein, Zieltermin in window and past)."""
+    _validate_range(date_from, date_to)
+    if date_from is None:
+        today = date.today()
+        date_from, date_to = _month_bounds(today.year, today.month)
+    rows = await list_overdue_open(db, date_from, date_to)
+    return [ProductionOverdueRow(**r) for r in rows]

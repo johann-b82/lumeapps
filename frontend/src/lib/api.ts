@@ -1121,6 +1121,23 @@ export async function fetchProductionVerzugList(params?: {
   );
 }
 
+export interface ProductionOverdueRow {
+  vorgang_nr: string;
+  customer_name: string | null;
+  adr_nr: string | null;
+  target_date: string | null;
+  days_overdue: number | null;
+}
+
+export async function fetchProductionOverdueList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<ProductionOverdueRow[]> {
+  return apiClient<ProductionOverdueRow[]>(
+    `/api/production/verzug/overdue${_buildOtdQuery(params)}`,
+  );
+}
+
 // --------------------------------------------------------------------------
 // Finanzperspektive / Materialkostenquote — v1.70
 // --------------------------------------------------------------------------

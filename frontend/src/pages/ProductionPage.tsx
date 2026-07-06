@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ProductionVerzugCardGrid } from "@/components/dashboard/ProductionVerzugCardGrid";
 import { ProductionVerzugChart } from "@/components/dashboard/ProductionVerzugChart";
 import { ProductionVerzugTable } from "@/components/dashboard/ProductionVerzugTable";
+import { ProductionOverdueTable } from "@/components/dashboard/ProductionOverdueTable";
 
 /**
  * Produktion dashboard. First section: Aufträge in Verzug (Seriengeschäft).
@@ -20,7 +21,10 @@ export function ProductionPage() {
       </h2>
       <ProductionVerzugCardGrid />
       <ProductionVerzugChart />
-      <ProductionVerzugTable />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <ProductionVerzugTable />
+        <ProductionOverdueTable />
+      </div>
     </div>
   );
 }

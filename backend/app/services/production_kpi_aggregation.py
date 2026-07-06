@@ -1,32 +1,33 @@
-"""Produktion — "Aufträge in Verzug" aggregation (v1.76).
+"""Produktion — "Aufträge in Verzug" aggregation (v1.76 / v1.78).
 
-Formula (Gesamtfertigstellung)
-------------------------------
-    rate = count(orders in Verzug)   within [first, last]
-           ───────────────────────
-           count(orders total)        within [first, last]
+Definition (v1.78 — windowed by Zieltermin, includes overdue-open orders)
+-------------------------------------------------------------------------
+An order belongs to the period of its **Zieltermin** = MAX(auftrag_positionen
+.lieferdatum). Within [first, last] an order is *counted* once its outcome is
+decided — i.e. it has been delivered, or its Zieltermin already passed (open &
+overdue). Not-yet-due open orders (future Zieltermin, no delivery) are pending
+and excluded from both numerator and denominator.
 
-Per order:
-* ``target``  = MAX(``auftrag_positionen.lieferdatum``) — the latest confirmed
-  Zieltermin across the order's positions (when the whole order should be done).
-* ``actual``  = MAX(``delivery_records.delivery_date``) — the latest Lieferschein
-  date across the order's delivered positions (when it was actually finished).
-* An order is *in Verzug* when ``actual − target > 0`` days.
+    effective = COALESCE(MAX(LS delivery_date), today)
+    delay     = effective − Zieltermin           (integer days)
+    counted   = delivered OR Zieltermin < today
+    in Verzug = counted AND delay > 0
 
-Joined on order number (``auftrag_positionen.vorgang_nr = delivery_records
-.order_nr``). Window filter is the *actual* completion date, keeping the KPI
-consistent with the other perspectives' date selector.
+So "in Verzug" spans two categories:
+  * delivered late  — has an LS, actual > Zieltermin
+  * open & overdue  — no LS, Zieltermin < today
 
-Orders without any positional Zieltermin, or with no Lieferschein yet, are
-excluded (Verzug undefined / order still open — the latter is the domain of the
-planned "Verzugsgefahr" section). ``rate`` is a fraction (0.12 → 12 %); lower is
-better, deltas render in Termintreue-complement space on the frontend.
+    rate = count(in Verzug) / count(counted)     within the Zieltermin window
+
+``rate`` is a fraction; lower is better. Joined on order number
+(``auftrag_positionen.vorgang_nr = delivery_records.order_nr``) via LEFT JOIN so
+undelivered orders survive.
 """
 from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuftragPosition, DeliveryRecord
@@ -40,44 +41,33 @@ IN_VERZUG_MIN_DAYS = 0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ⚠️  CONFIG — 'Pos Typ 2'-Werte, die Seriengeschäft kennzeichnen.
-#
-# Leer  → KEIN Filter: alle Aufträge werden gezählt (aktuell gewählt).
-# Sonst → nur Aufträge, die mindestens eine Position mit einem dieser
-#          'Pos Typ 2'-Werte haben. Mögliche Werte im Export: AV-F, AV-P,
-#          AV-S, OWB, AB. Sobald der Serien-Code feststeht, hier eintragen, z. B.:
-#              SERIENGESCHAEFT_POS_TYP_2 = frozenset({"AV-S"})
+# Leer = KEIN Filter (alle Aufträge). Sonst nur Aufträge mit mind. einer Position
+# dieser Werte. Beispielwerte im Export: AV-F, AV-P, AV-S, OWB, AB.
 # ─────────────────────────────────────────────────────────────────────────────
 SERIENGESCHAEFT_POS_TYP_2: frozenset[str] = frozenset()
 
 
-async def _counts_for_window(
-    db: AsyncSession, first: date, last: date
-) -> tuple[int, int, float]:
-    """Return (total, in_verzug, delay_sum) for orders completed in the window.
-
-    ``total``     — orders whose latest LS delivery falls in the window and that
-                    have a positional Zieltermin.
-    ``in_verzug`` — subset whose latest delivery overran the latest Zieltermin.
-    ``delay_sum`` — Σ (actual − target) days across ``total`` (signed).
-    """
-    # Latest confirmed Zieltermin per order (optionally Seriengeschäft-filtered).
-    auf_where = [AuftragPosition.lieferdatum.isnot(None)]
+def _auf_subquery():
+    """Per-order Zieltermin (MAX lieferdatum) + a representative customer."""
+    where = [AuftragPosition.lieferdatum.isnot(None)]
     if SERIENGESCHAEFT_POS_TYP_2:
-        auf_where.append(
-            AuftragPosition.pos_typ_2.in_(SERIENGESCHAEFT_POS_TYP_2)
-        )
-    auf = (
+        where.append(AuftragPosition.pos_typ_2.in_(SERIENGESCHAEFT_POS_TYP_2))
+    return (
         select(
             AuftragPosition.vorgang_nr.label("vorgang_nr"),
             func.max(AuftragPosition.lieferdatum).label("target"),
+            func.max(AuftragPosition.customer_name).label("customer_name"),
+            func.max(AuftragPosition.customer_id).label("adr_nr"),
         )
-        .where(*auf_where)
+        .where(*where)
         .group_by(AuftragPosition.vorgang_nr)
         .subquery()
     )
 
-    # Latest actual delivery per order.
-    ls = (
+
+def _ls_subquery():
+    """Per-order actual completion = MAX LS delivery_date."""
+    return (
         select(
             DeliveryRecord.order_nr.label("order_nr"),
             func.max(DeliveryRecord.delivery_date).label("actual"),
@@ -90,26 +80,34 @@ async def _counts_for_window(
         .subquery()
     )
 
-    # date − date → integer days in PostgreSQL.
-    verzug = ls.c.actual - auf.c.target
+
+async def _counts_for_window(
+    db: AsyncSession, first: date, last: date, today: date
+) -> tuple[int, int, float]:
+    """Return (total, in_verzug, delay_sum) for orders whose Zieltermin is in
+    the window and whose outcome is decided (delivered or overdue)."""
+    auf = _auf_subquery()
+    ls = _ls_subquery()
+
+    effective = func.coalesce(ls.c.actual, today)  # actual delivery, else today
+    delay = effective - auf.c.target               # int days (PostgreSQL)
+    counted = or_(ls.c.actual.isnot(None), auf.c.target < today)
 
     stmt = (
         select(
             func.count(),
-            func.count().filter(verzug > IN_VERZUG_MIN_DAYS),
-            func.coalesce(func.sum(verzug), 0),
+            func.count().filter(delay > IN_VERZUG_MIN_DAYS),
+            func.coalesce(func.sum(delay), 0),
         )
         .select_from(auf)
-        .join(ls, auf.c.vorgang_nr == ls.c.order_nr)
-        .where(ls.c.actual >= first, ls.c.actual <= last)
+        .join(ls, auf.c.vorgang_nr == ls.c.order_nr, isouter=True)
+        .where(auf.c.target >= first, auf.c.target <= last, counted)
     )
-
     total, in_verzug, delay_sum = (await db.execute(stmt)).one()
     return int(total or 0), int(in_verzug or 0), float(delay_sum or 0)
 
 
 def _rate(in_verzug: int, total: int) -> float | None:
-    """rate = in_verzug / total. Undefined → None (avoids 0/0)."""
     if total <= 0:
         return None
     return in_verzug / total
@@ -123,13 +121,14 @@ def _avg_delay(delay_sum: float, total: int) -> float | None:
 
 async def compute_verzug(db: AsyncSession, first: date, last: date) -> dict:
     """Verzug rate for the window with prev-period / prev-year baselines."""
-    total, in_verzug, dsum = await _counts_for_window(db, first, last)
+    today = date.today()
+    total, in_verzug, dsum = await _counts_for_window(db, first, last, today)
 
     p_first, p_last = prior_window_same_length(first, last)
-    p_total, p_in_verzug, _ = await _counts_for_window(db, p_first, p_last)
+    p_total, p_in_verzug, _ = await _counts_for_window(db, p_first, p_last, today)
 
     y_first, y_last = same_window_prior_year(first, last)
-    y_total, y_in_verzug, _ = await _counts_for_window(db, y_first, y_last)
+    y_total, y_in_verzug, _ = await _counts_for_window(db, y_first, y_last, today)
 
     return {
         "rate": _rate(in_verzug, total),
@@ -144,10 +143,11 @@ async def compute_verzug(db: AsyncSession, first: date, last: date) -> dict:
 async def compute_verzug_history(
     db: AsyncSession, buckets: list[tuple[str, date, date]]
 ) -> list[dict]:
-    """Per-bucket Verzug rate; ``buckets`` from ``_bucket_windows``."""
+    """Per-bucket Verzug rate; ``buckets`` from ``_bucket_windows`` (by Zieltermin)."""
+    today = date.today()
     points: list[dict] = []
     for label, b_first, b_last in buckets:
-        total, in_verzug, _ = await _counts_for_window(db, b_first, b_last)
+        total, in_verzug, _ = await _counts_for_window(db, b_first, b_last, today)
         points.append({
             "month": label,
             "rate": _rate(in_verzug, total),
@@ -160,37 +160,9 @@ async def compute_verzug_history(
 async def list_verzug(
     db: AsyncSession, first: date, last: date, *, limit: int = 500
 ) -> list[dict]:
-    """Orders in Verzug in the window (most-delayed first), one row per order.
-
-    Same per-order Gesamtfertigstellung join as the KPI, filtered to
-    ``actual − target > 0`` — the actionable list behind the headline number.
-    """
-    AP = AuftragPosition
-    DR = DeliveryRecord
-
-    auf_where = [AP.lieferdatum.isnot(None)]
-    if SERIENGESCHAEFT_POS_TYP_2:
-        auf_where.append(AP.pos_typ_2.in_(SERIENGESCHAEFT_POS_TYP_2))
-    auf = (
-        select(
-            AP.vorgang_nr.label("vorgang_nr"),
-            func.max(AP.lieferdatum).label("target"),
-            func.max(AP.customer_name).label("customer_name"),
-            func.max(AP.customer_id).label("adr_nr"),
-        )
-        .where(*auf_where)
-        .group_by(AP.vorgang_nr)
-        .subquery()
-    )
-    ls = (
-        select(
-            DR.order_nr.label("order_nr"),
-            func.max(DR.delivery_date).label("actual"),
-        )
-        .where(DR.order_nr.isnot(None), DR.delivery_date.isnot(None))
-        .group_by(DR.order_nr)
-        .subquery()
-    )
+    """Delivered-late orders (Zieltermin in window, actual > Zieltermin)."""
+    auf = _auf_subquery()
+    ls = _ls_subquery()
     verzug = ls.c.actual - auf.c.target
 
     stmt = (
@@ -203,13 +175,44 @@ async def list_verzug(
             verzug.label("verzug_tage"),
         )
         .select_from(auf)
-        .join(ls, auf.c.vorgang_nr == ls.c.order_nr)
+        .join(ls, auf.c.vorgang_nr == ls.c.order_nr)  # inner: delivered only
         .where(
-            ls.c.actual >= first,
-            ls.c.actual <= last,
-            verzug > IN_VERZUG_MIN_DAYS,
+            auf.c.target >= first,
+            auf.c.target <= last,
+            ls.c.actual > auf.c.target,
         )
         .order_by(verzug.desc(), auf.c.vorgang_nr)
+        .limit(limit)
+    )
+    return [dict(r._mapping) for r in (await db.execute(stmt)).all()]
+
+
+async def list_overdue_open(
+    db: AsyncSession, first: date, last: date, *, limit: int = 500
+) -> list[dict]:
+    """Open & overdue orders: no Lieferschein at all and Zieltermin already past."""
+    today = date.today()
+    auf = _auf_subquery()
+    ls = _ls_subquery()
+    days_overdue = today - auf.c.target
+
+    stmt = (
+        select(
+            auf.c.vorgang_nr,
+            auf.c.customer_name,
+            auf.c.adr_nr,
+            auf.c.target.label("target_date"),
+            days_overdue.label("days_overdue"),
+        )
+        .select_from(auf)
+        .join(ls, auf.c.vorgang_nr == ls.c.order_nr, isouter=True)
+        .where(
+            auf.c.target >= first,
+            auf.c.target <= last,
+            ls.c.actual.is_(None),        # no delivery at all
+            auf.c.target < today,          # overdue
+        )
+        .order_by(days_overdue.desc(), auf.c.vorgang_nr)
         .limit(limit)
     )
     return [dict(r._mapping) for r in (await db.execute(stmt)).all()]

@@ -150,6 +150,8 @@ export const productionKeys = {
     ["production", "verzug", "history", { from, to, granularity }] as const,
   verzugList: (from?: string, to?: string) =>
     ["production", "verzug", "list", { from, to }] as const,
+  verzugOverdue: (from?: string, to?: string) =>
+    ["production", "verzug", "overdue", { from, to }] as const,
 };
 
 // v1.70 — Finanzperspektive: Materialkostenquote.

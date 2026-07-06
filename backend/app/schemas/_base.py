@@ -765,7 +765,7 @@ class ProductionVerzugHistoryPoint(BaseModel):
 
 
 class ProductionVerzugRow(BaseModel):
-    """One order in Verzug for the verification table (Gesamtfertigstellung)."""
+    """One delivered-late order for the "Aufträge in Verzug" table."""
 
     vorgang_nr: str
     customer_name: str | None = None
@@ -773,6 +773,18 @@ class ProductionVerzugRow(BaseModel):
     target_date: date | None = None
     actual_date: date | None = None
     verzug_tage: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProductionOverdueRow(BaseModel):
+    """One open & overdue order (no Lieferschein, Zieltermin already past)."""
+
+    vorgang_nr: str
+    customer_name: str | None = None
+    adr_nr: str | None = None
+    target_date: date | None = None
+    days_overdue: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -988,6 +1000,7 @@ __all__ = [
     "ProductionVerzugValue",
     "ProductionVerzugHistoryPoint",
     "ProductionVerzugRow",
+    "ProductionOverdueRow",
     "OtdHistoryPoint",
     "OtdRow",
     # v1.70 Finanzperspektive — Materialkostenquote
