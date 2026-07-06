@@ -20,6 +20,7 @@ from app.database import get_async_db_session
 from app.security.directus_auth import get_current_user, require_admin
 from app.models import (
     Auftrag,
+    AuftragPosition,
     DeliveryRecord,
     DeliveryReliabilityRecord,
     GoodsReceiptRecord,
@@ -36,6 +37,7 @@ from app.models import (
 )
 from app.parsing.angebote_parser import parse_angebote_file
 from app.parsing.auftraege_parser import parse_auftraege_file
+from app.parsing.auftrag_positionen_parser import parse_auftrag_positionen_file
 from app.parsing.delivery_parser import parse_delivery_file
 from app.parsing.delivery_reliability_parser import (
     parse_delivery_reliability_file,
@@ -52,6 +54,7 @@ from app.parsing.revenue_parser import parse_revenue_file
 from app.schemas import (
     AngeboteUploadResponse,
     AuftraegeUploadResponse,
+    AuftragPositionenUploadResponse,
     ContactsUploadResponse,
     DeliveryReliabilityUploadResponse,
     DeliveryUploadResponse,
@@ -72,6 +75,11 @@ admin_router = APIRouter(
 )
 
 ALLOWED_EXTENSIONS = {".csv", ".txt"}
+
+# Batch size for composite-key upserts + their existing-key counts. Kept small
+# so neither a multi-row VALUES nor a (a,b,c) IN ((...)) tuple-list over a large
+# export (10k+ rows) overflows Postgres' max_stack_depth.
+_UPSERT_BATCH = 500
 
 
 @admin_router.post("/upload", response_model=UploadResponse)
@@ -407,19 +415,25 @@ async def upload_deliveries(
             errors=[ValidationErrorDetail(**e) for e in errors],
         )
 
-    # Count how many incoming (vorgang, pos, upos) tuples already exist —
-    # one EXISTS-style query using a value-list join.
+    # Count how many incoming (vorgang, pos, upos) tuples already exist. Done in
+    # batches: a one-shot (a,b,c) IN ((...)) over thousands of tuples expands to
+    # an OR-tree that overflows Postgres' max_stack_depth on large exports.
     incoming_keys = [(r["vorgang_nr"], r["pos"], r["upos"]) for r in rows]
-    # Postgres tuple-IN: SELECT count(*) FROM ... WHERE (a,b,c) IN ((...)).
-    # asyncpg + SQLAlchemy support this via sa.tuple_(...).in_.
-    existing_stmt = sa.select(sa.func.count(DeliveryRecord.id)).where(
-        sa.tuple_(
-            DeliveryRecord.vorgang_nr,
-            DeliveryRecord.pos,
-            DeliveryRecord.upos,
-        ).in_(incoming_keys)
+    key_tuple = sa.tuple_(
+        DeliveryRecord.vorgang_nr,
+        DeliveryRecord.pos,
+        DeliveryRecord.upos,
     )
-    rows_updated = (await db.execute(existing_stmt)).scalar_one() or 0
+    rows_updated = 0
+    for start in range(0, len(incoming_keys), _UPSERT_BATCH):
+        batch_keys = incoming_keys[start : start + _UPSERT_BATCH]
+        rows_updated += (
+            await db.execute(
+                sa.select(sa.func.count(DeliveryRecord.id)).where(
+                    key_tuple.in_(batch_keys)
+                )
+            )
+        ).scalar_one() or 0
     rows_inserted = len(rows) - rows_updated
 
     batch = UploadBatch(
@@ -444,7 +458,7 @@ async def upload_deliveries(
     ]
 
     cols_per_row = max(1, len(rows[0]))
-    chunk_size = max(1, 32767 // cols_per_row)
+    chunk_size = max(1, min(_UPSERT_BATCH, 32767 // cols_per_row))
     for start in range(0, len(rows), chunk_size):
         chunk = rows[start : start + chunk_size]
         stmt = pg_insert(DeliveryRecord).values(chunk)
@@ -462,6 +476,117 @@ async def upload_deliveries(
     await db.commit()
 
     return DeliveryUploadResponse(
+        rows_inserted=rows_inserted,
+        rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+@admin_router.post(
+    "/upload-auftrag-positionen",
+    response_model=AuftragPositionenUploadResponse,
+)
+async def upload_auftrag_positionen(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AuftragPositionenUploadResponse:
+    """Upsert of the position-level AswKpf_AUF.txt export (Auftragspositionen).
+
+    Composite business key ``(vorgang_nr, pos, upos)``; ``ON CONFLICT DO
+    UPDATE`` makes a re-upload of an edited export idempotent. Mirrors the
+    Lieferschein upload. Feeds the Produktion "Aufträge in Verzug" KPI.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for Auftragspositionen uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_auftrag_positionen_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="auftrag_positionen",
+            )
+        )
+        await db.commit()
+        return AuftragPositionenUploadResponse(
+            rows_inserted=0,
+            rows_updated=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    # Count pre-existing keys in batches. A single (a,b,c) IN ((...)) over
+    # thousands of tuples expands to an OR-tree that overflows Postgres'
+    # max_stack_depth (the 10k-row AUF export tripped a one-shot IN).
+    incoming_keys = [(r["vorgang_nr"], r["pos"], r["upos"]) for r in rows]
+    key_tuple = sa.tuple_(
+        AuftragPosition.vorgang_nr,
+        AuftragPosition.pos,
+        AuftragPosition.upos,
+    )
+    rows_updated = 0
+    for start in range(0, len(incoming_keys), _UPSERT_BATCH):
+        batch_keys = incoming_keys[start : start + _UPSERT_BATCH]
+        rows_updated += (
+            await db.execute(
+                sa.select(sa.func.count(AuftragPosition.id)).where(
+                    key_tuple.in_(batch_keys)
+                )
+            )
+        ).scalar_one() or 0
+    rows_inserted = len(rows) - rows_updated
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="auftrag_positionen",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    table = AuftragPosition.__table__
+    update_cols = [
+        c.name
+        for c in table.columns
+        if c.name not in ("id", "vorgang_nr", "pos", "upos")
+    ]
+
+    cols_per_row = max(1, len(rows[0]))
+    # Batch the upsert too — same max_stack_depth guard, and stays under the
+    # 32767 bind-param cap.
+    chunk_size = max(1, min(_UPSERT_BATCH, 32767 // cols_per_row))
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        stmt = pg_insert(AuftragPosition).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_auftrag_positionen_vorgang_pos",
+            set_={col: stmt.excluded[col] for col in update_cols},
+        )
+        await db.execute(stmt)
+
+    batch.row_count = rows_inserted + rows_updated
+    if errors and batch.row_count == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    return AuftragPositionenUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
         errors=[ValidationErrorDetail(**e) for e in errors],

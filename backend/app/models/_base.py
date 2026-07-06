@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import BYTEA, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -557,6 +558,9 @@ class DeliveryRecord(Base):
     __table_args__ = (
         Index("ix_delivery_records_delivery_date", "delivery_date"),
         Index("ix_delivery_records_customer_date", "customer_id", "delivery_date"),
+        # v1.76 — group/join key for the Produktion Verzug KPI (order_nr →
+        # Auftrag.vorgang_nr).
+        Index("ix_delivery_records_order_nr", "order_nr"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -590,6 +594,66 @@ class DeliveryRecord(Base):
 
     external_order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
     order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+# ── v1.76 — Auftragspositionen (position-level AswKpf_AUF export) ───────
+
+
+class AuftragPosition(Base):
+    """One line-item on a sales order (Auftrag), from the position-level
+    ``AswKpf_AUF`` export.
+
+    Structurally the AUF counterpart of :class:`DeliveryRecord`: one row per
+    (order ``vorgang_nr``, ``pos``, ``upos``) carrying the confirmed
+    ``lieferdatum`` (Zieltermin) for that position. Distinct from the order-book
+    :class:`Auftrag` table (Sales KPIs) — this feeds the Produktion "Aufträge in
+    Verzug" KPI, where per order MAX(lieferdatum) is the target against which the
+    LS completion date is compared.
+    """
+
+    __tablename__ = "auftrag_positionen"
+    __table_args__ = (
+        UniqueConstraint(
+            "vorgang_nr", "pos", "upos",
+            name="uq_auftrag_positionen_vorgang_pos",
+        ),
+        Index("ix_auftrag_positionen_vorgang_nr", "vorgang_nr"),
+        Index("ix_auftrag_positionen_lieferdatum", "lieferdatum"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    vorgang_nr: Mapped[str] = mapped_column(String(50), nullable=False)
+    pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    upos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    typ: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    entry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lieferdatum: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_city: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    article_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(15, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    price: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    position_value: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+
+    pos_typ_2: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    external_order_nr: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

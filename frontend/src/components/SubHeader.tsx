@@ -109,6 +109,7 @@ export function SubHeader() {
     location === "/hr" ||
     location === "/quality" ||
     location === "/procurement" ||
+    location === "/production" ||
     location === "/finance";
 
   const dashboardPath:
@@ -116,6 +117,7 @@ export function SubHeader() {
     | "/hr"
     | "/quality"
     | "/procurement"
+    | "/production"
     | "/finance" =
     location === "/hr"
       ? "/hr"
@@ -123,6 +125,8 @@ export function SubHeader() {
       ? "/quality"
       : location === "/procurement"
       ? "/procurement"
+      : location === "/production"
+      ? "/production"
       : location === "/finance"
       ? "/finance"
       : "/sales";
@@ -167,6 +171,8 @@ export function SubHeader() {
                       ? t("nav.quality")
                       : p === "/procurement"
                       ? t("nav.procurement")
+                      : p === "/production"
+                      ? t("nav.production")
                       : p === "/finance"
                       ? t("nav.finance")
                       : t("nav.sales")
@@ -178,6 +184,7 @@ export function SubHeader() {
                 <SelectItem value="/hr">{t("nav.hr")}</SelectItem>
                 <SelectItem value="/quality">{t("nav.quality")}</SelectItem>
                 <SelectItem value="/procurement">{t("nav.procurement")}</SelectItem>
+                <SelectItem value="/production">{t("nav.production")}</SelectItem>
                 <SelectItem value="/finance">{t("nav.finance")}</SelectItem>
               </SelectContent>
             </Select>
@@ -226,6 +233,7 @@ export function SubHeader() {
           {(location === "/sales" ||
             location === "/quality" ||
             location === "/procurement" ||
+            location === "/production" ||
             location === "/finance") && (
             <AdminOnly>
               <Link

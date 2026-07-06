@@ -5,6 +5,7 @@ import { AuftraegeDropZone } from "@/components/AuftraegeDropZone";
 import { ContactsDropZone } from "@/components/ContactsDropZone";
 import { QualityDropZone } from "@/components/QualityDropZone";
 import { DeliveriesDropZone } from "@/components/DeliveriesDropZone";
+import { AuftragPositionenDropZone } from "@/components/AuftragPositionenDropZone";
 import { GoodsReceiptsDropZone } from "@/components/GoodsReceiptsDropZone";
 import { DeliveryReliabilityDropZone } from "@/components/DeliveryReliabilityDropZone";
 import { InteressentenDropZone } from "@/components/InteressentenDropZone";
@@ -68,6 +69,15 @@ export function UploadPage() {
             {t("upload.deliveries_title")}
           </p>
           <DeliveriesDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.auftrag_positionen_title")}
+          </p>
+          <AuftragPositionenDropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(errs) => setErrors(errs)}
           />

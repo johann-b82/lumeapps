@@ -141,6 +141,17 @@ export const procurementKeys = {
     ["procurement", "otd", "list", { from, to }] as const,
 };
 
+// v1.76 — Produktion: Aufträge in Verzug (Seriengeschäft).
+export const productionKeys = {
+  all: ["production"] as const,
+  verzug: (from?: string, to?: string) =>
+    ["production", "verzug", { from, to }] as const,
+  verzugHistory: (from?: string, to?: string, granularity?: string) =>
+    ["production", "verzug", "history", { from, to, granularity }] as const,
+  verzugList: (from?: string, to?: string) =>
+    ["production", "verzug", "list", { from, to }] as const,
+};
+
 // v1.70 — Finanzperspektive: Materialkostenquote.
 export const financeKeys = {
   all: ["finance"] as const,

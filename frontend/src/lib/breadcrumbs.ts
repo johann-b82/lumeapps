@@ -29,6 +29,7 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
   { pattern: "/sales", trail: [{ labelKey: "nav.sales", href: "/sales" }] },
   { pattern: "/hr", trail: [{ labelKey: "nav.hr", href: "/hr" }] },
   { pattern: "/procurement", trail: [{ labelKey: "nav.procurement", href: "/procurement" }] },
+  { pattern: "/production", trail: [{ labelKey: "nav.production", href: "/production" }] },
   { pattern: "/finance", trail: [{ labelKey: "nav.finance", href: "/finance" }] },
   // Upload
   { pattern: "/upload", trail: [{ labelKey: "nav.upload", href: "/upload" }] },

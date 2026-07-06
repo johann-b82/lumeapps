@@ -588,6 +588,14 @@ class DeliveryUploadResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
+class AuftragPositionenUploadResponse(BaseModel):
+    """Response from POST /api/upload-auftrag-positionen (position-level AUF)."""
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
 class GoodsReceiptUploadResponse(BaseModel):
     rows_inserted: int
     rows_updated: int = 0
@@ -725,6 +733,44 @@ class OtdValue(BaseModel):
     avg_delay: float | None = None
     previous_period: float | None = None
     previous_year: float | None = None
+
+
+class ProductionVerzugValue(BaseModel):
+    """Produktion — "Aufträge in Verzug (Seriengeschäft)" KPI for a window.
+
+    Counted by *order* (Auftrag), not by delivery position: an order is in
+    Verzug when its latest LS-Lieferdatum falls after the order's confirmed
+    Lieferdatum (Zieltermin). ``rate`` = in_verzug / total, a fraction
+    (0.12 → 12 %). NULL when the window had no matching orders. Lower is
+    better — the frontend renders deltas in Termintreue-complement space.
+    """
+
+    rate: float | None = None
+    in_verzug_count: int
+    total_count: int
+    avg_delay: float | None = None
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class ProductionVerzugHistoryPoint(BaseModel):
+    month: str
+    rate: float | None = None
+    in_verzug_count: int
+    total_count: int
+
+
+class ProductionVerzugRow(BaseModel):
+    """One order in Verzug for the verification table (Gesamtfertigstellung)."""
+
+    vorgang_nr: str
+    customer_name: str | None = None
+    adr_nr: str | None = None
+    target_date: date | None = None
+    actual_date: date | None = None
+    verzug_tage: int | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class OtdHistoryPoint(BaseModel):
@@ -921,6 +967,7 @@ __all__ = [
     "UploadBatchSummary",
     "QualityUploadResponse",
     "DeliveryUploadResponse",
+    "AuftragPositionenUploadResponse",
     "GoodsReceiptUploadResponse",
     "InteressentenUploadResponse",
     "AngeboteUploadResponse",
@@ -934,6 +981,9 @@ __all__ = [
     "CustomerComplaintRow",
     "DeliveryReliabilityUploadResponse",
     "OtdValue",
+    "ProductionVerzugValue",
+    "ProductionVerzugHistoryPoint",
+    "ProductionVerzugRow",
     "OtdHistoryPoint",
     "OtdRow",
     # v1.70 Finanzperspektive — Materialkostenquote

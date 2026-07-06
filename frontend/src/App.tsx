@@ -16,6 +16,7 @@ import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
 import { EmbedWorldCupTippspielPage } from "./pages/EmbedWorldCupTippspielPage";
 import { QualityPage } from "./pages/QualityPage";
 import { ProcurementPage } from "./pages/ProcurementPage";
+import { ProductionPage } from "./pages/ProductionPage";
 import { FinancePage } from "./pages/FinancePage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -77,6 +78,7 @@ function AppShell() {
           <Route path="/hr" component={HRPage} />
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
+          <Route path="/production" component={ProductionPage} />
           {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
               main bundle used by the signage /embed pages. */}
