@@ -65,6 +65,14 @@ export default defineConfig(({ mode }) => {
               },
               workbox: {
                 navigateFallback: "/player/index.html",
+                // Tesseract OCR WASM (~20 MB total) is an admin-only FairPage
+                // dependency that Vite copies into every build from public/. The
+                // player never uses it, yet Workbox globs it into the precache
+                // manifest and then FAILS the build because each file exceeds the
+                // 2 MiB precache limit (this has broken CI's `npm run build` since
+                // the tesseract-fetch wiring landed). Exclude it: the player must
+                // not ship 20 MB of OCR wasm to every kiosk's SW cache anyway.
+                globIgnores: ["**/tesseract/**"],
                 // The build emits the player entry as player.html, then renames it
                 // to index.html AFTER Vite (and this plugin) run — so the generated
                 // precache manifest references "player.html" while navigateFallback
