@@ -65,6 +65,25 @@ export default defineConfig(({ mode }) => {
               },
               workbox: {
                 navigateFallback: "/player/index.html",
+                // The build emits the player entry as player.html, then renames it
+                // to index.html AFTER Vite (and this plugin) run — so the generated
+                // precache manifest references "player.html" while navigateFallback
+                // points at "/player/index.html". Workbox's createHandlerBoundToURL
+                // then throws `non-precached-url` at SW-evaluation time because
+                // /player/index.html isn't in the manifest, and the service worker
+                // fails to install — killing ALL offline support (blank kiosk after
+                // the server goes down + a Chromium restart). Rewrite that one entry
+                // to index.html so the manifest matches both navigateFallback and the
+                // renamed file on disk. The content (and thus revision hash) is
+                // identical — only the filename changes.
+                manifestTransforms: [
+                  (entries) => ({
+                    manifest: entries.map((e) =>
+                      e.url === "player.html" ? { ...e, url: "index.html" } : e,
+                    ),
+                    warnings: [],
+                  }),
+                ],
                 // Kiosk Pis never navigate; the default "wait until all pages close"
                 // SW activation leaves them on stale chunks forever. Skip-wait +
                 // claim makes the new build take over on the next reload.
@@ -77,8 +96,36 @@ export default defineConfig(({ mode }) => {
                     urlPattern: /\/api\/signage\/player\/playlist/,
                     handler: "StaleWhileRevalidate",
                     options: {
+                      // 1-year expiry (not 24h): offline playback must survive
+                      // indefinitely, not just one day. StaleWhileRevalidate still
+                      // refreshes the cache silently whenever the kiosk is online.
                       cacheName: "signage-playlist-v1",
-                      expiration: { maxEntries: 5, maxAgeSeconds: 86400 },
+                      expiration: { maxEntries: 5, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                      cacheableResponse: { statuses: [0, 200] },
+                    },
+                  },
+                  {
+                    // Matches /api/signage/player/asset/<uuid> and .../asset/<uuid>/slide/<idx>
+                    // (device-auth'd media + PPTX slide passthrough). Without this the media
+                    // only lives in the browser HTTP cache, which honours the backend's
+                    // Cache-Control: max-age=300 and goes stale after 5 minutes offline —
+                    // breaking playback. CacheFirst serves from the SW cache regardless of
+                    // network, so offline playback works infinitely.
+                    //
+                    // Media is content-addressed by UUID (new content ⇒ new id), so a cached
+                    // entry never goes stale. matchOptions.ignoreSearch drops the rotating
+                    // ?token=… query from the cache key, so token rotation while online neither
+                    // bloats the cache nor forces a re-fetch of already-cached media.
+                    urlPattern: /\/api\/signage\/player\/asset\//,
+                    handler: "CacheFirst",
+                    options: {
+                      cacheName: "signage-media-v1",
+                      matchOptions: { ignoreSearch: true },
+                      expiration: {
+                        maxEntries: 200,
+                        maxAgeSeconds: 60 * 60 * 24 * 365,
+                        purgeOnQuotaError: true,
+                      },
                       cacheableResponse: { statuses: [0, 200] },
                     },
                   },

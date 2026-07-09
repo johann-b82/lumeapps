@@ -658,7 +658,9 @@ Since v1.49 the device JWT carries no `exp` claim — a paired kiosk stays paire
 
 **Revoke a single device (preferred — keeps audit trail):**
 
-In the admin UI go to **Signage → Geräte** and click the red shield icon on the device row. Server-side this calls `POST /api/signage/pair/devices/{id}/revoke`, which stamps `signage_devices.revoked_at = now()`. The next request from that kiosk (heartbeat fires every 60s) returns 401, the player wipes localStorage, and the pairing screen appears within ~60 seconds. The device row is preserved so you still see when it was revoked.
+In the admin UI go to **Signage → Geräte** and click the red shield icon on the device row. Server-side this calls `POST /api/signage/pair/devices/{id}/revoke`, which stamps `signage_devices.revoked_at = now()`. The kiosk's next request (heartbeat fires every 60s) returns 401, and the pairing screen appears within roughly **3 minutes**. The device row is preserved so you still see when it was revoked.
+
+> **Why ~3 minutes, not ~60 seconds:** the player debounces 401s via `useRevocationGuard` (`frontend/src/player/hooks/useRevocationGuard.ts`). A single 401 no longer wipes the device token, because the backend also returns 401 for a *transiently* absent device row — during a server restart, a DB restore, or the reboot startup race (see §17–19) — and the old "any 401 → unpair" behaviour stranded working kiosks on the pairing screen during those windows. The token is now cleared only after 401s persist continuously for `REVOKE_CONFIRM_MS` (3 min) with no successful authenticated response resetting the clock. A genuine revoke keeps 401ing forever and so still drops to pairing; a transient blip is forgiven on the next good heartbeat. To make a revoke take effect faster in a pinch, delete the device row (below) — that is honoured on the same ~3-minute debounce, so for an *immediate* drop, power-cycle or restart the kiosk's `signage-player` service after revoking.
 
 **Delete a device entirely (when you want the row gone):**
 

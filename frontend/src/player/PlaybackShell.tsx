@@ -26,6 +26,7 @@ import { playerKeys } from "@/player/lib/queryKeys";
 import { applyDurationDefaults } from "@/player/lib/durationDefaults";
 import { resolveMediaUrl, resolveSlideUrl } from "@/player/lib/mediaUrl";
 import { useDeviceToken } from "@/player/hooks/useDeviceToken";
+import { useRevocationGuard } from "@/player/hooks/useRevocationGuard";
 import { useSseWithPollingFallback } from "@/player/hooks/useSseWithPollingFallback";
 import { useSidecarStatus } from "@/player/hooks/useSidecarStatus";
 import { OfflineChip } from "@/player/components/OfflineChip";
@@ -56,6 +57,10 @@ export function PlaybackShell() {
   const { token, clearToken, rotateToken } = useDeviceToken();
   const queryClient = useQueryClient();
   const sidecarStatus = useSidecarStatus();
+  // A single 401 must not unpair the kiosk — the backend transiently 401s a
+  // still-valid token when the device row is briefly unresolvable (server
+  // restart / DB restore / reboot race). Only clear the token once 401s persist.
+  const { onUnauthorized, noteAuthSuccess } = useRevocationGuard(clearToken);
 
   // Phase 62 D-05 / CAL-PI-06 — local calibration state. Default `false` keeps
   // the Phase 47 autoplay-muted invariant until the admin UI enables audio.
@@ -67,13 +72,14 @@ export function PlaybackShell() {
   const refreshCalibration = useCallback(async () => {
     if (!token) return;
     try {
-      const cal = await fetchCalibration(token, clearToken);
+      const cal = await fetchCalibration(token, onUnauthorized);
+      noteAuthSuccess();
       setAudioEnabled(cal.audio_enabled);
     } catch {
       // Non-fatal: keep the last-known value. SSE will retry on next event;
       // the Pi sidecar still holds the authoritative wpctl + wlr-randr state.
     }
-  }, [token, clearToken]);
+  }, [token, onUnauthorized, noteAuthSuccess]);
 
   // Seed calibration on token arrival (initial mount after pairing).
   useEffect(() => {
@@ -83,18 +89,26 @@ export function PlaybackShell() {
   // Initial + invalidate-driven playlist fetch. Polling fallback (30s) is driven
   // by the SSE hook, NOT a refetchInterval here — see UI-SPEC §"Data Fetching
   // Contract" (refetchInterval: false normally).
-  const { data: envelope } = useQuery<PlaylistEnvelope>({
+  const playlistQuery = useQuery<PlaylistEnvelope>({
     queryKey: playerKeys.playlist(),
     queryFn: () =>
       playerFetch<PlaylistEnvelope>(PLAYLIST_URL, {
         token: token!,
-        on401: clearToken,
+        on401: onUnauthorized,
       }),
     enabled: !!token,
     staleTime: 5 * 60_000,
     gcTime: Infinity, // never evict last-known playlist (offline cache-and-loop)
     retry: (failureCount) => failureCount < 3,
   });
+  const envelope = playlistQuery.data;
+
+  // A successful (authed) playlist fetch resets the revocation strike clock.
+  const playlistUpdatedAt = playlistQuery.dataUpdatedAt;
+  useEffect(() => {
+    if (playlistQuery.isSuccess) noteAuthSuccess();
+    // playlistUpdatedAt changes only on a fresh successful fetch.
+  }, [playlistUpdatedAt, playlistQuery.isSuccess, noteAuthSuccess]);
 
   // Wire the SSE/watchdog/polling lifecycle. On any signal that the playlist may
   // have changed, invalidate the query so TanStack refetches (which reuses the
@@ -109,7 +123,7 @@ export function PlaybackShell() {
     onCalibrationChanged: () => {
       void refreshCalibration();
     },
-    onUnauthorized: clearToken,
+    onUnauthorized,
   });
 
   // Apply per-format duration defaults (D-6) AND sidecar URL rewrite (D-1).
@@ -166,10 +180,13 @@ export function PlaybackShell() {
             playlist_etag: null,
           }),
           headers: { "Content-Type": "application/json" },
-          on401: clearToken,
+          on401: onUnauthorized,
         },
       )
         .then((body) => {
+          // A resolved heartbeat is a successful authed response — reset the
+          // revocation strike clock so an earlier transient 401 is forgiven.
+          noteAuthSuccess();
           if (body?.token && body.token !== token) {
             rotateToken(body.token);
             // Best-effort sidecar sync. 200ms timeout inside postSidecarToken
@@ -184,7 +201,7 @@ export function PlaybackShell() {
     tick();
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
-  }, [token, clearToken, rotateToken]);
+  }, [token, onUnauthorized, noteAuthSuccess, rotateToken]);
 
   // Hide cursor on playback canvas after 10 s of mouse inactivity. The kiosk Pi
   // normally has no mouse, but when an operator plugs one in for setup the
