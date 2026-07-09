@@ -61,4 +61,5 @@ Um einen Upload und alle zugehörigen Datensätze zu löschen, klicke auf das L�
 ## Verwandte Artikel
 
 - [Umsatz-Dashboard](/docs/user-guide/sales-dashboard) — Sieh deine hochgeladenen Daten als KPI-Kacheln und Diagramme.
+- [Produktions-Dashboard](/docs/user-guide/production-dashboard) — Aufträge in Verzug aus den Auftragspositionen- und Lieferschein-Uploads.
 - [Filter & Zeiträume](/docs/user-guide/filters) — Lerne, die Dashboard-Ansicht nach Zeitraum einzugrenzen.

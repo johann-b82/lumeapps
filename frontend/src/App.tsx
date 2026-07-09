@@ -16,6 +16,7 @@ import { EmbedWorldCupScorersPage } from "./pages/EmbedWorldCupScorersPage";
 import { EmbedWorldCupTippspielPage } from "./pages/EmbedWorldCupTippspielPage";
 import { QualityPage } from "./pages/QualityPage";
 import { ProcurementPage } from "./pages/ProcurementPage";
+import { ProductionPage } from "./pages/ProductionPage";
 import { FinancePage } from "./pages/FinancePage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -24,6 +25,7 @@ import { GeneralSettingsPage } from "@/pages/GeneralSettingsPage";
 import { HrSettingsPage } from "@/pages/HrSettingsPage";
 import { QualitySettingsPage } from "@/pages/QualitySettingsPage";
 import { FinanceSettingsPage } from "@/pages/FinanceSettingsPage";
+import { ProductionSettingsPage } from "@/pages/ProductionSettingsPage";
 import { SalesSettingsPage } from "@/pages/SalesSettingsPage";
 import { WorldCupSettingsPage } from "@/pages/WorldCupSettingsPage";
 import { AtrSettingsPage } from "@/pages/AtrSettingsPage";
@@ -77,6 +79,7 @@ function AppShell() {
           <Route path="/hr" component={HRPage} />
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
+          <Route path="/production" component={ProductionPage} />
           {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
               main bundle used by the signage /embed pages. */}
@@ -130,6 +133,7 @@ function AppShell() {
           <Route path="/settings/hr" component={HrSettingsPage} />
           <Route path="/settings/quality" component={QualitySettingsPage} />
           <Route path="/settings/finance" component={FinanceSettingsPage} />
+          <Route path="/settings/production" component={ProductionSettingsPage} />
           <Route path="/settings/sales" component={SalesSettingsPage} />
           <Route path="/settings/worldcup" component={WorldCupSettingsPage} />
           <Route path="/settings/atr" component={AtrSettingsPage} />

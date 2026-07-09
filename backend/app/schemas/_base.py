@@ -164,6 +164,8 @@ class SettingsUpdate(BaseModel):
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
+    # v1.77 — Produktion Verzug target (max Verzugsquote as fraction)
+    target_produktion_verzug: float | None = None
     # v1.15 Sensor Monitor — admin writes (Phase 40-01)
     # None means "don't change" (same pattern as Personio / HR targets above).
     # Known limitation (40-01): there is no sentinel for "clear threshold back
@@ -230,6 +232,8 @@ class SettingsRead(BaseModel):
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
+    # v1.77 — Produktion Verzug target (max Verzugsquote as fraction)
+    target_produktion_verzug: float | None = None
     # Phase 39-02 — Sensor config surfaced read-only (admin writes arrive Phase 40).
     # Decimal serializes as string; frontend parses via Number().
     sensor_poll_interval_s: int = 60
@@ -588,6 +592,14 @@ class DeliveryUploadResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
+class AuftragPositionenUploadResponse(BaseModel):
+    """Response from POST /api/upload-auftrag-positionen (position-level AUF)."""
+
+    rows_inserted: int
+    rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
 class GoodsReceiptUploadResponse(BaseModel):
     rows_inserted: int
     rows_updated: int = 0
@@ -725,6 +737,56 @@ class OtdValue(BaseModel):
     avg_delay: float | None = None
     previous_period: float | None = None
     previous_year: float | None = None
+
+
+class ProductionVerzugValue(BaseModel):
+    """Produktion — "Aufträge in Verzug (Seriengeschäft)" KPI for a window.
+
+    Counted by *order* (Auftrag), not by delivery position: an order is in
+    Verzug when its latest LS-Lieferdatum falls after the order's confirmed
+    Lieferdatum (Zieltermin). ``rate`` = in_verzug / total, a fraction
+    (0.12 → 12 %). NULL when the window had no matching orders. Lower is
+    better — the frontend renders deltas in Termintreue-complement space.
+    """
+
+    rate: float | None = None
+    in_verzug_count: int
+    total_count: int
+    avg_delay: float | None = None
+    previous_period: float | None = None
+    previous_year: float | None = None
+
+
+class ProductionVerzugHistoryPoint(BaseModel):
+    month: str
+    rate: float | None = None
+    in_verzug_count: int
+    total_count: int
+
+
+class ProductionVerzugRow(BaseModel):
+    """One delivered-late order for the "Aufträge in Verzug" table."""
+
+    vorgang_nr: str
+    customer_name: str | None = None
+    adr_nr: str | None = None
+    target_date: date | None = None
+    actual_date: date | None = None
+    verzug_tage: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProductionOverdueRow(BaseModel):
+    """One open & overdue order (no Lieferschein, Zieltermin already past)."""
+
+    vorgang_nr: str
+    customer_name: str | None = None
+    adr_nr: str | None = None
+    target_date: date | None = None
+    days_overdue: int | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class OtdHistoryPoint(BaseModel):
@@ -921,6 +983,7 @@ __all__ = [
     "UploadBatchSummary",
     "QualityUploadResponse",
     "DeliveryUploadResponse",
+    "AuftragPositionenUploadResponse",
     "GoodsReceiptUploadResponse",
     "InteressentenUploadResponse",
     "AngeboteUploadResponse",
@@ -934,6 +997,10 @@ __all__ = [
     "CustomerComplaintRow",
     "DeliveryReliabilityUploadResponse",
     "OtdValue",
+    "ProductionVerzugValue",
+    "ProductionVerzugHistoryPoint",
+    "ProductionVerzugRow",
+    "ProductionOverdueRow",
     "OtdHistoryPoint",
     "OtdRow",
     # v1.70 Finanzperspektive — Materialkostenquote

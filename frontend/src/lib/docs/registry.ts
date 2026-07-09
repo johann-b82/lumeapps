@@ -20,6 +20,8 @@ import enSalesDashboard from "../../docs/en/user-guide/sales-dashboard.md?raw";
 import deSalesDashboard from "../../docs/de/user-guide/sales-dashboard.md?raw";
 import enHrDashboard from "../../docs/en/user-guide/hr-dashboard.md?raw";
 import deHrDashboard from "../../docs/de/user-guide/hr-dashboard.md?raw";
+import enProductionDashboard from "../../docs/en/user-guide/production-dashboard.md?raw";
+import deProductionDashboard from "../../docs/de/user-guide/production-dashboard.md?raw";
 import enFilters from "../../docs/en/user-guide/filters.md?raw";
 import deFilters from "../../docs/de/user-guide/filters.md?raw";
 import enLanguageAndTheme from "../../docs/en/user-guide/language-and-theme.md?raw";
@@ -35,6 +37,7 @@ export const sections: Record<SectionId, ArticleEntry[]> = {
     { slug: "uploading-data", titleKey: "docs.nav.uploadingData" },
     { slug: "sales-dashboard", titleKey: "docs.nav.salesDashboard" },
     { slug: "hr-dashboard", titleKey: "docs.nav.hrDashboard" },
+    { slug: "production-dashboard", titleKey: "docs.nav.productionDashboard" },
     { slug: "filters", titleKey: "docs.nav.filters" },
     { slug: "language-and-theme", titleKey: "docs.nav.languageAndTheme" },
   ],
@@ -57,6 +60,7 @@ export const registry: Record<string, Record<string, Record<string, string>>> = 
       "uploading-data": enUploadingData,
       "sales-dashboard": enSalesDashboard,
       "hr-dashboard": enHrDashboard,
+      "production-dashboard": enProductionDashboard,
       filters: enFilters,
       "language-and-theme": enLanguageAndTheme,
     },
@@ -76,6 +80,7 @@ export const registry: Record<string, Record<string, Record<string, string>>> = 
       "uploading-data": deUploadingData,
       "sales-dashboard": deSalesDashboard,
       "hr-dashboard": deHrDashboard,
+      "production-dashboard": deProductionDashboard,
       filters: deFilters,
       "language-and-theme": deLanguageAndTheme,
     },

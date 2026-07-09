@@ -225,6 +225,7 @@ export interface Settings {
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
+  target_produktion_verzug: number | null;
   // v1.55 — Sales-dashboard weekly targets
   target_sales_erstkontakte: number | null;
   target_sales_interessenten: number | null;
@@ -304,6 +305,7 @@ export interface SettingsUpdatePayload {
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio?: number | null;
   target_personnel_cost_ratio?: number | null;
+  target_produktion_verzug?: number | null;
   // Phase 40-01 — Sensor Monitor admin writes. undefined = "don't change"
   // (mirrors Pydantic None-means-don't-change on SettingsUpdate). Decimals
   // go on the wire as strings to match Pydantic's Decimal input coercion.
@@ -749,6 +751,24 @@ export async function uploadAuftraegeFile(
   });
 }
 
+// v1.76 — position-level AswKpf_AUF (Auftragspositionen) feeding the Verzug KPI.
+export interface AuftragPositionenUploadResponse {
+  rows_inserted: number;
+  rows_updated: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadAuftragPositionenFile(
+  file: File,
+): Promise<AuftragPositionenUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<AuftragPositionenUploadResponse>(
+    "/api/upload-auftrag-positionen",
+    { method: "POST", body: formData },
+  );
+}
+
 function _buildQualityQuery(params?: {
   date_from?: string;
   date_to?: string;
@@ -1041,6 +1061,80 @@ export async function fetchOtdList(params?: {
 }): Promise<OtdRow[]> {
   return apiClient<OtdRow[]>(
     `/api/procurement/otd/list${_buildOtdQuery(params)}`,
+  );
+}
+
+// --------------------------------------------------------------------------
+// Produktion / Aufträge in Verzug (Seriengeschäft) — v1.76
+// --------------------------------------------------------------------------
+
+export interface ProductionVerzugValue {
+  rate: number | null;
+  in_verzug_count: number;
+  total_count: number;
+  avg_delay: number | null;
+  previous_period: number | null;
+  previous_year: number | null;
+}
+
+export interface ProductionVerzugHistoryPoint {
+  month: string;
+  rate: number | null;
+  in_verzug_count: number;
+  total_count: number;
+}
+
+export interface ProductionVerzugRow {
+  vorgang_nr: string;
+  customer_name: string | null;
+  adr_nr: string | null;
+  target_date: string | null;
+  actual_date: string | null;
+  verzug_tage: number | null;
+}
+
+export async function fetchProductionVerzug(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<ProductionVerzugValue> {
+  return apiClient<ProductionVerzugValue>(
+    `/api/production/verzug${_buildOtdQuery(params)}`,
+  );
+}
+
+export async function fetchProductionVerzugHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): Promise<ProductionVerzugHistoryPoint[]> {
+  return apiClient<ProductionVerzugHistoryPoint[]>(
+    `/api/production/verzug/history${_buildOtdQuery(params)}`,
+  );
+}
+
+export async function fetchProductionVerzugList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<ProductionVerzugRow[]> {
+  return apiClient<ProductionVerzugRow[]>(
+    `/api/production/verzug/list${_buildOtdQuery(params)}`,
+  );
+}
+
+export interface ProductionOverdueRow {
+  vorgang_nr: string;
+  customer_name: string | null;
+  adr_nr: string | null;
+  target_date: string | null;
+  days_overdue: number | null;
+}
+
+export async function fetchProductionOverdueList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<ProductionOverdueRow[]> {
+  return apiClient<ProductionOverdueRow[]>(
+    `/api/production/verzug/overdue${_buildOtdQuery(params)}`,
   );
 }
 

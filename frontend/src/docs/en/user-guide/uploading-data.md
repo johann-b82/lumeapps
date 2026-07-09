@@ -61,4 +61,5 @@ To delete an upload and all its associated records, click the delete icon in the
 ## Related Articles
 
 - [Sales Dashboard](/docs/user-guide/sales-dashboard) — See your uploaded data as KPI cards and charts.
+- [Production dashboard](/docs/user-guide/production-dashboard) — Orders overdue, from the order-positions and delivery-note uploads.
 - [Filters & Date Ranges](/docs/user-guide/filters) — Learn how to narrow the dashboard view by date range.
