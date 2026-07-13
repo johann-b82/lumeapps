@@ -452,6 +452,20 @@ export async function fetchHrKpis(params?: {
   return apiClient<HrKpiResponse>(`/api/hr/kpis${qs ? `?${qs}` : ""}`);
 }
 
+// Org chart — active employees + their supervisor id (from synced Personio data).
+export interface OrgChartNode {
+  id: number;
+  first_name: string | null;
+  last_name: string | null;
+  position: string | null;
+  department: string | null;
+  supervisor_id: number | null;
+}
+
+export async function fetchOrgChart(): Promise<OrgChartNode[]> {
+  return apiClient<OrgChartNode[]>("/api/hr/org-chart");
+}
+
 export interface HrKpiHistoryPoint {
   // bucket label: "YYYY-MM-DD" (daily) | "YYYY-Www" (weekly) | "YYYY-MM" (monthly) | "YYYY-Qn" (quarterly)
   month: string;
