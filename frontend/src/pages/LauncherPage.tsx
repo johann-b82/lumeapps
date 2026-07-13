@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler, Network, UserPlus } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -15,7 +15,7 @@ export function LauncherPage() {
   void user;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-16 pb-8 space-y-14">
+    <div className="max-w-7xl mx-auto px-6 pt-16 pb-8">
       <div
         className="grid gap-8"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
@@ -40,6 +40,27 @@ export function LauncherPage() {
           </button>
           <span className="text-xs text-muted-foreground text-center">
             {t("launcher.tile.kpi")}
+          </span>
+        </div>
+
+        {/* HR tile → /hr/home hub. The HR sub-features (Onboarding, Organigramm)
+            live behind this tile on HrHomePage. */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocation("/hr/home")}
+            aria-label={t("launcher.tile.hr")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-pink-400 to-rose-600
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Users className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("launcher.tile.hr")}
           </span>
         </div>
 
@@ -219,56 +240,6 @@ export function LauncherPage() {
           </div>
         ))}
       </div>
-
-      {/* HR section — dedicated group with its own heading and sub-feature
-          tiles (Organigramm, Onboarding). More tiles dock here later. */}
-      <section>
-        <h2 className="text-lg font-semibold mb-6">{t("launcher.section.hr")}</h2>
-        <div
-          className="grid gap-8"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
-        >
-          {/* Organigramm tile → /hr/organigramm */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/hr/organigramm")}
-              aria-label={t("launcher.tile.organigramm")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-cyan-500 to-sky-700
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Network className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.organigramm")}
-            </span>
-          </div>
-
-          {/* Onboarding tile → /hr/onboarding */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/hr/onboarding")}
-              aria-label={t("launcher.tile.onboarding")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-fuchsia-500 to-purple-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <UserPlus className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.onboarding")}
-            </span>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

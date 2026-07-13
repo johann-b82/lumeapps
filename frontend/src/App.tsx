@@ -7,6 +7,7 @@ import { UploadPage } from "./pages/UploadPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HRPage } from "./pages/HRPage";
 import { KpiDashboardHomePage } from "./pages/KpiDashboardHomePage";
+import { HrHomePage } from "./pages/HrHomePage";
 import { OrganigrammPage } from "./pages/OrganigrammPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
@@ -81,6 +82,7 @@ function AppShell() {
           <Route path="/kpi" component={KpiDashboardHomePage} />
           <Route path="/upload" component={UploadPage} />
           <Route path="/hr" component={HRPage} />
+          <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />
           <Route path="/hr/onboarding" component={OnboardingPage} />
           <Route path="/quality" component={QualityPage} />
