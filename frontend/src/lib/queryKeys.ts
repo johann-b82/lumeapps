@@ -46,6 +46,7 @@ export const hrKpiKeys = {
     ["hr", "employees", { from, to, search }] as const,
   birthdaysThisWeek: () => ["hr", "birthdays", "this-week"] as const,
   joinersRecent: () => ["hr", "joiners", "recent"] as const,
+  orgChart: () => ["hr", "org-chart"] as const,
 };
 
 /**

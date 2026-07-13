@@ -532,3 +532,66 @@ async def get_employee_photo(
         media_type=content_type,
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+class OrgChartNode(BaseModel):
+    """One employee node for the HR org chart.
+
+    ``supervisor_id`` is the Personio id of the employee's manager, extracted
+    from the raw payload (attributes.supervisor.value.attributes.id.value).
+    ``None`` means top of hierarchy — the frontend treats such nodes (and any
+    node whose supervisor is not in the active set) as roots.
+    """
+
+    id: int
+    first_name: str | None
+    last_name: str | None
+    position: str | None
+    department: str | None
+    supervisor_id: int | None
+
+
+def _extract_supervisor_id(raw: Any) -> int | None:
+    """Dig the supervisor's employee id out of a raw Personio employee payload."""
+    if not isinstance(raw, dict):
+        return None
+    value = (
+        raw.get("attributes", {})
+        .get("supervisor", {})
+        .get("value")
+    )
+    if not isinstance(value, dict):
+        return None
+    id_field = value.get("attributes", {}).get("id", {})
+    sid = id_field.get("value") if isinstance(id_field, dict) else None
+    try:
+        return int(sid) if sid is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+@router.get("/org-chart", response_model=list[OrgChartNode])
+async def get_org_chart(
+    session: AsyncSession = Depends(get_async_db_session),
+) -> list[OrgChartNode]:
+    """Active employees plus their supervisor id, for the HR org chart.
+
+    Reads already-synced Personio employees from the DB (no live API call);
+    supervisor links come from the stored raw payload.
+    """
+    rows = (
+        await session.execute(
+            sa_select(PersonioEmployee).where(PersonioEmployee.status == "active")
+        )
+    ).scalars().all()
+    return [
+        OrgChartNode(
+            id=emp.id,
+            first_name=emp.first_name,
+            last_name=emp.last_name,
+            position=emp.position,
+            department=emp.department,
+            supervisor_id=_extract_supervisor_id(emp.raw_json),
+        )
+        for emp in rows
+    ]
