@@ -809,6 +809,7 @@
   "launcher.tile.production": "Production",
   "launcher.tile.fair": "FAIR",
   "launcher.section.kpi": "KPI Dashboard",
+  "launcher.tile.kpi": "KPI Dashboard",
   "launcher.tile.sales": "Sales",
   "launcher.section.hr": "HR",
   "launcher.tile.organigramm": "Org Chart",

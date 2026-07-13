@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, ShieldCheck, Users, ShoppingCart, Factory, FileSpreadsheet, Coins, Ruler, Network, UserPlus } from "lucide-react";
+import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler, Network, UserPlus } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -16,195 +16,33 @@ export function LauncherPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-16 pb-8 space-y-14">
-      {/* KPI-Dashboard section — the six business KPI dashboards grouped under
-          one heading. Order: Vertrieb, Einkauf, Produktion, HR, Qualität,
-          Finanzperspektive. */}
-      <section>
-        <h2 className="text-lg font-semibold mb-6">{t("launcher.section.kpi")}</h2>
-        <div
-          className="grid gap-8"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
-        >
-          {/* Vertrieb (Sales dashboard) → /sales */}
-          <div className="flex flex-col items-center gap-2">
-            {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}
-            <button
-              type="button"
-              onClick={() => setLocation("/sales")}
-              aria-label={t("launcher.tile.sales")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-blue-500 to-indigo-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <LayoutDashboard className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.sales")}
-            </span>
-          </div>
-
-          {/* Einkauf (procurement) → /procurement */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/procurement")}
-              aria-label={t("launcher.tile.procurement")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-amber-400 to-orange-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ShoppingCart className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.procurement")}
-            </span>
-          </div>
-
-          {/* Produktion → /production */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/production")}
-              aria-label={t("launcher.tile.production")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-sky-500 to-blue-700
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Factory className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.production")}
-            </span>
-          </div>
-
-          {/* HR → /hr (birthdays + KPI cards / charts / employee table) */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/hr")}
-              aria-label={t("launcher.tile.hr")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-pink-400 to-rose-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Users className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.hr")}
-            </span>
-          </div>
-
-          {/* Qualität → /quality */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/quality")}
-              aria-label={t("launcher.tile.quality")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-emerald-400 to-cyan-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ShieldCheck className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.quality")}
-            </span>
-          </div>
-
-          {/* Finanzperspektive → /finance */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/finance")}
-              aria-label={t("launcher.tile.finance")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-lime-500 to-green-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Coins className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.finance")}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* HR section — dedicated group with its own heading and sub-feature
-          tiles (Organigramm, Onboarding). Distinct from the /hr dashboard tile
-          in the KPI section above; more tiles dock here later. */}
-      <section>
-        <h2 className="text-lg font-semibold mb-6">{t("launcher.section.hr")}</h2>
-        <div
-          className="grid gap-8"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
-        >
-          {/* Organigramm tile → /hr/organigramm */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/hr/organigramm")}
-              aria-label={t("launcher.tile.organigramm")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-cyan-500 to-sky-700
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Network className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.organigramm")}
-            </span>
-          </div>
-
-          {/* Onboarding tile → /hr/onboarding */}
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/hr/onboarding")}
-              aria-label={t("launcher.tile.onboarding")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-fuchsia-500 to-purple-600
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <UserPlus className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.onboarding")}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Tools & external apps — not KPI dashboards. Sensors / Signage / ATR /
-          FAIR are admin-only; Documents / PDF / OpenProject open embedded apps. */}
       <div
         className="grid gap-8"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
       >
+        {/* KPI-Dashboard tile → /kpi hub. The six business KPI dashboards
+            (Vertrieb, Einkauf, Produktion, HR, Qualität, Finanzperspektive)
+            live behind this tile on KpiDashboardHomePage. */}
+        <div className="flex flex-col items-center gap-2">
+          {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}
+          <button
+            type="button"
+            onClick={() => setLocation("/kpi")}
+            aria-label={t("launcher.tile.kpi")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-blue-500 to-indigo-600
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <LayoutDashboard className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("launcher.tile.kpi")}
+          </span>
+        </div>
+
         {/* v1.15 SEN-LNCH: Sensors tile (admin-only) */}
         <AdminOnly>
           <div className="flex flex-col items-center gap-2">
@@ -381,6 +219,56 @@ export function LauncherPage() {
           </div>
         ))}
       </div>
+
+      {/* HR section — dedicated group with its own heading and sub-feature
+          tiles (Organigramm, Onboarding). More tiles dock here later. */}
+      <section>
+        <h2 className="text-lg font-semibold mb-6">{t("launcher.section.hr")}</h2>
+        <div
+          className="grid gap-8"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
+        >
+          {/* Organigramm tile → /hr/organigramm */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/hr/organigramm")}
+              aria-label={t("launcher.tile.organigramm")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-cyan-500 to-sky-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Network className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("launcher.tile.organigramm")}
+            </span>
+          </div>
+
+          {/* Onboarding tile → /hr/onboarding */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/hr/onboarding")}
+              aria-label={t("launcher.tile.onboarding")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-fuchsia-500 to-purple-600
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <UserPlus className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("launcher.tile.onboarding")}
+            </span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
