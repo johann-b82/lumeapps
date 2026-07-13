@@ -6,6 +6,8 @@ import { Loader2 } from "lucide-react";
 import { UploadPage } from "./pages/UploadPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HRPage } from "./pages/HRPage";
+import { OrganigrammPage } from "./pages/OrganigrammPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
 import { EmbedWorldCupPage } from "./pages/EmbedWorldCupPage";
@@ -77,6 +79,8 @@ function AppShell() {
           <Route path="/" component={LauncherPage} />
           <Route path="/upload" component={UploadPage} />
           <Route path="/hr" component={HRPage} />
+          <Route path="/hr/organigramm" component={OrganigrammPage} />
+          <Route path="/hr/onboarding" component={OnboardingPage} />
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
           <Route path="/production" component={ProductionPage} />
