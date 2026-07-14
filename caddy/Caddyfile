@@ -32,56 +32,6 @@
 		reverse_proxy directus:8055
 	}
 
-	# --- /paperless/* → Paperless-ngx (Directus SSO via forward_auth) ----------
-	# Every request gets validated against Directus first via the FastAPI
-	# auth-forward endpoint. On 200, Caddy lifts the `X-Remote-User` header
-	# from the auth response onto the upstream request. Paperless reads
-	# HTTP_X_REMOTE_USER (Django/WSGI form) and auto-provisions the user.
-	# On 401/503, the auth response status short-circuits to the client.
-	#
-	# Prefix preserved: Paperless is configured with FORCE_SCRIPT_NAME=/paperless,
-	# so it builds its own URLs with that prefix and expects the inbound path
-	# to include it. Use `handle` (not `handle_path`).
-	handle /paperless/* {
-		forward_auth api:8000 {
-			uri /api/auth/forward
-			copy_headers X-Remote-User
-		}
-		reverse_proxy paperless:8000
-	}
-
-	# --- /pdf/* → Stirling-PDF (Directus SSO via forward_auth) -----------------
-	# Stirling-PDF runs with DOCKER_ENABLE_SECURITY=false (single-tenant tool,
-	# no user model). The forward_auth gate is the ONLY authentication — any
-	# request must carry a valid Directus session cookie or it 401s before
-	# touching Stirling. X-Remote-User is forwarded for parity with paperless
-	# but Stirling ignores it.
-	#
-	# Subpath: Stirling is configured with SERVER_SERVLET_CONTEXT_PATH=/pdf,
-	# so it builds its URLs and serves assets under /pdf already. Use
-	# `handle` (prefix preserved), not `handle_path`.
-	handle /pdf/* {
-		forward_auth api:8000 {
-			uri /api/auth/forward
-			copy_headers X-Remote-User
-		}
-		reverse_proxy stirling:8080
-	}
-
-	# --- /op/* → OpenProject (Directus edge-gate, separate internal login) -----
-	# OpenProject community edition does NOT support header-based SSO (paid
-	# Enterprise feature). The forward_auth gate keeps unauthenticated users
-	# off the OpenProject login page entirely; once past, OpenProject still
-	# enforces its own session. Subpath via OPENPROJECT_RAILS__RELATIVE__URL__ROOT=/op
-	# so this `handle` preserves the prefix.
-	handle /op/* {
-		forward_auth api:8000 {
-			uri /api/auth/forward
-			copy_headers X-Remote-User
-		}
-		reverse_proxy openproject:8080
-	}
-
 	# --- /player/* → FastAPI (kiosk bundle) ------------------------------------
 	# The player bundle is built into frontend/dist/player/ and mounted by
 	# FastAPI as a StaticFiles handler (see backend/app/main.py:44-62). Vite
