@@ -170,27 +170,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/directus/, ""),
         },
-        // Embedded apps live behind Caddy with forward_auth in front. In dev
-        // (localhost:5173) Vite catch-alls everything to the SPA, so /paperless,
-        // /pdf, /op would return the admin shell. Proxy through Caddy so the
-        // launcher tiles "just work" on the dev port too.
-        // `changeOrigin: false` keeps the original Host header. OpenProject
-        // validates Host against OPENPROJECT_HOST__NAME=localhost and rejects
-        // proxied requests where the rewritten Host is `caddy:80` (400 Bad
-        // Request). Caddy itself does not care about Host so leaving it as
-        // `localhost:5173` works for paperless and stirling too.
-        "/paperless": {
-          target: process.env.VITE_CADDY_TARGET || "http://caddy:80",
-          changeOrigin: false,
-        },
-        "/pdf": {
-          target: process.env.VITE_CADDY_TARGET || "http://caddy:80",
-          changeOrigin: false,
-        },
-        "/op": {
-          target: process.env.VITE_CADDY_TARGET || "http://caddy:80",
-          changeOrigin: false,
-        },
       },
     },
   };
