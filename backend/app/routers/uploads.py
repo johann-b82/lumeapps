@@ -24,6 +24,7 @@ from app.models import (
     DeliveryRecord,
     DeliveryReliabilityRecord,
     GoodsReceiptRecord,
+    InspectionRecord,
     Interessent,
     MaterialMovement,
     MaterialPrice,
@@ -44,6 +45,7 @@ from app.parsing.delivery_reliability_parser import (
 )
 from app.parsing.erp_parser import parse_erp_file
 from app.parsing.goods_receipt_parser import parse_goods_receipt_file
+from app.parsing.inspection_parser import parse_inspection_file
 from app.parsing.material_prices_parser import parse_material_prices_file
 from app.parsing.material_movements_parser import parse_material_movements_file
 from app.parsing.interessenten_parser import parse_interessenten_file
@@ -59,6 +61,7 @@ from app.schemas import (
     DeliveryReliabilityUploadResponse,
     DeliveryUploadResponse,
     GoodsReceiptUploadResponse,
+    InspectionsUploadResponse,
     InteressentenUploadResponse,
     MaterialMovementsUploadResponse,
     MaterialPricesUploadResponse,
@@ -1490,5 +1493,116 @@ async def upload_material_prices(
     return MaterialPricesUploadResponse(
         rows_inserted=rows_inserted,
         rows_updated=rows_updated,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+# ── v1.79 — Qualitätsprüfung (AswQs2151 inspection log) ────────────────
+
+
+@admin_router.post(
+    "/upload-inspections", response_model=InspectionsUploadResponse
+)
+async def upload_inspections(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> InspectionsUploadResponse:
+    """Replace-by-date-range insert of an AswQs2151.txt Qualitätsprüfung dump.
+
+    The source has no clean business key (identical booking rows are
+    legitimate — same date/time/user/FA/artikel booking 16 STK twice
+    counts as 32 inspected), so idempotency mirrors the
+    ``material_movements`` pattern: every existing ``inspection_records``
+    row whose ``pruef_datum`` falls inside the uploaded file's date range
+    is deleted first, then the new rows are bulk-inserted. Re-uploading
+    the same file is a no-op.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for inspection uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_inspection_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="inspections",
+            )
+        )
+        await db.commit()
+        return InspectionsUploadResponse(
+            rows_inserted=0,
+            rows_replaced=0,
+            small_count=0,
+            large_count=0,
+            date_range_from=None,
+            date_range_to=None,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    date_from = min(r["pruef_datum"] for r in rows)
+    date_to = max(r["pruef_datum"] for r in rows)
+
+    deleted = await db.execute(
+        sa.delete(InspectionRecord).where(
+            InspectionRecord.pruef_datum >= date_from,
+            InspectionRecord.pruef_datum <= date_to,
+        )
+    )
+    rows_replaced = deleted.rowcount or 0
+
+    batch = UploadBatch(
+        filename=filename,
+        uploaded_at=now,
+        row_count=0,
+        error_count=len(errors),
+        status="success",
+        kind="inspections",
+    )
+    db.add(batch)
+    await db.flush()
+
+    for r in rows:
+        r["upload_batch_id"] = batch.id
+
+    # Base the chunk on the real Insertable column count, not len(rows[0]):
+    # SQLAlchemy adds every model column with a server_default (e.g.
+    # ``excluded``) to the INSERT even when the row dict omits it, so
+    # counting keys undercounts and asyncpg's 32767 param cap is hit
+    # (35100 params on the raw AswQs2151 file).
+    cols_per_row = max(1, len(InspectionRecord.__table__.columns))
+    chunk_size = max(1, 32767 // cols_per_row)
+    inserted_total = 0
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start : start + chunk_size]
+        result = await db.execute(pg_insert(InspectionRecord).values(chunk))
+        inserted_total += result.rowcount or 0
+
+    batch.row_count = inserted_total
+    if errors and inserted_total == 0:
+        batch.status = "failed"
+    elif errors:
+        batch.status = "partial"
+    await db.commit()
+
+    small_count = sum(1 for r in rows if r["size_class"] == "small")
+    large_count = sum(1 for r in rows if r["size_class"] == "large")
+
+    return InspectionsUploadResponse(
+        rows_inserted=inserted_total,
+        rows_replaced=rows_replaced,
+        small_count=small_count,
+        large_count=large_count,
+        date_range_from=date_from,
+        date_range_to=date_to,
         errors=[ValidationErrorDetail(**e) for e in errors],
     )

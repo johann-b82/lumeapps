@@ -33,6 +33,7 @@ from app.models._base import (  # noqa: F401
     Auftrag,
     MaterialMovement,
     MaterialPrice,
+    InspectionRecord,
 )
 
 # Signage models (added in Task 2 of this plan)
@@ -74,6 +75,7 @@ __all__ = [
     "Auftrag",
     "MaterialMovement",
     "MaterialPrice",
+    "InspectionRecord",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
     "SignageDevice", "SignageDeviceTag", "SignageDeviceTagMap",

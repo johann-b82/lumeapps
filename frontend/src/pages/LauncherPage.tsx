@@ -43,13 +43,15 @@ export function LauncherPage() {
           </span>
         </div>
 
-        {/* HR tile → /hr/home hub. The HR sub-features (Onboarding, Organigramm)
-            live behind this tile on HrHomePage. */}
+        {/* HR-Dashboard tile → /hr/home hub. Opens the HR sub-menu
+            (Onboarding, Organigramm) on HrHomePage, mirroring the
+            KPI-Dashboard tile pattern. */}
         <div className="flex flex-col items-center gap-2">
+          {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}
           <button
             type="button"
             onClick={() => setLocation("/hr/home")}
-            aria-label={t("launcher.tile.hr")}
+            aria-label={t("launcher.tile.hr_dashboard")}
             className="w-[120px] h-[120px] rounded-2xl
                        bg-gradient-to-br from-pink-400 to-rose-600
                        shadow-md hover:shadow-xl hover:scale-[1.03]
@@ -60,11 +62,17 @@ export function LauncherPage() {
             <Users className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
           </button>
           <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.hr")}
+            {t("launcher.tile.hr_dashboard")}
           </span>
         </div>
 
-        {/* v1.15 SEN-LNCH: Sensors tile (admin-only) */}
+        {/* v1.82 — Quality / HR / Procurement / Finance / Production tiles
+            removed from the launcher; the KPI-Dashboard tile above is
+            now the single entry point, and users switch between
+            sections via the SubHeader section-picker (frontend/src/
+            components/SubHeader.tsx). */}
+
+        {/* v1.15 SEN-LNCH: Sensors tile (admin-only, replaces first coming-soon slot) */}
         <AdminOnly>
           <div className="flex flex-col items-center gap-2">
             {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}

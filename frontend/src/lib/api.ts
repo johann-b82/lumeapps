@@ -222,6 +222,8 @@ export interface Settings {
   target_complaint_rate_subcontractor: number | null;
   target_audit_findings_level1: number | null;
   target_audit_findings_level2: number | null;
+  target_inspection_large: number | null;
+  target_inspection_small: number | null;
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
@@ -302,6 +304,8 @@ export interface SettingsUpdatePayload {
   target_complaint_rate_subcontractor?: number | null;
   target_audit_findings_level1?: number | null;
   target_audit_findings_level2?: number | null;
+  target_inspection_large?: number | null;
+  target_inspection_small?: number | null;
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio?: number | null;
   target_personnel_cost_ratio?: number | null;
@@ -916,6 +920,28 @@ export async function uploadGoodsReceiptFile(
   });
 }
 
+// v1.79 — Qualitätsprüfung (AswQs2151 inspection log) upload
+export interface InspectionsUploadResponse {
+  rows_inserted: number;
+  rows_replaced: number;
+  small_count: number;
+  large_count: number;
+  date_range_from: string | null;
+  date_range_to: string | null;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadInspectionsFile(
+  file: File,
+): Promise<InspectionsUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<InspectionsUploadResponse>("/api/upload-inspections", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function uploadDeliveryFile(file: File): Promise<DeliveryUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -967,6 +993,116 @@ export async function fetchComplaintRateHistory(params?: {
   const qs = q.toString();
   return apiClient<ComplaintRateHistoryPoint[]>(
     `/api/quality/complaint-rate/history${qs ? `?${qs}` : ""}`,
+  );
+}
+
+// v1.70 — Inspections (Qualitätsprüfung: Große / Kleine Produkte)
+
+export interface InspectionsValue {
+  large_count: number;
+  small_count: number;
+  previous_period_large: number | null;
+  previous_period_small: number | null;
+  previous_year_large: number | null;
+  previous_year_small: number | null;
+}
+
+export interface InspectionsHistoryPoint {
+  month: string;
+  large_count: number;
+  small_count: number;
+}
+
+function _buildInspectionsQuery(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): string {
+  const q = new URLSearchParams();
+  if (params?.date_from) q.set("date_from", params.date_from);
+  if (params?.date_to) q.set("date_to", params.date_to);
+  if (params?.granularity) q.set("granularity", params.granularity);
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchInspections(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<InspectionsValue> {
+  return apiClient<InspectionsValue>(
+    `/api/quality/inspections${_buildInspectionsQuery(params)}`,
+  );
+}
+
+export async function fetchInspectionsHistory(params?: {
+  date_from?: string;
+  date_to?: string;
+  granularity?: BucketGranularity;
+}): Promise<InspectionsHistoryPoint[]> {
+  return apiClient<InspectionsHistoryPoint[]>(
+    `/api/quality/inspections/history${_buildInspectionsQuery(params)}`,
+  );
+}
+
+export interface InspectionListRow {
+  bezeichnung: string | null;
+  size_class: "large" | "small";
+  produktgruppe: string | null;
+  bookings: number;
+  total_qty: number;
+  scrap_qty: number;
+  scrap_rate: number | null;
+  inspectors: number;
+  first_date: string | null;
+  last_date: string | null;
+}
+
+export async function fetchInspectionsList(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<InspectionListRow[]> {
+  return apiClient<InspectionListRow[]>(
+    `/api/quality/inspections/list${_buildInspectionsQuery(params)}`,
+  );
+}
+
+// v1.80 — individual bookings + per-row exclude toggle
+export interface InspectionBookingRow {
+  id: number;
+  pruef_datum: string | null;
+  pruef_zeit: string | null;
+  benutzer: string | null;
+  fa: string | null;
+  artikel: string | null;
+  bezeichnung: string | null;
+  size_class: "large" | "small";
+  produktgruppe: string | null;
+  buchungs_menge: number;
+  ausschuss_menge: number;
+  excluded: boolean;
+}
+
+export async function fetchInspectionBookings(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<InspectionBookingRow[]> {
+  return apiClient<InspectionBookingRow[]>(
+    `/api/quality/inspections/bookings${_buildInspectionsQuery(params)}`,
+  );
+}
+
+export async function updateInspectionBooking(
+  id: number,
+  excluded: boolean,
+): Promise<InspectionBookingRow> {
+  return apiClient<InspectionBookingRow>(
+    `/api/quality/inspections/bookings/${id}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ excluded }),
+    },
   );
 }
 

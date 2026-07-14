@@ -9,6 +9,9 @@ import { AuditTypeFilter } from "@/components/dashboard/AuditTypeFilter";
 import { ComplaintRateCardGrid } from "@/components/dashboard/ComplaintRateCardGrid";
 import { ComplaintRateChart } from "@/components/dashboard/ComplaintRateChart";
 import { CustomerComplaintsTable } from "@/components/dashboard/CustomerComplaintsTable";
+import { QualityInspectionCardGrid } from "@/components/dashboard/QualityInspectionCardGrid";
+import { QualityInspectionCharts } from "@/components/dashboard/QualityInspectionCharts";
+import { QualityInspectionList } from "@/components/dashboard/QualityInspectionList";
 import {
   AUDIT_TYPE_CODES,
   type AuditTypeCode,
@@ -16,12 +19,15 @@ import {
   type QtyMode,
 } from "@/lib/api";
 
-type QualityView = "audits" | "complaints";
+type QualityView = "audits" | "complaints" | "inspections";
 
 export function QualityPage() {
   const { t } = useTranslation();
 
-  // Top-level view toggle: Audits | Reklamationen.
+  // Top-level view toggle: Audits | Reklamationen | Qualitätsprüfung.
+  // 3 segments → Toggle-component's 2-segment constraint doesn't fit,
+  // so we use the SegmentedControl (same pattern as the complaint-type
+  // 4-way switch below).
   const [view, setView] = useState<QualityView>("audits");
 
   // Audits state — unchanged from the v1.49 page.
@@ -37,22 +43,21 @@ export function QualityPage() {
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Toggle<QualityView>
+        <SegmentedControl<QualityView>
           segments={[
             { value: "audits", label: t("quality.view.audits") },
             { value: "complaints", label: t("quality.view.complaints") },
-          ] as const}
+            { value: "inspections", label: t("quality.view.inspections") },
+          ]}
           value={view}
           onChange={setView}
           aria-label={t("quality.view.toggleLabel")}
-          variant="muted"
         />
-        {view === "audits" ? (
+        {view === "audits" && (
           <AuditTypeFilter selected={auditTypes} onChange={setAuditTypes} />
-        ) : (
+        )}
+        {view === "complaints" && (
           <div className="flex flex-wrap items-center gap-3">
-            {/* Four complaint sources — the 2-segment Toggle component
-                can't host them, so we use the radio-group SegmentedControl. */}
             <SegmentedControl<ComplaintType>
               segments={[
                 { value: "customer", label: t("quality.complaintType.customer") },
@@ -78,17 +83,25 @@ export function QualityPage() {
         )}
       </div>
 
-      {view === "audits" ? (
+      {view === "audits" && (
         <>
           <QualityKpiCardGrid auditTypes={auditTypes} />
           <QualityKpiCharts auditTypes={auditTypes} />
           <QualityFindingsTable auditTypes={auditTypes} />
         </>
-      ) : (
+      )}
+      {view === "complaints" && (
         <>
           <ComplaintRateCardGrid qtyMode={qtyMode} complaintType={complaintType} />
           <ComplaintRateChart qtyMode={qtyMode} complaintType={complaintType} />
           <CustomerComplaintsTable complaintType={complaintType} />
+        </>
+      )}
+      {view === "inspections" && (
+        <>
+          <QualityInspectionCardGrid />
+          <QualityInspectionCharts />
+          <QualityInspectionList />
         </>
       )}
     </div>

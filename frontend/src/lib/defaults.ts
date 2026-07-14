@@ -27,6 +27,8 @@ export const DEFAULT_SETTINGS: Settings = {
   target_complaint_rate_subcontractor: null,
   target_audit_findings_level1: null,
   target_audit_findings_level2: null,
+  target_inspection_large: null,
+  target_inspection_small: null,
   // v1.71 / v1.72 Finance targets (cost ratios)
   target_material_cost_ratio: null,
   target_personnel_cost_ratio: null,
