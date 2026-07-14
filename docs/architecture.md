@@ -223,6 +223,30 @@ Directus session.
 
 ---
 
+## HR Org Chart & Launcher Hubs (v1.83)
+
+The Organigramm at `/hr/organigramm` renders the reporting hierarchy from
+**already-synced Personio data** — no live Personio API call. The HR sync
+stores each employee's full Personio payload in `personio_employees.raw_json`;
+the supervisor link lives at `attributes.supervisor.value.attributes.id.value`.
+
+`GET /api/hr/org-chart` (`backend/app/routers/hr_kpis.py`, viewer-gated at the
+router level) reads active employees and returns each one's `supervisor_id`.
+It sits in the HR compute router beside the KPI-aggregation endpoints (the
+module docstring already declares `Compute-justified: clause 3`); rather than
+exposing table rows verbatim it transforms the nested raw payload into flat
+org-chart nodes. The frontend `OrganigrammPage` builds a forest (roots =
+no/unknown supervisor, self/cycle guarded) and renders a collapsible tree.
+
+The launcher home (`/`) groups tiles behind two hub pages: a **KPI-Dashboard**
+tile → `/kpi` (`KpiDashboardHomePage`, six dashboard tiles — Vertrieb, Einkauf,
+Produktion, HR, Qualität, Finanzperspektive) and an **HR** tile → `/hr/home`
+(`HrHomePage`, Onboarding + Organigramm). The individual dashboard routes
+(`/sales`, `/quality`, `/hr`, …) are unchanged — only their launcher entry
+points moved behind the hubs.
+
+---
+
 ## Cache Namespace Migration & v22 Purge Flag (Phase 73 CACHE-03)
 
 **Phase:** 73 — Cache Namespace Migration
