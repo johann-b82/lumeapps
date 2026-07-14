@@ -161,6 +161,8 @@ class SettingsUpdate(BaseModel):
     target_complaint_rate_subcontractor: float | None = None
     target_audit_findings_level1: int | None = None
     target_audit_findings_level2: int | None = None
+    target_inspection_large: int | None = None
+    target_inspection_small: int | None = None
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
@@ -229,6 +231,8 @@ class SettingsRead(BaseModel):
     target_complaint_rate_subcontractor: float | None = None
     target_audit_findings_level1: int | None = None
     target_audit_findings_level2: int | None = None
+    target_inspection_large: int | None = None
+    target_inspection_small: int | None = None
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
@@ -702,6 +706,78 @@ class ComplaintRateValue(BaseModel):
     previous_year: float | None = None
 
 
+class InspectionsValue(BaseModel):
+    """Inspection counts for one window — large + small products.
+
+    Stub schema (v1.70) — the aggregation returns 0 for both counts
+    until the input pipeline (upload file + derivation from existing
+    data) is specified. Delta baselines mirror the audit-findings shape.
+    """
+
+    large_count: int = 0
+    small_count: int = 0
+    previous_period_large: int | None = None
+    previous_period_small: int | None = None
+    previous_year_large: int | None = None
+    previous_year_small: int | None = None
+
+
+class InspectionsHistoryPoint(BaseModel):
+    month: str
+    large_count: int = 0
+    small_count: int = 0
+
+
+class InspectionBookingRow(BaseModel):
+    """One raw AswQs2151 booking row for the verification table (v1.80).
+
+    Distinct from :class:`InspectionListRow` (which is aggregated per
+    product name): this schema is one-to-one with ``inspection_records``
+    so the user can tick individual bookings out of the KPI when they
+    spot a fat-finger entry.
+    """
+
+    id: int
+    pruef_datum: str | None = None
+    pruef_zeit: str | None = None
+    benutzer: str | None = None
+    fa: str | None = None
+    artikel: str | None = None
+    bezeichnung: str | None = None
+    size_class: str
+    produktgruppe: str | None = None
+    buchungs_menge: float = 0.0
+    ausschuss_menge: float = 0.0
+    excluded: bool = False
+
+
+class InspectionExcludeUpdate(BaseModel):
+    """Body of PATCH /api/quality/inspections/bookings/{id}."""
+
+    excluded: bool
+
+
+class InspectionListRow(BaseModel):
+    """One aggregated row per product name in the verification table.
+
+    Backs GET /api/quality/inspections/list — rows grouped by
+    ``(bezeichnung, size_class)`` in the window. ``scrap_rate`` is a
+    fraction (0.02 → 2 %) or NULL when nothing was booked, so the
+    frontend can format it consistently with other rate columns.
+    """
+
+    bezeichnung: str | None = None
+    size_class: str  # 'large' or 'small'
+    produktgruppe: str | None = None
+    bookings: int = 0
+    total_qty: float = 0.0
+    scrap_qty: float = 0.0
+    scrap_rate: float | None = None
+    inspectors: int = 0
+    first_date: str | None = None
+    last_date: str | None = None
+
+
 class ComplaintRateHistoryPoint(BaseModel):
     month: str
     rate: float | None = None
@@ -843,6 +919,26 @@ class MaterialPricesUploadResponse(BaseModel):
 
     rows_inserted: int
     rows_updated: int = 0
+    errors: list[ValidationErrorDetail]
+
+
+class InspectionsUploadResponse(BaseModel):
+    """Response from POST /api/upload-inspections (v1.79).
+
+    Replace-by-date-range insert (no clean business key in the source —
+    identical booking rows are legitimate). Every existing
+    ``inspection_records`` row whose ``pruef_datum`` falls inside the
+    file's date range is deleted first, so re-uploading the same file
+    is a no-op. ``date_range_*`` echo the min/max Datum of the uploaded
+    rows.
+    """
+
+    rows_inserted: int
+    rows_replaced: int = 0
+    small_count: int = 0
+    large_count: int = 0
+    date_range_from: date | None = None
+    date_range_to: date | None = None
     errors: list[ValidationErrorDetail]
 
 
@@ -995,6 +1091,11 @@ __all__ = [
     "ComplaintRateValue",
     "ComplaintRateHistoryPoint",
     "CustomerComplaintRow",
+    "InspectionsValue",
+    "InspectionsHistoryPoint",
+    "InspectionListRow",
+    "InspectionBookingRow",
+    "InspectionExcludeUpdate",
     "DeliveryReliabilityUploadResponse",
     "OtdValue",
     "ProductionVerzugValue",
@@ -1006,6 +1107,7 @@ __all__ = [
     # v1.70 Finanzperspektive — Materialkostenquote
     "MaterialMovementsUploadResponse",
     "MaterialPricesUploadResponse",
+    "InspectionsUploadResponse",
     "MaterialCostRatioValue",
     "MaterialCostRatioHistoryPoint",
     "MaterialCostRatioRow",

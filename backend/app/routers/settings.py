@@ -98,6 +98,8 @@ def _build_read(row: AppSettings) -> SettingsRead:
         target_complaint_rate_subcontractor=float(row.target_complaint_rate_subcontractor) if row.target_complaint_rate_subcontractor is not None else None,
         target_audit_findings_level1=row.target_audit_findings_level1,
         target_audit_findings_level2=row.target_audit_findings_level2,
+        target_inspection_large=row.target_inspection_large,
+        target_inspection_small=row.target_inspection_small,
         # v1.71 / v1.72 — Finance KPI targets
         target_material_cost_ratio=float(row.target_material_cost_ratio) if row.target_material_cost_ratio is not None else None,
         target_personnel_cost_ratio=float(row.target_personnel_cost_ratio) if row.target_personnel_cost_ratio is not None else None,
@@ -287,6 +289,10 @@ async def put_settings(
         row.target_audit_findings_level1 = payload.target_audit_findings_level1
     if payload.target_audit_findings_level2 is not None:
         row.target_audit_findings_level2 = payload.target_audit_findings_level2
+    if payload.target_inspection_large is not None:
+        row.target_inspection_large = payload.target_inspection_large
+    if payload.target_inspection_small is not None:
+        row.target_inspection_small = payload.target_inspection_small
     # v1.71 / v1.72 — Finance targets
     if payload.target_material_cost_ratio is not None:
         row.target_material_cost_ratio = payload.target_material_cost_ratio

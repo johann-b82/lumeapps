@@ -99,10 +99,10 @@ export function SubHeader() {
   const [location, navigate] = useLocation();
   const { preset, range, handleFilterChange } = useDateRange();
 
-  // Launcher surface hides chrome entirely — return null after all hooks
+  // Launcher + KPI-hub hide chrome entirely — return null after all hooks
   // so React's rules-of-hooks (constant hook order) are preserved across
-  // navigation between / and other routes.
-  if (location === "/") return null;
+  // navigation between / , /kpi and other routes.
+  if (location === "/" || location === "/kpi") return null;
 
   const isDashboard =
     location === "/sales" ||

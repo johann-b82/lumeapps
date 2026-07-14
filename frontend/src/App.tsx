@@ -77,9 +77,9 @@ function AppShell() {
       <main className={isLogin ? "" : isLauncher ? "pt-16" : "pt-28"}>
         <Switch>
           <Route path="/login" component={LoginPage} />
+          <Route path="/kpi" component={KpiDashboardHomePage} />
           <Route path="/sales" component={DashboardPage} />
           <Route path="/" component={LauncherPage} />
-          <Route path="/kpi" component={KpiDashboardHomePage} />
           <Route path="/upload" component={UploadPage} />
           <Route path="/hr" component={HRPage} />
           <Route path="/hr/home" component={HrHomePage} />

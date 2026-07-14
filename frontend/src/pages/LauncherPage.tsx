@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler } from "lucide-react";
+import { LayoutDashboard, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -43,28 +43,13 @@ export function LauncherPage() {
           </span>
         </div>
 
-        {/* HR tile → /hr/home hub. The HR sub-features (Onboarding, Organigramm)
-            live behind this tile on HrHomePage. */}
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLocation("/hr/home")}
-            aria-label={t("launcher.tile.hr")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-pink-400 to-rose-600
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Users className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </button>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.hr")}
-          </span>
-        </div>
+        {/* v1.82 — Quality / HR / Procurement / Finance / Production tiles
+            removed from the launcher; the KPI-Dashboard tile above is
+            now the single entry point, and users switch between
+            sections via the SubHeader section-picker (frontend/src/
+            components/SubHeader.tsx). */}
 
-        {/* v1.15 SEN-LNCH: Sensors tile (admin-only) */}
+        {/* v1.15 SEN-LNCH: Sensors tile (admin-only, replaces first coming-soon slot) */}
         <AdminOnly>
           <div className="flex flex-col items-center gap-2">
             {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}

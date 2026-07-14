@@ -195,6 +195,13 @@ class AppSettings(Base):
     target_audit_findings_level2: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )
+    # v1.70: Qualitätsprüfung — Produkte/Tag/Mitarbeiter targets.
+    target_inspection_large: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    target_inspection_small: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
 
     # v1.71 / v1.72 — Finance KPI targets. Stored as fractions (0.15 = 15 %);
     # NULL hides the chart's reference line.
@@ -988,6 +995,68 @@ class MaterialMovement(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class InspectionRecord(Base):
+    """One Qualitätsprüfung booking from the AswQs2151.txt export (v1.79).
+
+    Each row is a single inspection line (Datum, Zeit, Benutzer, FA,
+    Artikel, Bezeichnung, Buchungs-Menge, ...). ``size_class`` is derived
+    at parse time from ``bezeichnung``/``produktgruppe`` — see
+    :mod:`app.parsing.inspection_parser`. The source has no clean
+    business key (identical booking rows are allowed), so re-uploads are
+    made idempotent the Kontakte / material_movements way: delete every
+    row whose ``pruef_datum`` falls in the new file's date range, then
+    bulk-insert.
+    """
+
+    __tablename__ = "inspection_records"
+    __table_args__ = (
+        Index("ix_inspection_records_pruef_datum", "pruef_datum"),
+        Index(
+            "ix_inspection_records_size_class_datum",
+            "size_class",
+            "pruef_datum",
+        ),
+        CheckConstraint(
+            "size_class IN ('large', 'small')",
+            name="ck_inspection_records_size_class",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_batch_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("upload_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    pruef_datum: Mapped[date] = mapped_column(Date, nullable=False)
+    pruef_zeit: Mapped[time | None] = mapped_column(Time, nullable=True)
+    benutzer: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fa: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    artikel: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bezeichnung: Mapped[str | None] = mapped_column(Text, nullable=True)
+    buchungs_menge: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 3), nullable=True
+    )
+    ausschuss_menge: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 3), nullable=True
+    )
+    produktgruppe: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    typ: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    size_class: Mapped[str] = mapped_column(String(10), nullable=False)
+    # v1.81 — Kostenschlüssel from the AswQs2151 "RSC" column. Real
+    # Qualitätsprüfung bookings carry "70000"; every other value marks
+    # a stock-movement / Sonderbuchung and is skipped by the aggregation.
+    rsc: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # v1.80 — per-booking KPI opt-out. When true the row still lives in
+    # the table (audit trail intact) but is excluded from every KPI SUM.
+    excluded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 

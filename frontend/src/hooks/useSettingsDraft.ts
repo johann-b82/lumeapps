@@ -47,6 +47,8 @@ export interface DraftFields {
   target_complaint_rate_subcontractor: number | null;
   target_audit_findings_level1: number | null;
   target_audit_findings_level2: number | null;
+  target_inspection_large: number | null;
+  target_inspection_small: number | null;
   // v1.71 Finance target (material-cost ratio as fraction, e.g. 0.15 = 15%)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
@@ -111,6 +113,8 @@ function settingsToDraft(s: Settings): DraftFields {
     target_complaint_rate_subcontractor: s.target_complaint_rate_subcontractor,
     target_audit_findings_level1: s.target_audit_findings_level1,
     target_audit_findings_level2: s.target_audit_findings_level2,
+    target_inspection_large: s.target_inspection_large,
+    target_inspection_small: s.target_inspection_small,
     target_material_cost_ratio: s.target_material_cost_ratio,
     target_personnel_cost_ratio: s.target_personnel_cost_ratio,
     target_produktion_verzug: s.target_produktion_verzug,
@@ -157,6 +161,8 @@ function draftToCacheSettings(draft: DraftFields, prev: Settings): Settings {
     target_complaint_rate_subcontractor: draft.target_complaint_rate_subcontractor,
     target_audit_findings_level1: draft.target_audit_findings_level1,
     target_audit_findings_level2: draft.target_audit_findings_level2,
+    target_inspection_large: draft.target_inspection_large,
+    target_inspection_small: draft.target_inspection_small,
     target_material_cost_ratio: draft.target_material_cost_ratio,
     target_personnel_cost_ratio: draft.target_personnel_cost_ratio,
     target_produktion_verzug: draft.target_produktion_verzug,
@@ -198,6 +204,8 @@ function draftToPutPayload(draft: DraftFields): SettingsUpdatePayload {
     target_complaint_rate_subcontractor: draft.target_complaint_rate_subcontractor,
     target_audit_findings_level1: draft.target_audit_findings_level1,
     target_audit_findings_level2: draft.target_audit_findings_level2,
+    target_inspection_large: draft.target_inspection_large,
+    target_inspection_small: draft.target_inspection_small,
     target_material_cost_ratio: draft.target_material_cost_ratio,
     target_personnel_cost_ratio: draft.target_personnel_cost_ratio,
     target_produktion_verzug: draft.target_produktion_verzug,
@@ -261,6 +269,8 @@ const QUALITY_FIELDS = [
   "target_complaint_rate_subcontractor",
   "target_audit_findings_level1",
   "target_audit_findings_level2",
+  "target_inspection_large",
+  "target_inspection_small",
 ] as const satisfies readonly (keyof DraftFields)[];
 
 const FINANCE_FIELDS = [

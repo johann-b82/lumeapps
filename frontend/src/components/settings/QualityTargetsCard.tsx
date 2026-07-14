@@ -50,6 +50,18 @@ const TARGET_FIELDS = [
     isPercent: false,
     isInteger: true,
   },
+  {
+    key: "target_inspection_large" as const,
+    labelKey: "settings.targets.quality.inspectionLarge",
+    isPercent: false,
+    isInteger: true,
+  },
+  {
+    key: "target_inspection_small" as const,
+    labelKey: "settings.targets.quality.inspectionSmall",
+    isPercent: false,
+    isInteger: true,
+  },
 ];
 
 export function QualityTargetsCard({
