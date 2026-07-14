@@ -20,9 +20,6 @@ out of scope for this milestone.
 | `/api/*`     | `api:8000`        | Preserved                    | FastAPI routes live at `/api/...`. SSE passthrough via `flush_interval -1` + 24h `read_timeout`. |
 | `/directus/*`| `directus:8055`   | **Stripped** (`handle_path`) | Directus doesn't know it's behind a subpath; it expects bare `/auth`, `/items`, `/assets`, `/server`. |
 | `/player/*`  | `api:8000`        | Preserved                    | Kiosk bundle. Built into `frontend/dist/player/` and served by FastAPI as a StaticFiles mount (see `backend/app/main.py`). Vite dev does NOT serve the player entry — routing through FastAPI means the Pi always gets the built bundle. Rebuild with `npm run build:player`. |
-| `/paperless/*`| `paperless:8000` | Preserved                    | Paperless-ngx UI/API. Subpath via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`. Each request first hits `forward_auth → api:8000/api/auth/forward`; on 200, Caddy lifts `X-Remote-User` onto the upstream request. |
-| `/pdf/*`     | `stirling:8080`   | Preserved                    | Stirling-PDF (v2 image). Caddy `forward_auth` is the only auth gate; internal Stirling login is disabled via the `SECURITY_ENABLELOGIN=false` env var in `docker-compose.yml` (Stirling v2 ignores the obsolete `DOCKER_ENABLE_SECURITY` flag). Subpath via `SERVER_SERVLET_CONTEXT_PATH=/pdf`. |
-| `/op/*`      | `openproject:8080`| Preserved                    | OpenProject community. Caddy `forward_auth` keeps unauthenticated browsers off the OP login page; community edition has no header SSO so users still authenticate against OP separately on first visit. |
 
 **Why Caddy, why this shape:**
 
@@ -64,72 +61,7 @@ docker compose up
   +-- directus (directus:11.x identity)       --> 127.0.0.1:8055 (loopback)
   +-- caddy    (reverse proxy)                --> :80 (LAN entry point)
   +-- backup   (pg_dump cron sidecar)         --> writes to ./backups/
-  +-- paperless / paperless-broker            --> :8000 (v1.46)
-                                                  Postgres-backed, Redis broker, Directus SSO via Caddy forward_auth
-  +-- stirling                                --> :8080 (v1.48)
-                                                  Caddy forward_auth gate, internal login disabled
-  +-- openproject                             --> :8080 (v1.48)
-                                                  Dedicated `openproject` Postgres DB on shared db service
 ```
-
-### Paperless-ngx (v1.46+)
-
-Document management lives in two containers, both started by `docker compose up`:
-
-- `paperless` — `ghcr.io/paperless-ngx/paperless-ngx:latest`. Backed by a
-  dedicated `paperless` database in the shared `db` service (env:
-  `PAPERLESS_DBENGINE=postgresql`, `PAPERLESS_DBHOST=db`,
-  `PAPERLESS_DBNAME=paperless`, reuses `POSTGRES_USER`/`POSTGRES_PASSWORD`).
-  Mounted at `/paperless/*` via `PAPERLESS_FORCE_SCRIPT_NAME=/paperless`.
-- `paperless-broker` — `redis:7-alpine` celery broker. tmpfs `/data` (no persistence required).
-
-**SSO** (v1.48 session-mode rewrite): Caddy `forward_auth` routes every
-`/paperless/*`, `/pdf/*`, and `/op/*` hit through FastAPI
-`/api/auth/forward` (`backend/app/routers/auth_forward.py`). The endpoint
-validates the inbound `directus_session_token` cookie — an HS256 JWT
-signed with `DIRECTUS_SECRET` — locally with PyJWT (no `/auth/refresh`
-hop on the hot path, no rotation race against the SPA's own refresh
-loop, no cache-key sensitivity to upstream-set cookies like
-Paperless `sessionid` or OpenProject `_open_project_session`). Email is
-resolved once per user id via `/users/me` with the JWT as Bearer and
-cached for 5 min. On 200, Caddy lifts `X-Remote-User` onto the upstream
-request; Paperless auto-provisions local users from that header
-(`PAPERLESS_ENABLE_HTTP_REMOTE_USER=true`). Stirling-PDF and
-OpenProject treat the gate as a perimeter only — they do not consume
-`X-Remote-User` (Stirling has internal login disabled entirely;
-OpenProject community has no header-SSO support, so users still log
-into OP separately on first visit).
-
-**Bind mounts**: `./paperless_data` (search index, celery beat schedule),
-`./paperless_media` (originals + archive PDFs), `./paperless_consume`
-(inotify-watched ingestion drop), `./paperless_export`.
-
-### Stirling-PDF (v1.48+)
-
-Single `stirling` container running `stirlingtools/stirling-pdf:latest`
-(the Stirling v2 image — the old `frooodle/s-pdf` name is retired) on
-internal port 8080, mounted at `/pdf/*` via Caddy. Subpath deployment via
-`SERVER_SERVLET_CONTEXT_PATH=/pdf`, so Caddy preserves the prefix.
-Internal login is disabled with the `SECURITY_ENABLELOGIN=false` env var
-in `docker-compose.yml` — Stirling v2 ignores the obsolete
-`DOCKER_ENABLE_SECURITY` flag, and login is controlled by
-`security.enableLogin` (settings.yml), overridden here via env. Caddy
-`forward_auth` remains the only auth gate for `/pdf`. Bind mounts under
-`./stirling_data/` (`configs`, `custom-files`, `logs`, `pipeline`) hold
-config and scratch state — the app itself is stateless. Comes up with the
-rest of the stack on `docker compose up`.
-
-### OpenProject Community (v1.48+)
-
-Single `openproject` container (`openproject/community:latest`) mounted
-at `/op/*`. Stores all data in a dedicated `openproject` database on the
-shared `db` service (no separate Postgres). Bootstrap admin password
-comes from `OPENPROJECT_ADMIN_PASSWORD` in `.env`; the container starts
-with the rest of the stack on `docker compose up`. Because the community
-edition has no header-SSO mode, the Caddy gate is purely a perimeter
-defence: a user who clears the OP login still has to authenticate
-against OP itself; we accept the double login in exchange for keeping
-unauthenticated traffic off the OP surface.
 
 For deeper detail on any single subsystem (signage, sensors, HR pipeline,
 etc.) see the per-phase plans under `.planning/phases/`.

@@ -1071,25 +1071,3 @@ Instead, bind each kiosk's pending pairing session directly to its **original** 
 **Act quickly after reading a code:** pairing sessions expire after 10 minutes, and the player proactively requests a fresh code 5 seconds before expiry (`frontend/src/player/PairingScreen.tsx`) — so the code on screen rotates roughly every 10 minutes. If `UPDATE 0` comes back, the code on the screen has already rotated; re-read it and retry.
 
 The original device row must not be revoked (`revoked_at IS NULL`), otherwise the kiosk's first authenticated request 401s and it falls straight back to pairing.
-
----
-
-## 20. Stirling-PDF v2 Login Regression (401s on /pdf/)
-
-**Symptom:** the `stirling` container goes unhealthy; its healthcheck (`curl http://localhost:8080/pdf/`) and browser requests to `/pdf/` return 401 / a Stirling login screen, even though Caddy `forward_auth` is the intended gate.
-
-**Cause:** the `stirlingtools/stirling-pdf:latest` image (v2.x) **ignores the old `DOCKER_ENABLE_SECURITY` flag**. Login is now controlled by `security.enableLogin` in the persisted `./stirling_data/configs/settings.yml`, which survives container recreation — so a v2 image pull can silently turn the internal login screen on.
-
-**Fix:** ensure the env override is present on the `stirling` service in `docker-compose.yml` (it takes precedence over the persisted `settings.yml`):
-
-```yaml
-SECURITY_ENABLELOGIN: "false"
-```
-
-Then recreate the container (env changes require `up -d`, not `restart` — same rule as Section 14):
-
-```bash
-docker compose up -d stirling
-```
-
-This override is already committed in `docker-compose.yml` as of 2026-06-11. If 401s recur after an image update, check `./stirling_data/configs/settings.yml` for a `security.enableLogin: true` that a new Stirling version may have started honoring through a different key.

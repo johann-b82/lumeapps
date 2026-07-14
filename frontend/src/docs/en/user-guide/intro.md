@@ -14,16 +14,6 @@ Welcome to the KPI Dashboard user guide. This app lets your team upload sales da
 
 - **[Language & Dark Mode](/docs/user-guide/language-and-theme)** — Switch the interface between English and German, and toggle between light and dark mode.
 
-## Embedded Apps
-
-The launcher (`/`) shows tiles for KPI Dashboard, HR, Sensors, Digital Signage, and three optional embedded apps your administrator may have enabled:
-
-- **Documents** — Paperless-ngx for company document storage and OCR-driven search.
-- **PDF Tools** — Stirling-PDF for splitting, merging, OCR'ing, and converting PDFs.
-- **Projects** — OpenProject community for project tracking, work packages, and Gantt charts.
-
-These tiles open in a new browser tab. You sign in once into the dashboard; Documents reuses that session automatically. PDF Tools needs no second login. Projects (OpenProject) requires a one-time login inside its own UI on first visit because the community edition does not yet support single sign-on.
-
 ## Tips for Getting Started
 
 > **Tip:** Start with [Uploading Data](/docs/user-guide/uploading-data) if you have not yet added any sales records. The dashboards display "No data yet" until at least one file is imported.
