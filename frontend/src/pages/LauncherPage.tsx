@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileText, FileCog, KanbanSquare, FileSpreadsheet, Ruler } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -159,75 +159,6 @@ export function LauncherPage() {
             </span>
           </div>
         </AdminOnly>
-
-        {/* Documents (Paperless-ngx via Caddy /paperless; Directus SSO through
-            Caddy forward_auth + FastAPI /api/auth/forward). Anchor with
-            target=_blank so popup blockers don't intercept the click. */}
-        <div className="flex flex-col items-center gap-2">
-          <a
-            href="/paperless/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t("launcher.tile.documents")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-emerald-500 to-teal-600
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all no-underline
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <FileText className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </a>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.documents")}
-          </span>
-        </div>
-
-        {/* PDF Tools (Stirling-PDF via Caddy /pdf; Directus SSO through Caddy
-            forward_auth + FastAPI /api/auth/forward). Anchor with target=_blank
-            so popup blockers don't intercept the click. */}
-        <div className="flex flex-col items-center gap-2">
-          <a
-            href="/pdf/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t("launcher.tile.pdf_tools")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-rose-500 to-pink-600
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all no-underline
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <FileCog className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </a>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.pdf_tools")}
-          </span>
-        </div>
-
-        {/* OpenProject (community edition) gated by Caddy forward_auth at the
-            edge. Internal OpenProject login still required (community has no
-            header-SSO). Anchor with target=_blank so the launcher tab stays. */}
-        <div className="flex flex-col items-center gap-2">
-          <a
-            href="/op/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t("launcher.tile.openproject")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-amber-400 to-orange-500
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all no-underline
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <KanbanSquare className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </a>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.openproject")}
-          </span>
-        </div>
 
         {/* Coming-soon tiles (1x) — opacity-40 + pointer-events-none per D-04 */}
         {[0].map((i) => (
