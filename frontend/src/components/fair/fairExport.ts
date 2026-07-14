@@ -1,18 +1,19 @@
 /**
  * Export the drawing WITH its bubbles/arrows as a PDF at FULL original quality.
  *
- * The source PDF pages are copied verbatim (vector, original resolution) and the
- * source image is embedded at its native pixels — the drawing is never
- * re-rasterised or downscaled. The bubbles/arrows/numbers are drawn as crisp
- * VECTORS on top. The whole page is rotated to match the current view; the
- * numbers are counter-rotated so they stay upright.
+ * PDF source: the original page is embedded as a VECTOR form XObject and placed
+ * UPRIGHT onto a new page whose size equals the editor's rotation-aware viewport
+ * (i.e. the frame the balloons were captured in). This makes the export line up
+ * EXACTLY with the editor even when the source page carries a `/Rotate` — while
+ * preserving vector quality (no re-rasterisation / downscaling).
+ * Image source: the original bytes are embedded at native resolution.
  *
- * NOTE: file size/performance follows the ORIGINAL file — a heavy source PDF
- * yields a heavy export. This is intentional: drawing quality must not be
- * reduced. (Object streams give lossless structural compression only.)
+ * The bubbles/arrows/numbers are drawn as crisp vectors on top; the user's view
+ * rotation is applied to the whole page and the numbers are counter-rotated so
+ * they stay upright.
  */
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
-import type { PDFFont, PDFPage } from "pdf-lib";
+import type { PDFEmbeddedPage, PDFFont, PDFPage } from "pdf-lib";
 import { balloonPixels } from "./geometry";
 import type { Rotation } from "./geometry";
 import type { FairBalloon } from "@/lib/fairApi";
@@ -36,11 +37,37 @@ function download(bytes: Uint8Array, fileName: string): void {
 }
 
 /**
- * Draw one page's balloons in the page's content space. Geometry comes from
- * `balloonPixels` in canvas (y-down) coords; pdf-lib is y-up, so y is flipped.
- * `drawSvgPath` anchored at (0, pageH) performs the same flip for path shapes.
- * The number is centred on the bubble and counter-rotated by `rotation` so it
- * stays upright after the page is rotated.
+ * Place an embedded source page (unrotated content, W0×H0) UPRIGHT onto the
+ * target page, undoing the source `/Rotate` (clockwise). The target page is
+ * sized to the rotation-aware dims, so the result matches pdf.js/the editor.
+ */
+function drawUpright(
+  page: PDFPage,
+  embedded: PDFEmbeddedPage,
+  rot: number,
+  W0: number,
+  H0: number,
+): void {
+  switch (rot) {
+    case 90:
+      page.drawPage(embedded, { x: 0, y: W0, rotate: degrees(-90) });
+      break;
+    case 180:
+      page.drawPage(embedded, { x: W0, y: H0, rotate: degrees(180) });
+      break;
+    case 270:
+      page.drawPage(embedded, { x: H0, y: 0, rotate: degrees(90) });
+      break;
+    default:
+      page.drawPage(embedded, { x: 0, y: 0 });
+  }
+}
+
+/**
+ * Draw one page's balloons in the (upright) page's content space. Geometry from
+ * `balloonPixels` is canvas (y-down); pdf-lib is y-up, so y is flipped. The
+ * number is centred on the bubble and counter-rotated by `rotation` so it stays
+ * upright after the page is rotated.
  */
 function drawBalloons(
   page: PDFPage,
@@ -120,16 +147,15 @@ export interface ExportPdfOpts {
 export async function exportFairPdf(
   opts: ExportImageOpts | ExportPdfOpts,
 ): Promise<void> {
-  let doc: PDFDocument;
+  const out = await PDFDocument.create();
+  const font = await out.embedFont(StandardFonts.HelveticaBold);
 
   if (opts.kind === "image") {
     // Embed the ORIGINAL image bytes at native resolution — no downscale/re-encode.
     const bytes = new Uint8Array(await (await fetch(opts.imageUrl)).arrayBuffer());
-    doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.HelveticaBold);
     const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
-    const image = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-    const page = doc.addPage([image.width, image.height]);
+    const image = isPng ? await out.embedPng(bytes) : await out.embedJpg(bytes);
+    const page = out.addPage([image.width, image.height]);
     page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
     drawBalloons(
       page,
@@ -142,26 +168,31 @@ export async function exportFairPdf(
     );
     if (opts.rotation) page.setRotation(degrees(opts.rotation));
   } else {
-    // Copy the ORIGINAL PDF pages verbatim (vector, full quality); overlay only.
-    doc = await PDFDocument.load(opts.pdfData, { ignoreEncryption: true });
-    const font = await doc.embedFont(StandardFonts.HelveticaBold);
-    doc.getPages().forEach((page, i) => {
-      const { width, height } = page.getSize();
+    const src = await PDFDocument.load(opts.pdfData, { ignoreEncryption: true });
+    const srcPages = src.getPages();
+    for (let i = 0; i < srcPages.length; i++) {
+      const sp = srcPages[i];
+      const rot = (((sp.getRotation().angle % 360) + 360) % 360);
+      const embedded = await out.embedPage(sp);
+      const W0 = embedded.width;
+      const H0 = embedded.height;
+      const swap = rot === 90 || rot === 270;
+      const vw = swap ? H0 : W0;
+      const vh = swap ? W0 : H0;
+      const page = out.addPage([vw, vh]);
+      drawUpright(page, embedded, rot, W0, H0);
       drawBalloons(
         page,
         font,
         opts.balloonsByPage.get(i + 1) ?? [],
-        width,
-        height,
+        vw,
+        vh,
         opts.sizeScale,
         opts.rotation,
       );
-      if (opts.rotation) {
-        const current = page.getRotation().angle;
-        page.setRotation(degrees((current + opts.rotation) % 360));
-      }
-    });
+      if (opts.rotation) page.setRotation(degrees(opts.rotation));
+    }
   }
 
-  download(await doc.save({ useObjectStreams: true }), opts.fileName);
+  download(await out.save({ useObjectStreams: true }), opts.fileName);
 }
