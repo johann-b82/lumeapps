@@ -29,6 +29,26 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
   { pattern: "/sales", trail: [{ labelKey: "nav.sales", href: "/sales" }] },
   { pattern: "/hr", trail: [{ labelKey: "nav.hr", href: "/hr" }] },
   { pattern: "/procurement", trail: [{ labelKey: "nav.procurement", href: "/procurement" }] },
+  // Produktion hub + Maschinen-Wartung — deeper patterns first so the
+  // machine detail collapses to the "Wartung" leaf (D-02).
+  {
+    pattern: "/production/maintenance/:id",
+    trail: [
+      { labelKey: "launcher.section.production", href: "/production/home" },
+      { labelKey: "maintenance.tile", href: "/production/maintenance" },
+    ],
+  },
+  {
+    pattern: "/production/maintenance",
+    trail: [
+      { labelKey: "launcher.section.production", href: "/production/home" },
+      { labelKey: "maintenance.tile", href: "/production/maintenance" },
+    ],
+  },
+  {
+    pattern: "/production/home",
+    trail: [{ labelKey: "launcher.section.production", href: "/production/home" }],
+  },
   { pattern: "/production", trail: [{ labelKey: "nav.production", href: "/production" }] },
   { pattern: "/finance", trail: [{ labelKey: "nav.finance", href: "/finance" }] },
   // Upload
