@@ -4,6 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Network } from "lucide-react";
 import { fetchOrgChart, type OrgChartNode } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const ALL_OFFICES = "__all__";
 
 interface TreeNode extends OrgChartNode {
   children: TreeNode[];
@@ -90,24 +99,66 @@ function OrgNode({ node }: { node: TreeNode }) {
 
 export function OrganigrammPage() {
   const { t } = useTranslation();
+  const [office, setOffice] = useState<string>(ALL_OFFICES);
   const { data, isLoading, isError } = useQuery({
     queryKey: hrKpiKeys.orgChart(),
     queryFn: fetchOrgChart,
   });
 
-  const forest = useMemo(() => (data ? buildForest(data) : []), [data]);
+  // Distinct offices present in the data, sorted — drives the filter dropdown.
+  const offices = useMemo(() => {
+    const set = new Set<string>();
+    data?.forEach((n) => n.office && set.add(n.office));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    return office === ALL_OFFICES ? data : data.filter((n) => n.office === office);
+  }, [data, office]);
+
+  const forest = useMemo(() => buildForest(filtered), [filtered]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
-      <h1 className="text-lg font-semibold mb-1 flex items-center gap-2">
-        <Network className="w-5 h-5" aria-hidden="true" />
-        {t("hr.organigramm.title")}
-      </h1>
-      {data && data.length > 0 && (
-        <p className="text-sm text-muted-foreground mb-6">
-          {t("hr.organigramm.subtitle", { count: data.length })}
-        </p>
-      )}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-lg font-semibold mb-1 flex items-center gap-2">
+            <Network className="w-5 h-5" aria-hidden="true" />
+            {t("hr.organigramm.title")}
+          </h1>
+          {data && filtered.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("hr.organigramm.subtitle", { count: filtered.length })}
+            </p>
+          )}
+        </div>
+
+        {data && offices.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {t("hr.organigramm.office")}
+            </span>
+            <Select value={office} onValueChange={setOffice}>
+              <SelectTrigger className="w-48" aria-label={t("hr.organigramm.office")}>
+                <SelectValue>
+                  {office === ALL_OFFICES ? t("hr.organigramm.allOffices") : office}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_OFFICES}>
+                  {t("hr.organigramm.allOffices")}
+                </SelectItem>
+                {offices.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
 
       {isLoading && (
         <div className="flex h-64 items-center justify-center">
@@ -119,7 +170,7 @@ export function OrganigrammPage() {
         <p className="text-sm text-destructive">{t("hr.organigramm.error")}</p>
       )}
 
-      {data && data.length === 0 && (
+      {data && filtered.length === 0 && (
         <p className="text-sm text-muted-foreground">{t("hr.organigramm.empty")}</p>
       )}
 
