@@ -4,15 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Network } from "lucide-react";
 import { fetchOrgChart, type OrgChartNode } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
-const ALL_OFFICES = "__all__";
+// Default location filter — the two main German offices, pre-selected.
+const DEFAULT_OFFICES = ["Hamburg", "Memmingen"];
 
 interface TreeNode extends OrgChartNode {
   children: TreeNode[];
@@ -99,25 +93,38 @@ function OrgNode({ node }: { node: TreeNode }) {
 
 export function OrganigrammPage() {
   const { t } = useTranslation();
-  const [office, setOffice] = useState<string>(ALL_OFFICES);
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(DEFAULT_OFFICES),
+  );
   const { data, isLoading, isError } = useQuery({
     queryKey: hrKpiKeys.orgChart(),
     queryFn: fetchOrgChart,
   });
 
-  // Distinct offices present in the data, sorted — drives the filter dropdown.
+  // Distinct offices present in the data, sorted — drives the filter chips.
   const offices = useMemo(() => {
     const set = new Set<string>();
     data?.forEach((n) => n.office && set.add(n.office));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [data]);
 
+  // Multi-select: show employees whose office is selected. Empty selection =
+  // no location filter (show everyone).
   const filtered = useMemo(() => {
     if (!data) return [];
-    return office === ALL_OFFICES ? data : data.filter((n) => n.office === office);
-  }, [data, office]);
+    if (selected.size === 0) return data;
+    return data.filter((n) => n.office != null && selected.has(n.office));
+  }, [data, selected]);
 
   const forest = useMemo(() => buildForest(filtered), [filtered]);
+
+  const toggleOffice = (office: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(office)) next.delete(office);
+      else next.add(office);
+      return next;
+    });
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
@@ -135,27 +142,36 @@ export function OrganigrammPage() {
         </div>
 
         {data && offices.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">
               {t("hr.organigramm.office")}
             </span>
-            <Select value={office} onValueChange={setOffice}>
-              <SelectTrigger className="w-48" aria-label={t("hr.organigramm.office")}>
-                <SelectValue>
-                  {office === ALL_OFFICES ? t("hr.organigramm.allOffices") : office}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_OFFICES}>
-                  {t("hr.organigramm.allOffices")}
-                </SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o} value={o}>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label={t("hr.organigramm.office")}
+            >
+              {offices.map((o) => {
+                const on = selected.has(o);
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => toggleOffice(o)}
+                    aria-pressed={on}
+                    className={`rounded-full border px-3 py-1 text-sm transition-colors
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                                ${
+                                  on
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-transparent text-muted-foreground border-border hover:bg-muted"
+                                }`}
+                  >
                     {o}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

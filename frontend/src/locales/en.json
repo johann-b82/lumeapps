@@ -857,7 +857,6 @@
   "hr.organigramm.error": "Could not load the org chart.",
   "hr.organigramm.empty": "No active employees found.",
   "hr.organigramm.office": "Location",
-  "hr.organigramm.allOffices": "All locations",
   "hr.onboarding.title": "Onboarding",
   "hr.comingSoon": "This feature is coming soon.",
   "upload.material_movements_title": "Stock Movements (Material)",
