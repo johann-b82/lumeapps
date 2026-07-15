@@ -14,16 +14,6 @@ Willkommen im Benutzerhandbuch des KPI Dashboards. Mit dieser Anwendung kannst d
 
 - **[Sprache & Dark Mode](/docs/user-guide/language-and-theme)** — Wechsle die Anzeigesprache zwischen Deutsch und Englisch und stelle helles oder dunkles Farbschema ein.
 
-## Eingebettete Apps
-
-Auf der Startseite (`/`) findest du Kacheln für KPI Dashboard, HR, Sensoren, Digital Signage und drei optionale eingebettete Apps, die dein Administrator aktivieren kann:
-
-- **Dokumente** — Paperless-ngx für die unternehmensweite Dokumentenablage mit OCR-gestützter Volltextsuche.
-- **PDF-Werkzeuge** — Stirling-PDF zum Teilen, Zusammenführen, OCR'en und Konvertieren von PDFs.
-- **Projekte** — OpenProject Community Edition für Projektplanung, Aufgaben und Gantt-Diagramme.
-
-Diese Kacheln öffnen sich in einem neuen Browser-Tab. Du meldest dich einmalig im Dashboard an; Dokumente übernehmen diese Sitzung automatisch. PDF-Werkzeuge benötigen keine zweite Anmeldung. Projekte (OpenProject) erfordern beim ersten Besuch eine einmalige Anmeldung in der eigenen Oberfläche, weil die Community Edition Single Sign-on noch nicht unterstützt.
-
 ## Erste Schritte
 
 > **Tipp:** Beginne mit [Daten hochladen](/docs/user-guide/uploading-data), wenn du noch keine Umsatzdaten importiert hast. Die Dashboards zeigen „Noch keine Daten vorhanden", bis mindestens eine Datei erfolgreich importiert wurde.

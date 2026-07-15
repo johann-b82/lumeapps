@@ -33,7 +33,6 @@ cp .env.example .env
 | `DIRECTUS_ADMINISTRATOR_ROLE_UUID` | UUID of the seeded Administrator role; auto-patched by `scripts/install.sh` |
 | `FERNET_KEY` | Fernet key for encrypting Personio + sensor SNMP credentials at rest |
 | `SIGNAGE_DEVICE_JWT_SECRET` | Signing secret for kiosk device JWTs |
-| `OPENPROJECT_ADMIN_PASSWORD` | OpenProject bootstrap admin password (v1.48+) |
 
 > **Tip:** Generate secrets with `openssl rand -hex 32`. Each secret should be unique -- do not reuse the same value across variables.
 

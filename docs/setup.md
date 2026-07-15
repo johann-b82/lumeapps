@@ -240,32 +240,6 @@ Your `DIRECTUS_ADMIN_EMAIL` and `DIRECTUS_ADMIN_PASSWORD` don't match what Direc
 
 ---
 
-## Embedded Apps
-
-Three third-party apps ship with the stack and start with the rest of the services on `docker compose up -d`:
-
-| App | Containers | Mounted at |
-|-----|------------|------------|
-| Paperless-ngx (v1.46+) | `paperless` + `paperless-broker` (Redis) | `/paperless/*` |
-| Stirling-PDF (v1.48+) | `stirling` (community edition) | `/pdf/*` |
-| OpenProject (v1.48+) | `openproject` community | `/op/*` |
-
-All three are stopped together with `docker compose down`.
-
-**OpenProject extra env var.** Add to `.env` before the first `docker compose up`:
-
-```
-OPENPROJECT_ADMIN_PASSWORD=<random 24+ chars>
-```
-
-Generate a fresh random value with `openssl rand -base64 24`. The bootstrap admin user is `admin@example.net` (default OP convention) — change the email + password from inside OpenProject after first login. OpenProject community edition has no header-SSO mode, so users authenticate against OpenProject directly even though Caddy gates the `/op/*` perimeter with the same Directus session check used by Paperless.
-
-If you want to skip one of these apps on a given host, use `docker compose up -d --scale paperless=0 --scale paperless-broker=0` (or `--scale stirling=0`, `--scale openproject=0`) — the service stays in the compose file but no container is started.
-
-**Stirling-PDF login.** Internal Stirling login is disabled via the `SECURITY_ENABLELOGIN: "false"` environment variable on the `stirling` service in `docker-compose.yml`; the Caddy `forward_auth` gate is the only auth boundary. Stirling v2 ignores the old `DOCKER_ENABLE_SECURITY` flag — without `SECURITY_ENABLELOGIN=false`, Stirling enables its login screen and the container's healthcheck fails with 401s. The env var also overrides whatever `./stirling_data/configs/settings.yml` says about `security.enableLogin`, so the YAML file does not need editing. Do not remove the env var unless you also want a second login wall.
-
----
-
 ## Auth migration (v1.48 — refresh-cookie → session-mode)
 
 Existing browsers that signed in under v1.46/v1.47 carry a stale

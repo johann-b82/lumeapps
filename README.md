@@ -34,7 +34,7 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **iOS-style entry point at `/`** — After login, users land on a grid of rounded-corner 120×120px app tiles (icon only, label below) rather than directly in a dashboard
 - **KPI-Dashboard hub tile** — Opens `/kpi`, a hub that groups the six business KPI dashboards as tiles: Vertrieb (`/sales`), Einkauf (`/procurement`), Produktion (`/production`), HR (`/hr`), Qualität (`/quality`), and Finanzperspektive (`/finance`)
 - **HR hub tile** — Opens `/hr/home`, a hub that groups the HR sub-features: Onboarding (`/hr/onboarding`) and Organigramm (`/hr/organigramm`). The HR KPI dashboard itself stays under the KPI-Dashboard hub at `/hr`
-- **Tools & external-app tiles** — Admin-only tiles for Sensors (`/sensors`), Digital Signage (`/signage`), ATR (`/atr`), and FAIR (`/fair`); plus Documents (Paperless), PDF Tools (Stirling), and Projects (OpenProject) which open embedded apps in a new tab
+- **Tools & external-app tiles** — Admin-only tiles for Sensors (`/sensors`), Digital Signage (`/signage`), ATR (`/atr`), and FAIR (`/fair`)
 - **Coming-soon placeholders** — Greyed tiles (40% opacity, non-clickable) for future apps
 - **Role-aware scaffold** — Admin-only tiles can be added without structural changes; Viewer-role users see only tiles without the `admin` flag
 - **Minimal launcher chrome (v1.19)** — Top header is identity-only: brand (clickable → launcher), breadcrumb trail (`Apps › Section › …`), theme toggle, language toggle, and user menu. The user menu dropdown holds Docs, Settings, and Sign-out. All page-scoped controls (SALES/HR toggle, date-range filter, upload, Jetzt-messen, etc.) live in the per-route SubHeader below the top chrome
@@ -62,22 +62,6 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **SNMP Probe Button** — Per-sensor connectivity validation with live temperature/humidity test result
 - **Encrypted Community Strings** — Fernet-encrypted at rest, write-only secrets (never displayed post-save, shown as `••••••`)
 - **Bilingual Admin Guide** — Complete operational runbook (DE/EN) with onboarding workflows, threshold configuration, polling interval tuning, and Docker network troubleshooting
-
-### Embedded Apps (v1.46+)
-
-The launcher exposes three third-party apps, all gated by a Caddy `forward_auth` hook to the same Directus identity that powers the dashboard. All three come up with `docker compose up` alongside the rest of the stack.
-
-- **Documents — Paperless-ngx** (v1.46, mounted at `/paperless/*`)
-  - SSO via `X-Remote-User` (`PAPERLESS_ENABLE_HTTP_REMOTE_USER=true`); local user auto-provisioned on first hit
-  - Postgres backend on the shared `db` service (`paperless` database, no SQLite); `redis:7-alpine` broker sidecar
-  - German + English OCR (`PAPERLESS_OCR_LANGUAGE=deu+eng`); drop files into `./paperless_consume/` for inotify ingestion
-- **PDF Tools — Stirling-PDF** (v1.48, mounted at `/pdf/*`)
-  - Community edition with internal login disabled (`SECURITY_ENABLELOGIN=false` — Stirling v2 ignores the old `DOCKER_ENABLE_SECURITY` flag); auth handled exclusively by the Caddy gate
-  - Stateless app; `./stirling_data/` bind mount holds settings + custom config only
-- **Projects — OpenProject Community** (v1.48, mounted at `/op/*`)
-  - Caddy gate keeps unauthenticated users off the OP login page; community edition has no header SSO so users still sign into OP separately on first visit
-  - Dedicated `openproject` database on the shared `db` service; admin password set via `OPENPROJECT_ADMIN_PASSWORD` in `.env`
-- **Launcher behavior** — Documents / PDF Tools / Projects tiles open in a new tab via real `<a target="_blank">` anchors so popup blockers stay quiet
 
 ### In-App Documentation
 - **Role-Aware Docs** — Library icon in navbar opens /docs; Admins see User Guide + Admin Guide sections, Viewers see User Guide only
@@ -113,9 +97,6 @@ The launcher exposes three third-party apps, all gated by a Caddy `forward_auth`
 | i18n | react-i18next (flat dotted keys, `keySeparator: false`) |
 | Scheduler | APScheduler (in-process) |
 | External | Personio API (employees, attendances, absences), football-data.org (World Cup signage embed) |
-| Document Mgmt | Paperless-ngx 2.20 (Postgres backend, Redis broker), Caddy `forward_auth` SSO |
-| PDF Tools | Stirling-PDF community (Caddy `forward_auth` SSO) |
-| Project Mgmt | OpenProject community (Postgres backend, Caddy `forward_auth` gate) |
 | Infrastructure | Docker Compose v2 |
 
 ---
@@ -145,7 +126,7 @@ no named Docker volumes:
 
 | Path | Owner | Contents |
 |------|-------|----------|
-| `./postgres_data/` | `db` | PostgreSQL data dir (hosts `acm_kpi` + `paperless` databases) |
+| `./postgres_data/` | `db` | PostgreSQL data dir (hosts the `acm_kpi` database) |
 | `./directus_uploads/` | `directus` (rw) / `api` (ro) | Asset bytes |
 | `./directus_extensions/` | `directus` | Extension drop-in dir |
 | `./directus_database/` | `directus` | Reserved (sqlite slot — empty in Postgres mode) |
@@ -153,13 +134,8 @@ no named Docker volumes:
 | `./caddy_config/` | `caddy` | Caddy runtime config |
 | `./frontend_node_modules/` | `frontend` | Vite dev `node_modules` (auto-installed if empty) |
 | `./backups/` | `backup` | Nightly `pg_dump` archives |
-| `./paperless_data/` | `paperless` | Paperless index + celery beat schedule (DB now in Postgres) |
-| `./paperless_media/` | `paperless` | Stored document originals + archive PDFs |
-| `./paperless_consume/` | `paperless` | Drop-folder for ingestion (inotify-watched) |
-| `./paperless_export/` | `paperless` | Output dir for Paperless exports |
-| `./stirling_data/` | `stirling` | Stirling-PDF settings + custom config |
 
-All bind dirs are gitignored. OpenProject keeps its data inside the shared `openproject` Postgres database — no extra bind mount. Back up the lot to back up the deployment;
+All bind dirs are gitignored. Back up the lot to back up the deployment;
 restore by dropping them back in place before `docker compose up`.
 
 Once containers are healthy:
@@ -397,6 +373,7 @@ Exits 0 on success; non-zero and prints the failing step on failure. The harness
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v1.84 | 2026-07-14 | Removed the three embedded third-party apps — Paperless-ngx (Documents), Stirling-PDF (PDF Tools), OpenProject (Projects). Dropped their docker-compose services, Caddy `/paperless`/`/pdf`/`/op` routes, vite dev proxies, launcher tiles + i18n, `paperless`/`openproject` databases, images, and bind volumes. FastAPI `/api/auth/forward` retained but unused. |
 | v1.83 | 2026-07-14 | HR + KPI launcher hubs and Personio org chart. The launcher's scattered dashboard tiles collapse behind a single **KPI-Dashboard** tile → `/kpi` hub (Vertrieb, Einkauf, Produktion, HR, Qualität, Finanzperspektive), and a single **HR** tile → `/hr/home` hub (Onboarding, Organigramm placeholders). New viewer-gated `GET /api/hr/org-chart` returns active employees with their supervisor id extracted from the stored Personio payload (`attributes.supervisor.value…id`); `/hr/organigramm` renders it as a collapsible hierarchy tree. Reads already-synced data — no live Personio call. (Note: this table has a pre-existing gap for v1.51–v1.82.) |
 | v1.50 | 2026-05-28 | Sensors `/sensors` page loads instantly across every time window. `GET /api/sensors/{id}/readings` was previously returning every raw poll row for the selected window — ~10 000 rows for 7d and ~12 000+ for 30d. The DB query itself was fast (4 ms, indexed scan) but JSON-serialising tens of thousands of rows and rendering them all as SVG points in two stacked Recharts `<LineChart>` took several seconds in the browser. The endpoint now downsamples server-side via Postgres `date_bin()`: **5-minute bucket averages for windows ≤24 h, 1-hour bucket averages for 7 d and 30 d**. Smoke-tested against the live dataset, this collapses the per-window row count to ~12 (1h) / ~72 (6h) / ~288 (24h) / ~168 (7d) / ~720 (30d). `SensorReadingRead.id` is widened to `int \| None` because bucket rows have no natural row id (frontend type follows; the chart never reads id). asyncpg quirk worth knowing: `date_bin()`'s INTERVAL argument must be bound as a Python `timedelta` — binding a string sends VARCHAR and Postgres rejects it; casting via `CAST(:bucket AS interval)` explodes inside asyncpg's interval codec. Side effect: the "current value" display on the Sensor status cards is now the average of the last ~5 minutes of polls rather than the absolute latest poll (smoothing is invisible on slow-moving temperature/humidity). Tooltip values in both charts are formatted to 2 decimals via locale-aware `Intl.NumberFormat` (`21,71` in DE / `21.71` in EN) — bucket averages carry full numeric precision from `AVG()` which is way too noisy to display raw. |
 | v1.49 | 2026-05-28 | Signage device tokens are now revoke-only — kiosks stay paired indefinitely. `mint_device_jwt` no longer emits an `exp` claim, so a paired Pi that has been offline for weeks (or forever) still authenticates when it comes back. The only ways to force a kiosk back to the pairing screen are now `POST /api/signage/pair/devices/{id}/revoke` (the red-shield button on **Signage → Geräte**) or deleting the `signage_devices` row directly — see `docs/operator-runbook.md` §9.10. Previously the JWT carried a 24 h TTL with no rotation path, so every kiosk silently dropped back to the pairing code roughly once a day. `POST /api/signage/player/heartbeat` now returns `200 {token}` (was `204`) and mints a freshly-signed JWT on every heartbeat; both the browser (`useDeviceToken.rotateToken`) and the Pi sidecar (`_heartbeat_loop`) swap the rolled token into their local stores. Rotation is forward-secrecy hygiene only — a kiosk that misses every rotation keeps working on its original token. New regression test `test_long_lived_token_still_authenticates` locks the invariant by minting a token with `iat` one year in the past and asserting it still authenticates against `/api/signage/player/playlist`. |
