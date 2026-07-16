@@ -5,6 +5,9 @@ import { ChevronDown, ChevronRight, Loader2, Network } from "lucide-react";
 import { fetchOrgChart, type OrgChartNode } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 
+// Default location filter — the two main German offices, pre-selected.
+const DEFAULT_OFFICES = ["Hamburg", "Memmingen"];
+
 interface TreeNode extends OrgChartNode {
   children: TreeNode[];
 }
@@ -90,24 +93,88 @@ function OrgNode({ node }: { node: TreeNode }) {
 
 export function OrganigrammPage() {
   const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(DEFAULT_OFFICES),
+  );
   const { data, isLoading, isError } = useQuery({
     queryKey: hrKpiKeys.orgChart(),
     queryFn: fetchOrgChart,
   });
 
-  const forest = useMemo(() => (data ? buildForest(data) : []), [data]);
+  // Distinct offices present in the data, sorted — drives the filter chips.
+  const offices = useMemo(() => {
+    const set = new Set<string>();
+    data?.forEach((n) => n.office && set.add(n.office));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  // Multi-select: show employees whose office is selected. Empty selection =
+  // no location filter (show everyone).
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    if (selected.size === 0) return data;
+    return data.filter((n) => n.office != null && selected.has(n.office));
+  }, [data, selected]);
+
+  const forest = useMemo(() => buildForest(filtered), [filtered]);
+
+  const toggleOffice = (office: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(office)) next.delete(office);
+      else next.add(office);
+      return next;
+    });
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
-      <h1 className="text-lg font-semibold mb-1 flex items-center gap-2">
-        <Network className="w-5 h-5" aria-hidden="true" />
-        {t("hr.organigramm.title")}
-      </h1>
-      {data && data.length > 0 && (
-        <p className="text-sm text-muted-foreground mb-6">
-          {t("hr.organigramm.subtitle", { count: data.length })}
-        </p>
-      )}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-lg font-semibold mb-1 flex items-center gap-2">
+            <Network className="w-5 h-5" aria-hidden="true" />
+            {t("hr.organigramm.title")}
+          </h1>
+          {data && filtered.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("hr.organigramm.subtitle", { count: filtered.length })}
+            </p>
+          )}
+        </div>
+
+        {data && offices.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">
+              {t("hr.organigramm.office")}
+            </span>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label={t("hr.organigramm.office")}
+            >
+              {offices.map((o) => {
+                const on = selected.has(o);
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => toggleOffice(o)}
+                    aria-pressed={on}
+                    className={`rounded-full border px-3 py-1 text-sm transition-colors
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                                ${
+                                  on
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-transparent text-muted-foreground border-border hover:bg-muted"
+                                }`}
+                  >
+                    {o}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {isLoading && (
         <div className="flex h-64 items-center justify-center">
@@ -119,7 +186,7 @@ export function OrganigrammPage() {
         <p className="text-sm text-destructive">{t("hr.organigramm.error")}</p>
       )}
 
-      {data && data.length === 0 && (
+      {data && filtered.length === 0 && (
         <p className="text-sm text-muted-foreground">{t("hr.organigramm.empty")}</p>
       )}
 

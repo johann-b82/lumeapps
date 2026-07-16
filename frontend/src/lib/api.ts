@@ -463,6 +463,7 @@ export interface OrgChartNode {
   last_name: string | null;
   position: string | null;
   department: string | null;
+  office: string | null;
   supervisor_id: number | null;
 }
 

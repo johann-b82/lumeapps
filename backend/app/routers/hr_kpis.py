@@ -548,7 +548,23 @@ class OrgChartNode(BaseModel):
     last_name: str | None
     position: str | None
     department: str | None
+    office: str | None
     supervisor_id: int | None
+
+
+def _extract_office(raw: Any) -> str | None:
+    """Dig the Personio office/workplace name out of a raw employee payload.
+
+    Path: attributes.office.value.attributes.name (Personio's standard
+    ``universal_id: office`` "Workplace" field, e.g. "Hamburg").
+    """
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get("attributes", {}).get("office", {}).get("value")
+    if not isinstance(value, dict):
+        return None
+    name = value.get("attributes", {}).get("name")
+    return name if isinstance(name, str) and name else None
 
 
 def _extract_supervisor_id(raw: Any) -> int | None:
@@ -591,6 +607,7 @@ async def get_org_chart(
             last_name=emp.last_name,
             position=emp.position,
             department=emp.department,
+            office=_extract_office(emp.raw_json),
             supervisor_id=_extract_supervisor_id(emp.raw_json),
         )
         for emp in rows
