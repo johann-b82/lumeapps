@@ -21,6 +21,9 @@ import { EmbedWorldCupTippspielPage } from "./pages/EmbedWorldCupTippspielPage";
 import { QualityPage } from "./pages/QualityPage";
 import { ProcurementPage } from "./pages/ProcurementPage";
 import { ProductionPage } from "./pages/ProductionPage";
+import { ProductionHomePage } from "./pages/ProductionHomePage";
+import { MaintenanceMachinesPage } from "./pages/MaintenanceMachinesPage";
+import { MaintenanceMachineDetailPage } from "./pages/MaintenanceMachineDetailPage";
 import { FinancePage } from "./pages/FinancePage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -87,6 +90,18 @@ function AppShell() {
           <Route path="/hr/onboarding" component={OnboardingPage} />
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
+          {/* Produktion hub + Maschinen-Wartung (admin-only). Specific routes
+              precede /production; the :id detail precedes its list (wouter
+              first-match). The Verzug KPI stays at /production (KPI dashboard). */}
+          <Route path="/production/maintenance/:id">
+            <AdminOnly><MaintenanceMachineDetailPage /></AdminOnly>
+          </Route>
+          <Route path="/production/maintenance">
+            <AdminOnly><MaintenanceMachinesPage /></AdminOnly>
+          </Route>
+          <Route path="/production/home">
+            <AdminOnly><ProductionHomePage /></AdminOnly>
+          </Route>
           <Route path="/production" component={ProductionPage} />
           {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the

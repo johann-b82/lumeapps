@@ -56,6 +56,13 @@ from app.models.atr import AtrPart, AtrTemplate, AtrDelivery, AtrDeliveryItem  #
 # FAIR models (v1.73 — drawing ballooning / Erstmusterprüfung)
 from app.models.fair import FairProject, FairBalloon  # noqa: F401
 
+# Maschinen-Wartung models (v1.82 — machine maintenance)
+from app.models.maintenance import (  # noqa: F401
+    Machine,
+    MaintenanceTask,
+    MaintenanceFile,
+)
+
 __all__ = [
     "Base",
     # Legacy
@@ -86,4 +93,6 @@ __all__ = [
     "AtrDelivery", "AtrDeliveryItem",
     # FAIR
     "FairProject", "FairBalloon",
+    # Maschinen-Wartung
+    "Machine", "MaintenanceTask", "MaintenanceFile",
 ]

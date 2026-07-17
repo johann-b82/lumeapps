@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -65,6 +65,32 @@ export function LauncherPage() {
             {t("launcher.tile.hr_dashboard")}
           </span>
         </div>
+
+        {/* Produktion-Hub tile → /production/home. Opens the Produktion
+            sub-menu (Wartung, …) on ProductionHomePage, mirroring the
+            KPI/HR-Dashboard tile pattern. Admin-only in Phase 1 (machine
+            maintenance is admin setup); the Verzug KPI stays in the KPI
+            dashboard. */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/production/home")}
+              aria-label={t("launcher.tile.production")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-sky-500 to-blue-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Factory className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("launcher.tile.production")}
+            </span>
+          </div>
+        </AdminOnly>
 
         {/* v1.82 — Quality / HR / Procurement / Finance / Production tiles
             removed from the launcher; the KPI-Dashboard tile above is
