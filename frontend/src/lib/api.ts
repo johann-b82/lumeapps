@@ -257,6 +257,14 @@ export interface Settings {
   atr_archive_path: string | null;
   atr_scan_interval_s: number;
   atr_auto_mode: boolean;
+  // v1.82 E-Mail (Office 365 / Graph) — client secret is write-only, only the
+  // boolean is exposed.
+  email_tenant_id: string | null;
+  email_client_id: string | null;
+  email_sender_address: string | null;
+  email_sender_name: string | null;
+  email_has_secret: boolean;
+  email_enabled: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -332,6 +340,14 @@ export interface SettingsUpdatePayload {
   atr_archive_path?: string | null;
   atr_scan_interval_s?: number;
   atr_auto_mode?: boolean;
+  // v1.82 E-Mail (Office 365 / Graph). undefined = "don't change". Secret is
+  // write-only.
+  email_tenant_id?: string | null;
+  email_client_id?: string | null;
+  email_client_secret?: string;
+  email_sender_address?: string | null;
+  email_sender_name?: string | null;
+  email_enabled?: boolean;
 }
 
 /**
@@ -1863,4 +1879,36 @@ export async function runSnmpWalk(
 
 export async function testAtrFileserver(): Promise<{ ok: boolean; error: string | null }> {
   return apiClient<{ ok: boolean; error: string | null }>("/api/atr/fileserver/test", { method: "POST" });
+}
+
+// --- v1.82 E-Mail background module (Office 365 / Microsoft Graph) ----------
+
+export interface EmailSendPayload {
+  to: string[];
+  subject: string;
+  body_html: string;
+  body_text?: string | null;
+  cc?: string[] | null;
+}
+
+/** POST /api/email/test — send a probe mail to verify the O365 setup. */
+export async function sendTestEmail(
+  to: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to }),
+  });
+}
+
+/** POST /api/email/send — generic send for reminders/reports. */
+export async function sendEmail(
+  payload: EmailSendPayload,
+): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }

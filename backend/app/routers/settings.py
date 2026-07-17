@@ -125,6 +125,13 @@ def _build_read(row: AppSettings) -> SettingsRead:
         atr_archive_path=row.atr_archive_path,
         atr_scan_interval_s=row.atr_scan_interval_s,
         atr_auto_mode=row.atr_auto_mode,
+        # v1.82 E-Mail (Office 365 / Graph) — secret is write-only
+        email_tenant_id=row.email_tenant_id,
+        email_client_id=row.email_client_id,
+        email_sender_address=row.email_sender_address,
+        email_sender_name=row.email_sender_name,
+        email_has_secret=row.email_client_secret_enc is not None,
+        email_enabled=row.email_enabled,
     )
 
 
@@ -354,6 +361,16 @@ async def put_settings(
             reschedule_atr_scan(payload.atr_scan_interval_s)
         except Exception:  # scheduler hook lands in Task 7; never fail the PUT
             pass
+
+    # v1.82 E-Mail (Office 365 / Graph) — None means "don't change"; the
+    # client secret is encrypted like the other credentials above.
+    for _f in ("email_tenant_id", "email_client_id", "email_sender_address",
+               "email_sender_name", "email_enabled"):
+        _v = getattr(payload, _f)
+        if _v is not None:
+            setattr(row, _f, _v)
+    if payload.email_client_secret is not None:
+        row.email_client_secret_enc = encrypt_credential(payload.email_client_secret)
 
     # D-07: if the payload exactly matches canonical defaults, this is a
     # "reset to defaults" — also wipe the logo trio. A non-default PUT

@@ -192,6 +192,14 @@ class SettingsUpdate(BaseModel):
     atr_archive_path: str | None = None
     atr_scan_interval_s: int | None = None
     atr_auto_mode: bool | None = None
+    # v1.82 E-Mail (Office 365 / Graph) — None means "don't change"; the client
+    # secret is write-only (never returned by SettingsRead).
+    email_tenant_id: str | None = None
+    email_client_id: str | None = None
+    email_client_secret: str | None = None
+    email_sender_address: str | None = None
+    email_sender_name: str | None = None
+    email_enabled: bool | None = None
 
 
 class SettingsRead(BaseModel):
@@ -259,8 +267,44 @@ class SettingsRead(BaseModel):
     atr_archive_path: str | None = None
     atr_scan_interval_s: int = 0
     atr_auto_mode: bool = False
+    # v1.82 E-Mail (Office 365 / Graph) — client secret is write-only; expose
+    # only the boolean so the UI can show "configured" without leaking it.
+    email_tenant_id: str | None = None
+    email_client_id: str | None = None
+    email_sender_address: str | None = None
+    email_sender_name: str | None = None
+    email_has_secret: bool = False
+    email_enabled: bool = False
 
     model_config = {"from_attributes": True}
+
+
+# --------------------------------------------------------------------------
+# v1.82 — E-Mail background module (Office 365 / Microsoft Graph)
+# --------------------------------------------------------------------------
+
+
+class EmailSendRequest(BaseModel):
+    """Body for POST /api/email/send — generic mail for reminders/reports."""
+
+    to: list[EmailStr] = Field(min_length=1)
+    subject: Annotated[str, Field(min_length=1, max_length=255)]
+    body_html: Annotated[str, Field(min_length=1)]
+    body_text: str | None = None
+    cc: list[EmailStr] | None = None
+
+
+class EmailTestRequest(BaseModel):
+    """Body for POST /api/email/test — send a probe mail to one address."""
+
+    to: EmailStr
+
+
+class EmailSendResult(BaseModel):
+    """Uniform ``{ok, error}`` response for both email endpoints."""
+
+    ok: bool
+    error: str | None = None
 
 
 # --------------------------------------------------------------------------
@@ -1125,6 +1169,9 @@ __all__ = [
     "OklchColor",
     "SettingsUpdate",
     "SettingsRead",
+    "EmailSendRequest",
+    "EmailTestRequest",
+    "EmailSendResult",
     "SyncResult",
     "SyncTestResult",
     "AbsenceTypeOption",
