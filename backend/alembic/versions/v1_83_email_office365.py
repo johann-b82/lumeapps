@@ -1,4 +1,4 @@
-"""v1.82: E-Mail background module — Office 365 (Microsoft Graph) config
+"""v1.83: E-Mail background module — Office 365 (Microsoft Graph) config
 
 Adds the shared e-mail/notification service configuration to the ``app_settings``
 singleton. The service can send mail via the Microsoft Graph API in two modes:
@@ -23,8 +23,12 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "v1_82_email_office365"
-down_revision = "v1_81_inspection_rsc"
+revision = "v1_83_email_office365"
+# Prod is already at v1_82_maintenance (Wartung module, deployed 2026-07-15), so
+# this migration chains after it — NOT after v1_81 — to keep a single linear
+# head. The v1_82_maintenance file lives on the maintenance branch / main; this
+# branch must be merged on top of it (see docs/modules/email.md).
+down_revision = "v1_82_maintenance"
 branch_labels = None
 depends_on = None
 

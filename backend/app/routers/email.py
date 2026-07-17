@@ -1,4 +1,4 @@
-"""E-Mail API — v1.82 Office 365 background module.
+"""E-Mail API — v1.83 Office 365 background module.
 
 All endpoints are admin-only (gated at the router level per the CLAUDE.md
 "Auth gate placement" convention — no viewer-readable routes here).

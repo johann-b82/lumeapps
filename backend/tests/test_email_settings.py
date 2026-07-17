@@ -1,4 +1,4 @@
-"""Settings read/write coverage for the v1.82 Office 365 e-mail fields.
+"""Settings read/write coverage for the v1.83 Office 365 e-mail fields.
 
 The client secret is write-only: PUT accepts `email_client_secret`, GET/PUT
 responses expose only `email_has_secret`. None/omitted means "don't change",

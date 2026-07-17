@@ -79,9 +79,9 @@ All under router-level `require_admin` in `backend/app/routers/uploads.py`. Each
 | POST   | /api/sync           |   —    |   ✓   | Full Personio sync (blocking) |
 | POST   | /api/sync/test      |   —    |   ✓   | Personio credential test |
 
-Settings PUT also carries the v1.82 Office 365 e-mail credentials (`email_tenant_id`, `email_client_id`, write-only `email_client_secret`, `email_sender_address`, `email_sender_name`, `email_enabled`).
+Settings PUT also carries the v1.83 Office 365 e-mail credentials (`email_tenant_id`, `email_client_id`, write-only `email_client_secret`, `email_sender_address`, `email_sender_name`, `email_enabled`).
 
-### E-Mail (Admin-only) — v1.82 background module
+### E-Mail (Admin-only) — v1.83 background module
 
 Shared notification service (Office 365 / Microsoft Graph). Router-level `require_admin`. Both routes return `{ok, error}` (a failed send is HTTP 200 with `ok=false`). See [modules/email.md](modules/email.md) for the connection contract and Azure setup.
 

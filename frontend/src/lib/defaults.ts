@@ -62,7 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   atr_archive_path: null,
   atr_scan_interval_s: 60,
   atr_auto_mode: false,
-  // v1.82 E-Mail (Office 365 / Graph) defaults — null/false = "not configured".
+  // v1.83 E-Mail (Office 365 / Graph) defaults — null/false = "not configured".
   email_tenant_id: null,
   email_client_id: null,
   email_sender_address: null,

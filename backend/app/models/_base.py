@@ -263,7 +263,7 @@ class AppSettings(Base):
     atr_scan_interval_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     atr_auto_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # --- v1.82 E-Mail background module — Office 365 / Microsoft Graph ---
+    # --- v1.83 E-Mail background module — Office 365 / Microsoft Graph ---
     # Shared notification service config. Sends via the Graph API using the
     # client-credentials OAuth flow; the secret is Fernet-encrypted like the
     # other credential columns above. See app/services/email_service.py and

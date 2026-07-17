@@ -4,6 +4,12 @@ Zentraler, app-weiter Dienst zum **Versenden von E-Mails** — für Erinnerungen
 Berichte und Benachrichtigungen. Jedes andere Modul (Router oder Service) kann
 sich anbinden, ohne selbst SMTP-, OAuth- oder Konfigurationsdetails zu kennen.
 
+> **Deployment/Merge-Hinweis:** Die Migration ist `v1_83_email_office365` und
+> baut auf `v1_82_maintenance` (Wartungs-Modul) auf — die Prod-DB steht bereits
+> auf `v1_82_maintenance`. Dieser Branch muss daher **auf den Wartungs-Branch /
+> main mit `v1_82_maintenance` aufgesetzt** gemerged werden; erst dann ergibt
+> `alembic upgrade head` eine lineare Kette mit genau einem Head.
+
 - **Transport:** Microsoft Graph API
 - **Konfiguration:** zentral auf der `AppSettings`-Singleton-Zeile, gepflegt im
   Admin-Reiter **Einstellungen → E-Mail**
@@ -213,5 +219,5 @@ Postfach.
 | `backend/app/services/graph_client.py` | Graph-Transport (App- + Delegiert-Token, `sendMail`, Device-Code-Flow) |
 | `backend/app/routers/email.py` | HTTP-Endpunkte `/api/email/*` |
 | `backend/app/models/_base.py` (`AppSettings`) | Konfigurationsspalten `email_*` (inkl. `email_auth_mode`, delegiertes Token) |
-| `backend/alembic/versions/v1_82_email_office365.py` | Migration der Spalten |
+| `backend/alembic/versions/v1_83_email_office365.py` | Migration der Spalten (chained nach `v1_82_maintenance`) |
 | `frontend/src/pages/EmailSettingsPage.tsx` | Admin-Reiter mit Modus-Umschalter + Device-Code-Login |

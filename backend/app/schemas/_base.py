@@ -192,7 +192,7 @@ class SettingsUpdate(BaseModel):
     atr_archive_path: str | None = None
     atr_scan_interval_s: int | None = None
     atr_auto_mode: bool | None = None
-    # v1.82 E-Mail (Office 365 / Graph) — None means "don't change"; the client
+    # v1.83 E-Mail (Office 365 / Graph) — None means "don't change"; the client
     # secret is write-only (never returned by SettingsRead).
     email_tenant_id: str | None = None
     email_client_id: str | None = None
@@ -268,7 +268,7 @@ class SettingsRead(BaseModel):
     atr_archive_path: str | None = None
     atr_scan_interval_s: int = 0
     atr_auto_mode: bool = False
-    # v1.82 E-Mail (Office 365 / Graph) — client secret is write-only; expose
+    # v1.83 E-Mail (Office 365 / Graph) — client secret is write-only; expose
     # only the boolean so the UI can show "configured" without leaking it.
     email_tenant_id: str | None = None
     email_client_id: str | None = None
@@ -285,7 +285,7 @@ class SettingsRead(BaseModel):
 
 
 # --------------------------------------------------------------------------
-# v1.82 — E-Mail background module (Office 365 / Microsoft Graph)
+# v1.83 — E-Mail background module (Office 365 / Microsoft Graph)
 # --------------------------------------------------------------------------
 
 

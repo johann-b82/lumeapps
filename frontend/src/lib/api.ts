@@ -257,7 +257,7 @@ export interface Settings {
   atr_archive_path: string | null;
   atr_scan_interval_s: number;
   atr_auto_mode: boolean;
-  // v1.82 E-Mail (Office 365 / Graph) — client secret is write-only, only the
+  // v1.83 E-Mail (Office 365 / Graph) — client secret is write-only, only the
   // boolean is exposed.
   email_tenant_id: string | null;
   email_client_id: string | null;
@@ -344,7 +344,7 @@ export interface SettingsUpdatePayload {
   atr_archive_path?: string | null;
   atr_scan_interval_s?: number;
   atr_auto_mode?: boolean;
-  // v1.82 E-Mail (Office 365 / Graph). undefined = "don't change". Secret is
+  // v1.83 E-Mail (Office 365 / Graph). undefined = "don't change". Secret is
   // write-only.
   email_tenant_id?: string | null;
   email_client_id?: string | null;
@@ -1886,7 +1886,7 @@ export async function testAtrFileserver(): Promise<{ ok: boolean; error: string 
   return apiClient<{ ok: boolean; error: string | null }>("/api/atr/fileserver/test", { method: "POST" });
 }
 
-// --- v1.82 E-Mail background module (Office 365 / Microsoft Graph) ----------
+// --- v1.83 E-Mail background module (Office 365 / Microsoft Graph) ----------
 
 export interface EmailSendPayload {
   to: string[];
