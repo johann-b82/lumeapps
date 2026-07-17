@@ -62,6 +62,16 @@ export const DEFAULT_SETTINGS: Settings = {
   atr_archive_path: null,
   atr_scan_interval_s: 60,
   atr_auto_mode: false,
+  // v1.83 E-Mail (Office 365 / Graph) defaults — null/false = "not configured".
+  email_tenant_id: null,
+  email_client_id: null,
+  email_sender_address: null,
+  email_sender_name: null,
+  email_has_secret: false,
+  email_enabled: false,
+  email_auth_mode: "app",
+  email_delegated_account: null,
+  email_delegated_connected: false,
 };
 
 export const THEME_TOKEN_MAP = {

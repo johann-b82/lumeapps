@@ -79,6 +79,22 @@ All under router-level `require_admin` in `backend/app/routers/uploads.py`. Each
 | POST   | /api/sync           |   —    |   ✓   | Full Personio sync (blocking) |
 | POST   | /api/sync/test      |   —    |   ✓   | Personio credential test |
 
+Settings PUT also carries the v1.83 Office 365 e-mail credentials (`email_tenant_id`, `email_client_id`, write-only `email_client_secret`, `email_sender_address`, `email_sender_name`, `email_enabled`).
+
+### E-Mail (Admin-only) — v1.83 background module
+
+Shared notification service (Office 365 / Microsoft Graph). Router-level `require_admin`. Both routes return `{ok, error}` (a failed send is HTTP 200 with `ok=false`). See [modules/email.md](modules/email.md) for the connection contract and Azure setup.
+
+| Method | Path                             | Viewer | Admin | Notes |
+|--------|----------------------------------|:------:|:-----:|-------|
+| POST   | /api/email/test                  |   —    |   ✓   | Send a probe mail to one address `{to}` |
+| POST   | /api/email/send                  |   —    |   ✓   | Generic send `{to[], subject, body_html, cc?, body_text?}` |
+| POST   | /api/email/delegated/start       |   —    |   ✓   | Begin device-code sign-in (delegated mode) → `{device_code, user_code, verification_uri, interval, ...}` |
+| POST   | /api/email/delegated/poll        |   —    |   ✓   | Poll once `{device_code}` → `{status: pending\|complete\|error, account?}` |
+| POST   | /api/email/delegated/disconnect  |   —    |   ✓   | Clear the stored delegated token |
+
+Two send modes, switchable via `email_auth_mode` on `PUT /api/settings`: `app` (client-credentials) or `delegated` (device-code sign-in with the admin's own M365 account).
+
 ### Sensors (Admin-only, including reads)
 
 Router-level `require_admin` on the whole `/api/sensors` router — Viewers get 403 even on GETs.

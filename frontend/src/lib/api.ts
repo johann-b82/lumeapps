@@ -257,6 +257,18 @@ export interface Settings {
   atr_archive_path: string | null;
   atr_scan_interval_s: number;
   atr_auto_mode: boolean;
+  // v1.83 E-Mail (Office 365 / Graph) — client secret is write-only, only the
+  // boolean is exposed.
+  email_tenant_id: string | null;
+  email_client_id: string | null;
+  email_sender_address: string | null;
+  email_sender_name: string | null;
+  email_has_secret: boolean;
+  email_enabled: boolean;
+  // 'app' (client-credentials) or 'delegated' (device-code sign-in).
+  email_auth_mode: "app" | "delegated";
+  email_delegated_account: string | null;
+  email_delegated_connected: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -332,6 +344,15 @@ export interface SettingsUpdatePayload {
   atr_archive_path?: string | null;
   atr_scan_interval_s?: number;
   atr_auto_mode?: boolean;
+  // v1.83 E-Mail (Office 365 / Graph). undefined = "don't change". Secret is
+  // write-only.
+  email_tenant_id?: string | null;
+  email_client_id?: string | null;
+  email_client_secret?: string;
+  email_sender_address?: string | null;
+  email_sender_name?: string | null;
+  email_enabled?: boolean;
+  email_auth_mode?: "app" | "delegated";
 }
 
 /**
@@ -1863,4 +1884,74 @@ export async function runSnmpWalk(
 
 export async function testAtrFileserver(): Promise<{ ok: boolean; error: string | null }> {
   return apiClient<{ ok: boolean; error: string | null }>("/api/atr/fileserver/test", { method: "POST" });
+}
+
+// --- v1.83 E-Mail background module (Office 365 / Microsoft Graph) ----------
+
+export interface EmailSendPayload {
+  to: string[];
+  subject: string;
+  body_html: string;
+  body_text?: string | null;
+  cc?: string[] | null;
+}
+
+/** POST /api/email/test — send a probe mail to verify the O365 setup. */
+export async function sendTestEmail(
+  to: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to }),
+  });
+}
+
+/** POST /api/email/send — generic send for reminders/reports. */
+export async function sendEmail(
+  payload: EmailSendPayload,
+): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface DeviceCodeStart {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+  message: string;
+}
+
+export interface DeviceCodePollResult {
+  status: "pending" | "complete" | "error";
+  account: string | null;
+  error: string | null;
+}
+
+/** POST /api/email/delegated/start — begin device-code sign-in. */
+export async function startDelegatedLogin(): Promise<DeviceCodeStart> {
+  return apiClient<DeviceCodeStart>("/api/email/delegated/start", { method: "POST" });
+}
+
+/** POST /api/email/delegated/poll — poll once for completion. */
+export async function pollDelegatedLogin(
+  deviceCode: string,
+): Promise<DeviceCodePollResult> {
+  return apiClient<DeviceCodePollResult>("/api/email/delegated/poll", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_code: deviceCode }),
+  });
+}
+
+/** POST /api/email/delegated/disconnect — forget the delegated sign-in. */
+export async function disconnectDelegatedLogin(): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/delegated/disconnect", {
+    method: "POST",
+  });
 }

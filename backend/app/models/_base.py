@@ -263,6 +263,25 @@ class AppSettings(Base):
     atr_scan_interval_s: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     atr_auto_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # --- v1.83 E-Mail background module — Office 365 / Microsoft Graph ---
+    # Shared notification service config. Sends via the Graph API using the
+    # client-credentials OAuth flow; the secret is Fernet-encrypted like the
+    # other credential columns above. See app/services/email_service.py and
+    # docs/modules/email.md for how other modules connect to the service.
+    email_tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    email_client_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    email_client_secret_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    email_sender_address: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    email_sender_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Send mode: 'app' (client-credentials) or 'delegated' (device-code sign-in).
+    email_auth_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="app", default="app"
+    )
+    # Delegated mode — rotating refresh token (Fernet-encrypted) + signed-in UPN.
+    email_delegated_refresh_token_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    email_delegated_account: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
 
 class PersonioEmployee(Base):
     __tablename__ = "personio_employees"
