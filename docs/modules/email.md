@@ -4,12 +4,21 @@ Zentraler, app-weiter Dienst zum **Versenden von E-Mails** — für Erinnerungen
 Berichte und Benachrichtigungen. Jedes andere Modul (Router oder Service) kann
 sich anbinden, ohne selbst SMTP-, OAuth- oder Konfigurationsdetails zu kennen.
 
-- **Transport:** Microsoft Graph API (`/users/{sender}/sendMail`)
-- **Auth:** OAuth 2.0 Client-Credentials (App-Berechtigung `Mail.Send`)
+- **Transport:** Microsoft Graph API
 - **Konfiguration:** zentral auf der `AppSettings`-Singleton-Zeile, gepflegt im
   Admin-Reiter **Einstellungen → E-Mail**
-- **Verschlüsselung:** Client-Secret liegt Fernet-verschlüsselt in der DB
-  (`email_client_secret_enc`), wie alle anderen Zugangsdaten (Personio, ATR, WM)
+- **Verschlüsselung:** Secret bzw. Refresh-Token liegen Fernet-verschlüsselt in
+  der DB, wie alle anderen Zugangsdaten (Personio, ATR, WM)
+
+### Zwei Versandmodi (umschaltbar im Reiter, Feld `email_auth_mode`)
+
+| Modus | Auth | Sendet als | Admin nötig? |
+|---|---|---|---|
+| **`app`** | OAuth Client-Credentials, App-Berechtigung `Mail.Send` + Admin-Consent | `email_sender_address` (`/users/{sender}/sendMail`) | Ja — einmal Admin-Consent |
+| **`delegated`** | Device-Code-Anmeldung mit eigenem M365-Konto, delegiertes `Mail.Send` (Self-Consent) | dem angemeldeten Benutzer (`/me/sendMail`) | Nein für Consent; ggf. einmal für die App-Registrierung |
+
+Für **alle Module ist der Aufruf identisch** — `send_email(...)` wählt den aktiven
+Modus automatisch. Der Modus ist jederzeit im Reiter umstellbar.
 
 ---
 
@@ -119,55 +128,80 @@ scheduler.add_job(
 
 ## HTTP-Endpunkte (admin-only)
 
-Für Ad-hoc-Versand oder ein Frontend gibt es zwei admin-gate-gesicherte Routen
-(`app/routers/email.py`). Beide antworten mit `{ "ok": bool, "error": str|null }`
-— ein fehlgeschlagener Versand ist **HTTP 200 mit `ok=false`**, kein 5xx.
+Admin-gate-gesicherte Routen (`app/routers/email.py`). Versand-Routen antworten
+mit `{ "ok": bool, "error": str|null }` — ein fehlgeschlagener Versand ist
+**HTTP 200 mit `ok=false`**, kein 5xx.
 
 | Methode | Pfad | Zweck |
 |---|---|---|
-| `POST` | `/api/email/test` | Test-E-Mail an eine Adresse — verifiziert das O365-Setup. Body: `{ "to": "name@firma.de" }` |
+| `POST` | `/api/email/test` | Test-E-Mail an eine Adresse. Body: `{ "to": "name@firma.de" }` |
 | `POST` | `/api/email/send` | Generischer Versand. Body: `{ "to": ["…"], "subject": "…", "body_html": "…", "cc"?: […], "body_text"?: "…" }` |
+| `POST` | `/api/email/delegated/start` | Delegiert: Device-Code-Anmeldung starten → `{ user_code, verification_uri, device_code, interval, ... }` |
+| `POST` | `/api/email/delegated/poll` | Einmal pollen. Body: `{ "device_code": "…" }` → `{ status, account? }` |
+| `POST` | `/api/email/delegated/disconnect` | Delegierte Anmeldung vergessen |
 
 ---
 
 ## Einmalige Einrichtung in Azure / Microsoft Entra
 
-Diese Schritte macht **euer Microsoft-365-Administrator** (Claude kann keine
-Azure-App-Registrierung anlegen). Ergebnis sind vier Werte, die anschließend im
-Admin-Reiter **Einstellungen → E-Mail** eingetragen werden.
+Es gibt zwei Wege — **App-Berechtigung** (zentrales App-Konto, braucht Admin-Consent)
+oder **Delegiert** (du meldest dich mit deinem eigenen Konto an, kein Consent nötig).
+
+### Variante A — App-Berechtigung (`email_auth_mode = app`)
+
+Diese Schritte macht **euer Microsoft-365-Administrator**.
 
 1. **App registrieren** — Entra Admin Center → *App registrations* → *New
-   registration*. Name z. B. „LumeApps Mailer". Kontotyp: *Single tenant*.
-   Nach dem Anlegen findest du:
+   registration*. Kontotyp: *Single tenant*. Danach:
    - **Verzeichnis-(Tenant-)ID** → Feld *Tenant-ID*
    - **Anwendungs-(Client-)ID** → Feld *Client-ID*
 2. **API-Berechtigung** — *API permissions* → *Add a permission* → *Microsoft
-   Graph* → **Application permissions** → **`Mail.Send`** hinzufügen.
-   Anschließend **„Grant admin consent"** klicken (Pflicht — ohne Consent
-   schlägt der Versand mit 403 fehl).
+   Graph* → **Application permissions** → **`Mail.Send`** → **„Grant admin
+   consent"** (ohne Consent → Versand-403).
 3. **Client-Secret** — *Certificates & secrets* → *New client secret*. Den
-   **Wert** (nicht die Secret-ID!) sofort kopieren → Feld *Client-Secret*.
-   Secrets laufen ab; bei Ablauf ein neues erzeugen und im Reiter erneut
-   eintragen.
-4. **Absender** — die *Absender-E-Mailadresse* muss ein echtes Postfach im
-   Tenant sein (Benutzer- oder freigegebenes Postfach). Trag sie im Reiter ein,
-   optional einen Absendernamen.
-5. Häkchen **„E-Mail-Versand aktiviert"** setzen, speichern und über
-   **„Test-E-Mail senden"** prüfen.
+   **Wert** sofort kopieren → Feld *Client-Secret*. Secrets laufen ab.
+4. **Absender** — echtes Postfach im Tenant → Feld *Absenderadresse*.
+5. Modus **App-Berechtigung** wählen, **„aktiviert"** setzen, speichern, testen.
 
-> Sicherheits-Tipp: Mit der Application-Permission `Mail.Send` darf die App aus
-> *jedem* Postfach senden. Wer das einschränken will, richtet in Exchange Online
-> eine **Application Access Policy** ein, die die App auf genau dieses eine
-> Absenderpostfach begrenzt.
+> Sicherheits-Tipp: Mit `Mail.Send` (Application) darf die App aus *jedem*
+> Postfach senden. Eine **Application Access Policy** in Exchange Online grenzt
+> das auf genau das Absenderpostfach ein.
+
+### Variante B — Eigener Account / Delegiert (`email_auth_mode = delegated`)
+
+**Kein Admin-Consent, kein Client-Secret.** Du sendest aus deinem eigenen
+Postfach.
+
+1. **App registrieren** (einmalig) — wie oben, aber:
+   - *Supported account types*: „Accounts in this organizational directory only".
+   - Unter **Authentication** → *Advanced settings* → **„Allow public client
+     flows" = Yes** (nötig für den Device-Code-Flow).
+   - **Kein** API-Permission-Consent nötig — delegiertes `Mail.Send` genehmigt
+     sich der Benutzer beim ersten Login selbst.
+   > Falls euer Tenant „Users can register applications" gesperrt hat, legt der
+   > Admin **nur** diese Registrierung an (2 Minuten) — Consent/App-Rechte
+   > bleiben unnötig.
+2. Im Reiter **Tenant-ID** + **Client-ID** eintragen und **speichern**.
+3. Modus **„Eigener Account (Delegiert)"** wählen → **„Bei Microsoft anmelden"**.
+   Ein Code + Link (`microsoft.com/devicelogin`) erscheint; im Browser öffnen,
+   Code eingeben, mit deinem M365-Konto anmelden, delegiertes `Mail.Send`
+   bestätigen.
+4. Nach „Angemeldet als …" **„aktiviert"** setzen, speichern, testen.
+
+> Der Login liefert ein Refresh-Token (`offline_access`), das verschlüsselt
+> gespeichert wird und rotiert — Versand läuft danach dauerhaft im Hintergrund,
+> auch für terminierte Erinnerungen. „Verbindung trennen" löscht das Token.
 
 ### Fehlerbilder
 
 | Symptom | Ursache |
 |---|---|
-| `Token-Anforderung fehlgeschlagen (HTTP 401)` | falsche Client-ID/Secret oder Secret abgelaufen |
+| `Token-Anforderung fehlgeschlagen (HTTP 401)` | App-Modus: falsche Client-ID/Secret oder Secret abgelaufen |
 | `Token-Anforderung fehlgeschlagen (HTTP 400 … tenant)` | falsche Tenant-ID |
-| `Versand abgelehnt — fehlende 'Mail.Send'-Berechtigung/Consent` | Admin-Consent fehlt oder Absenderpostfach unbekannt |
-| `EmailNotConfigured` | Häkchen „aktiviert" nicht gesetzt oder ein Pflichtfeld leer |
+| `Versand abgelehnt — fehlende 'Mail.Send'-Berechtigung/Consent` | App-Modus: Admin-Consent fehlt oder Absenderpostfach unbekannt |
+| Device-Code startet nicht / `invalid_client` | Delegiert: „Allow public client flows" nicht aktiviert |
+| Delegiert-Versand schlägt nach längerer Zeit fehl | Refresh-Token abgelaufen/widerrufen → erneut „Bei Microsoft anmelden" |
+| `EmailNotConfigured` | „aktiviert" nicht gesetzt oder ein Pflichtfeld/Token des aktiven Modus fehlt |
 
 ---
 
@@ -175,9 +209,9 @@ Admin-Reiter **Einstellungen → E-Mail** eingetragen werden.
 
 | Datei | Rolle |
 |---|---|
-| `backend/app/services/email_service.py` | **Öffentliche API** (`send_email`, `is_configured`) — hier binden sich Module an |
-| `backend/app/services/graph_client.py` | Graph-Transport (Token + `sendMail`) |
-| `backend/app/routers/email.py` | HTTP-Endpunkte `/api/email/test` und `/api/email/send` |
-| `backend/app/models/_base.py` (`AppSettings`) | Konfigurationsspalten `email_*` |
+| `backend/app/services/email_service.py` | **Öffentliche API** (`send_email`, `is_configured`) + delegierte Login-Logik — hier binden sich Module an |
+| `backend/app/services/graph_client.py` | Graph-Transport (App- + Delegiert-Token, `sendMail`, Device-Code-Flow) |
+| `backend/app/routers/email.py` | HTTP-Endpunkte `/api/email/*` |
+| `backend/app/models/_base.py` (`AppSettings`) | Konfigurationsspalten `email_*` (inkl. `email_auth_mode`, delegiertes Token) |
 | `backend/alembic/versions/v1_82_email_office365.py` | Migration der Spalten |
-| `frontend/src/pages/EmailSettingsPage.tsx` | Admin-Reiter |
+| `frontend/src/pages/EmailSettingsPage.tsx` | Admin-Reiter mit Modus-Umschalter + Device-Code-Login |

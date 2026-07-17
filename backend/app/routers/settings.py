@@ -132,6 +132,9 @@ def _build_read(row: AppSettings) -> SettingsRead:
         email_sender_name=row.email_sender_name,
         email_has_secret=row.email_client_secret_enc is not None,
         email_enabled=row.email_enabled,
+        email_auth_mode=row.email_auth_mode,
+        email_delegated_account=row.email_delegated_account,
+        email_delegated_connected=row.email_delegated_refresh_token_enc is not None,
     )
 
 
@@ -365,7 +368,7 @@ async def put_settings(
     # v1.82 E-Mail (Office 365 / Graph) — None means "don't change"; the
     # client secret is encrypted like the other credentials above.
     for _f in ("email_tenant_id", "email_client_id", "email_sender_address",
-               "email_sender_name", "email_enabled"):
+               "email_sender_name", "email_enabled", "email_auth_mode"):
         _v = getattr(payload, _f)
         if _v is not None:
             setattr(row, _f, _v)

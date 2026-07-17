@@ -10,6 +10,8 @@ from app.services.graph_client import (
     GraphMailClient,
     GraphNetworkError,
     GraphSendError,
+    poll_device_code_once,
+    start_device_code,
 )
 
 
@@ -74,3 +76,55 @@ async def test_network_error_on_timeout():
         with pytest.raises(GraphNetworkError):
             await c._get_valid_token()
     await c.close()
+
+
+# --- Delegated (device-code) mode ------------------------------------------
+
+
+async def test_delegated_send_uses_me_endpoint_and_rotates_token():
+    c = GraphMailClient(
+        tenant_id="t", client_id="c", mode="delegated", refresh_token="old-rt"
+    )
+    token_resp = _resp(200, {"access_token": "at", "refresh_token": "new-rt", "expires_in": 3600})
+    send_resp = _resp(202)
+    with patch.object(
+        c._http, "post", new=AsyncMock(side_effect=[token_resp, send_resp])
+    ) as post:
+        await c.send_mail(to=["a@firma.de"], subject="Hi", body_html="<p>x</p>")
+    # Delegated send targets /me/sendMail, not /users/{sender}.
+    assert "/me/sendMail" in post.call_args_list[1].args[0]
+    # Rotated refresh token surfaced for the caller to persist.
+    assert c.rotated_refresh_token == "new-rt"
+    await c.close()
+
+
+async def test_start_device_code_returns_payload():
+    payload = {
+        "device_code": "dc", "user_code": "ABCD-EFGH",
+        "verification_uri": "https://microsoft.com/devicelogin",
+        "expires_in": 900, "interval": 5, "message": "go",
+    }
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=_resp(200, payload))):
+        out = await start_device_code("t", "c")
+    assert out["user_code"] == "ABCD-EFGH"
+
+
+async def test_poll_pending_then_complete():
+    pending = httpx.Response(400, json={"error": "authorization_pending"})
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=pending)):
+        r = await poll_device_code_once("t", "c", "dc")
+    assert r["status"] == "pending"
+
+    done = _resp(200, {"access_token": "at", "refresh_token": "rt", "expires_in": 3600})
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=done)):
+        r = await poll_device_code_once("t", "c", "dc")
+    assert r["status"] == "complete"
+    assert r["refresh_token"] == "rt"
+
+
+async def test_poll_error_declined():
+    declined = httpx.Response(400, json={"error": "expired_token", "error_description": "expired"})
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=declined)):
+        r = await poll_device_code_once("t", "c", "dc")
+    assert r["status"] == "error"
+    assert "expired" in r["error"]

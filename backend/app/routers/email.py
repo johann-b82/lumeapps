@@ -14,12 +14,24 @@ the message inline (same shape as the ATR fileserver /test endpoint).
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import HTTPException
+
 from app.database import get_async_db_session
-from app.schemas import EmailSendRequest, EmailSendResult, EmailTestRequest
+from app.schemas import (
+    DeviceCodePollRequest,
+    DeviceCodePollResult,
+    DeviceCodeStart,
+    EmailSendRequest,
+    EmailSendResult,
+    EmailTestRequest,
+)
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.email_service import (
     EmailError,
     EmailNotConfigured,
+    begin_delegated_login,
+    complete_delegated_login,
+    disconnect_delegated,
     send_email,
 )
 
@@ -51,6 +63,54 @@ async def email_test(
         return EmailSendResult(ok=False, error=str(exc))
     except EmailError as exc:
         return EmailSendResult(ok=False, error=str(exc))
+    return EmailSendResult(ok=True, error=None)
+
+
+# --- Delegated (device-code) sign-in ---------------------------------------
+
+
+@router.post("/delegated/start", response_model=DeviceCodeStart)
+async def delegated_start(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> DeviceCodeStart:
+    """Begin device-code sign-in. Admin opens the URL and enters the code."""
+    try:
+        payload = await begin_delegated_login(db)
+    except EmailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return DeviceCodeStart(
+        device_code=payload["device_code"],
+        user_code=payload["user_code"],
+        verification_uri=payload.get("verification_uri") or payload.get("verification_url", ""),
+        expires_in=int(payload.get("expires_in", 900)),
+        interval=int(payload.get("interval", 5)),
+        message=payload.get("message", ""),
+    )
+
+
+@router.post("/delegated/poll", response_model=DeviceCodePollResult)
+async def delegated_poll(
+    payload: DeviceCodePollRequest,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> DeviceCodePollResult:
+    """Poll once for completion of the device-code sign-in."""
+    try:
+        result = await complete_delegated_login(db, payload.device_code)
+    except EmailError as exc:
+        return DeviceCodePollResult(status="error", error=str(exc))
+    return DeviceCodePollResult(
+        status=result["status"],
+        account=result.get("account"),
+        error=result.get("error"),
+    )
+
+
+@router.post("/delegated/disconnect", response_model=EmailSendResult)
+async def delegated_disconnect(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> EmailSendResult:
+    """Forget the delegated sign-in (clear stored token + account)."""
+    await disconnect_delegated(db)
     return EmailSendResult(ok=True, error=None)
 
 

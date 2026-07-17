@@ -65,3 +65,21 @@ async def test_email_enabled_toggle(admin_client):
     assert on.json()["email_enabled"] is True
     off = await admin_client.put("/api/settings", json={**payload, "email_enabled": False})
     assert off.json()["email_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_email_auth_mode_switch(admin_client):
+    """email_auth_mode switches between 'app' and 'delegated' via PUT."""
+    payload = await _core_payload(admin_client)
+    r = await admin_client.put("/api/settings", json={**payload, "email_auth_mode": "delegated"})
+    body = r.json()
+    assert body["email_auth_mode"] == "delegated"
+    r2 = await admin_client.put("/api/settings", json={**payload, "email_auth_mode": "app"})
+    assert r2.json()["email_auth_mode"] == "app"
+
+
+@pytest.mark.asyncio
+async def test_email_auth_mode_rejects_bad_value(admin_client):
+    payload = await _core_payload(admin_client)
+    r = await admin_client.put("/api/settings", json={**payload, "email_auth_mode": "smtp"})
+    assert r.status_code == 422

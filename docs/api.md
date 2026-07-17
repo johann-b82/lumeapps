@@ -85,10 +85,15 @@ Settings PUT also carries the v1.82 Office 365 e-mail credentials (`email_tenant
 
 Shared notification service (Office 365 / Microsoft Graph). Router-level `require_admin`. Both routes return `{ok, error}` (a failed send is HTTP 200 with `ok=false`). See [modules/email.md](modules/email.md) for the connection contract and Azure setup.
 
-| Method | Path             | Viewer | Admin | Notes |
-|--------|------------------|:------:|:-----:|-------|
-| POST   | /api/email/test  |   —    |   ✓   | Send a probe mail to one address `{to}` |
-| POST   | /api/email/send  |   —    |   ✓   | Generic send `{to[], subject, body_html, cc?, body_text?}` |
+| Method | Path                             | Viewer | Admin | Notes |
+|--------|----------------------------------|:------:|:-----:|-------|
+| POST   | /api/email/test                  |   —    |   ✓   | Send a probe mail to one address `{to}` |
+| POST   | /api/email/send                  |   —    |   ✓   | Generic send `{to[], subject, body_html, cc?, body_text?}` |
+| POST   | /api/email/delegated/start       |   —    |   ✓   | Begin device-code sign-in (delegated mode) → `{device_code, user_code, verification_uri, interval, ...}` |
+| POST   | /api/email/delegated/poll        |   —    |   ✓   | Poll once `{device_code}` → `{status: pending\|complete\|error, account?}` |
+| POST   | /api/email/delegated/disconnect  |   —    |   ✓   | Clear the stored delegated token |
+
+Two send modes, switchable via `email_auth_mode` on `PUT /api/settings`: `app` (client-credentials) or `delegated` (device-code sign-in with the admin's own M365 account).
 
 ### Sensors (Admin-only, including reads)
 

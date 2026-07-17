@@ -274,6 +274,13 @@ class AppSettings(Base):
     email_sender_address: Mapped[str | None] = mapped_column(String(320), nullable=True)
     email_sender_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Send mode: 'app' (client-credentials) or 'delegated' (device-code sign-in).
+    email_auth_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="app", default="app"
+    )
+    # Delegated mode — rotating refresh token (Fernet-encrypted) + signed-in UPN.
+    email_delegated_refresh_token_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    email_delegated_account: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
 
 class PersonioEmployee(Base):

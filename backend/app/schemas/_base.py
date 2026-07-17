@@ -200,6 +200,7 @@ class SettingsUpdate(BaseModel):
     email_sender_address: str | None = None
     email_sender_name: str | None = None
     email_enabled: bool | None = None
+    email_auth_mode: Literal["app", "delegated"] | None = None
 
 
 class SettingsRead(BaseModel):
@@ -275,6 +276,10 @@ class SettingsRead(BaseModel):
     email_sender_name: str | None = None
     email_has_secret: bool = False
     email_enabled: bool = False
+    email_auth_mode: str = "app"
+    # Delegated (device-code) mode: signed-in account + whether a token is stored.
+    email_delegated_account: str | None = None
+    email_delegated_connected: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -304,6 +309,32 @@ class EmailSendResult(BaseModel):
     """Uniform ``{ok, error}`` response for both email endpoints."""
 
     ok: bool
+    error: str | None = None
+
+
+class DeviceCodeStart(BaseModel):
+    """Response for POST /api/email/delegated/start — the device-code payload.
+
+    ``device_code`` is returned to the admin client and passed back to /poll.
+    """
+
+    device_code: str
+    user_code: str
+    verification_uri: str
+    expires_in: int
+    interval: int
+    message: str
+
+
+class DeviceCodePollRequest(BaseModel):
+    device_code: Annotated[str, Field(min_length=1)]
+
+
+class DeviceCodePollResult(BaseModel):
+    """Result of one poll: 'pending' | 'complete' | 'error'."""
+
+    status: Literal["pending", "complete", "error"]
+    account: str | None = None
     error: str | None = None
 
 
@@ -1172,6 +1203,9 @@ __all__ = [
     "EmailSendRequest",
     "EmailTestRequest",
     "EmailSendResult",
+    "DeviceCodeStart",
+    "DeviceCodePollRequest",
+    "DeviceCodePollResult",
     "SyncResult",
     "SyncTestResult",
     "AbsenceTypeOption",

@@ -1,12 +1,20 @@
 """v1.82: E-Mail background module — Office 365 (Microsoft Graph) config
 
 Adds the shared e-mail/notification service configuration to the ``app_settings``
-singleton. The service sends mail via the Microsoft Graph API using the
-client-credentials OAuth flow, so we store the Azure/Entra app-registration
-identifiers plus the sender identity. The client secret is Fernet-encrypted
-BYTEA — same pattern as ``personio_client_secret_enc`` / ``worldcup_api_key_enc``
-/ ``atr_smb_password_enc``.
+singleton. The service can send mail via the Microsoft Graph API in two modes:
 
+- ``app`` (client-credentials): Azure app-registration + ``Mail.Send`` application
+  permission + admin consent; sends from ``email_sender_address`` via
+  ``/users/{sender}/sendMail``. Uses ``email_client_secret_enc``.
+- ``delegated`` (device-code): the admin signs in interactively with their own
+  M365 account and self-consents to delegated ``Mail.Send`` (no admin consent,
+  no application permission); sends as the signed-in user via ``/me/sendMail``.
+  A rotating refresh token is stored encrypted in
+  ``email_delegated_refresh_token_enc``; the signed-in UPN in
+  ``email_delegated_account``.
+
+``email_auth_mode`` selects the active mode ('app' | 'delegated'). Secrets/tokens
+are Fernet-encrypted BYTEA — same pattern as the other credential columns.
 ``email_enabled`` is a master switch so other modules can cheaply check whether
 mailing is turned on before building a message.
 """
@@ -31,9 +39,19 @@ def upgrade() -> None:
         "app_settings",
         sa.Column("email_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
+    # Auth mode + delegated (device-code) fields.
+    op.add_column(
+        "app_settings",
+        sa.Column("email_auth_mode", sa.String(16), nullable=False, server_default="app"),
+    )
+    op.add_column("app_settings", sa.Column("email_delegated_refresh_token_enc", postgresql.BYTEA, nullable=True))
+    op.add_column("app_settings", sa.Column("email_delegated_account", sa.String(320), nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column("app_settings", "email_delegated_account")
+    op.drop_column("app_settings", "email_delegated_refresh_token_enc")
+    op.drop_column("app_settings", "email_auth_mode")
     op.drop_column("app_settings", "email_enabled")
     op.drop_column("app_settings", "email_sender_name")
     op.drop_column("app_settings", "email_sender_address")

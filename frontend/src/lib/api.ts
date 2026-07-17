@@ -265,6 +265,10 @@ export interface Settings {
   email_sender_name: string | null;
   email_has_secret: boolean;
   email_enabled: boolean;
+  // 'app' (client-credentials) or 'delegated' (device-code sign-in).
+  email_auth_mode: "app" | "delegated";
+  email_delegated_account: string | null;
+  email_delegated_connected: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -348,6 +352,7 @@ export interface SettingsUpdatePayload {
   email_sender_address?: string | null;
   email_sender_name?: string | null;
   email_enabled?: boolean;
+  email_auth_mode?: "app" | "delegated";
 }
 
 /**
@@ -1910,5 +1915,43 @@ export async function sendEmail(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export interface DeviceCodeStart {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+  message: string;
+}
+
+export interface DeviceCodePollResult {
+  status: "pending" | "complete" | "error";
+  account: string | null;
+  error: string | null;
+}
+
+/** POST /api/email/delegated/start — begin device-code sign-in. */
+export async function startDelegatedLogin(): Promise<DeviceCodeStart> {
+  return apiClient<DeviceCodeStart>("/api/email/delegated/start", { method: "POST" });
+}
+
+/** POST /api/email/delegated/poll — poll once for completion. */
+export async function pollDelegatedLogin(
+  deviceCode: string,
+): Promise<DeviceCodePollResult> {
+  return apiClient<DeviceCodePollResult>("/api/email/delegated/poll", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_code: deviceCode }),
+  });
+}
+
+/** POST /api/email/delegated/disconnect — forget the delegated sign-in. */
+export async function disconnectDelegatedLogin(): Promise<{ ok: boolean; error: string | null }> {
+  return apiClient<{ ok: boolean; error: string | null }>("/api/email/delegated/disconnect", {
+    method: "POST",
   });
 }

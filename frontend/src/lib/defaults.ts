@@ -69,6 +69,9 @@ export const DEFAULT_SETTINGS: Settings = {
   email_sender_name: null,
   email_has_secret: false,
   email_enabled: false,
+  email_auth_mode: "app",
+  email_delegated_account: null,
+  email_delegated_connected: false,
 };
 
 export const THEME_TOKEN_MAP = {
