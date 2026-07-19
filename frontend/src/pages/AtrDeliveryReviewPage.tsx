@@ -6,7 +6,7 @@ import { useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDelivery, updateDelivery, updateDeliveryItem, generateDelivery,
-  atrFileUrl, type AtrDelivery,
+  atrFileUrl, formatPoPos, type AtrDelivery,
 } from "@/lib/atrApi";
 
 const HEADER_FIELDS: (keyof AtrDelivery)[] = [
@@ -83,7 +83,7 @@ export function AtrDeliveryReviewPage() {
               <td>{it.drawing_number_issue}</td>
               <td><input className="border rounded px-1 w-20" defaultValue={it.weight_kg ?? ""}
                 onBlur={(e) => saveItem(it.id, e.target.value, it.po_pos ?? "")} /></td>
-              <td><input className="border rounded px-1 w-16" defaultValue={it.po_pos ?? ""}
+              <td><input className="border rounded px-1 w-16" defaultValue={formatPoPos(it.po_pos)}
                 onBlur={(e) => saveItem(it.id, it.weight_kg ?? "", e.target.value)} /></td>
             </tr>
           ))}

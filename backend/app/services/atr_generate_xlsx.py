@@ -21,6 +21,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 from openpyxl.worksheet.properties import PageSetupProperties
 
+from app.services.atr_format import normalize_po_pos
+
 _RED = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
 _TABLE_HEADER_ROW = 13
 _FIRST_PART_ROW = 14
@@ -131,7 +133,7 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
         for it in lst:
             for c in range(1, _NCOLS + 1):
                 ws.cell(r, c)._style = copy(part_style[c - 1])
-            ws.cell(r, 1, it.po_pos or "")
+            ws.cell(r, 1, normalize_po_pos(it.po_pos) or "")
             ws.cell(r, 2, it.supplier_article_code or "")
             ws.cell(r, 3, it.part_number or "")
             ws.cell(r, 4, it.part_name or "")

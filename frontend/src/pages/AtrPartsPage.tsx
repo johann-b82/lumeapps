@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
+  fetchAtrParts, updateAtrPart, deleteAtrPart, formatPoPos, type AtrPart,
 } from "@/lib/atrApi";
 
 export function AtrPartsPage() {
@@ -86,7 +86,7 @@ export function AtrPartsPage() {
                   <td>{editing ? (
                     <input className="border rounded px-1 w-16" defaultValue={p.po_pos ?? ""}
                       onChange={(e) => setDraft((d) => ({ ...d, po_pos: e.target.value }))} />
-                  ) : p.po_pos}</td>
+                  ) : formatPoPos(p.po_pos)}</td>
                   <td className="text-xs text-muted-foreground">{p.source_filename}</td>
                   <td className="whitespace-nowrap">
                     {editing ? (
