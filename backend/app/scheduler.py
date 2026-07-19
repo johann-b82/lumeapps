@@ -325,12 +325,19 @@ async def _run_atr_scan() -> None:
         except (fs.AtrFileserverError, asyncio.TimeoutError):
             log.warning("atr_scan: list_input_pdfs failed/timed out", exc_info=True)
             return
-        # names already linked to a scan-origin delivery → skip
-        linked = set((await session.execute(
-            select(AtrDelivery.source_filename).where(AtrDelivery.origin == "scan")
+        # Skip names with an OPEN (draft) scan delivery still awaiting review —
+        # prevents re-creating a draft every tick while the file waits in Input.
+        # Once a delivery has moved past draft (generated/delivered), a same-named
+        # file reappearing in Input is a deliberate re-drop (or a delivery/archive
+        # that never moved it out) and gets processed again — otherwise a filename
+        # is silently ignored forever the moment it is first processed.
+        open_drafts = set((await session.execute(
+            select(AtrDelivery.source_filename).where(
+                AtrDelivery.origin == "scan", AtrDelivery.status == "draft")
         )).scalars().all())
         for name in names:
-            if name in linked:
+            if name in open_drafts:
+                log.debug("atr_scan: %s skipped — open draft awaiting review", name)
                 continue
             try:
                 raw = await asyncio.wait_for(asyncio.to_thread(fs.read_input, cfg, name), timeout=60)

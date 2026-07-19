@@ -49,6 +49,32 @@ async def test_scan_review_creates_draft(client, monkeypatch):
     assert sum(1 for d in r.json() if d["source_filename"] == "LS.pdf") == 1
 
 
+async def test_scan_reprocesses_once_past_draft(client, monkeypatch):
+    # A same-named file is only skipped while an OPEN draft awaits review.
+    # Once the delivery moves past draft, a re-appearing file is processed again.
+    await _configure(client, auto=False)
+    from app.services import atr_fileserver as fs
+    monkeypatch.setattr(fs, "list_input_pdfs", lambda cfg: ["LS.pdf"])
+    monkeypatch.setattr(fs, "read_input", lambda cfg, name: make_text_pdf(_LS))
+    monkeypatch.setattr(fs, "write_output", lambda *a: None)
+    from app.scheduler import _run_atr_scan
+    await _run_atr_scan()  # creates draft
+    # flip the draft to 'generated' (admin acted, but file still in Input)
+    from app.database import AsyncSessionLocal
+    from app.models import AtrDelivery
+    from sqlalchemy import update, select, func
+    async with AsyncSessionLocal() as db:
+        await db.execute(update(AtrDelivery)
+            .where(AtrDelivery.source_filename == "LS.pdf")
+            .values(status="generated"))
+        await db.commit()
+    await _run_atr_scan()  # same file → now a fresh draft, not silently ignored
+    async with AsyncSessionLocal() as db:
+        n = (await db.execute(select(func.count()).select_from(AtrDelivery)
+            .where(AtrDelivery.source_filename == "LS.pdf"))).scalar_one()
+    assert n == 2  # one 'generated' + one new 'draft'
+
+
 async def test_scan_auto_writes_and_archives(client, monkeypatch):
     await _configure(client, auto=True)
     from app.services import atr_fileserver as fs
