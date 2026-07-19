@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  fetchAtrParts, updateAtrPart, deleteAtrPart, formatPoPos, type AtrPart,
+  fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
 
 export function AtrPartsPage() {
@@ -19,7 +19,6 @@ export function AtrPartsPage() {
 
   const save = useMutation({
     mutationFn: (id: number) => updateAtrPart(id, {
-      po_pos: draft.po_pos ?? null,
       default_weight_kg: draft.default_weight_kg ?? null,
       drawing_number_issue: draft.drawing_number_issue ?? null,
       part_name: draft.part_name ?? null,
@@ -59,7 +58,6 @@ export function AtrPartsPage() {
               <th>{t("atr.parts.col.category")}</th>
               <th>{t("atr.parts.col.drawing")}</th>
               <th>{t("atr.parts.col.weight")}</th>
-              <th>{t("atr.parts.col.po_pos")}</th>
               <th>{t("atr.parts.col.source")}</th>
               <th />
             </tr>
@@ -83,10 +81,6 @@ export function AtrPartsPage() {
                     <input className="border rounded px-1 w-20" defaultValue={p.default_weight_kg ?? ""}
                       onChange={(e) => setDraft((d) => ({ ...d, default_weight_kg: e.target.value }))} />
                   ) : p.default_weight_kg}</td>
-                  <td>{editing ? (
-                    <input className="border rounded px-1 w-16" defaultValue={p.po_pos ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, po_pos: e.target.value }))} />
-                  ) : formatPoPos(p.po_pos)}</td>
                   <td className="text-xs text-muted-foreground">{p.source_filename}</td>
                   <td className="whitespace-nowrap">
                     {editing ? (

@@ -945,7 +945,6 @@
   "atr.parts.col.category": "Category",
   "atr.parts.col.drawing": "Drawing / Issue",
   "atr.parts.col.weight": "Weight [kg]",
-  "atr.parts.col.po_pos": "PO Pos",
   "atr.parts.col.source": "Source file",
   "atr.parts.empty": "No parts yet — import a reference workbook.",
   "atr.parts.save": "Save",
