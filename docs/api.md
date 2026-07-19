@@ -95,6 +95,25 @@ Shared notification service (Office 365 / Microsoft Graph). Router-level `requir
 
 Two send modes, switchable via `email_auth_mode` on `PUT /api/settings`: `app` (client-credentials) or `delegated` (device-code sign-in with the admin's own M365 account).
 
+### ATR — Lieferschein → ATR document (Admin-only)
+
+Router-level `require_admin` on `/api/atr` (`atr.py`) and `/api/atr/deliveries` (`atr_delivery.py`). Parses Diehl Lieferschein PDFs, matches positions against the parts catalog, and generates the ATR xlsx/pdf + container label; an optional SMB auto-scan drives the whole flow from a network folder. `po_pos` is taken from the Lieferschein ("Auftrag Nr. \<BA\> / \<Pos\>"), not the catalog. See [modules/atr.md](modules/atr.md).
+
+| Method | Path                                          | Viewer | Admin | Notes |
+|--------|-----------------------------------------------|:------:|:-----:|-------|
+| —      | /api/atr/parts[/{id}]                         |   —    |   ✓   | Parts catalog CRUD (GET/POST/PATCH/DELETE) |
+| GET/PATCH | /api/atr/template                          |   —    |   ✓   | ATR header data; `POST /template/structure` uploads the structural workbook |
+| POST   | /api/atr/import/preview · /commit             |   —    |   ✓   | Import reference file(s) into the catalog |
+| POST   | /api/atr/deliveries/upload                    |   —    |   ✓   | Upload a Lieferschein PDF → draft delivery |
+| GET    | /api/atr/deliveries/input-files               |   —    |   ✓   | List PDFs in the SMB input folder |
+| POST   | /api/atr/deliveries/input-files/process       |   —    |   ✓   | Process one input file manually |
+| GET    | /api/atr/deliveries · /{id}                   |   —    |   ✓   | List deliveries / detail |
+| PATCH  | /api/atr/deliveries/{id} · /{id}/items/{item_id} | —   |   ✓   | Edit header / position data |
+| POST   | /api/atr/deliveries/{id}/generate             |   —    |   ✓   | Build documents (and deliver, for scan origin) |
+| GET    | /api/atr/deliveries/{id}/files/{kind}         |   —    |   ✓   | Download `atr_xlsx` · `atr_pdf` · `label_docx` |
+
+The auto-scan (`_run_atr_scan` in `scheduler.py`, interval `atr_scan_interval_s`) only re-skips a filename while an **open `draft`** delivery for it still exists — once past draft, a re-appearing same-named file is processed again.
+
 ### Sensors (Admin-only, including reads)
 
 Router-level `require_admin` on the whole `/api/sensors` router — Viewers get 403 even on GETs.
