@@ -97,7 +97,7 @@ Decision recorded in [ADR-0001](./adr/0001-directus-fastapi-split.md).
 ## Sales Ingestion Tables (v1.53 / v1.54)
 
 The Sales dashboard now sources from two ERP-export ingestion tables
-(Alembic head is `v1_57_worldcup`):
+(Alembic head is `v1_77_produktion_verzug_target`):
 
 - **`revenues`** (migration `v1_53_revenues`) — Umsatz rows (RG/GS —
   Rechnungsausgang / Gutschrift) from the `AswKpf_RG.txt` ERP export
@@ -115,6 +115,53 @@ The Sales dashboard now sources from two ERP-export ingestion tables
 Both extend the `upload_batches.kind` check constraint with their
 respective discriminator and flow through the FastAPI upload + KPI
 aggregation pipeline (compute side of the ADR-0001 boundary).
+
+---
+
+## KPI Domains Beyond Sales & HR (v1.49–v1.77)
+
+Past v1.49 the dashboard grew from Sales + HR into a multi-domain KPI
+platform. Each domain follows the same shape: an ERP-export upload feeds
+an Alembic-owned ingestion table, a Viewer-readable `/api/<domain>`
+router computes the KPI value + history + drill-down list, and a
+launcher tile fronts the dashboard. All KPI routers are **Viewer-read**
+(router-level `Depends(get_current_user)`, no `require_admin`).
+
+| Domain | Router (prefix) | Core KPI(s) | Migrations |
+| ------ | --------------- | ----------- | ---------- |
+| Quality | `quality_kpis.py` (`/api/quality`) | Audit findings, customer complaint-rate; per-supplier targets (Sollwerte) | `v1_49`, `v1_59`, `v1_66`, `v1_69` |
+| Procurement | `procurement_kpis.py` (`/api/procurement`) | Supplier on-time-delivery (OTD) from goods receipts | `v1_60`, `v1_67`, `v1_68` |
+| Finance | `finance_kpis.py` (`/api/finance`) | Material-cost ratio, personnel-cost ratio; both with configurable targets | `v1_70`, `v1_71`, `v1_72` |
+| Production | `production_kpis.py` (`/api/production`) | Order delay (Verzug), overdue orders | `v1_76`, `v1_77` (head) |
+
+**Production Verzug** builds on a position-level `AswKpf_AUF` export
+(`auftrag_positionen`): an order is *in Verzug* when its latest
+delivery-note date exceeds its target date. The `/verzug/overdue` route
+surfaces the currently-late orders.
+
+### ATR — Abnahme-/Teile-Reporting (v1.63–v1.65, Admin-only)
+
+The ATR module generates customer weight-acceptance reports. Unlike the
+KPI domains it is **compute-heavy and Admin-only** — it stays entirely on
+the FastAPI side of the ADR-0001 boundary (file parsing, PDF/DOCX
+generation, SMB fileserver I/O), never in Directus.
+
+- **Parts catalog + template** (`atr.py`, `/api/atr`): the parts catalog
+  is populated via an Excel preview→commit import; a per-customer report
+  template drives the generated documents.
+- **Deliveries** (`atr_delivery.py`, `/api/atr/deliveries`): a
+  Lieferschein is parsed, its positions matched against the catalog, and
+  reviewed before generating the ATR **XLSX** (openpyxl body) + **PDF**
+  (LibreOffice UNO print-header) + container-label **DOCX**. Openpyxl
+  breaks merged cells on row insert/delete, so the print-header is applied
+  via UNO rather than openpyxl.
+- **Fileserver** (`atr/fileserver` router in `settings.py`): optional SMB
+  drop-folder for input Lieferschein files.
+
+### Fair — trade-fair balloon layout (v1.73–v1.75, Admin-only)
+
+`fair.py` (`/api/fair`, Admin-only) manages trade-fair projects and their
+balloon placements (create/reorder), with a per-project file attachment.
 
 ---
 
