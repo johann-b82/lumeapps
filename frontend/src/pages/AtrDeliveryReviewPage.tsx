@@ -6,8 +6,11 @@ import { useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDelivery, updateDelivery, updateDeliveryItem, generateDelivery,
-  atrFileUrl, type AtrDelivery,
+  atrFileUrl, type AtrDelivery, type AtrDeliveryItem,
 } from "@/lib/atrApi";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+
+type ItemRow = AtrDeliveryItem & Record<string, unknown>;
 
 const HEADER_FIELDS: (keyof AtrDelivery)[] = [
   "atr_number", "container_number", "set_title", "po_number",
@@ -48,6 +51,26 @@ export function AtrDeliveryReviewPage() {
     } catch (e) { toast.error(String(e)); }
   }
 
+  const itemColumns: DataTableColumn<ItemRow>[] = [
+    { key: "part_number", header: t("atr.deliveries.item.part_number"), className: "font-mono" },
+    { key: "part_name", header: t("atr.deliveries.item.name") },
+    { key: "drawing_number_issue", header: t("atr.deliveries.item.drawing") },
+    {
+      key: "weight_kg", header: t("atr.deliveries.item.weight"),
+      cell: (it) => (
+        <input className="border rounded px-1 w-20" defaultValue={it.weight_kg ?? ""}
+          onBlur={(e) => saveItem(it.id, e.target.value, it.po_pos ?? "")} />
+      ),
+    },
+    {
+      key: "po_pos", header: t("atr.deliveries.item.po_pos"),
+      cell: (it) => (
+        <input className="border rounded px-1 w-16" defaultValue={it.po_pos ?? ""}
+          onBlur={(e) => saveItem(it.id, it.weight_kg ?? "", e.target.value)} />
+      ),
+    },
+  ];
+
   if (!data) return <div className="p-6">…</div>;
   return (
     <div className="max-w-5xl mx-auto px-6 py-6">
@@ -66,29 +89,16 @@ export function AtrDeliveryReviewPage() {
       </div>
       <button className="mb-4 px-3 py-1 border rounded" onClick={saveHeader}>{t("atr.deliveries.save")}</button>
 
-      <table className="w-full text-sm mb-6">
-        <thead><tr className="text-left border-b">
-          <th className="py-2">{t("atr.deliveries.item.part_number")}</th>
-          <th>{t("atr.deliveries.item.name")}</th>
-          <th>{t("atr.deliveries.item.drawing")}</th>
-          <th>{t("atr.deliveries.item.weight")}</th>
-          <th>{t("atr.deliveries.item.po_pos")}</th></tr></thead>
-        <tbody>
-          {data.items.map((it) => (
-            <tr key={it.id}
-              className={`border-b ${it.match_status !== "matched" ? "bg-red-100" : ""}`}
-              data-testid={`atr-item-${it.id}`}>
-              <td className="py-1 font-mono">{it.part_number}</td>
-              <td>{it.part_name}</td>
-              <td>{it.drawing_number_issue}</td>
-              <td><input className="border rounded px-1 w-20" defaultValue={it.weight_kg ?? ""}
-                onBlur={(e) => saveItem(it.id, e.target.value, it.po_pos ?? "")} /></td>
-              <td><input className="border rounded px-1 w-16" defaultValue={it.po_pos ?? ""}
-                onBlur={(e) => saveItem(it.id, it.weight_kg ?? "", e.target.value)} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="mb-6">
+        <DataTable
+          card={false}
+          columns={itemColumns}
+          rows={data.items as ItemRow[]}
+          rowKey={(it) => it.id}
+          rowTestId={(it) => `atr-item-${it.id}`}
+          rowClassName={(it) => it.match_status !== "matched" ? "bg-red-100" : ""}
+        />
+      </div>
 
       <button className="px-4 py-2 bg-blue-600 text-white rounded mr-4" onClick={onGenerate}>
         {t("atr.deliveries.generate")}

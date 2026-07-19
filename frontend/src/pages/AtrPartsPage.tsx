@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
-import { Pager } from "@/components/Pager";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
-const PAGE_SIZE = 25;
+type PartRow = AtrPart & Record<string, unknown>;
 
 export function AtrPartsPage() {
   const { t } = useTranslation();
@@ -21,9 +21,6 @@ export function AtrPartsPage() {
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<AtrPart>>({});
-  const [page, setPage] = useState(0);
-  // Reset to the first page whenever the filtered result set changes.
-  useEffect(() => setPage(0), [search]);
 
   const save = useMutation({
     mutationFn: (id: number) => updateAtrPart(id, {
@@ -44,89 +41,81 @@ export function AtrPartsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["atr", "parts"] }),
   });
 
+  const columns: DataTableColumn<PartRow>[] = [
+    { key: "part_number", header: t("atr.parts.col.part_number"), className: "font-mono" },
+    {
+      key: "part_name", header: t("atr.parts.col.name"),
+      cell: (p) => editId === p.id ? (
+        <input className="border rounded px-1" defaultValue={p.part_name ?? ""}
+          onChange={(e) => setDraft((d) => ({ ...d, part_name: e.target.value }))} />
+      ) : p.part_name ?? "—",
+    },
+    { key: "category", header: t("atr.parts.col.category") },
+    {
+      key: "drawing_number_issue", header: t("atr.parts.col.drawing"),
+      cell: (p) => editId === p.id ? (
+        <input className="border rounded px-1" defaultValue={p.drawing_number_issue ?? ""}
+          onChange={(e) => setDraft((d) => ({ ...d, drawing_number_issue: e.target.value }))} />
+      ) : p.drawing_number_issue ?? "—",
+    },
+    {
+      key: "default_weight_kg", header: t("atr.parts.col.weight"),
+      cell: (p) => editId === p.id ? (
+        <input className="border rounded px-1 w-20" defaultValue={p.default_weight_kg ?? ""}
+          onChange={(e) => setDraft((d) => ({ ...d, default_weight_kg: e.target.value }))} />
+      ) : p.default_weight_kg ?? "—",
+    },
+    {
+      key: "po_pos", header: t("atr.parts.col.po_pos"),
+      cell: (p) => editId === p.id ? (
+        <input className="border rounded px-1 w-16" defaultValue={p.po_pos ?? ""}
+          onChange={(e) => setDraft((d) => ({ ...d, po_pos: e.target.value }))} />
+      ) : p.po_pos ?? "—",
+    },
+    { key: "source_filename", header: t("atr.parts.col.source"), className: "text-xs text-muted-foreground" },
+    {
+      key: "actions", header: "", sortable: false, className: "whitespace-nowrap",
+      cell: (p) => (
+        <>
+          {editId === p.id ? (
+            <button className="text-blue-600 mr-2" onClick={() => save.mutate(p.id)}>
+              {t("atr.parts.save")}
+            </button>
+          ) : (
+            <button className="text-blue-600 mr-2"
+              onClick={() => { setEditId(p.id); setDraft(p); }}>
+              {t("atr.parts.edit")}
+            </button>
+          )}
+          <button className="text-red-600" onClick={() => remove.mutate(p.id)}>
+            {t("atr.parts.delete")}
+          </button>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">{t("atr.parts.heading")}</h1>
-        <button className="px-3 py-2 border rounded text-sm"
-          onClick={() => setLocation("/atr/deliveries")}>
-          {t("atr.nav.deliveries")} →
-        </button>
-      </div>
-      <input
-        className="border rounded px-3 py-2 mb-4 w-full max-w-md"
-        placeholder={t("atr.parts.search")}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label={t("atr.parts.search")}
+      <DataTable
+        title={t("atr.parts.heading")}
+        actions={
+          <button className="px-3 py-2 border rounded text-sm"
+            onClick={() => setLocation("/atr/deliveries")}>
+            {t("atr.nav.deliveries")} →
+          </button>
+        }
+        search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
+        columns={columns}
+        rows={(parts ?? []) as PartRow[]}
+        rowKey={(p) => p.id}
+        rowTestId={(p) => `atr-part-${p.id}`}
+        isLoading={isLoading}
+        emptyText={t("atr.parts.empty")}
+        initialSort={{ key: "part_number", dir: "asc" }}
+        pageSize={25}
+        minWidth={880}
       />
-      {isLoading ? (
-        <p>…</p>
-      ) : !parts || parts.length === 0 ? (
-        <p className="text-muted-foreground">{t("atr.parts.empty")}</p>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-2">{t("atr.parts.col.part_number")}</th>
-              <th>{t("atr.parts.col.name")}</th>
-              <th>{t("atr.parts.col.category")}</th>
-              <th>{t("atr.parts.col.drawing")}</th>
-              <th>{t("atr.parts.col.weight")}</th>
-              <th>{t("atr.parts.col.po_pos")}</th>
-              <th>{t("atr.parts.col.source")}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {parts.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p) => {
-              const editing = editId === p.id;
-              return (
-                <tr key={p.id} className="border-b" data-testid={`atr-part-${p.id}`}>
-                  <td className="py-1 font-mono">{p.part_number}</td>
-                  <td>{editing ? (
-                    <input className="border rounded px-1" defaultValue={p.part_name ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, part_name: e.target.value }))} />
-                  ) : p.part_name}</td>
-                  <td>{p.category}</td>
-                  <td>{editing ? (
-                    <input className="border rounded px-1" defaultValue={p.drawing_number_issue ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, drawing_number_issue: e.target.value }))} />
-                  ) : p.drawing_number_issue}</td>
-                  <td>{editing ? (
-                    <input className="border rounded px-1 w-20" defaultValue={p.default_weight_kg ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, default_weight_kg: e.target.value }))} />
-                  ) : p.default_weight_kg}</td>
-                  <td>{editing ? (
-                    <input className="border rounded px-1 w-16" defaultValue={p.po_pos ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, po_pos: e.target.value }))} />
-                  ) : p.po_pos}</td>
-                  <td className="text-xs text-muted-foreground">{p.source_filename}</td>
-                  <td className="whitespace-nowrap">
-                    {editing ? (
-                      <button className="text-blue-600 mr-2" onClick={() => save.mutate(p.id)}>
-                        {t("atr.parts.save")}
-                      </button>
-                    ) : (
-                      <button className="text-blue-600 mr-2"
-                        onClick={() => { setEditId(p.id); setDraft(p); }}>
-                        {t("atr.parts.edit")}
-                      </button>
-                    )}
-                    <button className="text-red-600" onClick={() => remove.mutate(p.id)}>
-                      {t("atr.parts.delete")}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-      {parts && parts.length > 0 && (
-        <Pager page={page} pageCount={Math.ceil(parts.length / PAGE_SIZE)}
-          total={parts.length} onPage={setPage} />
-      )}
     </div>
   );
 }

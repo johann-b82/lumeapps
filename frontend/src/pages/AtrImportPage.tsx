@@ -61,21 +61,32 @@ export function AtrImportPage() {
                   {pv.warnings.map((w, i) => <li key={i}>{w}</li>)}
                 </ul>
               )}
-              <table className="w-full text-xs">
-                <tbody>
-                  {pv.parts.map((p) => (
-                    <tr key={p.part_number_norm} data-status={p.status}>
-                      <td className="font-mono pr-2">{p.part_number}</td>
-                      <td className="pr-2">{p.part_name}</td>
-                      <td className="pr-2">{p.default_weight_kg}</td>
-                      <td className={p.status === "new" ? "text-green-600"
-                        : p.status === "updated" ? "text-amber-600" : "text-muted-foreground"}>
-                        {t(`atr.import.${p.status}`)}
-                      </td>
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50 text-left">
+                      <th className="px-2 py-1.5 font-medium">{t("atr.parts.col.part_number")}</th>
+                      <th className="px-2 py-1.5 font-medium">{t("atr.parts.col.name")}</th>
+                      <th className="px-2 py-1.5 font-medium text-right">{t("atr.parts.col.weight")}</th>
+                      <th className="px-2 py-1.5 font-medium">{t("atr.deliveries.col.status")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {pv.parts.map((p) => (
+                      <tr key={p.part_number_norm} data-status={p.status}
+                        className="border-b border-border last:border-0 hover:bg-muted/30">
+                        <td className="px-2 py-1.5 font-mono">{p.part_number}</td>
+                        <td className="px-2 py-1.5">{p.part_name}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{p.default_weight_kg ?? "—"}</td>
+                        <td className={`px-2 py-1.5 ${p.status === "new" ? "text-green-600"
+                          : p.status === "updated" ? "text-amber-600" : "text-muted-foreground"}`}>
+                          {t(`atr.import.${p.status}`)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
           <label className="flex items-center gap-2 text-sm">

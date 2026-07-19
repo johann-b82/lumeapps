@@ -13,6 +13,9 @@ import {
   type MachineDetail,
   type TaskInput,
 } from "@/lib/maintenanceApi";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+
+type TaskRow = MachineDetail["tasks"][number] & Record<string, unknown>;
 
 const INTERVALS: IntervalType[] = [
   "daily",
@@ -123,46 +126,37 @@ function TasksSection({
     onError: (e: unknown) => toast.error(String(e)),
   });
 
+  const taskColumns: DataTableColumn<TaskRow>[] = [
+    { key: "title", header: t("maintenance.tasks.col.title"), className: "font-medium" },
+    {
+      key: "interval_type", header: t("maintenance.tasks.col.interval"), className: "whitespace-nowrap",
+      cell: (task) => intervalLabel(task.interval_type, task.interval_weeks),
+    },
+    { key: "instructions", header: t("maintenance.tasks.col.instructions"), className: "text-muted-foreground" },
+    {
+      key: "actions", header: "", align: "right",
+      cell: (task) => (
+        <button className="text-red-600" aria-label={t("common.delete")}
+          onClick={() => remove.mutate(task.id)}>
+          <Trash2 className="h-4 w-4" />
+        </button>
+      ),
+    },
+  ];
+
   return (
     <section className="mb-8">
       <h2 className="text-lg font-medium mb-3">{t("maintenance.tasks.heading")}</h2>
 
-      {machine.tasks.length === 0 ? (
-        <p className="text-muted-foreground text-sm mb-4">
-          {t("maintenance.tasks.empty")}
-        </p>
-      ) : (
-        <table className="w-full text-sm mb-4">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-2">{t("maintenance.tasks.col.title")}</th>
-              <th>{t("maintenance.tasks.col.interval")}</th>
-              <th>{t("maintenance.tasks.col.instructions")}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {machine.tasks.map((task) => (
-              <tr key={task.id} className="border-b">
-                <td className="py-2 font-medium">{task.title}</td>
-                <td className="whitespace-nowrap">
-                  {intervalLabel(task.interval_type, task.interval_weeks)}
-                </td>
-                <td className="text-muted-foreground">{task.instructions || "—"}</td>
-                <td className="text-right">
-                  <button
-                    className="text-red-600"
-                    aria-label={t("common.delete")}
-                    onClick={() => remove.mutate(task.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="mb-4">
+        <DataTable
+          card={false}
+          columns={taskColumns}
+          rows={machine.tasks as TaskRow[]}
+          rowKey={(task) => task.id}
+          emptyText={t("maintenance.tasks.empty")}
+        />
+      </div>
 
       <div className="border rounded-lg p-4 bg-card grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">

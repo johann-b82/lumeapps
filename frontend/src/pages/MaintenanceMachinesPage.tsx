@@ -6,9 +6,13 @@ import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import {
   maintenanceApi,
+  type Machine,
   type MachineInput,
   type MachineStatus,
 } from "@/lib/maintenanceApi";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+
+type MachineRow = Machine & Record<string, unknown>;
 
 const EMPTY: MachineInput = {
   name: "",
@@ -33,6 +37,7 @@ export function MaintenanceMachinesPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<MachineInput>(EMPTY);
+  const [search, setSearch] = useState("");
 
   const create = useMutation({
     mutationFn: () => maintenanceApi.createMachine(draft),
@@ -70,6 +75,53 @@ export function MaintenanceMachinesPage() {
       />
     </label>
   );
+
+  const q = search.trim().toLowerCase();
+  const machineRows = (machines ?? []).filter(
+    (m) => !q
+      || m.name.toLowerCase().includes(q)
+      || (m.inventory_no ?? "").toLowerCase().includes(q)
+      || (m.location ?? "").toLowerCase().includes(q)
+      || (m.responsible ?? "").toLowerCase().includes(q),
+  ) as MachineRow[];
+
+  const machineColumns: DataTableColumn<MachineRow>[] = [
+    {
+      key: "name", header: t("maintenance.machines.col.name"),
+      cell: (m) => (
+        <button className="text-blue-600 hover:underline font-medium"
+          onClick={() => setLocation(`/production/maintenance/${m.id}`)}>
+          {m.name}
+        </button>
+      ),
+    },
+    { key: "inventory_no", header: t("maintenance.machines.col.inventory_no"), className: "font-mono text-xs" },
+    { key: "location", header: t("maintenance.machines.col.location") },
+    { key: "responsible", header: t("maintenance.machines.col.responsible") },
+    {
+      key: "status", header: t("maintenance.machines.col.status"),
+      cell: (m) => (
+        <span className={m.status === "active" ? "text-emerald-600" : "text-muted-foreground"}>
+          {t(`maintenance.status.${m.status}`)}
+        </span>
+      ),
+    },
+    {
+      key: "actions", header: "", align: "right", sortable: false, className: "whitespace-nowrap",
+      cell: (m) => (
+        <>
+          <button className="text-blue-600 mr-3"
+            onClick={() => setLocation(`/production/maintenance/${m.id}`)}>
+            {t("maintenance.machines.open")}
+          </button>
+          <button className="text-red-600"
+            onClick={() => { if (confirm(t("maintenance.machines.confirmDelete"))) remove.mutate(m.id); }}>
+            {t("common.delete")}
+          </button>
+        </>
+      ),
+    },
+  ];
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
@@ -130,69 +182,17 @@ export function MaintenanceMachinesPage() {
         </div>
       )}
 
-      {isLoading ? (
-        <p className="text-muted-foreground">…</p>
-      ) : !machines || machines.length === 0 ? (
-        <p className="text-muted-foreground">{t("maintenance.machines.empty")}</p>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-2">{t("maintenance.machines.col.name")}</th>
-              <th>{t("maintenance.machines.col.inventory_no")}</th>
-              <th>{t("maintenance.machines.col.location")}</th>
-              <th>{t("maintenance.machines.col.responsible")}</th>
-              <th>{t("maintenance.machines.col.status")}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {machines.map((m) => (
-              <tr key={m.id} className="border-b hover:bg-accent/5">
-                <td className="py-2">
-                  <button
-                    className="text-blue-600 hover:underline font-medium"
-                    onClick={() => setLocation(`/production/maintenance/${m.id}`)}
-                  >
-                    {m.name}
-                  </button>
-                </td>
-                <td className="font-mono text-xs">{m.inventory_no ?? "—"}</td>
-                <td>{m.location ?? "—"}</td>
-                <td>{m.responsible ?? "—"}</td>
-                <td>
-                  <span
-                    className={
-                      m.status === "active"
-                        ? "text-emerald-600"
-                        : "text-muted-foreground"
-                    }
-                  >
-                    {t(`maintenance.status.${m.status}`)}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap text-right">
-                  <button
-                    className="text-blue-600 mr-3"
-                    onClick={() => setLocation(`/production/maintenance/${m.id}`)}
-                  >
-                    {t("maintenance.machines.open")}
-                  </button>
-                  <button
-                    className="text-red-600"
-                    onClick={() => {
-                      if (confirm(t("maintenance.machines.confirmDelete")))
-                        remove.mutate(m.id);
-                    }}
-                  >
-                    {t("common.delete")}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <DataTable
+        card={false}
+        columns={machineColumns}
+        rows={machineRows}
+        rowKey={(m) => m.id}
+        isLoading={isLoading}
+        emptyText={t("maintenance.machines.empty")}
+        search={{ value: search, onChange: setSearch, placeholder: t("maintenance.machines.col.name") }}
+        initialSort={{ key: "name", dir: "asc" }}
+        pageSize={25}
+      />
     </div>
   );
 }

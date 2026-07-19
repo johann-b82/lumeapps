@@ -213,8 +213,8 @@ export function SnmpWalkCard({ rows, onUpdateRow }: SnmpWalkCardProps) {
           {results !== null && results.length > 0 && (
             <div className="max-h-96 overflow-y-auto rounded-md border border-border">
               <table className="w-full text-sm">
-                <thead className="bg-muted/30 sticky top-0">
-                  <tr>
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr className="border-b border-border">
                     <th className="text-left font-medium px-3 py-2">OID</th>
                     <th className="text-left font-medium px-3 py-2">Type</th>
                     <th className="text-left font-medium px-3 py-2">Value</th>
@@ -227,7 +227,7 @@ export function SnmpWalkCard({ rows, onUpdateRow }: SnmpWalkCardProps) {
                   {results.map((entry) => (
                     <tr
                       key={entry.oid}
-                      className="border-t border-border hover:bg-accent/10 transition-colors"
+                      className="border-t border-border hover:bg-muted/30 transition-colors"
                     >
                       <td className="px-3 py-2 font-mono text-xs break-all">
                         {entry.oid}
