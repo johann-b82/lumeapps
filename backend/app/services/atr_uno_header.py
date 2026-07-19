@@ -68,7 +68,7 @@ def inject(in_path, out_path, docno, date_str, logo_path=None):
                 sys.stderr.write(f"page-field warning: {e}\n")
             if logo_path:
                 try:
-                    _set_header_logo(smgr, ctx, doc, sheet, logo_path)
+                    _set_header_logo(smgr, ctx, style, logo_path)
                 except Exception as e:  # noqa: BLE001
                     sys.stderr.write(f"logo warning: {e}\n")
             style.RightPageHeaderContent = hc
@@ -83,18 +83,25 @@ def inject(in_path, out_path, docno, date_str, logo_path=None):
             pass
 
 
-def _set_header_logo(smgr, ctx, doc, sheet, logo_path):
-    """Calc headers can't hold a graphic via the text API, so anchor the logo as
-    a floating drawing shape at the top-left of the sheet."""
-    from com.sun.star.awt import Point, Size
+def _set_header_logo(smgr, ctx, style, logo_path):
+    """Place the logo top-left of the print header via the page style's header
+    background graphic (LEFT_TOP).
+
+    The other routes fail under LibreOffice's PDF export: the Excel '&G' header
+    graphic (legacyDrawingHF/VML) is not rendered, a floating drawing shape gets
+    clipped out of the header margin, and Calc headers can't hold a graphic via
+    the text API (`createInstance('...TextGraphicObject')` returns None). The
+    header background graphic renders and repeats on every page."""
+    from com.sun.star.style.GraphicLocation import LEFT_TOP
     provider = smgr.createInstanceWithContext(
         "com.sun.star.graphic.GraphicProvider", ctx)
     graphic = provider.queryGraphic((_pv("URL", "file://" + logo_path),))
-    shape = doc.createInstance("com.sun.star.drawing.GraphicObjectShape")
-    sheet.DrawPage.add(shape)
-    shape.Graphic = graphic
-    shape.Size = Size(5200, 1400)          # ~52 x 14 mm
-    shape.Position = Point(200, -1700)     # lift into the top header band
+    style.setPropertyValue("HeaderBackGraphic", graphic)
+    style.setPropertyValue("HeaderBackGraphicLocation", LEFT_TOP)
+    try:
+        style.setPropertyValue("HeaderHeight", 1400)  # ~14 mm — room for the logo
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":

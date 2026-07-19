@@ -188,7 +188,9 @@ _UNO_SCRIPT = str(Path(__file__).with_name("atr_uno_header.py"))
 
 
 async def convert_xlsx_to_pdf(xlsx_bytes: bytes, doc_no: str = _ATR_DOC_NO,
-                              date_str: str | None = None) -> bytes:
+                              date_str: str | None = None,
+                              logo_bytes: bytes | None = None,
+                              logo_ext: str = "png") -> bytes:
     if date_str is None:
         date_str = date.today().strftime("%d.%m.%Y")
     async with _LO_SEMAPHORE:
@@ -198,8 +200,16 @@ async def convert_xlsx_to_pdf(xlsx_bytes: bytes, doc_no: str = _ATR_DOC_NO,
             src = tempdir / "atr.xlsx"
             src.write_bytes(xlsx_bytes)
             out = tempdir / "atr.pdf"
+            # openpyxl drops the template's header graphic (keeps the '&G'
+            # placeholder), so re-supply the logo to the UNO step, which anchors
+            # it as a floating shape in the header band (atr_uno_header.py).
+            args = ["/usr/bin/python3", _UNO_SCRIPT, str(src), str(out), doc_no, date_str]
+            if logo_bytes:
+                logo = tempdir / f"logo.{logo_ext}"
+                logo.write_bytes(logo_bytes)
+                args.append(str(logo))
             proc = await asyncio.create_subprocess_exec(
-                "/usr/bin/python3", _UNO_SCRIPT, str(src), str(out), doc_no, date_str,
+                *args,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
             try:

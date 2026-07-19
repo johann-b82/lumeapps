@@ -40,8 +40,10 @@ async def generate_and_deliver(db: AsyncSession, delivery, settings_row) -> AtrG
     xlsx = build_atr_xlsx(tmpl.structure_xlsx, delivery, items)
     docx = build_containerbeschriftung(delivery, items)
     pdf: bytes | None = None
+    logo_bytes = getattr(settings_row, "logo_data", None)
+    logo_ext = "svg" if "svg" in (getattr(settings_row, "logo_mime", "") or "") else "png"
     try:
-        pdf = await convert_xlsx_to_pdf(xlsx)
+        pdf = await convert_xlsx_to_pdf(xlsx, logo_bytes=logo_bytes, logo_ext=logo_ext)
     except Exception as exc:  # noqa: BLE001
         log.warning("atr deliver: pdf conversion failed for delivery %s: %s", delivery.id, exc)
         warnings.append("PDF conversion failed; .xlsx and .docx are still available.")

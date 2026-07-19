@@ -106,6 +106,12 @@ und Kategorie aus dem Katalog; ohne Treffer bleibt die Position `unmatched`
   Konvertierung fehl, bleiben xlsx + docx nutzbar (Warnung).
 - **Container-Etikett (docx)** via
   [`atr_generate_docx.py`](../../backend/app/services/atr_generate_docx.py).
+- **Kopf:** Titel + Doc-No/Datum/Seite werden im PDF-Schritt via LibreOffice UNO
+  gesetzt ([`atr_uno_header.py`](../../backend/app/services/atr_uno_header.py)),
+  da openpyxl den Druckkopf verstümmelt. Das **Logo** (App-Logo aus
+  `AppSettings.logo_data`) kommt als **Header-Hintergrundgrafik** (`LEFT_TOP`)
+  in den Kopf — die Excel-`&G`-Grafik rendert LibreOffice beim PDF-Export nicht,
+  Floating-Shapes werden am Kopfrand abgeschnitten.
 - Für **Scan-Herkunft** und konfiguriertes SMB: Dateien in den Output schreiben,
   bei Erfolg Status `delivered` setzen, committen und **dann** die Quelldatei
   ins Archiv verschieben. Schlägt der Share-Schreibvorgang fehl, bleibt der
