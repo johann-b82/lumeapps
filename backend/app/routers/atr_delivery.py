@@ -1,6 +1,10 @@
 """/api/atr/deliveries/* — admin-gated Lieferschein ingest + review (Phase B).
 
 Generation endpoints (Wave 2): POST /{id}/generate, GET /{id}/files/{kind}.
+
+Compute-justified: clause 1 (file parsing + document generation + SMB I/O) —
+parses Lieferschein files, generates the ATR XLSX/PDF/DOCX artifacts, and reads
+input files off an SMB share; none expressible as a Directus collection read.
 """
 from __future__ import annotations
 

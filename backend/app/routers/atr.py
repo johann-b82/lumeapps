@@ -2,6 +2,9 @@
 
 Router-level admin gate: every endpoint requires Admin. The dep-audit test
 in tests/test_atr_admin_gate.py enforces this.
+
+Compute-justified: clause 1 (file parsing) — the import preview/commit routes
+parse uploaded Excel workbooks into the parts catalog; not a Directus read.
 """
 from __future__ import annotations
 

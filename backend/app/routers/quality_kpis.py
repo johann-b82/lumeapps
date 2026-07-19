@@ -9,6 +9,10 @@ write paths live in the uploads router, except for one v1.80 per-row
 KPI opt-out toggle that lives here for locality:
 
     Admin-only: PATCH /api/quality/inspections/bookings/{id}
+
+Compute-justified: clause 2 (server-side aggregation) — audit-findings,
+complaint-rate, and inspections values/histories/lists are computed over the
+quality tables and cannot be served as plain Directus collection reads.
 """
 from __future__ import annotations
 

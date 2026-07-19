@@ -8,6 +8,10 @@ on the corporate LAN. Acceptable for an internal office-display use case;
 swap to a long-lived signed embed token if the dashboard ever leaves the
 LAN. The auth'd duplicates in hr_kpis.py keep their role gates intact —
 admin-only HR navigation still goes through those.
+
+Compute-justified: clause 1 (side effect outside Postgres) — proxies Personio
+profile-picture bytes, computes ISO-week birthday/joiner windows, and serves
+session-less kiosk embeds; none of which a Directus collection read can express.
 """
 
 from datetime import date, timedelta
