@@ -31,6 +31,17 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/hr/kpis", frozenset({"GET"})),
     ("/api/hr/kpis/history", frozenset({"GET"})),
     ("/api/data/employees/overtime", frozenset({"GET"})),
+    # HR launcher + Organigramm reads — viewer role (hr_kpis.py router-level
+    # get_current_user gate).
+    ("/api/hr/birthdays/this-week", frozenset({"GET"})),
+    ("/api/hr/joiners/recent", frozenset({"GET"})),
+    ("/api/hr/employees/{employee_id}/photo", frozenset({"GET"})),
+    ("/api/hr/org-chart", frozenset({"GET"})),
+    # HR signage embeds — public by design (kiosks without a session),
+    # mirrors the worldcup/embed rationale. See routers/hr_embed.py docstring.
+    ("/api/hr/embed/birthdays/this-week", frozenset({"GET"})),
+    ("/api/hr/embed/joiners/recent", frozenset({"GET"})),
+    ("/api/hr/embed/employees/{employee_id}/photo", frozenset({"GET"})),
     # v1.41 sales-activity dashboard reads — viewer role.
     ("/api/data/sales/contacts-weekly", frozenset({"GET"})),
     ("/api/data/sales/orders-distribution", frozenset({"GET"})),
@@ -44,6 +55,26 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/production/verzug/history", frozenset({"GET"})),
     ("/api/production/verzug/list", frozenset({"GET"})),
     ("/api/production/verzug/overdue", frozenset({"GET"})),
+    # Qualität dashboard reads — viewer role (quality_kpis.py router-level
+    # get_current_user gate; PATCH bookings/{id} stays admin per docstring).
+    ("/api/quality/audit-findings", frozenset({"GET"})),
+    ("/api/quality/audit-findings/list", frozenset({"GET"})),
+    ("/api/quality/audit-findings/history", frozenset({"GET"})),
+    ("/api/quality/complaint-rate", frozenset({"GET"})),
+    ("/api/quality/complaint-rate/history", frozenset({"GET"})),
+    ("/api/quality/complaints/list", frozenset({"GET"})),
+    ("/api/quality/inspections", frozenset({"GET"})),
+    ("/api/quality/inspections/history", frozenset({"GET"})),
+    ("/api/quality/inspections/list", frozenset({"GET"})),
+    ("/api/quality/inspections/bookings", frozenset({"GET"})),
+    # Finanzperspektive dashboard reads — viewer role (finance_kpis.py
+    # router-level get_current_user gate).
+    ("/api/finance/material-cost-ratio", frozenset({"GET"})),
+    ("/api/finance/material-cost-ratio/history", frozenset({"GET"})),
+    ("/api/finance/material-cost-ratio/list", frozenset({"GET"})),
+    ("/api/finance/personnel-cost-ratio", frozenset({"GET"})),
+    ("/api/finance/personnel-cost-ratio/history", frozenset({"GET"})),
+    ("/api/finance/personnel-cost-ratio/list", frozenset({"GET"})),
     # Viewer-readable sync freshness (mixed-gate; see sync.py docstring).
     ("/api/sync/meta", frozenset({"GET"})),
     # Signage pair/player endpoints use device-token auth, not user/admin auth.
@@ -54,6 +85,7 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/signage/player/heartbeat", frozenset({"POST"})),
     ("/api/signage/player/stream", frozenset({"GET"})),
     ("/api/signage/player/asset/{media_id}", frozenset({"GET"})),
+    ("/api/signage/player/asset/{media_id}/slide/{idx}", frozenset({"GET"})),
     ("/api/signage/player/calibration", frozenset({"GET"})),
     # Caddy `forward_auth` gate for /paperless, /pdf, /op. Intentionally
     # public — this endpoint IS the authentication, called by Caddy with
