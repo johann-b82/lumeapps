@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
@@ -78,23 +79,25 @@ export function AtrPartsPage() {
     },
     { key: "source_filename", header: t("atr.parts.col.source"), className: "text-xs text-muted-foreground" },
     {
-      key: "actions", header: "", sortable: false, className: "whitespace-nowrap",
+      key: "actions", header: "", align: "right", sortable: false, className: "whitespace-nowrap",
       cell: (p) => (
-        <>
+        <span className="inline-flex items-center gap-3">
           {editId === p.id ? (
-            <button className="text-blue-600 mr-2" onClick={() => save.mutate(p.id)}>
-              {t("atr.parts.save")}
+            <button className="text-blue-600" aria-label={t("atr.parts.save")} title={t("atr.parts.save")}
+              onClick={() => save.mutate(p.id)}>
+              <Check className="h-4 w-4" />
             </button>
           ) : (
-            <button className="text-blue-600 mr-2"
+            <button className="text-blue-600" aria-label={t("atr.parts.edit")} title={t("atr.parts.edit")}
               onClick={() => { setEditId(p.id); setDraft(p); }}>
-              {t("atr.parts.edit")}
+              <Pencil className="h-4 w-4" />
             </button>
           )}
-          <button className="text-red-600" onClick={() => remove.mutate(p.id)}>
-            {t("atr.parts.delete")}
+          <button className="text-red-600" aria-label={t("atr.parts.delete")} title={t("atr.parts.delete")}
+            onClick={() => remove.mutate(p.id)}>
+            <Trash2 className="h-4 w-4" />
           </button>
-        </>
+        </span>
       ),
     },
   ];
