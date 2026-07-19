@@ -14,6 +14,10 @@ All endpoints are admin-gated (upload + persistence + Directus proxy). Routes:
 
 Geometry is normalized [0,1]; the arrow tip is the region centre (derived on
 the client). ``number`` is server-assigned and kept contiguous.
+
+Compute-justified: clause 1 (file I/O + atomic renumber) — persists and proxies
+uploaded drawing bytes and keeps server-assigned balloon numbers contiguous
+across add/delete; not a plain Directus collection read.
 """
 from __future__ import annotations
 
