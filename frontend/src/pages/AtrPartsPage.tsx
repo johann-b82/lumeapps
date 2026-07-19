@@ -6,7 +6,9 @@ import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { AtrDeliveriesPage } from "@/pages/AtrDeliveriesPage";
 
 type PartRow = AtrPart & Record<string, unknown>;
@@ -15,7 +17,7 @@ type AtrTab = "parts" | "deliveries";
 export function AtrPartsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<AtrTab>("parts");
+  const [tab, setTab] = useState<AtrTab>("deliveries");
   const [search, setSearch] = useState("");
   const { data: parts, isLoading } = useQuery({
     queryKey: ["atr", "parts", search],
@@ -100,15 +102,15 @@ export function AtrPartsPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
       <div className="mb-4">
-        <SegmentedControl<AtrTab>
-          aria-label={t("atr.title")}
-          value={tab}
-          onChange={setTab}
-          segments={[
-            { value: "parts", label: t("atr.nav.parts") },
-            { value: "deliveries", label: t("atr.nav.deliveries") },
-          ]}
-        />
+        <Select value={tab} onValueChange={(v) => setTab(v as AtrTab)}>
+          <SelectTrigger className="w-56" aria-label={t("atr.title")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="deliveries">{t("atr.nav.deliveries")}</SelectItem>
+            <SelectItem value="parts">{t("atr.nav.parts")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       {tab === "parts" ? (
         <DataTable
