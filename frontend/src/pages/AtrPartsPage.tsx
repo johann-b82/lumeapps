@@ -104,7 +104,9 @@ export function AtrPartsPage() {
       <div className="mb-4">
         <Select value={tab} onValueChange={(v) => setTab(v as AtrTab)}>
           <SelectTrigger className="w-56" aria-label={t("atr.title")}>
-            <SelectValue />
+            <SelectValue>
+              {(v) => v === "parts" ? t("atr.nav.parts") : t("atr.nav.deliveries")}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="deliveries">{t("atr.nav.deliveries")}</SelectItem>
