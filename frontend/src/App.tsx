@@ -148,6 +148,7 @@ function AppShell() {
           <Route path="/atr/template"><AdminOnly><AtrTemplatePage /></AdminOnly></Route>
           <Route path="/atr/import"><AdminOnly><AtrImportPage /></AdminOnly></Route>
           <Route path="/atr/deliveries/:id"><AdminOnly><AtrDeliveryReviewPage /></AdminOnly></Route>
+          <Route path="/atr/teilekatalog"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
           <Route path="/atr"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
           {/* /settings/sensors MUST appear before /settings so wouter's first-match wins */}
           <Route path="/settings/sensors" component={SensorsSettingsPage} />

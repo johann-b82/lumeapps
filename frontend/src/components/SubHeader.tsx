@@ -228,6 +228,26 @@ export function SubHeader() {
             </Select>
           )}
           {location.startsWith("/settings") && <SettingsSectionPicker />}
+          {(location === "/atr" || location === "/atr/teilekatalog") && (
+            <Select
+              value={location === "/atr/teilekatalog" ? "/atr/teilekatalog" : "/atr"}
+              onValueChange={(path) => navigate(path)}
+            >
+              <SelectTrigger className="w-40" aria-label={t("atr.title")}>
+                <SelectValue>
+                  {(p) =>
+                    p === "/atr/teilekatalog"
+                      ? t("atr.nav.parts")
+                      : t("atr.nav.deliveries")
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="/atr">{t("atr.nav.deliveries")}</SelectItem>
+                <SelectItem value="/atr/teilekatalog">{t("atr.nav.parts")}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {(location === "/sales" ||

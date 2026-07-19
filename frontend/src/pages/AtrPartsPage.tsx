@@ -1,28 +1,29 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Pencil, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { AtrDeliveriesPage } from "@/pages/AtrDeliveriesPage";
 
 type PartRow = AtrPart & Record<string, unknown>;
-type AtrTab = "parts" | "deliveries";
 
 export function AtrPartsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<AtrTab>("deliveries");
+  // View is URL-driven so the SubHeader dropdown can switch it: /atr shows the
+  // deliveries list (default), /atr/teilekatalog shows the parts catalog.
+  const [location] = useLocation();
+  const tab: "parts" | "deliveries" = location === "/atr/teilekatalog" ? "parts" : "deliveries";
   const [search, setSearch] = useState("");
   const { data: parts, isLoading } = useQuery({
     queryKey: ["atr", "parts", search],
     queryFn: () => fetchAtrParts(search || undefined),
+    enabled: tab === "parts",
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<AtrPart>>({});
@@ -104,19 +105,6 @@ export function AtrPartsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
-      <div className="mb-4">
-        <Select value={tab} onValueChange={(v) => setTab(v as AtrTab)}>
-          <SelectTrigger className="w-56" aria-label={t("atr.title")}>
-            <SelectValue>
-              {(v) => v === "parts" ? t("atr.nav.parts") : t("atr.nav.deliveries")}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="deliveries">{t("atr.nav.deliveries")}</SelectItem>
-            <SelectItem value="parts">{t("atr.nav.parts")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
       {tab === "parts" ? (
         <DataTable
           search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
