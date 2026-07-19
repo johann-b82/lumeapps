@@ -42,8 +42,9 @@ async def test_match_and_unmatched(client):
     assert m.part_name == "CARPET EMERGENCY EXIT HATCH"
     assert m.drawing_number_issue == "VR11S 1010-10/D"
     assert str(m.weight_kg) == "0.413"
-    assert m.po_pos == "050"
+    assert m.po_pos == "5"  # PO Pos from the Lieferschein ("Auftrag Nr. 1024738 / 5"), not the catalog
     assert m.category == "CARPET"
     assert m.row_order == 1
     assert unmatched[0].row_order == 2
     assert unmatched[0].part_name == "UNKNOWN PART"
+    assert unmatched[0].po_pos == "9"  # populated from the Lieferschein even when unmatched

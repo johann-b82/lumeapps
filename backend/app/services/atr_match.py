@@ -69,7 +69,7 @@ async def match_positions(
                 part_number=p.part_number, part_number_norm=p.part_number_norm,
                 matched_part_id=part.id, part_name=part.part_name,
                 drawing_number_issue=part.drawing_number_issue, category=part.category,
-                qty=p.qty, weight_kg=part.default_weight_kg, po_pos=part.po_pos,
+                qty=p.qty, weight_kg=part.default_weight_kg, po_pos=p.po_pos,
                 match_status="matched", row_order=order,
             ))
         else:
@@ -78,7 +78,7 @@ async def match_positions(
                 part_number=p.part_number, part_number_norm=p.part_number_norm,
                 matched_part_id=None, part_name=p.bezeichnung,
                 drawing_number_issue=None, category=None, qty=p.qty,
-                weight_kg=None, po_pos=None, match_status="unmatched", row_order=order,
+                weight_kg=None, po_pos=p.po_pos, match_status="unmatched", row_order=order,
             ))
 
     return MatchedDelivery(

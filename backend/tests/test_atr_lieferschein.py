@@ -21,6 +21,7 @@ def test_parse_header_and_positions():
     assert p1.part_number == "VR11S1010016000"
     assert p1.part_number_norm == "111010016000"
     assert p1.ba_auftrag == "1024738"
+    assert p1.po_pos == "5"
     assert p1.po_base == "4501119979"
     assert p1.ac_programme == "A350"
     assert p1.compartment == "CCRC"

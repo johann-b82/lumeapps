@@ -33,6 +33,7 @@ class ParsedPosition:
     part_number: str | None = None
     part_number_norm: str | None = None
     ba_auftrag: str | None = None
+    po_pos: str | None = None
     po_base: str | None = None
     ac_programme: str | None = None
     compartment: str | None = None
@@ -110,6 +111,7 @@ def parse_lieferschein_text(text: str) -> ParsedLieferschein:
         ma = _AUFTRAG_RE.search(line)
         if ma:
             cur.ba_auftrag = ma.group(1)
+            cur.po_pos = ma.group(2)  # "Auftrag Nr. <BA> / <Pos>" — Pos = PO position
             continue
         mb = _BESTELL_RE.search(line)
         if mb:
