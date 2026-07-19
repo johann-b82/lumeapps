@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
+import { Pager } from "@/components/Pager";
+
+const PAGE_SIZE = 25;
 
 export function AtrPartsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const { data: parts, isLoading } = useQuery({
     queryKey: ["atr", "parts", search],
@@ -16,6 +21,9 @@ export function AtrPartsPage() {
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<AtrPart>>({});
+  const [page, setPage] = useState(0);
+  // Reset to the first page whenever the filtered result set changes.
+  useEffect(() => setPage(0), [search]);
 
   const save = useMutation({
     mutationFn: (id: number) => updateAtrPart(id, {
@@ -38,7 +46,13 @@ export function AtrPartsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
-      <h1 className="text-xl font-semibold mb-4">{t("atr.parts.heading")}</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">{t("atr.parts.heading")}</h1>
+        <button className="px-3 py-2 border rounded text-sm"
+          onClick={() => setLocation("/atr/deliveries")}>
+          {t("atr.nav.deliveries")} →
+        </button>
+      </div>
       <input
         className="border rounded px-3 py-2 mb-4 w-full max-w-md"
         placeholder={t("atr.parts.search")}
@@ -65,7 +79,7 @@ export function AtrPartsPage() {
             </tr>
           </thead>
           <tbody>
-            {parts.map((p) => {
+            {parts.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p) => {
               const editing = editId === p.id;
               return (
                 <tr key={p.id} className="border-b" data-testid={`atr-part-${p.id}`}>
@@ -108,6 +122,10 @@ export function AtrPartsPage() {
             })}
           </tbody>
         </table>
+      )}
+      {parts && parts.length > 0 && (
+        <Pager page={page} pageCount={Math.ceil(parts.length / PAGE_SIZE)}
+          total={parts.length} onPage={setPage} />
       )}
     </div>
   );

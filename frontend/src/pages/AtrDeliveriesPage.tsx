@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import {
   fetchDeliveries, uploadLieferschein, fetchInputFiles, processInputFile,
 } from "@/lib/atrApi";
+import { Pager } from "@/components/Pager";
+
+const PAGE_SIZE = 25;
 
 export function AtrDeliveriesPage() {
   const { t } = useTranslation();
@@ -16,6 +19,7 @@ export function AtrDeliveriesPage() {
   const { data: input } = useQuery({ queryKey: ["atr", "input-files"], queryFn: fetchInputFiles });
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState("");
+  const [page, setPage] = useState(0);
 
   async function onUpload(file: File) {
     setBusy(true);
@@ -63,7 +67,7 @@ export function AtrDeliveriesPage() {
           <th>{t("atr.deliveries.col.status")}</th>
           <th>{t("atr.deliveries.col.created")}</th><th /></tr></thead>
         <tbody>
-          {(deliveries ?? []).map((d) => (
+          {(deliveries ?? []).slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((d) => (
             <tr key={d.id} className="border-b" data-testid={`atr-delivery-${d.id}`}>
               <td className="py-1">{d.source_filename}</td>
               <td>{d.ba_auftrag}</td>
@@ -75,6 +79,8 @@ export function AtrDeliveriesPage() {
           ))}
         </tbody>
       </table>
+      <Pager page={page} pageCount={Math.ceil((deliveries?.length ?? 0) / PAGE_SIZE)}
+        total={deliveries?.length ?? 0} onPage={setPage} />
     </div>
   );
 }
