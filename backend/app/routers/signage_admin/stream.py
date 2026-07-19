@@ -19,6 +19,9 @@ Directus session cookie (commit 23ecbf1).
 
 --workers 1 invariant applies (admin queues are process-local; see
 signage_broadcast.py docstring).
+
+Compute-justified: clause 1 (SSE fan-out) — a long-lived Server-Sent-Events
+stream over a process-local queue; not expressible as a Directus read.
 """
 from __future__ import annotations
 
