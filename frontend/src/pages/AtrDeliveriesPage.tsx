@@ -89,18 +89,15 @@ export function AtrDeliveriesPage() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-6">
-      <DataTable
-        title={t("atr.deliveries.heading")}
-        actions={actions}
-        search={{ value: search, onChange: setSearch, placeholder: t("atr.deliveries.col.source") }}
-        columns={columns}
-        rows={rows}
-        rowKey={(d) => d.id}
-        rowTestId={(d) => `atr-delivery-${d.id}`}
-        initialSort={{ key: "created_at", dir: "desc" }}
-        pageSize={25}
-      />
-    </div>
+    <DataTable
+      actions={actions}
+      search={{ value: search, onChange: setSearch, placeholder: t("atr.deliveries.col.source") }}
+      columns={columns}
+      rows={rows}
+      rowKey={(d) => d.id}
+      rowTestId={(d) => `atr-delivery-${d.id}`}
+      initialSort={{ key: "created_at", dir: "desc" }}
+      pageSize={25}
+    />
   );
 }

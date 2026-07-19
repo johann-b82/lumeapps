@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { AtrDeliveriesPage } from "@/pages/AtrDeliveriesPage";
 
 type PartRow = AtrPart & Record<string, unknown>;
+type AtrTab = "parts" | "deliveries";
 
 export function AtrPartsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [tab, setTab] = useState<AtrTab>("parts");
   const [search, setSearch] = useState("");
   const { data: parts, isLoading } = useQuery({
     queryKey: ["atr", "parts", search],
@@ -97,25 +99,33 @@ export function AtrPartsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
-      <DataTable
-        title={t("atr.parts.heading")}
-        actions={
-          <button className="px-3 py-2 border rounded text-sm"
-            onClick={() => setLocation("/atr/deliveries")}>
-            {t("atr.nav.deliveries")} →
-          </button>
-        }
-        search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
-        columns={columns}
-        rows={(parts ?? []) as PartRow[]}
-        rowKey={(p) => p.id}
-        rowTestId={(p) => `atr-part-${p.id}`}
-        isLoading={isLoading}
-        emptyText={t("atr.parts.empty")}
-        initialSort={{ key: "part_number", dir: "asc" }}
-        pageSize={25}
-        minWidth={880}
-      />
+      <div className="mb-4">
+        <SegmentedControl<AtrTab>
+          aria-label={t("atr.title")}
+          value={tab}
+          onChange={setTab}
+          segments={[
+            { value: "parts", label: t("atr.nav.parts") },
+            { value: "deliveries", label: t("atr.nav.deliveries") },
+          ]}
+        />
+      </div>
+      {tab === "parts" ? (
+        <DataTable
+          search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
+          columns={columns}
+          rows={(parts ?? []) as PartRow[]}
+          rowKey={(p) => p.id}
+          rowTestId={(p) => `atr-part-${p.id}`}
+          isLoading={isLoading}
+          emptyText={t("atr.parts.empty")}
+          initialSort={{ key: "part_number", dir: "asc" }}
+          pageSize={25}
+          minWidth={880}
+        />
+      ) : (
+        <AtrDeliveriesPage />
+      )}
     </div>
   );
 }
