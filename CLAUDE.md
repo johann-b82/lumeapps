@@ -181,5 +181,45 @@ Auth dependencies live at the router (or `APIRouter` sub-package) level. Per-rou
 
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+Agent-facing map. Read this before touching a domain so you know what already exists and what not to break. Detailed docs: [`docs/architecture.md`](docs/architecture.md) (topology, Caddy routing), [`docs/api.md`](docs/api.md) (full route matrix, Admin/Viewer/Device/Public), [`docs/adr/0001-directus-fastapi-split.md`](docs/adr/0001-directus-fastapi-split.md) (the core split), [`docs/setup.md`](docs/setup.md), [`docs/operator-runbook.md`](docs/operator-runbook.md) (Pi signage).
+
+### Runtime topology (Docker Compose)
+
+Caddy (`:80`) fronts everything on one origin. Upstreams: `frontend:5173` (SPA + public `/embed/*` kiosk routes), `api:8000` (FastAPI, all `/api/*` + the built `/player/*` bundle), `directus:8055` (`/directus/*`, subpath stripped), `paperless:8000` (`/paperless/*`), `stirling:8080` (`/pdf/*`), `openproject:8080` (`/op/*`), plus `postgres:17`. The three tool apps (Paperless, Stirling, OpenProject) are gated by Caddy `forward_auth → /api/auth/forward`.
+
+### Codebase layout
+
+- `backend/app/routers/` — one module (or sub-package) per domain; each mounts a prefixed `APIRouter` with router-level auth. Registered in `backend/app/main.py`.
+- `backend/app/{models,schemas,parsing,services,security}/` — ORM models, Pydantic schemas, file parsers, business logic, auth deps.
+- `backend/alembic/versions/` — **sole DDL owner** of every `public.*` table (see invariants).
+- `frontend/src/` — React SPA. Domains under `components/`, `pages/`, `signage/`, `player/` (separate kiosk bundle → `npm run build:player`), `docs/{de,en}/` (in-app docs), `locales/` (DE/EN i18n).
+
+### Domains (FastAPI routers → prefix → auth)
+
+| Domain | Router module | Prefix | Auth |
+|--------|---------------|--------|------|
+| Sales KPIs | `kpis.py`, `sales_kpis.py` | `/api/kpis`, `/api/data/sales/*` | Viewer-read |
+| HR KPIs | `hr_kpis.py`, `hr_overtime.py`, `hr_embed.py` | `/api/hr/*` | Viewer-read (embed = public) |
+| Quality | `quality_kpis.py` | `/api/quality` | Viewer-read |
+| Finance | `finance_kpis.py` | `/api/finance` | Viewer-read |
+| Procurement | `procurement_kpis.py` | `/api/procurement` | Viewer-read |
+| Production | `production_kpis.py` | `/api/production` | Viewer-read |
+| Uploads | `uploads.py` | `/api/upload*`, `/api/uploads` | Admin-only |
+| Settings/Sync | `settings.py`, `sync.py` | `/api/settings`, `/api/sync` | GET viewer / mutations admin |
+| Sensors | `sensors.py` | `/api/sensors` | Admin-only (incl. reads) |
+| Signage | `signage_admin/*`, `signage_player.py`, `signage_pair.py` | `/api/signage/*` | Admin / Device JWT / pairing |
+| ATR | `atr.py`, `atr_delivery.py`, fileserver router in `settings.py` | `/api/atr*` | Admin-only |
+| Fair | `fair.py` | `/api/fair` | Admin-only |
+| World Cup | `worldcup.py` | `/api/worldcup` | embed public / config admin |
+| Auth forward | `auth_forward.py` | `/api/auth/forward` | public (IS the gate for tool apps) |
+
+### Load-bearing invariants — do NOT break these
+
+- **Directus = shape, FastAPI = compute.** Plain CRUD reads live in Directus collections (frontend reads via the SDK). FastAPI keeps only compute-justified routes: file parsing, KPI aggregation, cascade deletes, SSE fanout, JWT minting, upstream proxying, structured-409 bodies. Don't re-add a CRUD read endpoint to FastAPI — add/adjust the Directus collection instead.
+- **Alembic owns all DDL.** Never call `Base.metadata.create_all()`. Every schema change is an Alembic migration against `public.*`. Directus owns metadata rows only, not table definitions.
+- **Auth at router level.** See the Auth gate placement convention above; `backend/tests/test_admin_gate_audit.py` + `test_rbac.py` enforce it in CI. New mutation route ⇒ it must be under an admin-gated router.
+- **Same-origin only.** No CORS. Directus is reached via `/directus/*`; a direct-to-Directus cross-origin call will (intentionally) fail loudly.
+- **SSE passthrough is load-bearing.** Player + sidecar EventSource clients assume long-lived connections (Caddy `flush_interval -1`, 24h read timeout). Don't buffer or add a proxy timeout on `/api/signage/player/stream`.
+- **Signage player is served built, via FastAPI** (`/player/*` StaticFiles mount) — Vite dev does not serve it. After player changes run `npm run build:player`.
+- **Tests can wipe the DB.** Backend tests DELETE whole tables; never run pytest with real `POSTGRES_*` env pointing at the live `acm_kpi` DB. See memory `pytest-wipes-prod-db`.
 

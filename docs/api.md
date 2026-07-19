@@ -2,7 +2,7 @@
 # API Route Contract — Admin vs Viewer
 
 **Milestone:** v1.11-directus (auth model)
-**Last updated:** 2026-06-11 (route inventory refreshed through v1.54 + worldcup embed)
+**Last updated:** 2026-07-14 (added Finance, Procurement, Production, ATR, and Fair domains)
 **Enforcement:** FastAPI dependency `app.security.directus_auth.require_admin` on every mutation route. See `backend/tests/test_rbac.py` for the machine-verified matrix.
 
 ## Roles
@@ -50,6 +50,22 @@ FastAPI keeps only compute-justified routes (file parsing, cascade deletes, SSE 
 | GET    | /api/quality/audit-findings           |   ✓    |   ✓   | Audit findings KPI value |
 | GET    | /api/quality/audit-findings/list      |   ✓    |   ✓   | Audit findings listing |
 | GET    | /api/quality/audit-findings/history   |   ✓    |   ✓   | Audit findings time series |
+| GET    | /api/quality/complaint-rate           |   ✓    |   ✓   | Customer complaint-rate KPI value |
+| GET    | /api/quality/complaint-rate/history   |   ✓    |   ✓   | Complaint-rate time series |
+| GET    | /api/quality/complaints/list          |   ✓    |   ✓   | Customer complaints listing |
+| GET    | /api/finance/material-cost-ratio          |   ✓    |   ✓   | Material-cost-ratio KPI value |
+| GET    | /api/finance/material-cost-ratio/history  |   ✓    |   ✓   | Material-cost-ratio time series |
+| GET    | /api/finance/material-cost-ratio/list     |   ✓    |   ✓   | Material-cost-ratio row listing |
+| GET    | /api/finance/personnel-cost-ratio         |   ✓    |   ✓   | Personnel-cost-ratio KPI value |
+| GET    | /api/finance/personnel-cost-ratio/history |   ✓    |   ✓   | Personnel-cost-ratio time series |
+| GET    | /api/finance/personnel-cost-ratio/list    |   ✓    |   ✓   | Personnel-cost-ratio row listing |
+| GET    | /api/procurement/otd                  |   ✓    |   ✓   | On-time-delivery (supplier) KPI value |
+| GET    | /api/procurement/otd/history          |   ✓    |   ✓   | OTD time series |
+| GET    | /api/procurement/otd/list             |   ✓    |   ✓   | OTD row listing |
+| GET    | /api/production/verzug                 |   ✓    |   ✓   | Production delay (Verzug) KPI value |
+| GET    | /api/production/verzug/history         |   ✓    |   ✓   | Verzug time series |
+| GET    | /api/production/verzug/list            |   ✓    |   ✓   | Verzug per-order listing |
+| GET    | /api/production/verzug/overdue         |   ✓    |   ✓   | Currently overdue orders |
 | GET    | /api/settings                         |   ✓    |   ✓   | Read settings (colors, app name) |
 | GET    | /api/settings/personio-options        |   ✓    |   ✓   | Live Personio metadata — read-only |
 | GET    | /api/settings/logo                    |   ✓    |   ✓   | Serves raw logo bytes |
@@ -94,6 +110,58 @@ Router-level `require_admin` on the whole `/api/sensors` router — Viewers get 
 | POST   | /api/sensors/poll-now             |   —    |   ✓   | Trigger immediate poll |
 | POST   | /api/sensors/snmp-probe           |   —    |   ✓   | SNMP single-OID probe |
 | POST   | /api/sensors/snmp-walk            |   —    |   ✓   | SNMP walk |
+
+### ATR — parts & template (`/api/atr`, Admin-only)
+
+Router-level `require_admin` on the whole `/api/atr` router (`backend/app/routers/atr.py`) — Viewers get 403 even on GETs. ATR = Abnahme-/Teile-Reporting; the parts catalog is populated via the Excel preview→commit import flow.
+
+| Method | Path                          | Viewer | Admin | Notes |
+|--------|-------------------------------|:------:|:-----:|-------|
+| GET    | /api/atr/parts                |   —    |   ✓   | List parts catalog |
+| GET    | /api/atr/parts/{part_id}      |   —    |   ✓   | Single part |
+| POST   | /api/atr/parts                |   —    |   ✓   | Create part (201) |
+| PATCH  | /api/atr/parts/{part_id}      |   —    |   ✓   | Update part |
+| DELETE | /api/atr/parts/{part_id}      |   —    |   ✓   | Delete part (204) |
+| GET    | /api/atr/template             |   —    |   ✓   | Read PDF/report template |
+| PATCH  | /api/atr/template             |   —    |   ✓   | Update template |
+| POST   | /api/atr/template/structure   |   —    |   ✓   | Update template structure |
+| POST   | /api/atr/import/preview       |   —    |   ✓   | Excel import — dry-run preview |
+| POST   | /api/atr/import/commit        |   —    |   ✓   | Excel import — commit rows |
+
+### ATR — deliveries & fileserver (`/api/atr/deliveries`, `/api/atr/fileserver`, Admin-only)
+
+Router-level `require_admin` on both (`backend/app/routers/atr_delivery.py`; fileserver router lives in `settings.py`). Delivery PDF generation = openpyxl body + LibreOffice UNO print-header.
+
+| Method | Path                                            | Viewer | Admin | Notes |
+|--------|-------------------------------------------------|:------:|:-----:|-------|
+| POST   | /api/atr/deliveries/upload                      |   —    |   ✓   | Upload delivery source file (201) |
+| GET    | /api/atr/deliveries/input-files                 |   —    |   ✓   | List SMB input files |
+| POST   | /api/atr/deliveries/input-files/process         |   —    |   ✓   | Process an SMB input file (201) |
+| GET    | /api/atr/deliveries                             |   —    |   ✓   | List deliveries |
+| GET    | /api/atr/deliveries/{delivery_id}               |   —    |   ✓   | Single delivery |
+| PATCH  | /api/atr/deliveries/{delivery_id}               |   —    |   ✓   | Update delivery |
+| PATCH  | /api/atr/deliveries/{delivery_id}/items/{item_id} |  —   |   ✓   | Update delivery line item |
+| POST   | /api/atr/deliveries/{delivery_id}/generate      |   —    |   ✓   | Generate PDF/manifest |
+| GET    | /api/atr/deliveries/{delivery_id}/files/{kind}  |   —    |   ✓   | Download a generated file |
+| POST   | /api/atr/fileserver/test                        |   —    |   ✓   | Test SMB fileserver connection |
+
+### Fair — projects & balloons (`/api/fair`, Admin-only)
+
+Router-level `require_admin` on the whole `/api/fair` router (`backend/app/routers/fair.py`).
+
+| Method | Path                                          | Viewer | Admin | Notes |
+|--------|-----------------------------------------------|:------:|:-----:|-------|
+| POST   | /api/fair/projects                            |   —    |   ✓   | Create project (201) |
+| GET    | /api/fair/projects                            |   —    |   ✓   | List projects |
+| GET    | /api/fair/projects/{project_id}               |   —    |   ✓   | Project detail |
+| PATCH  | /api/fair/projects/{project_id}               |   —    |   ✓   | Update project |
+| DELETE | /api/fair/projects/{project_id}               |   —    |   ✓   | Delete project (204) |
+| GET    | /api/fair/projects/{project_id}/file          |   —    |   ✓   | Download project file |
+| POST   | /api/fair/projects/{project_id}/balloons      |   —    |   ✓   | Create balloon (201) |
+| POST   | /api/fair/projects/{project_id}/balloons/reorder | —   |   ✓   | Reorder balloons |
+| GET    | /api/fair/balloons/{balloon_id}               |   —    |   ✓   | Single balloon |
+| PATCH  | /api/fair/balloons/{balloon_id}               |   —    |   ✓   | Update balloon |
+| DELETE | /api/fair/balloons/{balloon_id}               |   —    |   ✓   | Delete balloon (204) |
 
 ### Signage — pairing (`/api/signage/pair`)
 
