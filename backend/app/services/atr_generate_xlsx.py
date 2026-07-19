@@ -66,6 +66,9 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
         ws["G1"] = delivery.po_number
     if delivery.msn is not None:
         ws["G2"] = delivery.msn
+        # PO line middle segment "79 - <MSN> - 94": MSN left-padded to 4 digits
+        # (830 -> "0830"). Template ships a literal "0…" placeholder in J1.
+        ws["J1"] = str(delivery.msn).zfill(4)
     if delivery.ba_auftrag is not None:
         ws["D9"] = delivery.ba_auftrag
     if getattr(delivery, "weighing_date", None):
