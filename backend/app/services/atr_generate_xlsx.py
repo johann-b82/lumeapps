@@ -167,6 +167,12 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
+    # Symmetric L/R margins so the right-aligned print header (Doc-No / Date /
+    # Page) lines up with the right edge of the fit-to-width table box below.
+    # The template ships asymmetric margins (left > right), which pushes the
+    # header past the box. Horizontal fit depends only on the fixed A..N columns,
+    # so this alignment holds for every delivery regardless of page count.
+    ws.page_margins.right = ws.page_margins.left
     ws.page_setup.scale = None  # scale and fitToPage are mutually exclusive
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
 
