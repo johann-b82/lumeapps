@@ -17,41 +17,31 @@ import pytest
 from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
-from app.models import SalesRecord, UploadBatch
+from app.models import Revenue
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _seed(prefix: str, rows: list[tuple[date, Decimal]]) -> int:
+async def _seed(prefix: str, rows: list[tuple[date, Decimal]]) -> str:
+    """Seed revenue rows for the chart, which buckets ``revenues`` by date.
+
+    Since v1.53 ``/api/kpis/chart`` (and the contract test's summary
+    ``previous_period.total_revenue``) both read the ``revenues`` table, so
+    each (datum, wert) entry becomes one Revenue row. Returns the id prefix.
+    """
     async with AsyncSessionLocal() as session:
-        batch = UploadBatch(
-            filename=f"{prefix}.csv",
-            uploaded_at=datetime.now(timezone.utc),
-            row_count=len(rows),
-            error_count=0,
-            status="success",
-        )
-        session.add(batch)
-        await session.flush()
+        now = datetime.now(timezone.utc)
         for idx, (d, v) in enumerate(rows):
             session.add(
-                SalesRecord(
-                    upload_batch_id=batch.id,
-                    order_number=f"{prefix}-{idx}",
-                    order_date=d,
-                    total_value=v,
-                )
+                Revenue(vorgang_nr=f"{prefix}-{idx}", typ="RG", datum=d, wert_eur=v, imported_at=now)
             )
         await session.commit()
-        return batch.id
+    return prefix
 
 
-async def _cleanup(batch_id: int) -> None:
+async def _cleanup(prefix: str) -> None:
     async with AsyncSessionLocal() as session:
-        await session.execute(
-            delete(SalesRecord).where(SalesRecord.upload_batch_id == batch_id)
-        )
-        await session.execute(delete(UploadBatch).where(UploadBatch.id == batch_id))
+        await session.execute(delete(Revenue).where(Revenue.vorgang_nr.like(f"{prefix}-%")))
         await session.commit()
 
 

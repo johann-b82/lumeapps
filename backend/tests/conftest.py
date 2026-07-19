@@ -12,6 +12,10 @@ os.environ.setdefault("DIRECTUS_SECRET", "test-directus-secret-phase-27")
 os.environ.setdefault("DIRECTUS_ADMINISTRATOR_ROLE_UUID", "c1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 os.environ.setdefault("DIRECTUS_VIEWER_ROLE_UUID", "a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 os.environ.setdefault("SIGNAGE_DEVICE_JWT_SECRET", "test-signage-device-jwt-secret-phase-42")
+# Force NullPool in the async engine so no asyncpg connection is shared across
+# pytest-asyncio's per-test event loops (avoids "attached to a different loop").
+# Must be set before app.database is imported (engine is built at import time).
+os.environ.setdefault("DB_DISABLE_POOL", "1")
 # Defaults required for app.database module import during test collection
 os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
