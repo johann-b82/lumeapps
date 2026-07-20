@@ -1226,6 +1226,5 @@
   "audit.trail.action.delete": "Gelöscht",
   "audit.trail.action.status_change": "Statuswechsel",
   "audit.trail.action.phase_skip": "Phase übersprungen",
-  "launcher.section.quality": "Qualität",
-  "quality.tile.kpis": "Qualitäts-KPIs"
+  "launcher.section.quality": "Qualität"
 }

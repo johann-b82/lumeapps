@@ -1,16 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { ClipboardCheck, LineChart } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 
 /**
  * Qualität hub (/quality/home). Landing page reached from the "Qualität"
  * launcher tile; groups the quality sub-features as tiles. Mirrors
  * ProductionHomePage.
  *
- * Two tiles today: the Audit-Modul (v1.84) and a shortcut to the existing
- * Qualitäts-KPI dashboard at /quality. The KPI dashboard also remains reachable
- * from the KPI-Dashboard hub — this is a second entry point, not a move, so the
- * KPI route keeps its own (viewer-accessible) gating.
+ * Phase 1 starts with the Audit-Modul (v1.84); more tiles dock here later. The
+ * Qualitäts-KPI dashboard at /quality is deliberately NOT linked here — KPIs
+ * live behind the KPI-Dashboard hub, same as Produktion keeps its Verzug KPI
+ * out of the Produktion hub.
  */
 export function QualityHomePage() {
   const { t } = useTranslation();
@@ -40,26 +40,6 @@ export function QualityHomePage() {
           </button>
           <span className="text-xs text-muted-foreground text-center">
             {t("audit.tile")}
-          </span>
-        </div>
-
-        {/* Qualitäts-KPI dashboard tile → /quality */}
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLocation("/quality")}
-            aria-label={t("quality.tile.kpis")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-rose-500 to-red-700
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <LineChart className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </button>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("quality.tile.kpis")}
           </span>
         </div>
       </div>

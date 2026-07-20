@@ -43,14 +43,15 @@ deaktiviert (`active = false`), nicht gelöscht; der FK ist `ON DELETE RESTRICT`
 ### Frontend
 
 Erreichbar über die **Qualität-Kachel** auf der Hauptseite → `/quality/home`
-(Hub, analog zum Produktion-Hub). Der Hub enthält zwei Kacheln: *Audits* und
-eine Verknüpfung auf das bestehende Qualitäts-KPI-Dashboard.
+(Hub, analog zum Produktion-Hub).
 
-- `/quality/home` — Qualität-Hub (admin-only)
+- `/quality/home` — Qualität-Hub (admin-only), aktuell mit der Audits-Kachel
 - `/quality/audit` — Auditübersicht (admin-only)
 - `/quality/audit/:id` — Detail mit Phasen-Checkliste, Norm-Bezug und Historie
-- `/quality` — Qualitäts-KPI-Dashboard, unverändert und weiterhin auch über den
-  KPI-Dashboard-Hub erreichbar (eigene, viewer-taugliche Gating-Regel)
+
+Das Qualitäts-KPI-Dashboard (`/quality`) ist bewusst **nicht** im Hub verlinkt:
+KPIs bleiben hinter dem KPI-Dashboard-Hub, genau wie Produktion seine
+Verzug-KPI aus dem Produktion-Hub heraushält.
 
 Deutsch und Englisch vollständig gepflegt (`de.json` / `en.json`, Parität
 CI-geprüft).
