@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 
@@ -182,6 +182,28 @@ export function LauncherPage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">
               {t("launcher.tile.fair")}
+            </span>
+          </div>
+        </AdminOnly>
+
+        {/* v1.84: Audit-Modul (Auditplanung + Phasen-Checkliste) tile — admin-only. */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/audit")}
+              aria-label={t("audit.tile")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-indigo-500 to-violet-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ClipboardCheck className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("audit.tile")}
             </span>
           </div>
         </AdminOnly>

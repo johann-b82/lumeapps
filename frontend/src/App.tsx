@@ -43,6 +43,8 @@ import { AtrPartsPage } from "./pages/AtrPartsPage";
 import { AtrImportPage } from "./pages/AtrImportPage";
 import { AtrTemplatePage } from "./pages/AtrTemplatePage";
 import { AtrDeliveryReviewPage } from "./pages/AtrDeliveryReviewPage";
+import { AuditsPage } from "./pages/AuditsPage";
+import { AuditDetailPage } from "./pages/AuditDetailPage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
@@ -103,6 +105,15 @@ function AppShell() {
             <AdminOnly><ProductionHomePage /></AdminOnly>
           </Route>
           <Route path="/production" component={ProductionPage} />
+          {/* v1.84 Audit-Modul — /audit/:id (detail) MUST precede /audit (list).
+              Admin-only in Phase 1: the identity provider has only Admin/Viewer,
+              which is too coarse for the Auditor/Lead-Auditor/QM-Leitung split. */}
+          <Route path="/audit/:id">
+            <AdminOnly><AuditDetailPage /></AdminOnly>
+          </Route>
+          <Route path="/audit">
+            <AdminOnly><AuditsPage /></AdminOnly>
+          </Route>
           {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
               main bundle used by the signage /embed pages. */}

@@ -29,6 +29,16 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
   { pattern: "/sales", trail: [{ labelKey: "nav.sales", href: "/sales" }] },
   { pattern: "/hr", trail: [{ labelKey: "nav.hr", href: "/hr" }] },
   { pattern: "/procurement", trail: [{ labelKey: "nav.procurement", href: "/procurement" }] },
+  // v1.84 Audit-Modul — deeper pattern first so the audit detail collapses to
+  // the "Audits" leaf (D-02).
+  {
+    pattern: "/audit/:id",
+    trail: [{ labelKey: "audit.tile", href: "/audit" }],
+  },
+  {
+    pattern: "/audit",
+    trail: [{ labelKey: "audit.tile", href: "/audit" }],
+  },
   // Produktion hub + Maschinen-Wartung — deeper patterns first so the
   // machine detail collapses to the "Wartung" leaf (D-02).
   {

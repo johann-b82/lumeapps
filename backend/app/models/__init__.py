@@ -63,6 +63,17 @@ from app.models.maintenance import (  # noqa: F401
     MaintenanceFile,
 )
 
+# Audit-Modul models (v1.84 — internal/external audit management)
+from app.models.audit import (  # noqa: F401
+    Audit,
+    AuditNormLink,
+    AuditNormReference,
+    AuditPhase,
+    AuditPhaseTemplate,
+    AuditPhaseTemplateStep,
+    AuditTrailEntry,
+)
+
 __all__ = [
     "Base",
     # Legacy
@@ -95,4 +106,7 @@ __all__ = [
     "FairProject", "FairBalloon",
     # Maschinen-Wartung
     "Machine", "MaintenanceTask", "MaintenanceFile",
+    # Audit-Modul
+    "AuditNormReference", "AuditPhaseTemplate", "AuditPhaseTemplateStep",
+    "Audit", "AuditNormLink", "AuditPhase", "AuditTrailEntry",
 ]
