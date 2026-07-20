@@ -186,13 +186,15 @@ export function LauncherPage() {
           </div>
         </AdminOnly>
 
-        {/* v1.84: Audit-Modul (Auditplanung + Phasen-Checkliste) tile — admin-only. */}
+        {/* v1.84: Qualität-Hub tile → /quality/home. Opens the Qualität
+            sub-menu (Audits + Qualitäts-KPIs), mirroring the Produktion tile.
+            Admin-only because the Audit-Modul behind it is admin-only. */}
         <AdminOnly>
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"
-              onClick={() => setLocation("/audit")}
-              aria-label={t("audit.tile")}
+              onClick={() => setLocation("/quality/home")}
+              aria-label={t("launcher.tile.quality")}
               className="w-[120px] h-[120px] rounded-2xl
                          bg-gradient-to-br from-indigo-500 to-violet-700
                          shadow-md hover:shadow-xl hover:scale-[1.03]
@@ -203,7 +205,7 @@ export function LauncherPage() {
               <ClipboardCheck className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
             </button>
             <span className="text-xs text-muted-foreground text-center">
-              {t("audit.tile")}
+              {t("launcher.tile.quality")}
             </span>
           </div>
         </AdminOnly>

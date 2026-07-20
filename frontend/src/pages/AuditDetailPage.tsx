@@ -42,7 +42,7 @@ const trailKey = (id: string) => ["audit", "trail", id] as const;
 export function AuditDetailPage() {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const [, params] = useRoute("/audit/:id");
+  const [, params] = useRoute("/quality/audit/:id");
   const auditId = params?.id ?? "";
 
   const audit = useQuery({
@@ -97,7 +97,7 @@ export function AuditDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-6">
-      <Link href="/audit" className="text-sm text-muted-foreground hover:underline">
+      <Link href="/quality/audit" className="text-sm text-muted-foreground hover:underline">
         ← {t("audit.detail.back")}
       </Link>
 

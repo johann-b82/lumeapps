@@ -42,9 +42,18 @@ deaktiviert (`active = false`), nicht gelöscht; der FK ist `ON DELETE RESTRICT`
 
 ### Frontend
 
-`/audit` (Übersicht) und `/audit/:id` (Detail mit Phasen-Checkliste, Norm-Bezug
-und Historie). Kachel auf der Hauptseite, admin-only. Deutsch und Englisch
-vollständig gepflegt (`de.json` / `en.json`, Parität CI-geprüft).
+Erreichbar über die **Qualität-Kachel** auf der Hauptseite → `/quality/home`
+(Hub, analog zum Produktion-Hub). Der Hub enthält zwei Kacheln: *Audits* und
+eine Verknüpfung auf das bestehende Qualitäts-KPI-Dashboard.
+
+- `/quality/home` — Qualität-Hub (admin-only)
+- `/quality/audit` — Auditübersicht (admin-only)
+- `/quality/audit/:id` — Detail mit Phasen-Checkliste, Norm-Bezug und Historie
+- `/quality` — Qualitäts-KPI-Dashboard, unverändert und weiterhin auch über den
+  KPI-Dashboard-Hub erreichbar (eigene, viewer-taugliche Gating-Regel)
+
+Deutsch und Englisch vollständig gepflegt (`de.json` / `en.json`, Parität
+CI-geprüft).
 
 ---
 

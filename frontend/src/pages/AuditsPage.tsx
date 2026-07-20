@@ -84,7 +84,7 @@ export function AuditsPage() {
       setDraft(EMPTY);
       setShowForm(false);
       qc.invalidateQueries({ queryKey: ["audit", "audits"] });
-      setLocation(`/audit/${created.id}`);
+      setLocation(`/quality/audit/${created.id}`);
     },
     onError: (e) => toast.error(String(e)),
   });
@@ -286,7 +286,7 @@ export function AuditsPage() {
         emptyText={t("audit.empty")}
         search={{ value: search, onChange: setSearch }}
         initialSort={{ key: "planned_start", dir: "desc" }}
-        onRowClick={(row) => setLocation(`/audit/${row.id}`)}
+        onRowClick={(row) => setLocation(`/quality/audit/${row.id}`)}
         minWidth={1000}
         card={false}
       />

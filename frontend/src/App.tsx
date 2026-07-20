@@ -45,6 +45,7 @@ import { AtrTemplatePage } from "./pages/AtrTemplatePage";
 import { AtrDeliveryReviewPage } from "./pages/AtrDeliveryReviewPage";
 import { AuditsPage } from "./pages/AuditsPage";
 import { AuditDetailPage } from "./pages/AuditDetailPage";
+import { QualityHomePage } from "./pages/QualityHomePage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
@@ -90,6 +91,19 @@ function AppShell() {
           <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />
           <Route path="/hr/onboarding" component={OnboardingPage} />
+          {/* Qualität hub + Audit-Modul (v1.84). Specific routes precede
+              /quality; the :id detail precedes its list (wouter first-match).
+              The Qualitäts-KPI dashboard stays at /quality and keeps its own
+              (viewer-accessible) gating. */}
+          <Route path="/quality/audit/:id">
+            <AdminOnly><AuditDetailPage /></AdminOnly>
+          </Route>
+          <Route path="/quality/audit">
+            <AdminOnly><AuditsPage /></AdminOnly>
+          </Route>
+          <Route path="/quality/home">
+            <AdminOnly><QualityHomePage /></AdminOnly>
+          </Route>
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
           {/* Produktion hub + Maschinen-Wartung (admin-only). Specific routes
@@ -105,15 +119,6 @@ function AppShell() {
             <AdminOnly><ProductionHomePage /></AdminOnly>
           </Route>
           <Route path="/production" component={ProductionPage} />
-          {/* v1.84 Audit-Modul — /audit/:id (detail) MUST precede /audit (list).
-              Admin-only in Phase 1: the identity provider has only Admin/Viewer,
-              which is too coarse for the Auditor/Lead-Auditor/QM-Leitung split. */}
-          <Route path="/audit/:id">
-            <AdminOnly><AuditDetailPage /></AdminOnly>
-          </Route>
-          <Route path="/audit">
-            <AdminOnly><AuditsPage /></AdminOnly>
-          </Route>
           {/* v1.73 FAIR — /fair/:id (editor) MUST precede /fair (list). Admin-only.
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
               main bundle used by the signage /embed pages. */}
