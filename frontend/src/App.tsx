@@ -43,6 +43,9 @@ import { AtrPartsPage } from "./pages/AtrPartsPage";
 import { AtrImportPage } from "./pages/AtrImportPage";
 import { AtrTemplatePage } from "./pages/AtrTemplatePage";
 import { AtrDeliveryReviewPage } from "./pages/AtrDeliveryReviewPage";
+import { AuditsPage } from "./pages/AuditsPage";
+import { AuditDetailPage } from "./pages/AuditDetailPage";
+import { QualityHomePage } from "./pages/QualityHomePage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
@@ -88,6 +91,19 @@ function AppShell() {
           <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />
           <Route path="/hr/onboarding" component={OnboardingPage} />
+          {/* Qualität hub + Audit-Modul (v1.84). Specific routes precede
+              /quality; the :id detail precedes its list (wouter first-match).
+              The Qualitäts-KPI dashboard stays at /quality and keeps its own
+              (viewer-accessible) gating. */}
+          <Route path="/quality/audit/:id">
+            <AdminOnly><AuditDetailPage /></AdminOnly>
+          </Route>
+          <Route path="/quality/audit">
+            <AdminOnly><AuditsPage /></AdminOnly>
+          </Route>
+          <Route path="/quality/home">
+            <AdminOnly><QualityHomePage /></AdminOnly>
+          </Route>
           <Route path="/quality" component={QualityPage} />
           <Route path="/procurement" component={ProcurementPage} />
           {/* Produktion hub + Maschinen-Wartung (admin-only). Specific routes
