@@ -6,9 +6,13 @@ from io import BytesIO
 from docx import Document
 from docx.shared import Pt
 
+from app.services.atr_format import normalize_po_pos
+
 
 def build_containerbeschriftung(delivery, items) -> bytes:
-    pos_list = sorted({(it.po_pos or "").strip() for it in items if (it.po_pos or "").strip()})
+    pos_list = sorted(
+        {p for it in items if (p := (normalize_po_pos(it.po_pos) or "").strip())}
+    )
     lines = [
         f"BA {delivery.ba_auftrag or ''}".rstrip(),
         f"PO {delivery.po_number or ''}".rstrip(),

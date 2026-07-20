@@ -21,6 +21,22 @@ A Dockerized multi-domain KPI platform with Sales and HR dashboards. Uploads tab
 - **Employee Filters** — Segmented toggle: with overtime / active / all
 - **Organigramm (org chart)** — Reporting hierarchy built entirely from synced Personio data (supervisor links live in the stored employee payload — no live API call). Rendered at `/hr/organigramm` as a collapsible tree of active employees (name / position / department); reached via the HR hub tile
 
+### Additional KPI Domains (v1.49+)
+Each domain uploads an ERP export, computes a KPI value + 12-month history + a drill-down list, and is Viewer-readable at `/api/<domain>`:
+- **Quality** (`/quality`) — Audit-findings and customer complaint-rate KPIs with configurable per-supplier targets (Sollwerte)
+- **Procurement** (`/procurement`) — Supplier on-time-delivery (OTD) computed from goods-receipt data
+- **Finance** (`/finance`) — Material-cost ratio and personnel-cost ratio, each with a configurable target reference line
+- **Production** (`/production`) — Order delay (Verzug) from a position-level `AswKpf_AUF` export; an order is *in Verzug* when its latest delivery-note date exceeds its target date, plus a live overdue-orders list
+
+### ATR — Weight-Acceptance Reports (v1.63+, Admin-only)
+- **Parts Catalog** — Populated via an Excel preview→commit import; editable per-part `PO Pos`, weight, drawing number, category
+- **Delivery Reports** — Parse a Lieferschein, match positions against the catalog, review, then generate the ATR **XLSX** (openpyxl) + **PDF** (LibreOffice UNO print-header) + container-label **DOCX**
+- **SMB Fileserver** — Optional drop-folder for input Lieferschein files
+- Admin-only end to end; lives entirely on the FastAPI compute side (no Directus CRUD)
+
+### Fair — Trade-Fair Balloon Layout (v1.73+, Admin-only)
+- Manage trade-fair projects, their balloon placements (create/reorder), and a per-project file attachment
+
 ### Settings
 - **Appearance** — App name, logo upload (SVG/PNG/JPG/WebP), 6 semantic color tokens (oklch) with live WCAG contrast badges
 - **Personio Integration** — Fernet-encrypted API credentials, configurable sync interval (manual/1h/6h/24h), auto-sync via APScheduler, credential test, on-demand refresh
@@ -256,6 +272,12 @@ kpi-light/
 | GET | `/api/hr/kpis/history` | HR KPI 12-month history for trend charts |
 | GET | `/api/hr/org-chart` | Active employees + supervisor id for the HR org chart (from synced Personio data; no live API call) |
 | GET | `/api/data/employees/overtime` | Per-employee total-hours / overtime roll-up over `?date_from&date_to` (compute-only; row data comes from Directus `personio_employees`, v1.22) |
+| GET | `/api/quality/*` | Audit-findings + complaint-rate KPI value / history / list (viewer-read, v1.49+) |
+| GET | `/api/procurement/otd*` | Supplier on-time-delivery KPI value / history / list (viewer-read, v1.60) |
+| GET | `/api/finance/*-cost-ratio*` | Material- and personnel-cost-ratio KPI value / history / list (viewer-read, v1.70) |
+| GET | `/api/production/verzug*` | Order-delay (Verzug) KPI value / history / list / overdue (viewer-read, v1.76) |
+| * | `/api/atr*` | Parts catalog, template, deliveries, fileserver — report generation (**admin-only**, v1.63+; full route list in `docs/api.md`) |
+| * | `/api/fair*` | Trade-fair projects + balloons (**admin-only**, v1.73+; full route list in `docs/api.md`) |
 | POST | `/api/sync` | Trigger Personio data sync |
 | POST | `/api/sync/test` | Test Personio credential validity |
 | GET | `/api/sync/meta` | Last sync status and counts |
