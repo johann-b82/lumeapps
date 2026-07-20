@@ -92,6 +92,31 @@ export function LauncherPage() {
           </div>
         </AdminOnly>
 
+        {/* v1.84: Qualitäts-Dashboard tile → /quality/home. Placed directly
+            after Produktion so the four dashboard tiles (KPI, HR, Produktion,
+            Qualität) sit together at the front of the grid. Opens the Qualität
+            sub-menu (Audits); admin-only because the Audit-Modul behind it is. */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/quality/home")}
+              aria-label={t("launcher.tile.quality")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-indigo-500 to-violet-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ClipboardCheck className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("launcher.tile.quality")}
+            </span>
+          </div>
+        </AdminOnly>
+
         {/* v1.82 — Quality / HR / Procurement / Finance / Production tiles
             removed from the launcher; the KPI-Dashboard tile above is
             now the single entry point, and users switch between
@@ -182,30 +207,6 @@ export function LauncherPage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">
               {t("launcher.tile.fair")}
-            </span>
-          </div>
-        </AdminOnly>
-
-        {/* v1.84: Qualität-Hub tile → /quality/home. Opens the Qualität
-            sub-menu (Audits + Qualitäts-KPIs), mirroring the Produktion tile.
-            Admin-only because the Audit-Modul behind it is admin-only. */}
-        <AdminOnly>
-          <div className="flex flex-col items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocation("/quality/home")}
-              aria-label={t("launcher.tile.quality")}
-              className="w-[120px] h-[120px] rounded-2xl
-                         bg-gradient-to-br from-indigo-500 to-violet-700
-                         shadow-md hover:shadow-xl hover:scale-[1.03]
-                         flex items-center justify-center p-4
-                         cursor-pointer transition-all
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ClipboardCheck className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-            </button>
-            <span className="text-xs text-muted-foreground text-center">
-              {t("launcher.tile.quality")}
             </span>
           </div>
         </AdminOnly>
