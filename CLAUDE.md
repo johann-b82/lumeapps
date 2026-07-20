@@ -185,7 +185,7 @@ Agent-facing map. Read this before touching a domain so you know what already ex
 
 ### Runtime topology (Docker Compose)
 
-Caddy (`:80`) fronts everything on one origin. Upstreams: `frontend:5173` (SPA + public `/embed/*` kiosk routes), `api:8000` (FastAPI, all `/api/*` + the built `/player/*` bundle), `directus:8055` (`/directus/*`, subpath stripped), `paperless:8000` (`/paperless/*`), `stirling:8080` (`/pdf/*`), `openproject:8080` (`/op/*`), plus `postgres:17`. The three tool apps (Paperless, Stirling, OpenProject) are gated by Caddy `forward_auth → /api/auth/forward`.
+Caddy (`:80`) fronts everything on one origin. Upstreams: `frontend:5173` (SPA + public `/embed/*` kiosk routes), `api:8000` (FastAPI, all `/api/*` + the built `/player/*` bundle), `directus:8055` (`/directus/*`, subpath stripped), plus `postgres:17`. (The Paperless/Stirling/OpenProject tool apps and their `/paperless`·`/pdf`·`/op` Caddy `forward_auth` gate were removed in v1.84; `/api/auth/forward` is retained but currently unused.)
 
 ### Codebase layout
 
@@ -211,7 +211,7 @@ Caddy (`:80`) fronts everything on one origin. Upstreams: `frontend:5173` (SPA +
 | ATR | `atr.py`, `atr_delivery.py`, fileserver router in `settings.py` | `/api/atr*` | Admin-only |
 | Fair | `fair.py` | `/api/fair` | Admin-only |
 | World Cup | `worldcup.py` | `/api/worldcup` | embed public / config admin |
-| Auth forward | `auth_forward.py` | `/api/auth/forward` | public (IS the gate for tool apps) |
+| Auth forward | `auth_forward.py` | `/api/auth/forward` | public (was the gate for the removed tool apps; retained, unused) |
 
 ### Load-bearing invariants — do NOT break these
 
