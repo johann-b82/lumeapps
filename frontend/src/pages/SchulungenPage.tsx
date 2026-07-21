@@ -27,69 +27,9 @@ import {
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
+import { Klappbar, Th } from "@/components/hr/Klappbar";
 
 type KatalogZeile = Schulung;
-
-/** Einklappbarer Abschnitt mit Kopfzeile, Zähler-Badge und Chevron. */
-function Klappbar({
-  titel,
-  anzahl,
-  icon,
-  offenStart = true,
-  children,
-}: {
-  titel: string;
-  anzahl: number;
-  icon?: React.ReactNode;
-  offenStart?: boolean;
-  children: React.ReactNode;
-}) {
-  const [offen, setOffen] = useState(offenStart);
-  return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOffen((v) => !v)}
-        aria-expanded={offen}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors
-                   hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2
-                   focus-visible:ring-ring focus-visible:ring-inset"
-      >
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
-            offen ? "" : "-rotate-90"
-          }`}
-          aria-hidden="true"
-        />
-        {icon}
-        <span className="font-medium">{titel}</span>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
-          {anzahl}
-        </span>
-      </button>
-      {offen && <div className="overflow-x-auto border-t">{children}</div>}
-    </div>
-  );
-}
-
-/** Kopfzeile im einheitlichen, dezenten Stil. */
-function Th({
-  children,
-  rechts,
-}: {
-  children: React.ReactNode;
-  rechts?: boolean;
-}) {
-  return (
-    <th
-      className={`px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase ${
-        rechts ? "text-right" : "text-left"
-      }`}
-    >
-      {children}
-    </th>
-  );
-}
 
 /** Schulungen eines Bereichs. */
 function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
