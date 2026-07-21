@@ -30,6 +30,7 @@ from app.routers.fair import router as fair_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.email import router as email_router
 from app.routers.audit import router as audit_router
+from app.routers.schulungen import router as schulungen_router
 from app.scheduler import lifespan
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
@@ -60,6 +61,7 @@ app.include_router(fair_router)
 app.include_router(maintenance_router)
 app.include_router(email_router)
 app.include_router(audit_router)
+app.include_router(schulungen_router)
 
 
 # ---------------------------------------------------------------------------
