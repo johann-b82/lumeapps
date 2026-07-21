@@ -10,7 +10,7 @@ hochgeladene .xlsx serverseitig ein; clause 3 (multi-row atomic compute) — die
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -270,6 +270,71 @@ def _status(faellig_am: date | None, heute: date) -> str:
     if (faellig_am - heute).days <= BALD_FAELLIG_TAGE:
         return "bald"
     return "ok"
+
+
+class OffeneSchulungRead(BaseModel):
+    """Eine offene Fälligkeit — überfällig oder in den nächsten 3 Monaten."""
+
+    personalnummer: str
+    mitarbeiter_name: str
+    abteilung: str | None
+    abteilung_kuerzel: str | None
+    bereich: str
+    schulung: str
+    turnus: str | None
+    aktuell_datum: date | None
+    faellig_am: date
+    #: Negativ = überfällig seit n Tagen, positiv = fällig in n Tagen.
+    tage: int
+    status: str
+
+
+@router.get("/offen", response_model=list[OffeneSchulungRead])
+async def offene_schulungen(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[OffeneSchulungRead]:
+    """Alle Schulungen, die überfällig sind oder in den nächsten 3 Monaten fällig werden.
+
+    Ohne berechenbare Frist ("bei Bedarf", Turnus-Spannen) taucht nichts auf —
+    dort gibt es kein Datum, an dem etwas fällig wäre.
+    """
+    heute = date.today()
+    grenze = heute + timedelta(days=BALD_FAELLIG_TAGE)
+
+    zeilen = (
+        await db.execute(
+            select(SchulungTeilnahme, SchulungKatalog)
+            .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
+            .where(
+                SchulungTeilnahme.naechste_faellig_am.isnot(None),
+                SchulungTeilnahme.naechste_faellig_am <= grenze,
+            )
+        )
+    ).all()
+
+    abteilungen: dict[int, str | None] = {
+        e.id: e.department
+        for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    }
+
+    ergebnis = [
+        OffeneSchulungRead(
+            personalnummer=t.personalnummer,
+            mitarbeiter_name=t.mitarbeiter_name or f"#{t.personalnummer}",
+            abteilung=abteilungen.get(t.employee_id or -1),
+            abteilung_kuerzel=t.abteilung_kuerzel,
+            bereich=k.bereich,
+            schulung=k.name,
+            turnus=k.turnus,
+            aktuell_datum=t.aktuell_datum,
+            faellig_am=t.naechste_faellig_am,
+            tage=(t.naechste_faellig_am - heute).days,
+            status=_status(t.naechste_faellig_am, heute),
+        )
+        for t, k in zeilen
+    ]
+    # Dringendstes zuerst.
+    return sorted(ergebnis, key=lambda o: (o.faellig_am, o.mitarbeiter_name.lower()))
 
 
 @router.get("/mitarbeiter", response_model=list[MitarbeiterRead])

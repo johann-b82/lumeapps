@@ -14,6 +14,7 @@ import {
   fetchAbteilungen,
   fetchMitarbeiter,
   fetchMitarbeiterSchulungen,
+  fetchOffeneSchulungen,
   fetchPflichtMatrix,
   fetchSchulungen,
   schulungImportCommit,
@@ -125,6 +126,109 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
         </tbody>
       </table>
     </Klappbar>
+  );
+}
+
+/** Offene Schulungen: überfällig oder in den nächsten 3 Monaten fällig. */
+function OffenePanel() {
+  const { t } = useTranslation();
+  const [nurUeberfaellig, setNurUeberfaellig] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: hrKpiKeys.schulungOffen(),
+    queryFn: fetchOffeneSchulungen,
+  });
+
+  const gezeigt = useMemo(
+    () => (nurUeberfaellig ? (data ?? []).filter((o) => o.status === "ueberfaellig") : data ?? []),
+    [data, nurUeberfaellig],
+  );
+  const ueberfaellig = (data ?? []).filter((o) => o.status === "ueberfaellig").length;
+  const bald = (data ?? []).length - ueberfaellig;
+
+  if (isLoading) {
+    return (
+      <div className="mb-6 flex h-24 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+      </div>
+    );
+  }
+  if (!data || data.length === 0) return null;
+
+  return (
+    <section className="mb-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-medium">
+          <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />
+          {t("schulungen.offen.title")}
+        </h2>
+        <div className="flex items-center gap-3">
+          <span className="rounded-md bg-destructive/15 px-2 py-0.5 text-xs text-destructive">
+            {t("schulungen.offen.ueberfaellig", { count: ueberfaellig })}
+          </span>
+          <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+            {t("schulungen.offen.bald", { count: bald })}
+          </span>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={nurUeberfaellig}
+              onChange={(e) => setNurUeberfaellig(e.target.checked)}
+              className="h-3.5 w-3.5 accent-primary"
+            />
+            {t("schulungen.offen.filter")}
+          </label>
+        </div>
+      </div>
+
+      <div className="max-h-[26rem] overflow-auto rounded-xl border bg-card shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b bg-muted/60 backdrop-blur">
+              <Th>{t("schulungen.mitarbeiter.name")}</Th>
+              <Th>{t("schulungen.abteilungen.abteilung")}</Th>
+              <Th>{t("schulungen.katalog.name")}</Th>
+              <Th>{t("schulungen.mitarbeiter.faelligAm")}</Th>
+              <Th rechts>{t("schulungen.offen.frist")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {gezeigt.map((o) => (
+              <tr
+                key={`${o.personalnummer}-${o.schulung}`}
+                className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
+              >
+                <td className="px-4 py-1.5 whitespace-nowrap">
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {o.personalnummer}
+                  </span>{" "}
+                  {o.mitarbeiter_name}
+                </td>
+                <td className="px-4 py-1.5 whitespace-nowrap text-muted-foreground">
+                  {o.abteilung_kuerzel ?? o.abteilung ?? "—"}
+                </td>
+                <td className="px-4 py-1.5">
+                  <span className="text-muted-foreground">{o.bereich}</span> · {o.schulung}
+                </td>
+                <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">
+                  {datum(o.faellig_am)}
+                </td>
+                <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                  {o.tage < 0 ? (
+                    <span className="rounded-md bg-destructive/15 px-2 py-0.5 text-xs text-destructive">
+                      {t("schulungen.offen.seit", { count: Math.abs(o.tage) })}
+                    </span>
+                  ) : (
+                    <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                      {t("schulungen.offen.in", { count: o.tage })}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -692,6 +796,9 @@ export function SchulungenPage() {
           />
         )}
       </section>
+
+      {/* Handlungsliste zuerst: was ist überfällig oder wird bald fällig. */}
+      <OffenePanel />
 
       {/* Anforderungsmatrix: Pflichtschulungen je Abteilung ankreuzen. */}
       <PflichtMatrixPanel schulungen={schulungen} />

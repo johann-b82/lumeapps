@@ -123,6 +123,26 @@ export function setzePflicht(eingabe: {
   });
 }
 
+export interface OffeneSchulung {
+  personalnummer: string;
+  mitarbeiter_name: string;
+  abteilung: string | null;
+  abteilung_kuerzel: string | null;
+  bereich: string;
+  schulung: string;
+  turnus: string | null;
+  aktuell_datum: string | null;
+  faellig_am: string;
+  /** Negativ = überfällig seit n Tagen, positiv = fällig in n Tagen. */
+  tage: number;
+  status: SchulungStatus;
+}
+
+/** Überfällig oder in den nächsten 3 Monaten fällig, dringendstes zuerst. */
+export function fetchOffeneSchulungen(): Promise<OffeneSchulung[]> {
+  return apiClient<OffeneSchulung[]>("/api/hr/schulungen/offen");
+}
+
 export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
   return apiClient<MitarbeiterZeile[]>("/api/hr/schulungen/mitarbeiter");
 }

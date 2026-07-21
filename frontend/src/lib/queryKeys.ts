@@ -50,6 +50,7 @@ export const hrKpiKeys = {
   schulungen: () => ["hr", "schulungen"] as const,
   schulungAbteilungen: () => ["hr", "schulungen", "abteilungen"] as const,
   schulungPflicht: (ebene: string) => ["hr", "schulungen", "pflicht", ebene] as const,
+  schulungOffen: () => ["hr", "schulungen", "offen"] as const,
   schulungMitarbeiter: () => ["hr", "schulungen", "mitarbeiter"] as const,
   schulungMitarbeiterDetail: (persnr: string) =>
     ["hr", "schulungen", "mitarbeiter", persnr] as const,
