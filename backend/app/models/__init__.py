@@ -75,6 +75,13 @@ from app.models.audit import (  # noqa: F401
     AuditTrailEntry,
 )
 
+from app.models.schulung import (  # noqa: F401
+    SchulungImport,
+    SchulungKatalog,
+    SchulungPflicht,
+    SchulungTeilnahme,
+)
+
 __all__ = [
     "Base",
     # Legacy
@@ -110,4 +117,6 @@ __all__ = [
     # Audit-Modul
     "AuditNormReference", "AuditPhaseTemplate", "AuditPhaseTemplateStep",
     "Audit", "AuditNormLink", "AuditCategoryLink", "AuditPhase", "AuditTrailEntry",
+    # Schulungen
+    "SchulungKatalog", "SchulungImport", "SchulungTeilnahme", "SchulungPflicht",
 ]
