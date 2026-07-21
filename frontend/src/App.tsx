@@ -95,7 +95,10 @@ function AppShell() {
           <Route path="/hr/schulungen">
             <AdminOnly><SchulungenPage /></AdminOnly>
           </Route>
-          <Route path="/hr/onboarding" component={OnboardingPage} />
+          {/* Onboarding: der Backend-Router ist komplett admin-gated. */}
+          <Route path="/hr/onboarding">
+            <AdminOnly><OnboardingPage /></AdminOnly>
+          </Route>
           {/* Qualität hub + Audit-Modul (v1.84). Specific routes precede
               /quality; the :id detail precedes its list (wouter first-match).
               The Qualitäts-KPI dashboard stays at /quality and keeps its own

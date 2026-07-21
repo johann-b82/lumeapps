@@ -80,6 +80,26 @@ class SchulungPflicht(Base):
     abteilung: Mapped[str] = mapped_column(String(80), nullable=False)
 
 
+class SchulungRolle(Base):
+    """Zuordnung Personio-Position → Abteilungskürzel.
+
+    Brücke für Neueintritte: Personio liefert nur die grobe Abteilung, die
+    Anforderungsmatrix arbeitet zusätzlich auf den feinen Excel-Kürzeln.
+    Gematcht wird auf ``position_norm`` (klein, Whitespace zusammengefasst),
+    weil die Positionen in Personio uneinheitlich geschrieben sind.
+    """
+
+    __tablename__ = "schulung_rolle"
+    __table_args__ = (
+        UniqueConstraint("position_norm", name="uq_schulung_rolle_position"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    position: Mapped[str] = mapped_column(Text, nullable=False)
+    position_norm: Mapped[str] = mapped_column(String(200), nullable=False)
+    abteilung_kuerzel: Mapped[str] = mapped_column(String(30), nullable=False)
+
+
 class SchulungImport(Base):
     """Protokoll eines Excel-Imports — je Lauf eine Zeile."""
 
@@ -107,11 +127,8 @@ class SchulungTeilnahme(Base):
     """
 
     __tablename__ = "schulung_teilnahme"
-    __table_args__ = (
-        UniqueConstraint(
-            "schulung_id", "personalnummer", name="uq_schulung_teilnahme_schulung_persnr"
-        ),
-    )
+    # Eindeutigkeit über zwei partielle Indizes (Migration v1_89), je einen pro
+    # Identitätsart — Personalnummer (Excel-Historie) bzw. Personio-ID.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     schulung_id: Mapped[int] = mapped_column(
@@ -120,7 +137,8 @@ class SchulungTeilnahme(Base):
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("personio_employees.id", ondelete="SET NULL"), nullable=True
     )
-    personalnummer: Mapped[str] = mapped_column(String(30), nullable=False)
+    #: Schlüssel der Excel-Historie; für rein aus Personio angelegte Zeilen NULL.
+    personalnummer: Mapped[str | None] = mapped_column(String(30), nullable=True)
     mitarbeiter_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Abteilungskürzel der Excel (NÄH, CUT, WVK …) — eigenes Schema, nicht
     #: identisch mit Personios ``department``.

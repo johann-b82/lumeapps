@@ -169,9 +169,8 @@ async def uebernehmen(
         eintrag.sort_order = s.sort_order
         await db.flush()
 
-        bestehende = {
-            t.personalnummer: t
-            for t in (
+        zeilen = (
+            (
                 await db.execute(
                     select(SchulungTeilnahme).where(
                         SchulungTeilnahme.schulung_id == eintrag.id
@@ -180,10 +179,18 @@ async def uebernehmen(
             )
             .scalars()
             .all()
-        }
+        )
+        # Zwei Zugriffswege, weil Zeilen aus dem Onboarding nur die Personio-ID
+        # tragen (keine Personalnummer). Ohne den zweiten Weg entstünde für
+        # dieselbe Person eine zweite Zeile.
+        nach_persnr = {z.personalnummer: z for z in zeilen if z.personalnummer}
+        nach_employee = {z.employee_id: z for z in zeilen if z.employee_id is not None}
 
         for t in s.teilnahmen:
-            ziel = bestehende.get(t.personalnummer)
+            emp_id = lookup.get(t.personalnummer)
+            ziel = nach_persnr.get(t.personalnummer) or (
+                nach_employee.get(emp_id) if emp_id is not None else None
+            )
             if ziel is None:
                 ziel = SchulungTeilnahme(
                     schulung_id=eintrag.id, personalnummer=t.personalnummer

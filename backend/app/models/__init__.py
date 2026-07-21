@@ -79,6 +79,7 @@ from app.models.schulung import (  # noqa: F401
     SchulungImport,
     SchulungKatalog,
     SchulungPflicht,
+    SchulungRolle,
     SchulungTeilnahme,
 )
 
@@ -118,5 +119,5 @@ __all__ = [
     "AuditNormReference", "AuditPhaseTemplate", "AuditPhaseTemplateStep",
     "Audit", "AuditNormLink", "AuditCategoryLink", "AuditPhase", "AuditTrailEntry",
     # Schulungen
-    "SchulungKatalog", "SchulungImport", "SchulungTeilnahme", "SchulungPflicht",
+    "SchulungKatalog", "SchulungImport", "SchulungTeilnahme", "SchulungPflicht", "SchulungRolle",
 ]
