@@ -103,7 +103,8 @@ export interface Audit {
   audit_number: string;
   title: string;
   audit_type: AuditType;
-  category: AuditCategory;
+  /** An audit can be several things at once (v1.85), e.g. Prozess + Produkt. */
+  categories: AuditCategory[];
   scope_label: string;
   objective: string;
   lead_auditor: string | null;
@@ -154,7 +155,7 @@ export interface AuditInput {
   audit_number: string;
   title: string;
   audit_type: AuditType;
-  category: AuditCategory;
+  categories: AuditCategory[];
   scope_label?: string;
   objective?: string;
   lead_auditor?: string | null;

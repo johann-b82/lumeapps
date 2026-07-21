@@ -21,6 +21,8 @@ bevor du das Modul als audit-sicher gegenüber einer Behörde darstellst.
 | Statusmodell | 8 Audit-Status, 4 Phasen-Status; Übergänge nur explizit und protokolliert |
 | Normmatrix | Editierbare Stammdaten (Regelwerk, Revision, Kapitel, Kurztext, Gültigkeit, `verified`) |
 | Änderungshistorie | Append-only Trail, eine Zeile je geändertem Feld (wer/wann/was/alt→neu) |
+| Kategorien | Mehrere je Audit (v1.85) — ein Audit ist oft Prozess- **und** Produktaudit |
+| Programm-Import | Excel-Auditprogramm einlesen (v1.85), idempotent, per CLI |
 
 ### Datenmodell
 
@@ -148,6 +150,44 @@ Datei-Anhänge je Phase, PDF-/Excel-Export, Fristen-Erinnerungen und Eskalation,
 Aufbewahrungsfristen.
 
 ---
+
+## Import des Auditprogramms (v1.85)
+
+`backend/app/services/audit_import_programme.py` liest die Matrix-Tabelle
+„Internes Auditprogramm 2025-2027" (Spalte = Audit, Zeile = Attribut) ein.
+CLI-Wrapper: `backend/scripts/import_audit_programme.py`.
+
+```bash
+# Dry-Run (schreibt in eine Transaktion und rollt zurück)
+docker compose run --rm --no-deps -v "<downloads>:/data:ro" api \
+  python scripts/import_audit_programme.py "/data/<datei>.xlsx"
+
+# Übernehmen
+… python scripts/import_audit_programme.py "/data/<datei>.xlsx" --commit
+```
+
+Zwei Eigenschaften sind bewusst so gebaut:
+
+**Idempotent.** Audits werden über `audit_number` erkannt, Normzeilen über
+(Regelwerk, Revision, Kapitel). Ein zweiter Lauf legt nichts an und meldet alles
+als übersprungen — ein abgebrochener Lauf lässt sich einfach wiederholen.
+
+**Setzt nie einen Status.** Alle Audits kommen als `geplant` herein, auch die im
+Programm bereits als durchgeführt vermerkten. Das Modul verlangt für einen
+Abschluss eine bewusste menschliche Entscheidung, und ein Massenimport ist keine
+solche. Ist-Termin und Ist-Auditor landen als Kommentar in der Phase
+„Audit durchgeführt", damit die Information vorliegt, wenn ein Mensch den Status
+setzt.
+
+Beim Import aus Version03 entstanden 21 Audits, 210 Phasen und 144 neue
+Normmatrix-Zeilen (9 vorhandene wiederverwendet). Alle neuen Normzeilen tragen
+`verified = false`.
+
+Bekannte Eigenheiten der Quelldatei, die der Import als Warnung meldet statt sie
+still zu korrigieren: Ziel-Termin `Oct 27` ist Freitext (übernommen als
+2027-10-01) und „Special Processes" hat keine Bereiche markiert. Nicht
+korrigiert wurden Tippfehler der Quelle („Manintenance", „Antinio") — sie stehen
+so im Auditprogramm.
 
 ## Tests
 

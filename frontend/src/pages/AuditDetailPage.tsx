@@ -107,7 +107,8 @@ export function AuditDetailPage() {
             {data.audit_number} — {data.title}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {t(`audit.type.${data.audit_type}`)} · {t(`audit.category.${data.category}`)}
+            {t(`audit.type.${data.audit_type}`)} ·{" "}
+            {data.categories.map((c) => t(`audit.category.${c}`)).join(" + ")}
             {data.scope_label && ` · ${data.scope_label}`}
             {data.lead_auditor && ` · ${data.lead_auditor}`}
           </p>

@@ -188,7 +188,9 @@ class AuditIn(BaseModel):
     audit_number: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=255)
     audit_type: AuditType
-    category: AuditCategory
+    # A set, not one value: an audit is often a Prozessaudit and a Produktaudit
+    # in the same session (v1.85).
+    categories: list[AuditCategory] = Field(min_length=1)
     scope_label: str = Field(default="", max_length=255)
     objective: str = ""
     lead_auditor: str | None = Field(default=None, max_length=255)
@@ -200,6 +202,13 @@ class AuditIn(BaseModel):
     # referenced: editing the template later must not rewrite a running audit.
     template_id: uuid.UUID | None = None
     norm_reference_ids: list[uuid.UUID] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _dedupe_categories(self) -> AuditIn:
+        # Order-insensitive: the set is what matters, and the DB has a
+        # unique(audit_id, category) constraint that duplicates would trip.
+        self.categories = sorted(set(self.categories))
+        return self
 
     @model_validator(mode="after")
     def _check_planned_range(self) -> AuditIn:
@@ -216,7 +225,7 @@ class AuditPatch(BaseModel):
     audit_number: str | None = Field(default=None, min_length=1, max_length=64)
     title: str | None = Field(default=None, min_length=1, max_length=255)
     audit_type: AuditType | None = None
-    category: AuditCategory | None = None
+    categories: list[AuditCategory] | None = Field(default=None, min_length=1)
     scope_label: str | None = Field(default=None, max_length=255)
     objective: str | None = None
     lead_auditor: str | None = Field(default=None, max_length=255)
@@ -266,7 +275,7 @@ class AuditOut(BaseModel):
     audit_number: str
     title: str
     audit_type: str
-    category: str
+    categories: list[str] = Field(default_factory=list)
     scope_label: str
     objective: str
     lead_auditor: str | None

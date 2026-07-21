@@ -22,7 +22,6 @@ import {
   AUDIT_STATUSES,
   AUDIT_TYPES,
   auditApi,
-  type AuditCategory,
   type AuditInput,
   type AuditListItem,
   type AuditType,
@@ -34,7 +33,7 @@ const EMPTY: AuditInput = {
   audit_number: "",
   title: "",
   audit_type: "intern",
-  category: "system",
+  categories: ["prozess"],
   scope_label: "",
   planned_start: "",
   planned_end: "",
@@ -111,10 +110,10 @@ export function AuditsPage() {
       cell: (row) => t(`audit.type.${row.audit_type}`),
     },
     {
-      key: "category",
+      key: "categories",
       header: t("audit.col.category"),
-      sortable: true,
-      cell: (row) => t(`audit.category.${row.category}`),
+      sortable: false,
+      cell: (row) => row.categories.map((c) => t(`audit.category.${c}`)).join(" + "),
     },
     { key: "scope_label", header: t("audit.col.scope"), sortable: true },
     { key: "planned_start", header: t("audit.col.plannedStart"), sortable: true },
@@ -225,22 +224,32 @@ export function AuditsPage() {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">{t("audit.col.category")}</span>
-              <select
-                className="border rounded px-2 py-1.5"
-                value={draft.category}
-                onChange={(e) =>
-                  setDraft({ ...draft, category: e.target.value as AuditCategory })
-                }
-              >
-                {AUDIT_CATEGORIES.map((s) => (
-                  <option key={s} value={s}>
-                    {t(`audit.category.${s}`)}
-                  </option>
+            {/* Multi-select: an audit is often a Prozess- and a Produktaudit in
+                the same session, so this is checkboxes rather than a dropdown. */}
+            <fieldset className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <legend className="text-muted-foreground mb-1">
+                {t("audit.col.category")}
+              </legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {AUDIT_CATEGORIES.map((c) => (
+                  <label key={c} className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={draft.categories.includes(c)}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          categories: e.target.checked
+                            ? [...draft.categories, c]
+                            : draft.categories.filter((x) => x !== c),
+                        })
+                      }
+                    />
+                    {t(`audit.category.${c}`)}
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </fieldset>
             {field("lead_auditor", t("audit.col.leadAuditor"))}
             {field("planned_start", t("audit.col.plannedStart"), "date")}
             {field("planned_end", t("audit.col.plannedEnd"), "date")}
@@ -268,7 +277,10 @@ export function AuditsPage() {
               type="button"
               className="border rounded px-3 py-1.5 text-sm bg-primary text-primary-foreground disabled:opacity-50"
               disabled={
-                !draft.audit_number.trim() || !draft.title.trim() || create.isPending
+                !draft.audit_number.trim() ||
+                !draft.title.trim() ||
+                draft.categories.length === 0 ||
+                create.isPending
               }
               onClick={() => create.mutate()}
             >
