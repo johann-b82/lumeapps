@@ -12,11 +12,14 @@ import {
 } from "lucide-react";
 import {
   fetchAbteilungen,
+  fetchMitarbeiter,
+  fetchMitarbeiterSchulungen,
   fetchSchulungen,
   schulungImportCommit,
   schulungImportPreview,
   type Schulung,
   type SchulungImportVorschau,
+  type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 
@@ -118,6 +121,159 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
         </tbody>
       </table>
     </Klappbar>
+  );
+}
+
+/** Farbige Status-Plakette für eine Fälligkeit. */
+function StatusBadge({ status }: { status: SchulungStatus }) {
+  const { t } = useTranslation();
+  const stil: Record<SchulungStatus, string> = {
+    ueberfaellig: "bg-destructive/15 text-destructive",
+    bald: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    ok: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    ohne_frist: "bg-muted text-muted-foreground",
+  };
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-xs whitespace-nowrap ${stil[status]}`}>
+      {t(`schulungen.status.${status}`)}
+    </span>
+  );
+}
+
+function datum(wert: string | null): string {
+  if (!wert) return "—";
+  const d = new Date(wert);
+  return Number.isNaN(d.getTime()) ? wert : d.toLocaleDateString();
+}
+
+/** Einzelübersicht: alle Schulungen eines Mitarbeiters. */
+function MitarbeiterDetail({ personalnummer }: { personalnummer: string }) {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery({
+    queryKey: hrKpiKeys.schulungMitarbeiterDetail(personalnummer),
+    queryFn: () => fetchMitarbeiterSchulungen(personalnummer),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b bg-muted/20">
+          <Th>{t("schulungen.katalog.name")}</Th>
+          <Th>{t("schulungen.mitarbeiter.aktuell")}</Th>
+          <Th>{t("schulungen.mitarbeiter.faelligAm")}</Th>
+          <Th rechts>{t("schulungen.mitarbeiter.status")}</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((s) => (
+          <tr
+            key={s.schulung_id}
+            className="border-b border-border/40 transition-colors last:border-0 hover:bg-muted/30"
+          >
+            <td className="px-4 py-1.5">
+              <span className="text-muted-foreground">{s.bereich}</span> · {s.name}
+            </td>
+            <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">
+              {datum(s.aktuell_datum)}
+            </td>
+            <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">
+              {datum(s.naechste_faellig_am)}
+            </td>
+            <td className="px-4 py-1.5 text-right">
+              <StatusBadge status={s.status} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Mitarbeiterübersicht; Zeile aufklappen zeigt die Einzelübersicht. */
+function MitarbeiterPanel() {
+  const { t } = useTranslation();
+  const [offenFuer, setOffenFuer] = useState<string | null>(null);
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.schulungMitarbeiter(),
+    queryFn: fetchMitarbeiter,
+  });
+  if (!data || data.length === 0) return null;
+
+  const ueberfaellig = data.filter((m) => m.ueberfaellig > 0).length;
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.mitarbeiter.title")}
+        anzahl={data.length}
+        icon={<Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <Th>{t("schulungen.mitarbeiter.name")}</Th>
+              <Th>{t("schulungen.abteilungen.abteilung")}</Th>
+              <Th rechts>{t("schulungen.mitarbeiter.anzahl")}</Th>
+              <Th rechts>{t("schulungen.status.ueberfaellig")}</Th>
+              <Th rechts>{t("schulungen.status.bald")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((m) => {
+              const offen = offenFuer === m.personalnummer;
+              return [
+                <tr
+                  key={m.personalnummer}
+                  onClick={() => setOffenFuer(offen ? null : m.personalnummer)}
+                  className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40"
+                >
+                  <td className="px-4 py-2">
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {m.personalnummer}
+                    </span>{" "}
+                    {m.name}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{m.abteilung ?? "—"}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{m.schulungen}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">
+                    {m.ueberfaellig > 0 ? (
+                      <span className="rounded-md bg-destructive/15 px-2 py-0.5 text-destructive">
+                        {m.ueberfaellig}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">0</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                    {m.bald_faellig}
+                  </td>
+                </tr>,
+                offen ? (
+                  <tr key={`${m.personalnummer}-detail`} className="border-b bg-muted/10">
+                    <td colSpan={5} className="p-0">
+                      <MitarbeiterDetail personalnummer={m.personalnummer} />
+                    </td>
+                  </tr>
+                ) : null,
+              ];
+            })}
+          </tbody>
+        </table>
+      </Klappbar>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {t("schulungen.mitarbeiter.hinweis", { count: ueberfaellig })}
+      </p>
+    </section>
   );
 }
 
@@ -379,6 +535,9 @@ export function SchulungenPage() {
           />
         )}
       </section>
+
+      {/* Mitarbeiter mit Fälligkeiten; Zeile aufklappen = Einzelübersicht. */}
+      <MitarbeiterPanel />
 
       {/* Abteilungen & Vorgesetzte — abgeleitet aus den Personio-Daten. */}
       <AbteilungenPanel />

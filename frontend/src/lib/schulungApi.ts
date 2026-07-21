@@ -69,3 +69,41 @@ export interface Abteilung {
 export function fetchAbteilungen(): Promise<Abteilung[]> {
   return apiClient<Abteilung[]>("/api/hr/schulungen/abteilungen");
 }
+
+/** "ueberfaellig" | "bald" | "ok" | "ohne_frist" */
+export type SchulungStatus = "ueberfaellig" | "bald" | "ok" | "ohne_frist";
+
+export interface MitarbeiterZeile {
+  employee_id: number | null;
+  personalnummer: string;
+  name: string;
+  abteilung: string | null;
+  schulungen: number;
+  ueberfaellig: number;
+  bald_faellig: number;
+  naechste_faelligkeit: string | null;
+}
+
+export interface MitarbeiterSchulung {
+  schulung_id: number;
+  bereich: string;
+  name: string;
+  turnus: string | null;
+  initial_datum: string | null;
+  aktuell_datum: string | null;
+  naechste_faellig: string | null;
+  naechste_faellig_am: string | null;
+  status: SchulungStatus;
+}
+
+export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
+  return apiClient<MitarbeiterZeile[]>("/api/hr/schulungen/mitarbeiter");
+}
+
+export function fetchMitarbeiterSchulungen(
+  personalnummer: string,
+): Promise<MitarbeiterSchulung[]> {
+  return apiClient<MitarbeiterSchulung[]>(
+    `/api/hr/schulungen/mitarbeiter/${encodeURIComponent(personalnummer)}`,
+  );
+}

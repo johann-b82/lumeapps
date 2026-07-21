@@ -10,6 +10,8 @@ hochgeladene .xlsx serverseitig ein; clause 3 (multi-row atomic compute) — die
 """
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -126,6 +128,146 @@ async def import_commit(
     """Datei übernehmen (idempotent: erneuter Import aktualisiert)."""
     parsed = await _parse_upload(file)
     return _als_read(await uebernehmen(db, parsed, file.filename or "unbenannt.xlsx"))
+
+
+class MitarbeiterSchulungRead(BaseModel):
+    """Eine Schulung im Blick eines Mitarbeiters."""
+
+    schulung_id: int
+    bereich: str
+    name: str
+    turnus: str | None
+    initial_datum: date | None
+    aktuell_datum: date | None
+    naechste_faellig: str | None
+    naechste_faellig_am: date | None
+    #: "ueberfaellig" | "bald" | "ok" | "ohne_frist"
+    status: str
+
+
+class MitarbeiterRead(BaseModel):
+    """Zeile der Mitarbeiterübersicht."""
+
+    employee_id: int | None
+    personalnummer: str
+    name: str
+    abteilung: str | None
+    schulungen: int
+    ueberfaellig: int
+    bald_faellig: int
+    naechste_faelligkeit: date | None
+
+
+#: Fenster, ab dem eine Fälligkeit als "bald" gilt.
+BALD_FAELLIG_TAGE = 90
+
+
+def _status(faellig_am: date | None, heute: date) -> str:
+    if faellig_am is None:
+        return "ohne_frist"
+    if faellig_am < heute:
+        return "ueberfaellig"
+    if (faellig_am - heute).days <= BALD_FAELLIG_TAGE:
+        return "bald"
+    return "ok"
+
+
+@router.get("/mitarbeiter", response_model=list[MitarbeiterRead])
+async def liste_mitarbeiter(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[MitarbeiterRead]:
+    """Übersicht: je Mitarbeiter Anzahl Schulungen und Fälligkeiten.
+
+    Gruppiert über die Personalnummer, weil sie auch dort trägt, wo keine
+    Personio-Zuordnung existiert.
+    """
+    heute = date.today()
+    zeilen = (
+        (
+            await db.execute(
+                select(SchulungTeilnahme, SchulungKatalog).join(
+                    SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
+                )
+            )
+        )
+        .all()
+    )
+
+    # Abteilung aus Personio, wo zugeordnet.
+    abteilungen: dict[int, str | None] = {
+        e.id: e.department
+        for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    }
+
+    gruppen: dict[str, MitarbeiterRead] = {}
+    for teilnahme, _katalog in zeilen:
+        eintrag = gruppen.get(teilnahme.personalnummer)
+        if eintrag is None:
+            eintrag = MitarbeiterRead(
+                employee_id=teilnahme.employee_id,
+                personalnummer=teilnahme.personalnummer,
+                name=teilnahme.mitarbeiter_name or f"#{teilnahme.personalnummer}",
+                abteilung=abteilungen.get(teilnahme.employee_id or -1),
+                schulungen=0,
+                ueberfaellig=0,
+                bald_faellig=0,
+                naechste_faelligkeit=None,
+            )
+            gruppen[teilnahme.personalnummer] = eintrag
+
+        eintrag.schulungen += 1
+        status = _status(teilnahme.naechste_faellig_am, heute)
+        if status == "ueberfaellig":
+            eintrag.ueberfaellig += 1
+        elif status == "bald":
+            eintrag.bald_faellig += 1
+        if teilnahme.naechste_faellig_am is not None and (
+            eintrag.naechste_faelligkeit is None
+            or teilnahme.naechste_faellig_am < eintrag.naechste_faelligkeit
+        ):
+            eintrag.naechste_faelligkeit = teilnahme.naechste_faellig_am
+
+    return sorted(
+        gruppen.values(),
+        key=lambda m: (-m.ueberfaellig, -m.bald_faellig, m.name.lower()),
+    )
+
+
+@router.get(
+    "/mitarbeiter/{personalnummer}", response_model=list[MitarbeiterSchulungRead]
+)
+async def mitarbeiter_schulungen(
+    personalnummer: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[MitarbeiterSchulungRead]:
+    """Alle Schulungen eines Mitarbeiters (Einzelübersicht)."""
+    heute = date.today()
+    zeilen = (
+        await db.execute(
+            select(SchulungTeilnahme, SchulungKatalog)
+            .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
+            .where(SchulungTeilnahme.personalnummer == personalnummer)
+        )
+    ).all()
+    if not zeilen:
+        raise HTTPException(status_code=404, detail="Keine Schulungen zu dieser Personalnummer.")
+
+    ergebnis = [
+        MitarbeiterSchulungRead(
+            schulung_id=k.id,
+            bereich=k.bereich,
+            name=k.name,
+            turnus=k.turnus,
+            initial_datum=t.initial_datum,
+            aktuell_datum=t.aktuell_datum,
+            naechste_faellig=t.naechste_faellig,
+            naechste_faellig_am=t.naechste_faellig_am,
+            status=_status(t.naechste_faellig_am, heute),
+        )
+        for t, k in zeilen
+    ]
+    rang = {"ueberfaellig": 0, "bald": 1, "ok": 2, "ohne_frist": 3}
+    return sorted(ergebnis, key=lambda s: (rang[s.status], s.bereich, s.name))
 
 
 @router.get("/abteilungen", response_model=list[AbteilungRead])
