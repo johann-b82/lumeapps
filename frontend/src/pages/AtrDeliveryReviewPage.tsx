@@ -6,7 +6,7 @@ import { useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDelivery, updateDelivery, updateDeliveryItem, generateDelivery,
-  atrFileUrl, type AtrDelivery, type AtrDeliveryItem,
+  atrFileUrl, formatPoPos, type AtrDelivery, type AtrDeliveryItem,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
@@ -65,7 +65,7 @@ export function AtrDeliveryReviewPage() {
     {
       key: "po_pos", header: t("atr.deliveries.item.po_pos"),
       cell: (it) => (
-        <input className="border rounded px-1 w-16" defaultValue={it.po_pos ?? ""}
+        <input className="border rounded px-1 w-16" defaultValue={formatPoPos(it.po_pos)}
           onBlur={(e) => saveItem(it.id, it.weight_kg ?? "", e.target.value)} />
       ),
     },

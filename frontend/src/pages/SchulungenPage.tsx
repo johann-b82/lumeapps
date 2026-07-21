@@ -1,15 +1,178 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, GraduationCap, Loader2, Upload } from "lucide-react";
 import {
+  AlertTriangle,
+  ChevronDown,
+  GraduationCap,
+  Loader2,
+  Upload,
+  Users,
+} from "lucide-react";
+import {
+  fetchAbteilungen,
   fetchSchulungen,
   schulungImportCommit,
   schulungImportPreview,
+  type Schulung,
   type SchulungImportVorschau,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
+
+type KatalogZeile = Schulung;
+
+/** Einklappbarer Abschnitt mit Kopfzeile, Zähler-Badge und Chevron. */
+function Klappbar({
+  titel,
+  anzahl,
+  icon,
+  offenStart = true,
+  children,
+}: {
+  titel: string;
+  anzahl: number;
+  icon?: React.ReactNode;
+  offenStart?: boolean;
+  children: React.ReactNode;
+}) {
+  const [offen, setOffen] = useState(offenStart);
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOffen((v) => !v)}
+        aria-expanded={offen}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors
+                   hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2
+                   focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+            offen ? "" : "-rotate-90"
+          }`}
+          aria-hidden="true"
+        />
+        {icon}
+        <span className="font-medium">{titel}</span>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+          {anzahl}
+        </span>
+      </button>
+      {offen && <div className="overflow-x-auto border-t">{children}</div>}
+    </div>
+  );
+}
+
+/** Kopfzeile im einheitlichen, dezenten Stil. */
+function Th({
+  children,
+  rechts,
+}: {
+  children: React.ReactNode;
+  rechts?: boolean;
+}) {
+  return (
+    <th
+      className={`px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase ${
+        rechts ? "text-right" : "text-left"
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
+/** Schulungen eines Bereichs. */
+function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
+  const { t } = useTranslation();
+  return (
+    <Klappbar titel={bereich} anzahl={zeilen.length}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30">
+            <Th>{t("schulungen.katalog.name")}</Th>
+            <Th>{t("schulungen.katalog.turnus")}</Th>
+            <Th rechts>{t("schulungen.katalog.teilnahmen")}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((s) => (
+            <tr
+              key={s.id}
+              className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
+            >
+              <td className="px-4 py-2">{s.name}</td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                {s.turnus ? (
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    {s.turnus}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </td>
+              <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Klappbar>
+  );
+}
+
+/** Abteilungen mit ihrem Hauptverantwortlichen (aus Personio abgeleitet). */
+function AbteilungenPanel() {
+  const { t } = useTranslation();
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.schulungAbteilungen(),
+    queryFn: fetchAbteilungen,
+  });
+  if (!data || data.length === 0) return null;
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.abteilungen.title")}
+        anzahl={data.length}
+        icon={<Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <Th>{t("schulungen.abteilungen.abteilung")}</Th>
+              <Th>{t("schulungen.abteilungen.vorgesetzter")}</Th>
+              <Th rechts>{t("schulungen.abteilungen.mitarbeiter")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((a) => (
+              <tr
+                key={a.abteilung}
+                className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
+              >
+                <td className="px-4 py-2">{a.abteilung}</td>
+                <td className="px-4 py-2">
+                  {a.vorgesetzter ?? <span className="text-muted-foreground">—</span>}
+                  {a.weitere_vorgesetzte > 0 && (
+                    <span className="ml-2 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      {t("schulungen.abteilungen.weitere", { count: a.weitere_vorgesetzte })}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums">{a.mitarbeiter}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Klappbar>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {t("schulungen.abteilungen.hinweis")}
+      </p>
+    </section>
+  );
+}
 
 /** Kennzahl-Kachel der Vorschau. */
 function Kennzahl({ label, wert }: { label: string; wert: string | number }) {
@@ -108,10 +271,39 @@ export function SchulungenPage() {
   const [vorschau, setVorschau] = useState<SchulungImportVorschau | null>(null);
   const [committed, setCommitted] = useState(false);
 
+  const [suche, setSuche] = useState("");
+
   const { data: schulungen, isLoading } = useQuery({
     queryKey: hrKpiKeys.schulungen(),
     queryFn: fetchSchulungen,
   });
+
+  const gefiltert = useMemo<KatalogZeile[] | undefined>(() => {
+    if (!schulungen) return undefined;
+    const q = suche.trim().toLowerCase();
+    const zeilen = schulungen as KatalogZeile[];
+    if (!q) return zeilen;
+    return zeilen.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.bereich.toLowerCase().includes(q) ||
+        (s.turnus ?? "").toLowerCase().includes(q),
+    );
+  }, [schulungen, suche]);
+
+  /** Nach Bereich gruppiert; Reihenfolge folgt der Excel (betrieblich zuerst). */
+  const gruppen = useMemo<[string, KatalogZeile[]][]>(() => {
+    if (!gefiltert) return [];
+    const map = new Map<string, KatalogZeile[]>();
+    for (const s of gefiltert) {
+      const liste = map.get(s.bereich);
+      if (liste) liste.push(s);
+      else map.set(s.bereich, [s]);
+    }
+    const rang = (b: string) =>
+      b === "betrieblich" ? 0 : b === "Produktion" ? 1 : b === "Verwaltung" ? 2 : 3;
+    return [...map.entries()].sort((a, b) => rang(a[0]) - rang(b[0]) || a[0].localeCompare(b[0]));
+  }, [gefiltert]);
 
   const preview = useMutation({
     mutationFn: (f: File) => schulungImportPreview(f),
@@ -188,16 +380,22 @@ export function SchulungenPage() {
         )}
       </section>
 
-      {/* Katalog */}
+      {/* Abteilungen & Vorgesetzte — abgeleitet aus den Personio-Daten. */}
+      <AbteilungenPanel />
+
+      {/* Katalog — nach Bereich gruppiert, Abschnitte einklappbar. */}
       <section>
-        <h2 className="mb-3 text-sm font-medium">
-          {t("schulungen.katalog.title")}
-          {schulungen && schulungen.length > 0 && (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {schulungen.length}
-            </span>
-          )}
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">{t("schulungen.katalog.title")}</h2>
+          <input
+            type="search"
+            value={suche}
+            onChange={(e) => setSuche(e.target.value)}
+            placeholder={t("schulungen.katalog.suche")}
+            className="h-8 w-72 rounded-md border bg-background px-3 text-sm
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
 
         {isLoading && (
           <div className="flex h-32 items-center justify-center">
@@ -205,40 +403,17 @@ export function SchulungenPage() {
           </div>
         )}
 
-        {schulungen && schulungen.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t("schulungen.katalog.leer")}</p>
+        {gefiltert && gefiltert.length === 0 && (
+          <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+            {suche ? t("schulungen.katalog.keinTreffer") : t("schulungen.katalog.leer")}
+          </p>
         )}
 
-        {schulungen && schulungen.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/40 text-left">
-                <tr>
-                  <th className="px-3 py-2">{t("schulungen.katalog.bereich")}</th>
-                  <th className="px-3 py-2">{t("schulungen.katalog.name")}</th>
-                  <th className="px-3 py-2">{t("schulungen.katalog.turnus")}</th>
-                  <th className="px-3 py-2 text-right">
-                    {t("schulungen.katalog.teilnahmen")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {schulungen.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
-                      {s.bereich}
-                    </td>
-                    <td className="px-3 py-1.5">{s.name}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
-                      {s.turnus ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">{s.teilnahmen}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="space-y-3">
+          {gruppen.map(([bereich, zeilen]) => (
+            <BereichGruppe key={bereich} bereich={bereich} zeilen={zeilen} />
+          ))}
+        </div>
       </section>
     </div>
   );

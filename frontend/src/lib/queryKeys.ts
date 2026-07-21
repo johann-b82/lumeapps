@@ -48,6 +48,7 @@ export const hrKpiKeys = {
   joinersRecent: () => ["hr", "joiners", "recent"] as const,
   orgChart: () => ["hr", "org-chart"] as const,
   schulungen: () => ["hr", "schulungen"] as const,
+  schulungAbteilungen: () => ["hr", "schulungen", "abteilungen"] as const,
 };
 
 /**

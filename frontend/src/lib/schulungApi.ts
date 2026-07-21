@@ -55,3 +55,17 @@ export function schulungImportCommit(file: File): Promise<SchulungImportVorschau
 export function fetchSchulungen(): Promise<Schulung[]> {
   return apiClient<Schulung[]>("/api/hr/schulungen");
 }
+
+export interface Abteilung {
+  abteilung: string;
+  mitarbeiter: number;
+  /** Führungskraft mit den meisten Unterstellten in dieser Abteilung. */
+  vorgesetzter: string | null;
+  unterstellte: number;
+  /** Weitere Führungskräfte derselben Abteilung (häufig > 0). */
+  weitere_vorgesetzte: number;
+}
+
+export function fetchAbteilungen(): Promise<Abteilung[]> {
+  return apiClient<Abteilung[]>("/api/hr/schulungen/abteilungen");
+}
