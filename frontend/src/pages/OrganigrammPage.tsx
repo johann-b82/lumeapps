@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Loader2, Network } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Network, User } from "lucide-react";
 import { fetchOrgChart, type OrgChartNode } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 
@@ -47,41 +47,50 @@ function OrgNode({ node }: { node: TreeNode }) {
 
   return (
     <li>
-      <div className="flex items-start gap-1.5 py-1">
-        {hasChildren ? (
+      {/* Node card: avatar on top, details centred below — the connector lines
+          around it come from the .org-tree rules in index.css. */}
+      <div className="flex w-[160px] flex-col items-center px-1 text-center">
+        <div
+          className="flex h-14 w-14 items-center justify-center rounded-full
+                     bg-gradient-to-br from-sky-500 to-indigo-600 shadow-sm"
+        >
+          <User className="h-7 w-7 text-white drop-shadow" aria-hidden="true" />
+        </div>
+
+        <div className="mt-2 text-sm leading-tight font-medium">{fullName(node)}</div>
+        {node.position && (
+          <div className="text-xs leading-tight text-muted-foreground">
+            {node.position}
+          </div>
+        )}
+        {node.department && (
+          <div className="mt-0.5 text-[11px] leading-tight text-muted-foreground/80">
+            {node.department}
+          </div>
+        )}
+
+        {hasChildren && (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={fullName(node)}
-            className="mt-1.5 text-muted-foreground hover:text-foreground
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            className="mt-1 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]
+                       text-muted-foreground hover:text-foreground
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {open ? (
-              <ChevronDown className="w-4 h-4" aria-hidden="true" />
+              <ChevronUp className="h-3 w-3" aria-hidden="true" />
             ) : (
-              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
             )}
+            {node.children.length}
           </button>
-        ) : (
-          <span className="w-4" aria-hidden="true" />
         )}
-
-        <div className="rounded-lg border bg-card text-card-foreground px-3 py-2 shadow-sm min-w-[200px]">
-          <div className="text-sm font-medium">{fullName(node)}</div>
-          {node.position && (
-            <div className="text-xs text-muted-foreground">{node.position}</div>
-          )}
-          {node.department && (
-            <div className="text-[11px] text-muted-foreground/80 mt-0.5">
-              {node.department}
-            </div>
-          )}
-        </div>
       </div>
 
       {hasChildren && open && (
-        <ul className="ml-[9px] border-l border-border pl-4">
+        <ul>
           {node.children.map((child) => (
             <OrgNode key={child.id} node={child} />
           ))}
@@ -191,11 +200,13 @@ export function OrganigrammPage() {
       )}
 
       {forest.length > 0 && (
-        <ul className="mt-2">
-          {forest.map((root) => (
-            <OrgNode key={root.id} node={root} />
-          ))}
-        </ul>
+        <div className="org-tree mt-2 overflow-x-auto pb-4">
+          <ul>
+            {forest.map((root) => (
+              <OrgNode key={root.id} node={root} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
