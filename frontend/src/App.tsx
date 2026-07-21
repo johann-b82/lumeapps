@@ -9,6 +9,7 @@ import { HRPage } from "./pages/HRPage";
 import { KpiDashboardHomePage } from "./pages/KpiDashboardHomePage";
 import { HrHomePage } from "./pages/HrHomePage";
 import { OrganigrammPage } from "./pages/OrganigrammPage";
+import { SchulungenPage } from "./pages/SchulungenPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
@@ -90,6 +91,10 @@ function AppShell() {
           <Route path="/hr" component={HRPage} />
           <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />
+          {/* Schulungen: der Backend-Router ist komplett admin-gated. */}
+          <Route path="/hr/schulungen">
+            <AdminOnly><SchulungenPage /></AdminOnly>
+          </Route>
           <Route path="/hr/onboarding" component={OnboardingPage} />
           {/* Qualität hub + Audit-Modul (v1.84). Specific routes precede
               /quality; the :id detail precedes its list (wouter first-match).

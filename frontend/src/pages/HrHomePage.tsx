@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { UserPlus, Network } from "lucide-react";
+import { UserPlus, Network, GraduationCap } from "lucide-react";
+import { AdminOnly } from "@/auth/AdminOnly";
 
 /**
  * HR hub (/hr/home). Landing page reached from the single "HR" launcher tile;
@@ -38,6 +39,28 @@ export function HrHomePage() {
             {t("launcher.tile.onboarding")}
           </span>
         </div>
+
+        {/* Schulungen tile → /hr/schulungen (admin-only, wie der Backend-Router) */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/hr/schulungen")}
+              aria-label={t("schulungen.title")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-amber-500 to-orange-600
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <GraduationCap className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("schulungen.title")}
+            </span>
+          </div>
+        </AdminOnly>
 
         {/* Organigramm tile → /hr/organigramm */}
         <div className="flex flex-col items-center gap-2">
