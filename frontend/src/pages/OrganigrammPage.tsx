@@ -41,9 +41,36 @@ function buildForest(nodes: OrgChartNode[]): TreeNode[] {
   return roots;
 }
 
-function OrgNode({ node }: { node: TreeNode }) {
-  const [open, setOpen] = useState(true);
+/** Compact row card used inside a stacked leaf column. */
+function LeafCard({ node }: { node: TreeNode }) {
+  return (
+    <div className="flex w-[148px] items-center gap-2 text-left">
+      <div
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full
+                   bg-gradient-to-br from-sky-500 to-indigo-600 shadow-sm"
+      >
+        <User className="h-4 w-4 text-white" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-xs leading-tight font-medium">{fullName(node)}</div>
+        {node.position && (
+          <div className="truncate text-[11px] leading-tight text-muted-foreground">
+            {node.position}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrgNode({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
+  // Levels 3+ start collapsed so the chart fits without sideways scrolling.
+  const [open, setOpen] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
+  // When every report is itself a leaf, stack them in one narrow column
+  // instead of spreading them across the full width.
+  const leafOnly =
+    hasChildren && node.children.every((c) => c.children.length === 0);
 
   return (
     <li>
@@ -89,13 +116,23 @@ function OrgNode({ node }: { node: TreeNode }) {
         )}
       </div>
 
-      {hasChildren && open && (
-        <ul>
-          {node.children.map((child) => (
-            <OrgNode key={child.id} node={child} />
-          ))}
-        </ul>
-      )}
+      {hasChildren &&
+        open &&
+        (leafOnly ? (
+          <ul className="org-leaves">
+            {node.children.map((child) => (
+              <li key={child.id}>
+                <LeafCard node={child} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul>
+            {node.children.map((child) => (
+              <OrgNode key={child.id} node={child} depth={depth + 1} />
+            ))}
+          </ul>
+        ))}
     </li>
   );
 }

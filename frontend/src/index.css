@@ -251,3 +251,42 @@ code.hljs { padding: 0; }
 .org-tree > ul > li { padding-top: 0; }
 .org-tree > ul > li::before,
 .org-tree > ul > li::after { display: none; }
+/* Compact vertical stack: when every report of a node is itself a leaf, they
+   are stacked in ONE column (spine + elbows) instead of one column each —
+   this is what keeps a 60-person chart from needing sideways scrolling.
+   Fixed width so the 50% offsets resolve deterministically and the spine
+   lines up with the parent's drop line (also at 50%). */
+.org-tree ul.org-leaves {
+  display: block;
+  width: 340px;
+}
+.org-tree ul.org-leaves > li {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  padding: 0 0 10px calc(50% + 22px);
+}
+.org-tree ul.org-leaves > li::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  right: auto;
+  top: 0;
+  width: 0;
+  height: 100%;
+  border: 0 none;
+  border-left: 1px solid var(--border);
+}
+.org-tree ul.org-leaves > li:last-child::before { height: 50%; }
+.org-tree ul.org-leaves > li::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  right: auto;
+  top: 50%;
+  width: 22px;
+  height: 0;
+  border: 0 none;
+  border-top: 1px solid var(--border);
+}
