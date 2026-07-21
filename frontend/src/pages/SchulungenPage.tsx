@@ -130,20 +130,45 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
 }
 
 /** Offene Schulungen: überfällig oder in den nächsten 3 Monaten fällig. */
+type OffenFilter = "alle" | "ueberfaellig" | "bald";
+
 function OffenePanel() {
   const { t } = useTranslation();
-  const [nurUeberfaellig, setNurUeberfaellig] = useState(false);
+  const [filter, setFilter] = useState<OffenFilter>("alle");
   const { data, isLoading } = useQuery({
     queryKey: hrKpiKeys.schulungOffen(),
     queryFn: fetchOffeneSchulungen,
   });
 
-  const gezeigt = useMemo(
-    () => (nurUeberfaellig ? (data ?? []).filter((o) => o.status === "ueberfaellig") : data ?? []),
-    [data, nurUeberfaellig],
-  );
   const ueberfaellig = (data ?? []).filter((o) => o.status === "ueberfaellig").length;
   const bald = (data ?? []).length - ueberfaellig;
+
+  const gezeigt = useMemo(
+    () => (filter === "alle" ? (data ?? []) : (data ?? []).filter((o) => o.status === filter)),
+    [data, filter],
+  );
+
+  /** Filter-Schaltflächen: Beschriftung samt Anzahl, aktiver Zustand farbig. */
+  const schalter: { wert: OffenFilter; label: string; anzahl: number; aktivStil: string }[] = [
+    {
+      wert: "alle",
+      label: t("schulungen.offen.filter.alle"),
+      anzahl: (data ?? []).length,
+      aktivStil: "bg-primary text-primary-foreground",
+    },
+    {
+      wert: "ueberfaellig",
+      label: t("schulungen.offen.filter.ueberfaellig"),
+      anzahl: ueberfaellig,
+      aktivStil: "bg-destructive text-white",
+    },
+    {
+      wert: "bald",
+      label: t("schulungen.offen.filter.bald"),
+      anzahl: bald,
+      aktivStil: "bg-amber-500 text-white",
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -161,25 +186,37 @@ function OffenePanel() {
           <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />
           {t("schulungen.offen.title")}
         </h2>
-        <div className="flex items-center gap-3">
-          <span className="rounded-md bg-destructive/15 px-2 py-0.5 text-xs text-destructive">
-            {t("schulungen.offen.ueberfaellig", { count: ueberfaellig })}
-          </span>
-          <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-            {t("schulungen.offen.bald", { count: bald })}
-          </span>
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={nurUeberfaellig}
-              onChange={(e) => setNurUeberfaellig(e.target.checked)}
-              className="h-3.5 w-3.5 accent-primary"
-            />
-            {t("schulungen.offen.filter")}
-          </label>
+        <div className="flex gap-1 rounded-lg border p-0.5" role="group">
+          {schalter.map((s) => (
+            <button
+              key={s.wert}
+              type="button"
+              onClick={() => setFilter(s.wert)}
+              aria-pressed={filter === s.wert}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-colors ${
+                filter === s.wert ? s.aktivStil : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {s.label}
+              <span
+                className={`rounded-full px-1.5 tabular-nums ${
+                  filter === s.wert ? "bg-white/20" : "bg-muted"
+                }`}
+              >
+                {s.anzahl}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
+      {gezeigt.length === 0 && (
+        <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+          {t("schulungen.offen.leer")}
+        </p>
+      )}
+
+      {gezeigt.length > 0 && (
       <div className="max-h-[26rem] overflow-auto rounded-xl border bg-card shadow-sm">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
@@ -228,6 +265,7 @@ function OffenePanel() {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }
