@@ -16,7 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import PersonioEmployee, SchulungRolle
+from app.models import (
+    PersonioEmployee,
+    SchulungPflicht,
+    SchulungRolle,
+    SchulungTeilnahme,
+)
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.onboarding import (
     normalisiere_position,
@@ -63,6 +68,8 @@ class EintrittRead(BaseModel):
     name: str
     position: str | None
     abteilung: str | None
+    #: Aktuell zugeordnetes Kürzel (über die Position), None wenn nicht gepflegt.
+    abteilung_kuerzel: str | None
     hire_date: date | None
     #: Negativ = liegt n Tage zurück, positiv = beginnt in n Tagen.
     tage_bis_eintritt: int | None
@@ -128,6 +135,7 @@ async def neue_eintritte(
                 name=plan.name,
                 position=emp.position,
                 abteilung=emp.department,
+                abteilung_kuerzel=plan.abteilung_kuerzel,
                 hire_date=emp.hire_date,
                 tage_bis_eintritt=(emp.hire_date - heute).days if emp.hire_date else None,
                 soll_gesamt=len(plan.soll),
@@ -178,6 +186,38 @@ async def plan_erzeugen(
         soll=[SollSchulungRead(**vars(s)) for s in plan.soll],
         fehlend=len(plan.fehlend),
     )
+
+
+@router.get("/kuerzel", response_model=list[str])
+async def verfuegbare_kuerzel(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[str]:
+    """Wählbare Abteilungskürzel für die Zuordnung.
+
+    Führend ist die Anforderungsmatrix: nur Kürzel, für die es dort Regeln gibt,
+    lösen überhaupt Pflichtschulungen aus. Ergänzt um die aus dem Import
+    bekannten und die bereits zugeordneten Kürzel, damit auch eine Zuordnung
+    möglich bleibt, bevor die Matrix dafür gepflegt ist.
+    """
+    aus_matrix = (
+        await db.execute(
+            select(SchulungPflicht.abteilung)
+            .where(SchulungPflicht.ebene == "kuerzel")
+            .distinct()
+        )
+    ).scalars().all()
+    aus_teilnahmen = (
+        await db.execute(
+            select(SchulungTeilnahme.abteilung_kuerzel)
+            .where(SchulungTeilnahme.abteilung_kuerzel.isnot(None))
+            .distinct()
+        )
+    ).scalars().all()
+    aus_rollen = (
+        await db.execute(select(SchulungRolle.abteilung_kuerzel).distinct())
+    ).scalars().all()
+    alle = [*aus_matrix, *aus_teilnahmen, *aus_rollen]
+    return sorted({k.strip() for k in alle if k and k.strip()})
 
 
 @router.get("/rollen", response_model=list[RolleRead])

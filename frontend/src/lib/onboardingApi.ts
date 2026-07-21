@@ -12,6 +12,8 @@ export interface Eintritt {
   name: string;
   position: string | null;
   abteilung: string | null;
+  /** Aktuell zugeordnetes Kürzel (über die Position). */
+  abteilung_kuerzel: string | null;
   hire_date: string | null;
   /** Negativ = liegt n Tage zurück, positiv = beginnt in n Tagen. */
   tage_bis_eintritt: number | null;
@@ -67,6 +69,11 @@ export function erzeugePlan(employeeId: number): Promise<Schulungsplan> {
 
 export function fetchRollen(): Promise<Rolle[]> {
   return apiClient<Rolle[]>("/api/hr/onboarding/rollen");
+}
+
+/** Wählbare Abteilungskürzel für das Dropdown. */
+export function fetchKuerzel(): Promise<string[]> {
+  return apiClient<string[]>("/api/hr/onboarding/kuerzel");
 }
 
 export function setzeRolle(eingabe: {

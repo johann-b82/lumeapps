@@ -7,6 +7,7 @@ import {
   erzeugePlan,
   fetchEintritte,
   fetchPlan,
+  fetchKuerzel,
   fetchRollen,
   setzeRolle,
   type Eintritt,
@@ -120,90 +121,98 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
   );
 }
 
-/** Pflege der Zuordnung Position → Abteilungskürzel. */
-function RollenPanel() {
+/** Dropdown in der Zeile: Kürzel für die Position dieses Mitarbeiters wählen.
+ *
+ *  Die Zuordnung hängt an der POSITION, nicht an der Person — die Auswahl gilt
+ *  daher für alle Mitarbeiter mit derselben Positionsbezeichnung. Der Hinweis
+ *  über der Tabelle sagt das ausdrücklich.
+ */
+function KuerzelAuswahl({ eintritt }: { eintritt: Eintritt }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [position, setPosition] = useState("");
-  const [kuerzel, setKuerzel] = useState("");
+  const { data: kuerzel } = useQuery({
+    queryKey: hrKpiKeys.onboardingKuerzel(),
+    queryFn: fetchKuerzel,
+  });
 
+  const speichern = useMutation({
+    mutationFn: (wert: string) =>
+      setzeRolle({ position: eintritt.position ?? "", abteilung_kuerzel: wert }),
+    onSuccess: (r) => {
+      toast.success(t("onboarding.rolleGespeichert", { kuerzel: r.abteilung_kuerzel }));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingRollen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingKuerzel() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!eintritt.position) {
+    return <span className="text-xs text-muted-foreground">{t("onboarding.ohnePosition")}</span>;
+  }
+
+  return (
+    <select
+      value={eintritt.abteilung_kuerzel ?? ""}
+      disabled={speichern.isPending}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const wert = e.target.value;
+        if (wert) speichern.mutate(wert);
+      }}
+      aria-label={t("onboarding.rollen.kuerzel")}
+      className={`h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                  ${eintritt.abteilung_kuerzel ? "" : "border-amber-500/60 text-muted-foreground"}`}
+    >
+      <option value="">{t("onboarding.kuerzelWaehlen")}</option>
+      {(kuerzel ?? []).map((k) => (
+        <option key={k} value={k}>
+          {k}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Übersicht der bestehenden Zuordnungen (Pflege läuft über die Zeilen-Dropdowns). */
+function RollenPanel() {
+  const { t } = useTranslation();
   const { data } = useQuery({
     queryKey: hrKpiKeys.onboardingRollen(),
     queryFn: fetchRollen,
   });
-
-  const speichern = useMutation({
-    mutationFn: () => setzeRolle({ position, abteilung_kuerzel: kuerzel }),
-    onSuccess: () => {
-      setPosition("");
-      setKuerzel("");
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingRollen() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
-      toast.success(t("onboarding.rolleGespeichert"));
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  if (!data || data.length === 0) return null;
 
   return (
     <section className="mb-6">
       <Klappbar
         titel={t("onboarding.rollen.title")}
-        anzahl={data?.length ?? 0}
+        anzahl={data.length}
         icon={<Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
         offenStart={false}
       >
-        <div className="space-y-3 px-4 py-3">
-          <p className="text-xs text-muted-foreground">{t("onboarding.rollen.hinweis")}</p>
-
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              placeholder={t("onboarding.rollen.position")}
-              className="h-8 w-72 rounded-md border bg-background px-3 text-sm
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <input
-              value={kuerzel}
-              onChange={(e) => setKuerzel(e.target.value)}
-              placeholder={t("onboarding.rollen.kuerzel")}
-              className="h-8 w-40 rounded-md border bg-background px-3 text-sm
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <button
-              type="button"
-              onClick={() => speichern.mutate()}
-              disabled={!position.trim() || !kuerzel.trim() || speichern.isPending}
-              className="rounded-md border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {t("onboarding.rollen.speichern")}
-            </button>
-          </div>
-
-          {data && data.length > 0 && (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/20">
-                  <Th>{t("onboarding.rollen.position")}</Th>
-                  <Th>{t("onboarding.rollen.kuerzel")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((r) => (
-                  <tr key={r.id} className="border-b border-border/40 last:border-0">
-                    <td className="px-4 py-1.5">{r.position}</td>
-                    <td className="px-4 py-1.5">
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs">
-                        {r.abteilung_kuerzel}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/20">
+              <Th>{t("onboarding.rollen.position")}</Th>
+              <Th>{t("onboarding.rollen.kuerzel")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r) => (
+              <tr key={r.id} className="border-b border-border/40 last:border-0">
+                <td className="px-4 py-1.5">{r.position}</td>
+                <td className="px-4 py-1.5">
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs">
+                    {r.abteilung_kuerzel}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Klappbar>
     </section>
   );
@@ -228,7 +237,10 @@ export function OnboardingPage() {
       <RollenPanel />
 
       <section>
-        <h2 className="mb-3 text-sm font-medium">{t("onboarding.eintritte.title")}</h2>
+        <h2 className="mb-1 text-sm font-medium">{t("onboarding.eintritte.title")}</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          {t("onboarding.rollen.hinweis")}
+        </p>
 
         {isLoading && (
           <div className="flex h-32 items-center justify-center">
@@ -250,6 +262,7 @@ export function OnboardingPage() {
                   <Th>{t("onboarding.eintritte.name")}</Th>
                   <Th>{t("onboarding.eintritte.position")}</Th>
                   <Th>{t("onboarding.eintritte.abteilung")}</Th>
+                  <Th>{t("onboarding.rollen.kuerzel")}</Th>
                   <Th>{t("onboarding.eintritte.eintritt")}</Th>
                   <Th rechts>{t("onboarding.eintritte.plan")}</Th>
                 </tr>
@@ -274,6 +287,9 @@ export function OnboardingPage() {
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{e.position ?? "—"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{e.abteilung ?? "—"}</td>
+                      <td className="px-4 py-2">
+                        <KuerzelAuswahl eintritt={e} />
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap tabular-nums">
                         {datum(e.hire_date)}
                       </td>
@@ -298,7 +314,7 @@ export function OnboardingPage() {
                     </tr>,
                     offen ? (
                       <tr key={`${e.employee_id}-detail`} className="border-b bg-muted/10">
-                        <td colSpan={5} className="p-0">
+                        <td colSpan={6} className="p-0">
                           <PlanDetail eintritt={e} />
                         </td>
                       </tr>
