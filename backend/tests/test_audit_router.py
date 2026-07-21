@@ -53,7 +53,7 @@ async def _create_audit(client, **overrides) -> dict:
         "audit_number": f"A-{uuid.uuid4().hex[:8]}",
         "title": "Internes Systemaudit Fertigung",
         "audit_type": "intern",
-        "category": "system",
+        "categories": ["system"],
         "scope_label": "Fertigung",
     }
     payload.update(overrides)
@@ -422,7 +422,7 @@ async def test_unknown_norm_reference_is_rejected(client):
             "audit_number": f"A-{uuid.uuid4().hex[:8]}",
             "title": "Test",
             "audit_type": "intern",
-            "category": "system",
+            "categories": ["system"],
             "norm_reference_ids": [str(uuid.uuid4())],
         },
     )
@@ -442,7 +442,7 @@ async def test_duplicate_audit_number_is_rejected(client):
             "audit_number": audit["audit_number"],
             "title": "Zweites Audit",
             "audit_type": "intern",
-            "category": "system",
+            "categories": ["system"],
         },
     )
     assert r.status_code == 409
@@ -470,3 +470,90 @@ async def test_viewer_is_denied(client):
 async def test_unauthenticated_is_denied(client):
     r = await client.get("/api/audit/audits")
     assert r.status_code == 401
+
+
+# ── Multiple categories per audit (v1.85) ───────────────────────────────
+
+
+async def test_audit_can_carry_several_categories(client):
+    """The audit programme runs Prozess- and Produktaudit in one session."""
+    audit = await _create_audit(client, categories=["prozess", "produkt"])
+    assert audit["categories"] == ["produkt", "prozess"]  # normalised, sorted
+
+    r = await client.get(f"/api/audit/audits/{audit['id']}", headers=_auth())
+    assert r.json()["categories"] == ["produkt", "prozess"]
+
+
+async def test_duplicate_categories_are_deduped(client):
+    audit = await _create_audit(client, categories=["prozess", "prozess", "system"])
+    assert audit["categories"] == ["prozess", "system"]
+
+
+async def test_at_least_one_category_is_required(client):
+    r = await client.post(
+        "/api/audit/audits",
+        headers=_auth(),
+        json={
+            "audit_number": f"A-{uuid.uuid4().hex[:8]}",
+            "title": "Ohne Kategorie",
+            "audit_type": "intern",
+            "categories": [],
+        },
+    )
+    assert r.status_code == 422
+
+
+async def test_category_filter_matches_any_of_an_audits_categories(client):
+    combined = await _create_audit(client, categories=["prozess", "produkt"])
+    system_only = await _create_audit(client, categories=["system"])
+
+    r = await client.get("/api/audit/audits?category=produkt", headers=_auth())
+    ids = [a["id"] for a in r.json()]
+    assert combined["id"] in ids
+    assert system_only["id"] not in ids
+
+    # The same audit must also be found under its other category.
+    r = await client.get("/api/audit/audits?category=prozess", headers=_auth())
+    assert combined["id"] in [a["id"] for a in r.json()]
+
+
+async def test_changing_categories_is_logged(client):
+    audit = await _create_audit(client, categories=["prozess"])
+    r = await client.patch(
+        f"/api/audit/audits/{audit['id']}",
+        headers=_auth(),
+        json={"categories": ["prozess", "produkt"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["categories"] == ["produkt", "prozess"]
+
+    r = await client.get(f"/api/audit/audits/{audit['id']}/trail", headers=_auth())
+    entry = next(e for e in r.json() if e["field"] == "categories")
+    assert entry["old_value"] == "prozess"
+    assert entry["new_value"] == "produkt, prozess"
+
+
+async def test_patching_norm_references_is_reflected_in_the_response(client):
+    """Regression: a raw insert left the loaded collection stale after commit."""
+    r = await client.get("/api/audit/norm-references", headers=_auth())
+    norms = r.json()
+    first, second = norms[0]["id"], norms[1]["id"]
+
+    audit = await _create_audit(client, norm_reference_ids=[first])
+    assert [n["id"] for n in audit["norm_references"]] == [first]
+
+    r = await client.patch(
+        f"/api/audit/audits/{audit['id']}",
+        headers=_auth(),
+        json={"norm_reference_ids": [first, second]},
+    )
+    assert r.status_code == 200
+    assert sorted(n["id"] for n in r.json()["norm_references"]) == sorted([first, second])
+
+    # And removal must land too.
+    r = await client.patch(
+        f"/api/audit/audits/{audit['id']}",
+        headers=_auth(),
+        json={"norm_reference_ids": [second]},
+    )
+    assert [n["id"] for n in r.json()["norm_references"]] == [second]

@@ -200,9 +200,6 @@ class Audit(Base):
             _in_list("audit_type", AUDIT_TYPES), name="ck_audits_audit_type"
         ),
         CheckConstraint(
-            _in_list("category", AUDIT_CATEGORIES), name="ck_audits_category"
-        ),
-        CheckConstraint(
             "priority BETWEEN 1 AND 3", name="ck_audits_priority"
         ),
         CheckConstraint(
@@ -220,7 +217,6 @@ class Audit(Base):
     audit_number: Mapped[str] = mapped_column(String(64), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     audit_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    category: Mapped[str] = mapped_column(String(16), nullable=False)
     scope_label: Mapped[str] = mapped_column(String(255), nullable=False, server_default="")
     objective: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     lead_auditor: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -261,6 +257,43 @@ class Audit(Base):
         back_populates="audit",
         cascade="all, delete-orphan",
     )
+    category_links: Mapped[list["AuditCategoryLink"]] = relationship(
+        "AuditCategoryLink",
+        back_populates="audit",
+        cascade="all, delete-orphan",
+        order_by="AuditCategoryLink.category",
+    )
+
+
+class AuditCategoryLink(Base):
+    """One category an audit belongs to (v1.85).
+
+    An audit is frequently more than one thing at once — the internal audit
+    programme runs a Prozessaudit and a Produktaudit in the same session — so
+    the category is a set, not a single column.
+    """
+
+    __tablename__ = "audit_category_links"
+    __table_args__ = (
+        CheckConstraint(
+            _in_list("category", AUDIT_CATEGORIES),
+            name="ck_audit_category_links_category",
+        ),
+        UniqueConstraint("audit_id", "category", name="uq_audit_category_links"),
+        Index("ix_audit_category_links_audit", "audit_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    audit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("audits.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    audit: Mapped["Audit"] = relationship("Audit", back_populates="category_links")
 
 
 class AuditNormLink(Base):

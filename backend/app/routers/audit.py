@@ -43,6 +43,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_async_db_session
 from app.models import (
     Audit,
+    AuditCategoryLink,
     AuditNormLink,
     AuditNormReference,
     AuditPhase,
@@ -86,7 +87,6 @@ _AUDIT_TRACKED_FIELDS = (
     "audit_number",
     "title",
     "audit_type",
-    "category",
     "scope_label",
     "objective",
     "lead_auditor",
@@ -112,6 +112,7 @@ async def _load_audit(db: AsyncSession, audit_id: uuid.UUID) -> Audit:
         .options(
             selectinload(Audit.phases),
             selectinload(Audit.norm_links).selectinload(AuditNormLink.norm_reference),
+            selectinload(Audit.category_links),
         )
     )
     audit = result.scalar_one_or_none()
@@ -120,11 +121,28 @@ async def _load_audit(db: AsyncSession, audit_id: uuid.UUID) -> Audit:
     return audit
 
 
+def _audit_base(audit: Audit) -> dict:
+    """Scalar audit fields plus the derived category list.
+
+    ``categories`` lives in a join table rather than on the row, so it cannot be
+    pulled off the ORM object by name like the other AuditOut fields.
+    """
+    data = {
+        f: getattr(audit, f) for f in AuditOut.model_fields if f != "categories"
+    }
+    # Sorted here, not left to the relationship's order_by: that only applies
+    # when the collection comes from the DB, so a collection just mutated in
+    # memory would come back in insertion order and make the response order
+    # depend on the load path.
+    data["categories"] = sorted(link.category for link in audit.category_links)
+    return data
+
+
 def _detail(audit: Audit, today: date | None = None) -> AuditDetail:
     today = today or date.today()
     phases = sorted(audit.phases, key=lambda p: p.position)
     return AuditDetail(
-        **{f: getattr(audit, f) for f in AuditOut.model_fields},
+        **_audit_base(audit),
         phases=[
             PhaseWithFlags(
                 **{f: getattr(p, f) for f in PhaseOut.model_fields},
@@ -166,12 +184,16 @@ async def _set_norm_links(
     wanted = set(norm_ids)
     await _validate_norm_ids(db, wanted)
 
+    # Mutate the relationship collection rather than issuing raw add/delete:
+    # the audit is already loaded, and a raw insert would leave the in-memory
+    # collection stale for the response built after the commit. delete-orphan
+    # turns the removal into a DELETE.
     existing = {link.norm_reference_id: link for link in audit.norm_links}
     for norm_id, link in existing.items():
         if norm_id not in wanted:
-            await db.delete(link)
-    for norm_id in wanted - set(existing):
-        db.add(AuditNormLink(audit_id=audit.id, norm_reference_id=norm_id))
+            audit.norm_links.remove(link)
+    for norm_id in sorted(wanted - set(existing), key=str):
+        audit.norm_links.append(AuditNormLink(norm_reference_id=norm_id))
 
 
 # ── Audits ──────────────────────────────────────────────────────────────
@@ -185,13 +207,19 @@ async def list_audits(
     year: int | None = Query(default=None, ge=2000, le=2100),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[AuditListItem]:
-    stmt = sa.select(Audit).options(selectinload(Audit.phases))
+    stmt = sa.select(Audit).options(
+        selectinload(Audit.phases), selectinload(Audit.category_links)
+    )
     if status:
         stmt = stmt.where(Audit.status == status)
     if audit_type:
         stmt = stmt.where(Audit.audit_type == audit_type)
     if category:
-        stmt = stmt.where(Audit.category == category)
+        # "has this category", not "is exactly this category" — an audit can
+        # carry several (v1.85).
+        stmt = stmt.where(
+            Audit.category_links.any(AuditCategoryLink.category == category)
+        )
     if year:
         stmt = stmt.where(
             sa.extract("year", Audit.planned_start) == year
@@ -203,7 +231,7 @@ async def list_audits(
     today = date.today()
     return [
         AuditListItem(
-            **{f: getattr(a, f) for f in AuditOut.model_fields},
+            **_audit_base(a),
             progress=compute_progress(a, sorted(a.phases, key=lambda p: p.position), today),
         )
         for a in audits
@@ -228,10 +256,13 @@ async def create_audit(
     # rather than half-building an audit.
     await _validate_norm_ids(db, set(payload.norm_reference_ids))
 
-    data = payload.model_dump(exclude={"norm_reference_ids"})
+    data = payload.model_dump(exclude={"norm_reference_ids", "categories"})
     audit = Audit(**data)
     db.add(audit)
     await db.flush()  # assign audit.id before children reference it
+
+    for category in payload.categories:
+        db.add(AuditCategoryLink(audit_id=audit.id, category=category))
 
     # Copy the template's steps into owned phase rows. Copied on purpose: a
     # later template edit must not rewrite an audit already in flight.
@@ -292,6 +323,7 @@ async def patch_audit(
     audit = await _load_audit(db, audit_id)
     changes = patch.model_dump(exclude_unset=True)
     norm_ids = changes.pop("norm_reference_ids", None)
+    categories = changes.pop("categories", None)
 
     before = snapshot(audit, _AUDIT_TRACKED_FIELDS)
     for field, value in changes.items():
@@ -318,6 +350,31 @@ async def patch_audit(
         before=before,
         after=snapshot(audit, _AUDIT_TRACKED_FIELDS),
     )
+
+    if categories is not None:
+        old_categories = sorted(link.category for link in audit.category_links)
+        new_categories = sorted(set(categories))
+        if old_categories != new_categories:
+            # Mutate the relationship collection rather than issuing raw
+            # add/delete: the audit is already loaded, and a raw insert would
+            # leave the in-memory collection stale for the response we build
+            # after the commit. delete-orphan turns the removal into a DELETE.
+            for link in list(audit.category_links):
+                if link.category not in new_categories:
+                    audit.category_links.remove(link)
+            for category in sorted(set(new_categories) - set(old_categories)):
+                audit.category_links.append(AuditCategoryLink(category=category))
+            record(
+                db,
+                actor=current_user,
+                entity_type="audit",
+                entity_id=audit.id,
+                audit_id=audit.id,
+                action="update",
+                field="categories",
+                old_value=", ".join(old_categories),
+                new_value=", ".join(new_categories),
+            )
 
     if norm_ids is not None:
         old_ids = sorted(str(link.norm_reference_id) for link in audit.norm_links)
