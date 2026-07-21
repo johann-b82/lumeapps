@@ -96,6 +96,33 @@ export interface MitarbeiterSchulung {
   status: SchulungStatus;
 }
 
+/** Feine Excel-Kürzel (NÄH, WVK …) bzw. grobe Personio-Abteilungen. */
+export type PflichtEbene = "kuerzel" | "personio";
+
+export interface PflichtMatrix {
+  ebene: PflichtEbene;
+  abteilungen: string[];
+  /** Gesetzte Häkchen als "<schulung_id>:<abteilung>". */
+  regeln: string[];
+}
+
+export function fetchPflichtMatrix(ebene: PflichtEbene): Promise<PflichtMatrix> {
+  return apiClient<PflichtMatrix>(`/api/hr/schulungen/pflicht/${ebene}`);
+}
+
+export function setzePflicht(eingabe: {
+  schulung_id: number;
+  ebene: PflichtEbene;
+  abteilung: string;
+  pflicht: boolean;
+}): Promise<void> {
+  return apiClient<void>("/api/hr/schulungen/pflicht", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
 export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
   return apiClient<MitarbeiterZeile[]>("/api/hr/schulungen/mitarbeiter");
 }

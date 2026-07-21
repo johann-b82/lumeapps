@@ -14,9 +14,13 @@ import {
   fetchAbteilungen,
   fetchMitarbeiter,
   fetchMitarbeiterSchulungen,
+  fetchPflichtMatrix,
   fetchSchulungen,
   schulungImportCommit,
   schulungImportPreview,
+  setzePflicht,
+  type PflichtEbene,
+  type PflichtMatrix,
   type Schulung,
   type SchulungImportVorschau,
   type SchulungStatus,
@@ -121,6 +125,159 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
         </tbody>
       </table>
     </Klappbar>
+  );
+}
+
+/** Anforderungsmatrix: welche Schulung ist für welche Abteilung Pflicht. */
+function PflichtMatrixPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [ebene, setEbene] = useState<PflichtEbene>("kuerzel");
+
+  const { data, isLoading } = useQuery({
+    queryKey: hrKpiKeys.schulungPflicht(ebene),
+    queryFn: () => fetchPflichtMatrix(ebene),
+  });
+
+  const setzen = useMutation({
+    mutationFn: setzePflicht,
+    // Optimistisch: das Häkchen soll sofort reagieren, nicht erst nach dem Server.
+    onMutate: async (eingabe) => {
+      const key = hrKpiKeys.schulungPflicht(eingabe.ebene);
+      await qc.cancelQueries({ queryKey: key });
+      const vorher = qc.getQueryData<PflichtMatrix>(key);
+      if (vorher) {
+        const marke = `${eingabe.schulung_id}:${eingabe.abteilung}`;
+        qc.setQueryData<PflichtMatrix>(key, {
+          ...vorher,
+          regeln: eingabe.pflicht
+            ? [...vorher.regeln, marke]
+            : vorher.regeln.filter((r) => r !== marke),
+        });
+      }
+      return { key, vorher };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.vorher) qc.setQueryData(ctx.key, ctx.vorher);
+      toast.error(e.message);
+    },
+  });
+
+  const gesetzt = useMemo(() => new Set(data?.regeln ?? []), [data]);
+
+  const gruppen = useMemo<[string, Schulung[]][]>(() => {
+    if (!schulungen) return [];
+    const map = new Map<string, Schulung[]>();
+    for (const s of schulungen) {
+      const l = map.get(s.bereich);
+      if (l) l.push(s);
+      else map.set(s.bereich, [s]);
+    }
+    const rang = (b: string) =>
+      b === "betrieblich" ? 0 : b === "Produktion" ? 1 : b === "Verwaltung" ? 2 : 3;
+    return [...map.entries()].sort((a, b) => rang(a[0]) - rang(b[0]));
+  }, [schulungen]);
+
+  const abteilungen = data?.abteilungen ?? [];
+
+  return (
+    <section className="mb-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">{t("schulungen.pflicht.title")}</h2>
+        <div className="flex gap-1 rounded-lg border p-0.5">
+          {(["kuerzel", "personio"] as PflichtEbene[]).map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => setEbene(e)}
+              className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                ebene === e
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {t(`schulungen.pflicht.ebene.${e}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="mb-3 text-xs text-muted-foreground">
+        {t(`schulungen.pflicht.hinweis.${ebene}`)}
+      </p>
+
+      {isLoading && (
+        <div className="flex h-32 items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+        </div>
+      )}
+
+      {data && abteilungen.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+          <table className="text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="sticky left-0 z-10 min-w-[280px] bg-muted/30 px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("schulungen.katalog.name")}
+                </th>
+                {abteilungen.map((a) => (
+                  <th
+                    key={a}
+                    className="px-2 py-2 text-xs font-medium whitespace-nowrap text-muted-foreground"
+                    title={a}
+                  >
+                    {a}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {gruppen.map(([bereich, zeilen]) => (
+              <tbody key={bereich}>
+                <tr className="border-b bg-muted/50">
+                  <td
+                    colSpan={abteilungen.length + 1}
+                    className="sticky left-0 px-4 py-1.5 text-xs font-medium"
+                  >
+                    {bereich}
+                  </td>
+                </tr>
+                {zeilen.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/30"
+                  >
+                    <td className="sticky left-0 z-10 max-w-[380px] truncate bg-card px-4 py-1.5">
+                      {s.name}
+                    </td>
+                    {abteilungen.map((a) => {
+                      const an = gesetzt.has(`${s.id}:${a}`);
+                      return (
+                        <td key={a} className="px-2 py-1.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={an}
+                            aria-label={`${s.name} – ${a}`}
+                            onChange={() =>
+                              setzen.mutate({
+                                schulung_id: s.id,
+                                ebene,
+                                abteilung: a,
+                                pflicht: !an,
+                              })
+                            }
+                            className="h-4 w-4 cursor-pointer accent-primary"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -535,6 +692,9 @@ export function SchulungenPage() {
           />
         )}
       </section>
+
+      {/* Anforderungsmatrix: Pflichtschulungen je Abteilung ankreuzen. */}
+      <PflichtMatrixPanel schulungen={schulungen} />
 
       {/* Mitarbeiter mit Fälligkeiten; Zeile aufklappen = Einzelübersicht. */}
       <MitarbeiterPanel />

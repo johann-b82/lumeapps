@@ -49,6 +49,7 @@ export const hrKpiKeys = {
   orgChart: () => ["hr", "org-chart"] as const,
   schulungen: () => ["hr", "schulungen"] as const,
   schulungAbteilungen: () => ["hr", "schulungen", "abteilungen"] as const,
+  schulungPflicht: (ebene: string) => ["hr", "schulungen", "pflicht", ebene] as const,
   schulungMitarbeiter: () => ["hr", "schulungen", "mitarbeiter"] as const,
   schulungMitarbeiterDetail: (persnr: string) =>
     ["hr", "schulungen", "mitarbeiter", persnr] as const,

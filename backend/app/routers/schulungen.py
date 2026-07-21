@@ -18,7 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import PersonioEmployee, SchulungKatalog, SchulungTeilnahme
+from app.models import PersonioEmployee, SchulungKatalog, SchulungPflicht, SchulungTeilnahme
+from app.models.schulung import PFLICHT_EBENEN
 from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
@@ -128,6 +129,105 @@ async def import_commit(
     """Datei übernehmen (idempotent: erneuter Import aktualisiert)."""
     parsed = await _parse_upload(file)
     return _als_read(await uebernehmen(db, parsed, file.filename or "unbenannt.xlsx"))
+
+
+class PflichtMatrixRead(BaseModel):
+    """Anforderungsmatrix: Achsen plus gesetzte Regeln.
+
+    ``regeln`` enthält nur die gesetzten Häkchen als "<schulung_id>:<abteilung>",
+    damit die Oberfläche nicht 87 × 25 leere Zellen übertragen muss.
+    """
+
+    ebene: str
+    abteilungen: list[str]
+    regeln: list[str]
+
+
+class PflichtSetzen(BaseModel):
+    schulung_id: int
+    ebene: str
+    abteilung: str
+    pflicht: bool
+
+
+@router.get("/pflicht/{ebene}", response_model=PflichtMatrixRead)
+async def pflicht_matrix(
+    ebene: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> PflichtMatrixRead:
+    """Achse und gesetzte Pflicht-Regeln einer Ebene.
+
+    ``kuerzel``  — Abteilungskürzel aus der Schulungs-Excel (fein).
+    ``personio`` — Abteilungen aktiver Personio-Mitarbeiter (grob).
+    """
+    if ebene not in PFLICHT_EBENEN:
+        raise HTTPException(status_code=400, detail="Unbekannte Ebene.")
+
+    if ebene == "kuerzel":
+        werte = (
+            await db.execute(
+                select(SchulungTeilnahme.abteilung_kuerzel)
+                .where(SchulungTeilnahme.abteilung_kuerzel.isnot(None))
+                .distinct()
+            )
+        ).scalars().all()
+    else:
+        werte = (
+            await db.execute(
+                select(PersonioEmployee.department)
+                .where(
+                    PersonioEmployee.status == "active",
+                    PersonioEmployee.department.isnot(None),
+                )
+                .distinct()
+            )
+        ).scalars().all()
+
+    regeln = (
+        await db.execute(
+            select(SchulungPflicht.schulung_id, SchulungPflicht.abteilung).where(
+                SchulungPflicht.ebene == ebene
+            )
+        )
+    ).all()
+
+    return PflichtMatrixRead(
+        ebene=ebene,
+        abteilungen=sorted({w.strip() for w in werte if w and w.strip()}),
+        regeln=[f"{sid}:{abt}" for sid, abt in regeln],
+    )
+
+
+@router.put("/pflicht", status_code=204)
+async def pflicht_setzen(
+    eingabe: PflichtSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Ein Häkchen setzen oder entfernen (idempotent)."""
+    if eingabe.ebene not in PFLICHT_EBENEN:
+        raise HTTPException(status_code=400, detail="Unbekannte Ebene.")
+
+    vorhanden = (
+        await db.execute(
+            select(SchulungPflicht).where(
+                SchulungPflicht.schulung_id == eingabe.schulung_id,
+                SchulungPflicht.ebene == eingabe.ebene,
+                SchulungPflicht.abteilung == eingabe.abteilung,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if eingabe.pflicht and vorhanden is None:
+        db.add(
+            SchulungPflicht(
+                schulung_id=eingabe.schulung_id,
+                ebene=eingabe.ebene,
+                abteilung=eingabe.abteilung,
+            )
+        )
+    elif not eingabe.pflicht and vorhanden is not None:
+        await db.delete(vorhanden)
+    await db.commit()
 
 
 class MitarbeiterSchulungRead(BaseModel):

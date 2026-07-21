@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     Boolean,
     Date,
     DateTime,
@@ -26,6 +27,9 @@ from app.database import Base
 
 #: Bereiche, wie sie die Excel als Arbeitsblätter führt.
 SCHULUNG_BEREICHE = ("betrieblich", "Produktion", "Verwaltung")
+
+#: Ebenen der Anforderungsmatrix — feine Excel-Kürzel bzw. grobe Personio-Abteilung.
+PFLICHT_EBENEN = ("kuerzel", "personio")
 
 
 class SchulungKatalog(Base):
@@ -52,6 +56,28 @@ class SchulungKatalog(Base):
         back_populates="schulung",
         cascade="all, delete-orphan",
     )
+
+
+class SchulungPflicht(Base):
+    """Anforderungsmatrix: diese Schulung ist für diese Abteilung Pflicht.
+
+    ``ebene`` unterscheidet die feinen Excel-Kürzel (``kuerzel``, z. B. NÄH) von
+    den groben Personio-Abteilungen (``personio``, z. B. Production). Die
+    Abteilung ist bewusst Text — die Wertelisten stammen aus Fremdsystemen.
+    """
+
+    __tablename__ = "schulung_pflicht"
+    __table_args__ = (
+        CheckConstraint("ebene IN ('kuerzel','personio')", name="ck_schulung_pflicht_ebene"),
+        UniqueConstraint("schulung_id", "ebene", "abteilung", name="uq_schulung_pflicht_regel"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schulung_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("schulung_katalog.id", ondelete="CASCADE"), nullable=False
+    )
+    ebene: Mapped[str] = mapped_column(String(20), nullable=False)
+    abteilung: Mapped[str] = mapped_column(String(80), nullable=False)
 
 
 class SchulungImport(Base):
