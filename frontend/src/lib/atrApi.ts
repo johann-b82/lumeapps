@@ -1,6 +1,19 @@
 // frontend/src/lib/atrApi.ts
 import { apiClient } from "./apiClient";
 
+/**
+ * Pad a purely numeric PO position to 3 digits with leading zeros
+ * ("5" -> "005", "50" -> "050"). Empty, non-numeric, or already
+ * longer-than-3-digit values are returned unchanged. Mirrors the
+ * backend `normalize_po_pos`.
+ */
+export function formatPoPos(value: string | null | undefined): string {
+  if (value == null) return "";
+  const s = value.trim();
+  if (/^\d{1,3}$/.test(s)) return s.padStart(3, "0");
+  return value;
+}
+
 export interface AtrPart {
   id: number;
   part_number: string;

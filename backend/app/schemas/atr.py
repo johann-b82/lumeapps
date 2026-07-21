@@ -5,7 +5,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.atr_format import normalize_po_pos
 
 
 class AtrPartRead(BaseModel):
@@ -35,6 +37,11 @@ class AtrPartCreate(BaseModel):
     category: str | None = Field(default=None, max_length=40)
     po_pos: str | None = Field(default=None, max_length=20)
 
+    @field_validator("po_pos")
+    @classmethod
+    def _norm_po_pos(cls, v: str | None) -> str | None:
+        return normalize_po_pos(v)
+
 
 class AtrPartUpdate(BaseModel):
     part_number: str | None = Field(default=None, max_length=60)
@@ -45,6 +52,11 @@ class AtrPartUpdate(BaseModel):
     qty: int | None = None
     category: str | None = Field(default=None, max_length=40)
     po_pos: str | None = Field(default=None, max_length=20)
+
+    @field_validator("po_pos")
+    @classmethod
+    def _norm_po_pos(cls, v: str | None) -> str | None:
+        return normalize_po_pos(v)
 
 
 class AtrTemplateRead(BaseModel):

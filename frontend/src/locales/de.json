@@ -1004,7 +1004,6 @@
   "atr.parts.col.category": "Kategorie",
   "atr.parts.col.drawing": "Zeichnung / Index",
   "atr.parts.col.weight": "Gewicht [kg]",
-  "atr.parts.col.po_pos": "PO Pos",
   "atr.parts.col.source": "Quelldatei",
   "atr.parts.empty": "Noch keine Teile — bitte eine Referenzdatei importieren.",
   "atr.parts.save": "Speichern",
