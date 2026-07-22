@@ -41,6 +41,17 @@ export interface AtrPartUpdate {
   po_pos?: string | null; // editable from AtrPartsPage
 }
 
+export interface AtrPartCreate {
+  part_number: string;
+  supplier_article_code?: string | null;
+  part_name?: string | null;
+  drawing_number_issue?: string | null;
+  default_weight_kg?: string | null;
+  qty?: number;
+  category?: string | null;
+  po_pos?: string | null;
+}
+
 export interface AtrTemplate {
   id: number;
   customer: string | null;
@@ -97,7 +108,7 @@ export async function fetchAtrParts(search?: string): Promise<AtrPart[]> {
   return apiClient<AtrPart[]>(`/api/atr/parts${qs}`);
 }
 
-export async function createAtrPart(body: { part_number: string }): Promise<AtrPart> {
+export async function createAtrPart(body: AtrPartCreate): Promise<AtrPart> {
   return apiClient<AtrPart>("/api/atr/parts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

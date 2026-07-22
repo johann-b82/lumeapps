@@ -2,15 +2,17 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Pencil, Check, Trash2 } from "lucide-react";
+import { Pencil, Check, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
-  fetchAtrParts, updateAtrPart, deleteAtrPart, type AtrPart,
+  fetchAtrParts, updateAtrPart, deleteAtrPart, createAtrPart,
+  type AtrPart, type AtrPartCreate,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { AtrDeliveriesPage } from "@/pages/AtrDeliveriesPage";
 
 type PartRow = AtrPart & Record<string, unknown>;
+const EMPTY_NEW: AtrPartCreate = { part_number: "" };
 
 export function AtrPartsPage() {
   const { t } = useTranslation();
@@ -27,6 +29,22 @@ export function AtrPartsPage() {
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<AtrPart>>({});
+  const [showAdd, setShowAdd] = useState(false);
+  const [newPart, setNewPart] = useState<AtrPartCreate>(EMPTY_NEW);
+
+  const create = useMutation({
+    mutationFn: () => createAtrPart({
+      ...newPart,
+      part_number: newPart.part_number.trim(),
+    }),
+    onSuccess: () => {
+      toast.success(t("atr.parts.created"));
+      setNewPart(EMPTY_NEW);
+      setShowAdd(false);
+      qc.invalidateQueries({ queryKey: ["atr", "parts"] });
+    },
+    onError: (e: unknown) => toast.error(String(e)),
+  });
 
   const save = useMutation({
     mutationFn: (id: number) => updateAtrPart(id, {
@@ -95,21 +113,69 @@ export function AtrPartsPage() {
     },
   ];
 
+  const nfield = (key: keyof AtrPartCreate, label: string, required = false) => (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="text-muted-foreground">{label}{required ? " *" : ""}</span>
+      <input className="border rounded px-2 py-1.5"
+        value={(newPart[key] as string | undefined) ?? ""}
+        onChange={(e) => setNewPart((p) => ({ ...p, [key]: e.target.value }))} />
+    </label>
+  );
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
       {tab === "parts" ? (
-        <DataTable
-          search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
-          columns={columns}
-          rows={(parts ?? []) as PartRow[]}
-          rowKey={(p) => p.id}
-          rowTestId={(p) => `atr-part-${p.id}`}
-          isLoading={isLoading}
-          emptyText={t("atr.parts.empty")}
-          initialSort={{ key: "part_number", dir: "asc" }}
-          pageSize={25}
-          minWidth={880}
-        />
+        <div className="space-y-4">
+          {showAdd && (
+            <div className="border rounded-lg p-4 bg-card">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {nfield("part_number", t("atr.parts.col.part_number"), true)}
+                {nfield("part_name", t("atr.parts.col.name"))}
+                {nfield("category", t("atr.parts.col.category"))}
+                {nfield("drawing_number_issue", t("atr.parts.col.drawing"))}
+                {nfield("default_weight_kg", t("atr.parts.col.weight"))}
+                {nfield("po_pos", t("atr.parts.col.po_pos"))}
+                {nfield("supplier_article_code", t("atr.parts.col.supplier_code"))}
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
+                  disabled={!newPart.part_number.trim() || create.isPending}
+                  onClick={() => create.mutate()}
+                >
+                  {t("atr.parts.create")}
+                </button>
+                <button
+                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent/10"
+                  onClick={() => { setShowAdd(false); setNewPart(EMPTY_NEW); }}
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          )}
+          <DataTable
+            actions={
+              <button
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm hover:opacity-90"
+                onClick={() => setShowAdd((v) => !v)}
+              >
+                <Plus className="h-4 w-4" />
+                {t("atr.parts.add")}
+              </button>
+            }
+            search={{ value: search, onChange: setSearch, placeholder: t("atr.parts.search") }}
+            columns={columns}
+            rows={(parts ?? []) as PartRow[]}
+            rowKey={(p) => p.id}
+            rowTestId={(p) => `atr-part-${p.id}`}
+            isLoading={isLoading}
+            emptyText={t("atr.parts.empty")}
+            initialSort={{ key: "part_number", dir: "asc" }}
+            pageSize={25}
+            minWidth={880}
+          />
+        </div>
       ) : (
         <AtrDeliveriesPage />
       )}
