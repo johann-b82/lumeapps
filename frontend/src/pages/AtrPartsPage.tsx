@@ -33,10 +33,16 @@ export function AtrPartsPage() {
   const [newPart, setNewPart] = useState<AtrPartCreate>(EMPTY_NEW);
 
   const create = useMutation({
-    mutationFn: () => createAtrPart({
-      ...newPart,
-      part_number: newPart.part_number.trim(),
-    }),
+    mutationFn: () => {
+      // Accept a German decimal comma in the weight field (0,44 -> 0.44); the
+      // backend Decimal parser needs a period. Empty weight -> null.
+      const weight = newPart.default_weight_kg?.replace(",", ".").trim();
+      return createAtrPart({
+        ...newPart,
+        part_number: newPart.part_number.trim(),
+        default_weight_kg: weight || null,
+      });
+    },
     onSuccess: () => {
       toast.success(t("atr.parts.created"));
       setNewPart(EMPTY_NEW);
