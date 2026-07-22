@@ -18,7 +18,7 @@ from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
+from openpyxl.styles import Alignment, PatternFill
 from openpyxl.worksheet.properties import PageSetupProperties
 
 from app.services.atr_format import normalize_po_pos
@@ -132,10 +132,13 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     r = _FIRST_PART_ROW
     total_weight = Decimal("0")
     for cat, lst in grouped:
-        # section header row
+        # section header row: category label centered across A..H (through
+        # the Weight column), then the inspection columns I..N stay separate.
         for c in range(1, _NCOLS + 1):
             ws.cell(r, c)._style = copy(section_style[c - 1])
         ws.cell(r, 1, cat or "")
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=8)
+        ws.cell(r, 1).alignment = Alignment(horizontal="center", vertical="center")
         r += 1
         for it in lst:
             for c in range(1, _NCOLS + 1):
