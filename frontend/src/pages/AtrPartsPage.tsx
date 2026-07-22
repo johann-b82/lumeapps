@@ -134,7 +134,6 @@ export function AtrPartsPage() {
                 {nfield("category", t("atr.parts.col.category"))}
                 {nfield("drawing_number_issue", t("atr.parts.col.drawing"))}
                 {nfield("default_weight_kg", t("atr.parts.col.weight"))}
-                {nfield("po_pos", t("atr.parts.col.po_pos"))}
                 {nfield("supplier_article_code", t("atr.parts.col.supplier_code"))}
               </div>
               <div className="mt-4 flex gap-2">
