@@ -28,6 +28,9 @@ _TABLE_HEADER_ROW = 13
 _FIRST_PART_ROW = 14
 _NCOLS = 14  # A..N
 _DE_NUM = "[$-407]0.00"  # force German decimal comma regardless of LibreOffice locale
+_ACM_ADDRESS = "ACM GmbH - Brandstücken 16 - 22549 Hamburg"
+# Certification block (row wraps to 3 lines; merged cells don't auto-size height).
+_CERT_ROW_HEIGHT = 48.0
 
 
 def _de_date(d) -> str:
@@ -62,6 +65,7 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     ws = _visible_sheet(wb)
 
     # --- header block (template defaults stay; per-delivery values overwrite) ---
+    ws["D8"] = _ACM_ADDRESS  # supplier address (static — overrides the template)
     if delivery.set_title is not None:
         ws["A11"] = delivery.set_title
     if delivery.po_number is not None:
@@ -164,6 +168,14 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
         if "max" in str(ws.cell(rr, 6).value or "").lower() and delivery.max_guaranteed_weight_kg is not None:
             mg = ws.cell(rr, 8, float(delivery.max_guaranteed_weight_kg))
             mg.number_format = _DE_NUM
+
+    # Grow the certification row so its wrapped 3-line text isn't clipped —
+    # merged cells (A..F / G..N) don't auto-size row height. Located after the
+    # row surgery since the block shifts with the rewritten part region.
+    cert_row = next((c.row for row in ws.iter_rows() for c in row
+                     if isinstance(c.value, str) and "hereby certify" in c.value), None)
+    if cert_row is not None:
+        ws.row_dimensions[cert_row].height = _CERT_ROW_HEIGHT
 
     # Fit to one page WIDE (kills the horizontal overflow that doubled the page
     # count); height flows to as many pages as needed. Constrain print_area to

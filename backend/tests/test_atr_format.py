@@ -7,10 +7,13 @@ from app.services.atr_format import normalize_po_pos
 @pytest.mark.parametrize(
     "value,expected",
     [
-        ("5", "005"),
-        ("50", "050"),
-        ("500", "500"),
-        (" 50 ", "050"),
+        ("1", "010"),
+        ("12", "120"),
+        ("5", "050"),
+        ("50", "500"),
+        ("500", "500"),      # already 3 digits -> idempotent
+        ("050", "050"),      # idempotent
+        (" 50 ", "500"),
         ("0", "000"),
         ("", ""),
         (None, None),
