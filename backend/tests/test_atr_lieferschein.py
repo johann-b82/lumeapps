@@ -36,6 +36,19 @@ def test_parse_missing_field_warns():
     assert any("auftrag" in w.lower() or "bestelldaten" in w.lower() for w in pl.warnings)
 
 
+def test_bezeichnung_strips_right_column_note():
+    # pdftotext -layout can merge a right-column note onto the Bezeichnung line.
+    text = (
+        "Nr. 1\nDatum 01.01.2026\n"
+        "11 6060 1 STK\n"
+        "SEC. LINING STAIRHOUSE 04                         Freigabe durch AV\n"
+        "Ihre Nr. VR11S1020078000\nAuftrag Nr. 1024738 / 11\n"
+        "Bestelldaten 4501119979/A350/CCRC/MSN830/6-Bett\n"
+    )
+    pl = parse_lieferschein_text(text)
+    assert pl.positions[0].bezeichnung == "SEC. LINING STAIRHOUSE 04"
+
+
 def test_zero_positions_warns():
     pl = parse_lieferschein_text("LIEFERSCHEIN\nNr. 1\n")
     assert pl.positions == []

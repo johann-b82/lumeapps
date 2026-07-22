@@ -177,6 +177,15 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     if cert_row is not None:
         ws.row_dimensions[cert_row].height = _CERT_ROW_HEIGHT
 
+    # QA signer (C/L on the "Date:" row). The template ships a static name;
+    # make the delivery's qa_signer authoritative (blank when unset) so the
+    # field actually drives the document.
+    sig_row = next((r for r in range(new_totals_row, ws.max_row + 1)
+                    if str(ws.cell(r, 1).value or "").strip() == "Date:"), None)
+    if sig_row is not None:
+        ws.cell(sig_row, 3, delivery.qa_signer or "")
+        ws.cell(sig_row, 12, delivery.qa_signer or "")
+
     # Fit to one page WIDE (kills the horizontal overflow that doubled the page
     # count); height flows to as many pages as needed. Constrain print_area to
     # A..N so stray far-right cells don't spawn extra pages.

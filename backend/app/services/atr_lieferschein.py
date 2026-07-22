@@ -122,9 +122,12 @@ def parse_lieferschein_text(text: str) -> ParsedLieferschein:
             cur.index = mx.group(1)
             continue
         # First non-empty, non-keyword line after the Pos line → Bezeichnung.
+        # `pdftotext -layout` can merge a right-column note (e.g. "Freigabe
+        # durch AV") onto the same line; cut at the first run of 3+ spaces so an
+        # unmatched item's name stays the bare Bezeichnung.
         s = line.strip()
         if s and cur.bezeichnung is None and not s.lower().startswith("teppich"):
-            cur.bezeichnung = s
+            cur.bezeichnung = re.split(r"\s{3,}", s, maxsplit=1)[0].strip()
     _flush(cur)
 
     if not pl.positions:
