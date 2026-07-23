@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, Info, Loader2, Upload } from "lucide-react";
 import {
   fetchMatrix,
   fetchMatrizen,
@@ -51,6 +51,59 @@ function ZelleAnzeige({
         </span>
       )}
     </span>
+  );
+}
+
+/** Erläuterungen aus der Excel — was AL und Erfüllungsgrad bedeuten.
+ *
+ *  Steht in der Excel als Fließtext über der Matrix. Hier zweisprachig aus
+ *  den i18n-Dateien, damit die englische Oberfläche nicht auf Deutsch fällt.
+ */
+function LegendePanel() {
+  const { t } = useTranslation();
+  const stufen = [1, 2, 3, 4];
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("kompetenzen.erlaeuterungen")}
+        icon={<Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-4 px-4 py-3 text-sm">
+          <div>
+            <p className="mb-1 font-medium">{t("kompetenzen.al.title")}</p>
+            <p className="mb-2 text-muted-foreground">{t("kompetenzen.al.intro")}</p>
+            <ul className="space-y-1">
+              {stufen.map((s) => (
+                <li key={s} className="flex gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center
+                                   rounded bg-muted text-xs tabular-nums text-muted-foreground">
+                    {s}
+                  </span>
+                  <span>{t(`kompetenzen.al.stufe${s}`)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="mb-1 font-medium">{t("kompetenzen.eg.title")}</p>
+            <p className="text-muted-foreground">{t("kompetenzen.eg.intro")}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[0, 25, 50, 75, 100].map((g) => (
+                <span
+                  key={g}
+                  className={`rounded px-2 py-0.5 text-xs tabular-nums ${gradFarbe(g)}`}
+                >
+                  {g} %
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Klappbar>
+    </section>
   );
 }
 
@@ -419,6 +472,8 @@ export function KompetenzenPage() {
           </button>
         ))}
       </div>
+
+      <LegendePanel />
 
       <ImportPanel bereich={bereich} />
 

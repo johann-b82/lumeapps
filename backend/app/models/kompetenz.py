@@ -15,15 +15,6 @@ from app.database import Base
 #: Die vier Fachbereiche. Quality bringt drei Blätter mit (QM, CS, QS).
 KOMPETENZ_BEREICHE = ("produktion", "verwaltung", "safety", "quality")
 
-#: Legende der Excel — Anforderungslevel.
-ANFORDERUNGSLEVEL = {
-    0: "nicht gefordert",
-    1: "Grundkenntnisse erforderlich",
-    2: "Fachwissen für Zuarbeiten erforderlich",
-    3: "gutes Fachwissen, selbstständiges Arbeiten",
-    4: "Experte",
-}
-
 
 class KompetenzMatrix(Base):
     """Eine Matrix = ein Blatt einer Bereichsdatei."""
@@ -112,7 +103,8 @@ class KompetenzBewertung(Base):
     person_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("kompetenz_person.id", ondelete="CASCADE"), nullable=False
     )
-    #: 0-4, siehe ANFORDERUNGSLEVEL.
+    #: Anforderungslevel 0-4; die Bedeutung der Stufen steht als Legende in
+    #: der Oberfläche (zweisprachig), siehe i18n-Schlüssel kompetenzen.al.*.
     anforderungslevel: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: 0-100 %.
     erfuellungsgrad: Mapped[int | None] = mapped_column(Integer, nullable=True)

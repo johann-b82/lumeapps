@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_async_db_session
 from app.models import KompetenzMatrix, KompetenzQualifikation
-from app.models.kompetenz import ANFORDERUNGSLEVEL, KOMPETENZ_BEREICHE
+from app.models.kompetenz import KOMPETENZ_BEREICHE
 from app.parsing.kompetenz_parser import parse_qualifikationsmatrix
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.kompetenz_import import ImportVorschau, baue_vorschau, uebernehmen
@@ -100,8 +100,6 @@ class MatrixRead(BaseModel):
     titel: str | None
     stand: date | None
     importiert_am: datetime
-    #: Legende der Anforderungslevel (Stufe -> Bedeutung).
-    level_legende: dict[int, str]
     personen: list[PersonRead]
     qualifikationen: list[QualifikationRead]
 
@@ -263,7 +261,6 @@ async def matrix_ansehen(
         titel=matrix.titel,
         stand=matrix.stand,
         importiert_am=matrix.importiert_am,
-        level_legende=ANFORDERUNGSLEVEL,
         personen=[
             PersonRead(
                 id=p.id,

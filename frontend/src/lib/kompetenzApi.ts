@@ -58,7 +58,6 @@ export interface Matrix {
   titel: string | null;
   stand: string | null;
   importiert_am: string;
-  level_legende: Record<string, string>;
   personen: KompetenzPerson[];
   qualifikationen: Qualifikation[];
 }
