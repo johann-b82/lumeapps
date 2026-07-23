@@ -4,13 +4,15 @@ Schritte 4/5 des Prozesskonzepts. Der Router ist komplett admin-gated (HR).
 
 Compute-justified: clause 3 (multi-row atomic compute) — das Anlegen eines
 Plans schreibt mehrere Teilnahme-Zeilen in einer Transaktion; die Ableitung
-selbst verknüpft Anforderungsmatrix, Rollen-Zuordnung und Bestand.
+selbst verknüpft Anforderungsmatrix, Rollen-Zuordnung und Bestand. Clause 2
+(document generation) — /plan/{id}/pdf baut Formblatt 71 serverseitig auf und
+konvertiert es über LibreOffice.
 """
 from __future__ import annotations
 
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +29,11 @@ from app.services.onboarding import (
     normalisiere_position,
     plan_anlegen,
     schulungsplan,
+)
+from app.services.schulungsuebersicht_pdf import (
+    UebersichtZeile,
+    dateiname,
+    erzeuge_schulungsuebersicht_pdf,
 )
 
 router = APIRouter(
@@ -265,4 +272,39 @@ async def rolle_setzen(
         id=vorhanden.id,
         position=vorhanden.position,
         abteilung_kuerzel=vorhanden.abteilung_kuerzel,
+    )
+
+
+@router.get("/plan/{employee_id}/pdf")
+async def plan_als_pdf(
+    employee_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Schulungsübersicht der Person als PDF (Formblatt 71).
+
+    Listet die Soll-Schulungen aus der Anforderungsmatrix — das Blatt ist der
+    Plan, den der neue Mitarbeiter abarbeitet. Zeitraum und Nachweis bleiben
+    leer, bis die Schulung stattgefunden hat; ein Datum vorzugeben, das noch
+    niemand terminiert hat, wäre erfunden.
+
+    Compute-justified: clause 2 (document generation) — openpyxl-Aufbau plus
+    LibreOffice-Konvertierung laufen serverseitig.
+    """
+    emp = await _employee(db, employee_id)
+    plan = await schulungsplan(db, emp)
+
+    zeilen = [
+        UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)
+        for s in plan.soll
+    ]
+    pdf = await erzeuge_schulungsuebersicht_pdf(
+        name=plan.name,
+        funktion=plan.position or "",
+        zeilen=zeilen,
+    )
+    name = dateiname(plan.name, date.today())
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
     )

@@ -5,6 +5,7 @@
  * Personio-Abteilung, feine Ebene über die Zuordnung Position → Kürzel.
  */
 import { apiClient } from "./apiClient";
+import { fetchBlob, openBlob } from "./download";
 
 export interface Eintritt {
   employee_id: number;
@@ -85,4 +86,19 @@ export function setzeRolle(eingabe: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(eingabe),
   });
+}
+
+/** Lädt die Schulungsübersicht (Formblatt 71) der Person als PDF herunter. */
+export async function ladeSchulungsuebersicht(
+  employeeId: number,
+  name: string,
+): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/onboarding/plan/${employeeId}/pdf`);
+  const heute = new Date();
+  const stand = [
+    heute.getFullYear(),
+    String(heute.getMonth() + 1).padStart(2, "0"),
+    String(heute.getDate()).padStart(2, "0"),
+  ].join(".");
+  openBlob(blob, `${stand}_${name.split(" ").join("_")}_Schulungsuebersicht.pdf`);
 }

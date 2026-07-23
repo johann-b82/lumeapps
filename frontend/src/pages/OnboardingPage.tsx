@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Check, Loader2, UserPlus, Wrench } from "lucide-react";
+import { AlertTriangle, Check, FileDown, Loader2, UserPlus, Wrench } from "lucide-react";
 import {
   erzeugePlan,
   fetchEintritte,
   fetchPlan,
   fetchKuerzel,
   fetchRollen,
+  ladeSchulungsuebersicht,
   setzeRolle,
   type Eintritt,
 } from "@/lib/onboardingApi";
@@ -39,6 +40,11 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
       // Die Schulungssichten zeigen die neuen Zeilen ebenfalls.
       qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const pdfLaden = useMutation({
+    mutationFn: () => ladeSchulungsuebersicht(eintritt.employee_id, eintritt.name),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -99,24 +105,45 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
               ))}
             </tbody>
           </table>
-
-          {data.fehlend > 0 && (
-            <button
-              type="button"
-              onClick={() => anlegen.mutate()}
-              disabled={anlegen.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
-                         text-primary-foreground disabled:opacity-60
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {anlegen.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              )}
-              {t("onboarding.planAnlegen", { count: data.fehlend })}
-            </button>
-          )}
         </>
       )}
+
+      {/* Außerhalb der Soll-Bedingung: das Formblatt lässt sich auch leer
+          ausdrucken und von Hand ausfüllen — und solange die Anforderungsmatrix
+          nicht gepflegt ist, ist das Soll bei jedem leer. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {data.fehlend > 0 && (
+          <button
+            type="button"
+            onClick={() => anlegen.mutate()}
+            disabled={anlegen.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
+                       text-primary-foreground disabled:opacity-60
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {anlegen.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            {t("onboarding.planAnlegen", { count: data.fehlend })}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => pdfLaden.mutate()}
+          disabled={pdfLaden.isPending}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
+                     transition-colors hover:bg-muted disabled:opacity-60
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {pdfLaden.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+          )}
+          {t("onboarding.uebersichtPdf")}
+        </button>
+      </div>
     </div>
   );
 }

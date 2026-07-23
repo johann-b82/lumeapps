@@ -5,7 +5,8 @@
  * fetched as raw Blobs with the token attached manually, since apiClient only
  * returns parsed JSON.
  */
-import { apiClient, getAccessToken, trySilentRefresh } from "@/lib/apiClient";
+import { apiClient } from "@/lib/apiClient";
+import { fetchBlob, openBlob } from "@/lib/download";
 
 export type IntervalType =
   | "daily"
@@ -120,42 +121,6 @@ export const maintenanceApi = {
   deleteFile: (fileId: string) =>
     apiClient<void>(`/api/maintenance/files/${fileId}`, { method: "DELETE" }),
 };
-
-/** Fetch bytes from an admin-gated GET endpoint as a Blob (attaches the Bearer
- *  token manually; retries once after a silent refresh on 401). */
-async function fetchBlob(url: string): Promise<Blob> {
-  const doFetch = () => {
-    const token = getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(url, { headers, credentials: "include" });
-  };
-  let res = await doFetch();
-  if (res.status === 401 && (await trySilentRefresh())) {
-    res = await doFetch();
-  }
-  if (!res.ok) {
-    throw new Error(`Download fehlgeschlagen (HTTP ${res.status})`);
-  }
-  return res.blob();
-}
-
-/** Open a blob in a new tab (file preview) or trigger a download. */
-function openBlob(blob: Blob, filename?: string): void {
-  const url = URL.createObjectURL(blob);
-  if (filename) {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } else {
-    window.open(url, "_blank", "noopener");
-  }
-  // Revoke on the next tick so the navigation/download has picked up the URL.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
 
 export async function downloadMachineSheet(
   machineId: string,

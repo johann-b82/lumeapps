@@ -930,6 +930,7 @@
   "onboarding.offen": "open",
   "onboarding.keinSoll": "No mandatory training is defined for this person in the requirement matrix yet.",
   "onboarding.planAnlegen": "Create {{count}} missing training(s)",
+  "onboarding.uebersichtPdf": "Training overview (PDF)",
   "onboarding.planAngelegt": "Training plan created ({{count}} trainings).",
   "onboarding.kuerzelFehlt": "There is no department-code mapping for the position \"{{position}}\". The fine-grained level of the requirement matrix therefore does not apply — some mandatory trainings may be missing.",
   "onboarding.kuerzelFehltKurz": "Position mapping missing",

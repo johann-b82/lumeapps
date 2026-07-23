@@ -926,6 +926,7 @@
   "onboarding.offen": "offen",
   "onboarding.keinSoll": "Für diese Person ist in der Anforderungsmatrix noch keine Pflichtschulung hinterlegt.",
   "onboarding.planAnlegen": "{{count}} fehlende Schulung(en) anlegen",
+  "onboarding.uebersichtPdf": "Schulungsübersicht (PDF)",
   "onboarding.planAngelegt": "Schulungsplan angelegt ({{count}} Schulungen).",
   "onboarding.kuerzelFehlt": "Für die Position „{{position}}“ gibt es keine Zuordnung zu einem Abteilungskürzel. Die feine Ebene der Anforderungsmatrix greift deshalb nicht — es werden möglicherweise zu wenige Pflichtschulungen angezeigt.",
   "onboarding.kuerzelFehltKurz": "Positions-Zuordnung fehlt",
