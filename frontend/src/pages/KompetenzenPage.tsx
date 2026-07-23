@@ -1,22 +1,19 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Info, Loader2, Pencil, Upload, X } from "lucide-react";
+import { Info, Loader2, Pencil, Table2, X } from "lucide-react";
 import {
   entfernePerson,
   entferneQualifikation,
   fetchMatrix,
   fetchMatrizen,
   fetchVerfuegbarePersonen,
-  kompetenzImportCommit,
-  kompetenzImportPreview,
   legePersonAn,
   legeQualifikationAn,
   setzeZelle,
   KOMPETENZ_BEREICHE,
   type KompetenzBereich,
-  type KompetenzImportVorschau,
   type Matrix,
   type MatrixUebersicht,
   type Qualifikation,
@@ -651,128 +648,6 @@ function PersonenPanel({ matrix }: { matrix: Matrix }) {
   );
 }
 
-/** Ergebnis von Vorschau bzw. Übernahme. */
-function Vorschau({
-  vorschau,
-  uebernommen,
-}: {
-  vorschau: KompetenzImportVorschau;
-  uebernommen: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="mt-3 rounded-xl border bg-card p-4 text-sm shadow-sm">
-      <p className="mb-2 font-medium">
-        {uebernommen ? t("kompetenzen.import.uebernommen") : t("kompetenzen.import.vorschau")} ·{" "}
-        <span className="font-mono text-xs text-muted-foreground">{vorschau.dateiname}</span>
-      </p>
-      <ul className="space-y-1">
-        {vorschau.matrizen.map((m) => (
-          <li key={m.blatt}>
-            <span className="font-medium">{m.blatt}</span>{" "}
-            <span className="text-muted-foreground">
-              {t("kompetenzen.import.zahlen", {
-                qualifikationen: m.qualifikationen,
-                personen: m.personen,
-                bewertungen: m.bewertungen,
-              })}
-            </span>
-            {m.nicht_zugeordnet.length > 0 && (
-              <div className="mt-0.5 flex gap-2 text-xs text-amber-600 dark:text-amber-400">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>
-                  {t("kompetenzen.import.ohneTreffer")}: {m.nicht_zugeordnet.join(", ")}
-                </span>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {vorschau.warnungen.map((w) => (
-        <p key={w} className="mt-2 text-xs text-muted-foreground">
-          {w}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/** Import einer Bereichsdatei. */
-function ImportPanel({ bereich }: { bereich: KompetenzBereich }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const eingabe = useRef<HTMLInputElement>(null);
-  const [datei, setDatei] = useState<File | null>(null);
-  const [vorschau, setVorschau] = useState<KompetenzImportVorschau | null>(null);
-  const [uebernommen, setUebernommen] = useState(false);
-
-  const pruefen = useMutation({
-    mutationFn: (f: File) => kompetenzImportPreview(bereich, f),
-    onSuccess: (v) => {
-      setVorschau(v);
-      setUebernommen(false);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const uebernehmen = useMutation({
-    mutationFn: (f: File) => kompetenzImportCommit(bereich, f),
-    onSuccess: (v) => {
-      setVorschau(v);
-      setUebernommen(true);
-      toast.success(t("kompetenzen.import.erfolg", { count: v.matrizen.length }));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrizen() });
-      qc.invalidateQueries({ queryKey: ["hr", "kompetenzen", "matrix"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const laeuft = pruefen.isPending || uebernehmen.isPending;
-
-  return (
-    <section className="mb-6">
-      <Klappbar
-        titel={t("kompetenzen.import.title")}
-        icon={<Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-        offenStart={false}
-      >
-        <div className="px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={eingabe}
-              type="file"
-              accept=".xlsx,.xlsm"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                setDatei(f);
-                setVorschau(null);
-                if (f) pruefen.mutate(f);
-              }}
-              className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted
-                         file:px-3 file:py-1.5 file:text-sm"
-            />
-            <button
-              type="button"
-              disabled={!datei || laeuft || !vorschau}
-              onClick={() => datei && uebernehmen.mutate(datei)}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm
-                         text-primary-foreground disabled:opacity-50
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {laeuft && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {t("kompetenzen.import.aktion")}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t("kompetenzen.import.hinweis")}
-          </p>
-          {vorschau && <Vorschau vorschau={vorschau} uebernommen={uebernommen} />}
-        </div>
-      </Klappbar>
-    </section>
-  );
-}
-
 /**
  * HR › Kompetenzen. Qualifikationsmatrix je Bereich.
  *
@@ -830,7 +705,6 @@ export function KompetenzenPage() {
 
       <LegendePanel />
 
-      <ImportPanel bereich={bereich} />
 
       {isLoading && (
         <div className="flex h-24 items-center justify-center">
@@ -840,7 +714,7 @@ export function KompetenzenPage() {
 
       {!isLoading && imBereich.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-20 text-center">
-          <Upload className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+          <Table2 className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium">
             {t("kompetenzen.leer.title", { abteilung: t(`kompetenzen.abteilung.${bereich}`) })}
           </p>

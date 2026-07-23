@@ -139,6 +139,13 @@ async def _parse_upload(file: UploadFile):
         ) from exc
 
 
+# Die beiden Import-Routen haben seit v1.91 keine Oberfläche mehr: führend ist
+# die Tabelle in der App, nicht die Excel. Sie bleiben für die Erstbefüllung
+# eines Bereichs bestehen (Betrieb ruft sie einmalig auf) — ein Aufruf ERSETZT
+# die Matrizen des Bereichs blattweise und verwirft dabei alles von Hand
+# Gepflegte. Ohne Oberfläche kann das niemand mehr versehentlich auslösen.
+
+
 @router.post("/{bereich}/import/preview", response_model=ImportVorschauRead)
 async def import_preview(
     bereich: str,
