@@ -74,8 +74,10 @@ export function fetchAbteilungen(): Promise<Abteilung[]> {
 export type SchulungStatus = "ueberfaellig" | "bald" | "ok" | "ohne_frist";
 
 export interface MitarbeiterZeile {
+  /** "p:<personalnummer>" oder "e:<employee_id>" — siehe fetchMitarbeiterSchulungen. */
+  schluessel: string;
   employee_id: number | null;
-  personalnummer: string;
+  personalnummer: string | null;
   name: string;
   abteilung: string | null;
   schulungen: number;
@@ -85,6 +87,8 @@ export interface MitarbeiterZeile {
 }
 
 export interface MitarbeiterSchulung {
+  /** Zeilen-ID, nötig zum Entfernen einer Einzelzuweisung. */
+  teilnahme_id: number;
   schulung_id: number;
   bereich: string;
   name: string;
@@ -148,9 +152,48 @@ export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
 }
 
 export function fetchMitarbeiterSchulungen(
-  personalnummer: string,
+  schluessel: string,
 ): Promise<MitarbeiterSchulung[]> {
   return apiClient<MitarbeiterSchulung[]>(
-    `/api/hr/schulungen/mitarbeiter/${encodeURIComponent(personalnummer)}`,
+    `/api/hr/schulungen/mitarbeiter/${encodeURIComponent(schluessel)}`,
   );
+}
+
+export interface ZuweisbarerMitarbeiter {
+  employee_id: number;
+  personalnummer: string | null;
+  name: string;
+  abteilung: string | null;
+}
+
+/** Alle aktiven Personio-Mitarbeiter — auch ohne bisherige Schulung. */
+export function fetchZuweisbare(): Promise<ZuweisbarerMitarbeiter[]> {
+  return apiClient<ZuweisbarerMitarbeiter[]>("/api/hr/schulungen/zuweisbar");
+}
+
+export interface Zuweisung {
+  teilnahme_id: number;
+  employee_id: number;
+  schulung_id: number;
+  name: string;
+  schulung: string;
+}
+
+/** Weist einer einzelnen Person eine einzelne Schulung zu (offen, ohne Datum). */
+export function weiseSchulungZu(eingabe: {
+  employee_id: number;
+  schulung_id: number;
+}): Promise<Zuweisung> {
+  return apiClient<Zuweisung>("/api/hr/schulungen/zuweisen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Nimmt eine Zuweisung zurück — nur solange kein Nachweis eingetragen ist. */
+export function entferneZuweisung(teilnahmeId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/zuweisung/${teilnahmeId}`, {
+    method: "DELETE",
+  });
 }

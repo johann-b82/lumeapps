@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
@@ -25,7 +25,12 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
 from app.routers.hr_kpis import _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
-from app.services.schulung_import import ImportVorschau, baue_vorschau, uebernehmen
+from app.services.schulung_import import (
+    ImportVorschau,
+    _personalnummer,
+    baue_vorschau,
+    uebernehmen,
+)
 
 router = APIRouter(
     prefix="/api/hr/schulungen",
@@ -233,6 +238,8 @@ async def pflicht_setzen(
 class MitarbeiterSchulungRead(BaseModel):
     """Eine Schulung im Blick eines Mitarbeiters."""
 
+    #: Zeilen-ID, damit eine Einzelzuweisung wieder entfernt werden kann.
+    teilnahme_id: int
     schulung_id: int
     bereich: str
     name: str
@@ -248,8 +255,12 @@ class MitarbeiterSchulungRead(BaseModel):
 class MitarbeiterRead(BaseModel):
     """Zeile der Mitarbeiterübersicht."""
 
+    #: Stabiler Schlüssel für die Detailsicht: "p:<personalnummer>" oder
+    #: "e:<employee_id>". Seit v1_89 gibt es Zeilen ohne Personalnummer; nach
+    #: ihr allein zu gruppieren würde alle diese Personen zu einer verschmelzen.
+    schluessel: str
     employee_id: int | None
-    personalnummer: str
+    personalnummer: str | None
     name: str
     abteilung: str | None
     schulungen: int
@@ -262,6 +273,29 @@ class MitarbeiterRead(BaseModel):
 BALD_FAELLIG_TAGE = 90
 
 
+def _schluessel(teilnahme: SchulungTeilnahme) -> str | None:
+    """Adressierbarer Schlüssel einer Teilnahme-Zeile.
+
+    Die Personalnummer hat Vorrang, weil sie die Excel-Historie zusammenhält;
+    Zeilen ohne sie (seit v1_89 möglich) laufen über die Personio-ID.
+    """
+    if teilnahme.personalnummer:
+        return f"p:{teilnahme.personalnummer}"
+    if teilnahme.employee_id is not None:
+        return f"e:{teilnahme.employee_id}"
+    return None
+
+
+def _schluessel_filter(schluessel: str):
+    """Übersetzt einen Schlüssel in die passende WHERE-Bedingung."""
+    art, _, wert = schluessel.partition(":")
+    if art == "p" and wert:
+        return SchulungTeilnahme.personalnummer == wert
+    if art == "e" and wert.isdigit():
+        return SchulungTeilnahme.employee_id == int(wert)
+    raise HTTPException(status_code=400, detail="Unbekannter Mitarbeiter-Schlüssel.")
+
+
 def _status(faellig_am: date | None, heute: date) -> str:
     if faellig_am is None:
         return "ohne_frist"
@@ -270,6 +304,149 @@ def _status(faellig_am: date | None, heute: date) -> str:
     if (faellig_am - heute).days <= BALD_FAELLIG_TAGE:
         return "bald"
     return "ok"
+
+
+class ZuweisbarerMitarbeiterRead(BaseModel):
+    """Auswahl für die Einzelzuweisung — alle aktiven Personio-Mitarbeiter."""
+
+    employee_id: int
+    personalnummer: str | None
+    name: str
+    abteilung: str | None
+
+
+class ZuweisungRead(BaseModel):
+    teilnahme_id: int
+    employee_id: int
+    schulung_id: int
+    name: str
+    schulung: str
+
+
+class ZuweisungSetzen(BaseModel):
+    employee_id: int
+    schulung_id: int
+
+
+@router.get("/zuweisbar", response_model=list[ZuweisbarerMitarbeiterRead])
+async def zuweisbare_mitarbeiter(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[ZuweisbarerMitarbeiterRead]:
+    """Aktive Mitarbeiter für die Einzelzuweisung.
+
+    Quelle ist Personio, nicht der Teilnahme-Bestand: zuweisen muss auch für
+    jemanden möglich sein, der noch gar keine Schulung hat.
+    """
+    aktive = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status == "active")
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        ZuweisbarerMitarbeiterRead(
+            employee_id=e.id,
+            personalnummer=_personalnummer(e.raw_json),
+            name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
+            abteilung=e.department,
+        )
+        for e in aktive
+    ]
+
+
+@router.post("/zuweisen", response_model=ZuweisungRead, status_code=201)
+async def schulung_zuweisen(
+    eingabe: ZuweisungSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ZuweisungRead:
+    """Eine einzelne Schulung einer einzelnen Person zuweisen.
+
+    Ergänzt die Anforderungsmatrix, die nur abteilungsweit wirkt. Die Zeile
+    entsteht ohne Datumsangaben ("offen") — eine Fälligkeit wäre erfunden,
+    solange die Schulung nicht stattgefunden hat.
+    """
+    emp = (
+        await db.execute(
+            select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
+        )
+    ).scalar_one_or_none()
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
+
+    katalog = (
+        await db.execute(
+            select(SchulungKatalog).where(SchulungKatalog.id == eingabe.schulung_id)
+        )
+    ).scalar_one_or_none()
+    if katalog is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+
+    persnr = _personalnummer(emp.raw_json)
+    # Doppelzuweisung über beide Identitätsarten prüfen — die partiellen Unique-
+    # Indizes aus v1_89 greifen je nur für eine davon.
+    bedingungen = [SchulungTeilnahme.employee_id == emp.id]
+    if persnr:
+        bedingungen.append(SchulungTeilnahme.personalnummer == persnr)
+    vorhanden = (
+        await db.execute(
+            select(SchulungTeilnahme).where(
+                SchulungTeilnahme.schulung_id == katalog.id, or_(*bedingungen)
+            )
+        )
+    ).scalars().first()
+    if vorhanden is not None:
+        raise HTTPException(
+            status_code=409, detail="Diese Schulung ist der Person bereits zugewiesen."
+        )
+
+    name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
+    zeile = SchulungTeilnahme(
+        schulung_id=katalog.id,
+        employee_id=emp.id,
+        personalnummer=persnr,
+        mitarbeiter_name=name,
+    )
+    db.add(zeile)
+    await db.commit()
+    await db.refresh(zeile)
+    return ZuweisungRead(
+        teilnahme_id=zeile.id,
+        employee_id=emp.id,
+        schulung_id=katalog.id,
+        name=name,
+        schulung=katalog.name,
+    )
+
+
+@router.delete("/zuweisung/{teilnahme_id}", status_code=204)
+async def zuweisung_entfernen(
+    teilnahme_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Zuweisung zurücknehmen.
+
+    Nur solange nichts nachgewiesen ist: sobald Daten eingetragen sind, ist die
+    Zeile ein Nachweis und wird nicht stillschweigend gelöscht.
+    """
+    zeile = (
+        await db.execute(
+            select(SchulungTeilnahme).where(SchulungTeilnahme.id == teilnahme_id)
+        )
+    ).scalar_one_or_none()
+    if zeile is None:
+        raise HTTPException(status_code=404, detail="Zuweisung nicht gefunden.")
+    if zeile.initial_datum is not None or zeile.aktuell_datum is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Zeile enthält Schulungsnachweise und wird nicht gelöscht.",
+        )
+    await db.delete(zeile)
+    await db.commit()
 
 
 class OffeneSchulungRead(BaseModel):
@@ -366,19 +543,24 @@ async def liste_mitarbeiter(
 
     gruppen: dict[str, MitarbeiterRead] = {}
     for teilnahme, _katalog in zeilen:
-        eintrag = gruppen.get(teilnahme.personalnummer)
+        schluessel = _schluessel(teilnahme)
+        if schluessel is None:
+            continue  # weder Personalnummer noch Personio-Zuordnung — nicht adressierbar
+        eintrag = gruppen.get(schluessel)
         if eintrag is None:
             eintrag = MitarbeiterRead(
+                schluessel=schluessel,
                 employee_id=teilnahme.employee_id,
                 personalnummer=teilnahme.personalnummer,
-                name=teilnahme.mitarbeiter_name or f"#{teilnahme.personalnummer}",
+                name=teilnahme.mitarbeiter_name
+                or f"#{teilnahme.personalnummer or teilnahme.employee_id}",
                 abteilung=abteilungen.get(teilnahme.employee_id or -1),
                 schulungen=0,
                 ueberfaellig=0,
                 bald_faellig=0,
                 naechste_faelligkeit=None,
             )
-            gruppen[teilnahme.personalnummer] = eintrag
+            gruppen[schluessel] = eintrag
 
         eintrag.schulungen += 1
         status = _status(teilnahme.naechste_faellig_am, heute)
@@ -398,27 +580,30 @@ async def liste_mitarbeiter(
     )
 
 
-@router.get(
-    "/mitarbeiter/{personalnummer}", response_model=list[MitarbeiterSchulungRead]
-)
+@router.get("/mitarbeiter/{schluessel}", response_model=list[MitarbeiterSchulungRead])
 async def mitarbeiter_schulungen(
-    personalnummer: str,
+    schluessel: str,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[MitarbeiterSchulungRead]:
-    """Alle Schulungen eines Mitarbeiters (Einzelübersicht)."""
+    """Alle Schulungen eines Mitarbeiters (Einzelübersicht).
+
+    ``schluessel`` ist "p:<personalnummer>" oder "e:<employee_id>" — siehe
+    :func:`_schluessel`.
+    """
     heute = date.today()
     zeilen = (
         await db.execute(
             select(SchulungTeilnahme, SchulungKatalog)
             .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
-            .where(SchulungTeilnahme.personalnummer == personalnummer)
+            .where(_schluessel_filter(schluessel))
         )
     ).all()
     if not zeilen:
-        raise HTTPException(status_code=404, detail="Keine Schulungen zu dieser Personalnummer.")
+        raise HTTPException(status_code=404, detail="Keine Schulungen zu diesem Mitarbeiter.")
 
     ergebnis = [
         MitarbeiterSchulungRead(
+            teilnahme_id=t.id,
             schulung_id=k.id,
             bereich=k.bereich,
             name=k.name,
