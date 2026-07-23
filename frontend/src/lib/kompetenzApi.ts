@@ -108,3 +108,80 @@ export function kompetenzImportPreview(bereich: string, file: File) {
 export function kompetenzImportCommit(bereich: string, file: File) {
   return upload(bereich, "commit", file);
 }
+
+/** Anforderungslevel und Erfüllungsgrad einer Zelle setzen (legt sie bei Bedarf an). */
+export function setzeZelle(
+  matrixId: number,
+  eingabe: {
+    qualifikation_id: number;
+    person_id: number;
+    anforderungslevel: number | null;
+    erfuellungsgrad: number | null;
+  },
+): Promise<Zelle> {
+  return apiClient<Zelle>(`/api/hr/kompetenzen/matrix/${matrixId}/zelle`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Spalte ergänzen. */
+export function legePersonAn(
+  matrixId: number,
+  eingabe: { name: string; employee_id?: number | null },
+): Promise<KompetenzPerson> {
+  return apiClient<KompetenzPerson>(`/api/hr/kompetenzen/matrix/${matrixId}/person`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+export function entfernePerson(matrixId: number, personId: number): Promise<void> {
+  return apiClient<void>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/person/${personId}`,
+    { method: "DELETE" },
+  );
+}
+
+/** Zeile ergänzen. */
+export function legeQualifikationAn(
+  matrixId: number,
+  eingabe: { bezeichnung: string; kategorie?: string | null; nr?: number | null },
+): Promise<Qualifikation> {
+  return apiClient<Qualifikation>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/qualifikation`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(eingabe),
+    },
+  );
+}
+
+export function entferneQualifikation(
+  matrixId: number,
+  qualifikationId: number,
+): Promise<void> {
+  return apiClient<void>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/qualifikation/${qualifikationId}`,
+    { method: "DELETE" },
+  );
+}
+
+export interface VerfuegbarePerson {
+  employee_id: number;
+  name: string;
+  abteilung: string | null;
+  position: string | null;
+}
+
+/** Aktive Personio-Mitarbeiter, die noch keine Spalte in dieser Matrix haben. */
+export function fetchVerfuegbarePersonen(
+  matrixId: number,
+): Promise<VerfuegbarePerson[]> {
+  return apiClient<VerfuegbarePerson[]>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/verfuegbar`,
+  );
+}
