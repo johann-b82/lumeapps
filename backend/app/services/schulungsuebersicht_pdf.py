@@ -38,6 +38,7 @@ _THIN = Side(style="thin", color="000000")
 _RAHMEN = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _LINKS_OBEN = Alignment(horizontal="left", vertical="top", wrap_text=True)
 _MITTE = Alignment(horizontal="center", vertical="center")
+_MITTE_OBEN = Alignment(horizontal="center", vertical="top")
 
 
 @dataclass
@@ -65,12 +66,16 @@ def _kopf(ws, name: str, funktion: str) -> int:
 
     # Über C:G zusammengefasst und rechtsbündig — in einer schmalen Spalte
     # allein würde "Revisions-Stand: 22.03.2022" abgeschnitten.
+    # "Blatt x von y" steht nicht hier, sondern als Seitenkopf (&P/&N) — fest
+    # verdrahtet wäre es falsch, sobald die Liste auf eine zweite Seite läuft.
+    ws.oddHeader.right.text = "&9Blatt &P von &N"
+    ws.evenHeader.right.text = ws.oddHeader.right.text
+
     for i, text in enumerate(
         [
             FORMBLATT,
             f"Revisions-Index: {REVISIONS_INDEX}",
             f"Revisions-Stand: {REVISIONS_STAND}",
-            "Blatt 1 von 1",
         ]
     ):
         zeile = 1 + i
@@ -146,20 +151,40 @@ def _zeile_schreiben(ws, r: int, nr: int, z: UebersichtZeile) -> None:
         zelle = ws.cell(row=r, column=c)
         zelle.border = _RAHMEN
         zelle.font = Font(size=9)
-        zelle.alignment = _MITTE if c == 1 or c >= SP_IN else _LINKS_OBEN
-    # Platz für Bezeichnung samt Anbieteranschrift, auch wenn beides noch leer
-    # ist — sonst rutscht das Formular beim Ausfüllen von Hand aus dem Raster.
-    ws.row_dimensions[r].height = 46 if z.anbieter else 30
+        # Nummer und Zeitraum stehen oben wie im Original, die Kreuzfelder
+        # mittig — dort wird von Hand ein X gesetzt.
+        zelle.alignment = _MITTE_OBEN if c == 1 else (
+            _MITTE if c >= SP_IN else _LINKS_OBEN
+        )
+    # Zwei Textzeilen Platz; mit Anbieteranschrift entsprechend mehr. Enger als
+    # zuvor, damit auf ein Blatt mehr Schulungen passen.
+    ws.row_dimensions[r].height = 38 if z.anbieter else 24
 
 
-def _fuss(ws, zeile: int, freigegeben_von: str, erstellt_von: str) -> None:
-    ws.cell(row=zeile, column=1, value="Aktualisiert am:")
-    ws.cell(row=zeile, column=3, value=f"Ausgabedatum: {AUSGABEDATUM}")
-    ws.cell(row=zeile + 1, column=1, value=f"Freigegeben von: {freigegeben_von}")
-    ws.cell(row=zeile + 1, column=3, value=f"Erstellt von: {erstellt_von}")
-    for r in (zeile, zeile + 1):
-        for c in (1, 3):
-            ws.cell(row=r, column=c).font = Font(size=8)
+def _fuss(ws, freigegeben_von: str, erstellt_von: str) -> None:
+    """Fußblock als echte Seitenfußzeile.
+
+    Nicht als Tabellenzeilen unter der letzten Schulung: dort klebte er am
+    Tabellenende statt am Blattfuß, und bei wenigen Zeilen stand er mitten auf
+    der Seite. Als Fußzeile sitzt er immer unten — und wiederholt sich, wenn
+    die Liste auf eine zweite Seite läuft.
+
+    ``&9`` setzt die Schriftgröße.
+
+    Bewusst je Abschnitt EINE Zeile: openpyxl kodiert ein "\\n" in der Fußzeile
+    als OOXML-Escape ``_x000a_``, und LibreOffice gibt das wörtlich aus statt
+    umzubrechen. Die vier Felder des Formblatts stehen daher nebeneinander
+    statt zweizeilig untereinander.
+    """
+    ws.oddFooter.left.text = (
+        f"&9Aktualisiert am: ________     Freigegeben von: {freigegeben_von or '________'}"
+    )
+    ws.oddFooter.right.text = (
+        f"&9Ausgabedatum: {AUSGABEDATUM}     Erstellt von: {erstellt_von or '________'}"
+    )
+    # Gleiche Fußzeile auf Folgeseiten.
+    ws.evenFooter.left.text = ws.oddFooter.left.text
+    ws.evenFooter.right.text = ws.oddFooter.right.text
 
 
 def baue_xlsx(
@@ -178,18 +203,27 @@ def baue_xlsx(
         ws.column_dimensions[spalte].width = breite
 
     r = _kopf(ws, name, funktion)
+    kopfzeile = r
     r = _tabellenkopf(ws, r)
     for i, z in enumerate(zeilen, start=1):
         _zeile_schreiben(ws, r, i, z)
         r += 1
-    _fuss(ws, r + 1, freigegeben_von, erstellt_von)
+    _fuss(ws, freigegeben_von, erstellt_von)
 
-    ws.print_area = f"A1:G{r + 2}"
+    ws.print_area = f"A1:G{r - 1}"
     ws.page_setup.orientation = "portrait"
+    # A4, nicht der LibreOffice-Standard Letter — das Formblatt wird in
+    # Deutschland gedruckt und abgeheftet.
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins = PageMargins(left=0.5, right=0.4, top=0.5, bottom=0.5)
+    # Unten mehr Rand, damit die Fußzeile nicht an der Tabelle klebt.
+    ws.page_margins = PageMargins(
+        left=0.5, right=0.4, top=0.6, bottom=0.8, header=0.3, footer=0.35
+    )
+    # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
+    ws.print_title_rows = f"{kopfzeile}:{kopfzeile + 1}"
 
     puffer = BytesIO()
     wb.save(puffer)
