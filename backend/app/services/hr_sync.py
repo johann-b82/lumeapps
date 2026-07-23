@@ -5,6 +5,7 @@ Decisions:
   D-03: Upsert by Personio ID via INSERT ... ON CONFLICT DO UPDATE.
   D-04: Sync results persisted to personio_sync_meta singleton.
 """
+import logging
 from datetime import date as date_type, datetime, time as time_type, timedelta, timezone
 
 from sqlalchemy import func, select, update
@@ -21,6 +22,8 @@ from app.models import (
 from app.schemas import SyncResult
 from app.security.fernet import decrypt_credential
 from app.services.personio_client import PersonioAPIError, PersonioClient
+
+log = logging.getLogger(__name__)
 
 
 # Incremental syncs re-fetch the trailing window so late-entered / edited
@@ -83,6 +86,23 @@ async def run_sync(session: AsyncSession) -> SyncResult:
         abs_count = await _upsert(session, PersonioAbsence, absences)
 
         await _update_sync_meta(session, emp_count, att_count, abs_count, "ok")
+
+        # Nach dem Abgleich: für neue Eintritte die Schulungsübersicht anlegen
+        # bzw. auffrischen. Bewusst NACH _update_sync_meta und in eigenem
+        # try/except — der Personio-Abgleich selbst gilt als geglückt, auch
+        # wenn LibreOffice oder Directus gerade nicht mitspielen.
+        try:
+            from app.services.onboarding_dokumente import uebersichten_erzeugen
+
+            lauf = await uebersichten_erzeugen(session)
+            if lauf.erzeugt or lauf.aktualisiert:
+                log.info(
+                    "Schulungsübersichten: %s erzeugt, %s aktualisiert",
+                    lauf.erzeugt,
+                    lauf.aktualisiert,
+                )
+        except Exception as exc:  # noqa: BLE001 - darf den Sync nicht kippen
+            log.warning("Schulungsübersichten fehlgeschlagen: %s", exc)
 
     except PersonioAPIError as exc:
         await _update_sync_meta(session, emp_count, att_count, abs_count, "error", str(exc))

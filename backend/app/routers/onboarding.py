@@ -10,7 +10,7 @@ konvertiert es über LibreOffice.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -19,17 +19,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import (
+    OnboardingDokument,
     PersonioEmployee,
     SchulungPflicht,
     SchulungRolle,
     SchulungTeilnahme,
 )
 from app.security.directus_auth import get_current_user, require_admin
+from app.services.maintenance_files import fetch_directus_asset
 from app.services.onboarding import (
     normalisiere_position,
     plan_anlegen,
     schulungsplan,
 )
+from app.services.onboarding_dokumente import plan_signatur, uebersichten_erzeugen
 from app.services.schulungsuebersicht_pdf import (
     UebersichtZeile,
     dateiname,
@@ -308,3 +311,104 @@ async def plan_als_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
     )
+
+
+class DokumentRead(BaseModel):
+    """Die automatisch erzeugte Schulungsübersicht einer Person."""
+
+    employee_id: int
+    dateiname: str
+    schulungen: int
+    erzeugt_am: datetime
+    #: True, wenn der Soll-Plan inzwischen von der abgelegten Fassung abweicht.
+    veraltet: bool
+
+
+@router.get("/dokumente", response_model=list[DokumentRead])
+async def dokumente_liste(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[DokumentRead]:
+    """Alle abgelegten Schulungsübersichten.
+
+    ``veraltet`` vergleicht die gespeicherte Signatur mit dem heutigen Soll —
+    so ist sichtbar, dass der nächste Abgleich das Dokument erneuern wird.
+    """
+    dokumente = (
+        (await db.execute(select(OnboardingDokument))).scalars().all()
+    )
+    if not dokumente:
+        return []
+
+    mitarbeiter = {
+        e.id: e
+        for e in (
+            await db.execute(
+                select(PersonioEmployee).where(
+                    PersonioEmployee.id.in_([d.employee_id for d in dokumente])
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+
+    ergebnis: list[DokumentRead] = []
+    for d in dokumente:
+        emp = mitarbeiter.get(d.employee_id)
+        veraltet = False
+        if emp is not None:
+            plan = await schulungsplan(db, emp)
+            veraltet = plan_signatur([s.schulung_id for s in plan.soll]) != d.plan_signatur
+        ergebnis.append(
+            DokumentRead(
+                employee_id=d.employee_id,
+                dateiname=d.dateiname,
+                schulungen=d.schulungen,
+                erzeugt_am=d.erzeugt_am,
+                veraltet=veraltet,
+            )
+        )
+    return sorted(ergebnis, key=lambda x: x.erzeugt_am, reverse=True)
+
+
+@router.get("/dokumente/{employee_id}")
+async def dokument_laden(
+    employee_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Die abgelegte Schulungsübersicht ausliefern."""
+    dok = (
+        await db.execute(
+            select(OnboardingDokument).where(
+                OnboardingDokument.employee_id == employee_id
+            )
+        )
+    ).scalar_one_or_none()
+    if dok is None:
+        raise HTTPException(
+            status_code=404, detail="Für diese Person liegt keine Übersicht vor."
+        )
+    inhalt, _ = await fetch_directus_asset(dok.directus_file_uuid)
+    return Response(
+        content=inhalt,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{dok.dateiname}"'},
+    )
+
+
+@router.post("/dokumente/erzeugen", response_model=dict)
+async def dokumente_erzeugen(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> dict:
+    """Den Lauf von Hand anstoßen, statt auf den nächsten Abgleich zu warten.
+
+    Nützlich direkt nach dem Pflegen der Anforderungsmatrix.
+    """
+    lauf = await uebersichten_erzeugen(db)
+    return {
+        "geprueft": lauf.geprueft,
+        "erzeugt": lauf.erzeugt,
+        "aktualisiert": lauf.aktualisiert,
+        "uebersprungen_leer": lauf.uebersprungen_leer,
+        "fehler": lauf.fehler,
+    }

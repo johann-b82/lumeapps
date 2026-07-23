@@ -102,3 +102,41 @@ export async function ladeSchulungsuebersicht(
   ].join(".");
   openBlob(blob, `${stand}_${name.split(" ").join("_")}_Schulungsuebersicht.pdf`);
 }
+
+export interface OnboardingDokument {
+  employee_id: number;
+  dateiname: string;
+  schulungen: number;
+  erzeugt_am: string;
+  /** Der Soll-Plan weicht inzwischen von der abgelegten Fassung ab. */
+  veraltet: boolean;
+}
+
+/** Automatisch erzeugte Schulungsübersichten (eine je Mitarbeiter). */
+export function fetchDokumente(): Promise<OnboardingDokument[]> {
+  return apiClient<OnboardingDokument[]>("/api/hr/onboarding/dokumente");
+}
+
+/** Lädt die abgelegte Übersicht herunter. */
+export async function ladeDokument(
+  employeeId: number,
+  dateiname: string,
+): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/onboarding/dokumente/${employeeId}`);
+  openBlob(blob, dateiname);
+}
+
+export interface ErzeugenErgebnis {
+  geprueft: number;
+  erzeugt: number;
+  aktualisiert: number;
+  uebersprungen_leer: number;
+  fehler: number;
+}
+
+/** Stößt den Lauf von Hand an, statt auf den nächsten Personio-Abgleich zu warten. */
+export function erzeugeDokumente(): Promise<ErzeugenErgebnis> {
+  return apiClient<ErzeugenErgebnis>("/api/hr/onboarding/dokumente/erzeugen", {
+    method: "POST",
+  });
+}
