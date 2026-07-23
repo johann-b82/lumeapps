@@ -127,3 +127,58 @@ describe("matchBreadcrumb", () => {
     expect(specific).toBeLessThan(generic);
   });
 });
+
+describe("breadcrumbs — HR-Unterseiten", () => {
+  const hrSeiten = [
+    ["/hr/onboarding", "hr.onboarding.title"],
+    ["/hr/schulungen", "schulungen.title"],
+    ["/hr/kompetenzen", "kompetenzen.title"],
+    ["/hr/organigramm", "hr.organigramm.title"],
+  ] as const;
+
+  it.each(hrSeiten)("%s ergibt HR > Seite", (pfad, blattKey) => {
+    const trail = matchBreadcrumb(pfad);
+    expect(trail).not.toBeNull();
+    expect(trail!.map((c) => c.labelKey)).toEqual(["launcher.section.hr", blattKey]);
+  });
+
+  it.each(hrSeiten)("%s verlinkt die HR-Ebene auf /hr/home", (pfad) => {
+    expect(matchBreadcrumb(pfad)![0]!.href).toBe("/hr/home");
+  });
+
+  it("/hr/home ergibt nur die HR-Ebene", () => {
+    const trail = matchBreadcrumb("/hr/home");
+    expect(trail!.map((c) => c.labelKey)).toEqual(["launcher.section.hr"]);
+  });
+
+  it("/kpi ergibt die KPI-Ebene", () => {
+    expect(matchBreadcrumb("/kpi")!.map((c) => c.labelKey)).toEqual([
+      "launcher.section.kpi",
+    ]);
+  });
+
+  // Der Matcher läuft von oben nach unten: stünde /hr vor /hr/onboarding,
+  // bekäme jede Unterseite fälschlich den Hub-Trail. Längengleichheit im
+  // Matcher schützt hier zwar schon, aber die Reihenfolge ist die dokumentierte
+  // Regel der Tabelle — sie soll nicht unbemerkt kippen.
+  it("BREADCRUMB_ROUTES ordnet die HR-Unterseiten vor /hr ein", () => {
+    const patterns = BREADCRUMB_ROUTES.map((r) => r.pattern);
+    const hub = patterns.indexOf("/hr");
+    expect(hub).toBeGreaterThanOrEqual(0);
+    for (const [pfad] of hrSeiten) {
+      expect(patterns.indexOf(pfad)).toBeGreaterThanOrEqual(0);
+      expect(patterns.indexOf(pfad)).toBeLessThan(hub);
+    }
+    expect(patterns.indexOf("/hr/home")).toBeLessThan(hub);
+  });
+
+  it("jeder HR-Trail verweist auf eine reale Route", () => {
+    // Alle href-Ziele müssen selbst wieder auflösbar sein, sonst führt ein
+    // Klick auf die HR-Ebene ins Leere.
+    for (const [pfad] of hrSeiten) {
+      for (const crumb of matchBreadcrumb(pfad)!) {
+        expect(matchBreadcrumb(crumb.href!)).not.toBeNull();
+      }
+    }
+  });
+});

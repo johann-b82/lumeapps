@@ -27,7 +27,43 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
 }> = [
   // Dashboards
   { pattern: "/sales", trail: [{ labelKey: "nav.sales", href: "/sales" }] },
+  // HR-Hub und seine Unterseiten — tiefere Muster zuerst, sonst gewinnt /hr
+  // nie gegen /hr/onboarding (der Matcher läuft von oben nach unten).
+  {
+    pattern: "/hr/onboarding",
+    trail: [
+      { labelKey: "launcher.section.hr", href: "/hr/home" },
+      { labelKey: "hr.onboarding.title", href: "/hr/onboarding" },
+    ],
+  },
+  {
+    pattern: "/hr/schulungen",
+    trail: [
+      { labelKey: "launcher.section.hr", href: "/hr/home" },
+      { labelKey: "schulungen.title", href: "/hr/schulungen" },
+    ],
+  },
+  {
+    pattern: "/hr/kompetenzen",
+    trail: [
+      { labelKey: "launcher.section.hr", href: "/hr/home" },
+      { labelKey: "kompetenzen.title", href: "/hr/kompetenzen" },
+    ],
+  },
+  {
+    pattern: "/hr/organigramm",
+    trail: [
+      { labelKey: "launcher.section.hr", href: "/hr/home" },
+      { labelKey: "hr.organigramm.title", href: "/hr/organigramm" },
+    ],
+  },
+  {
+    pattern: "/hr/home",
+    trail: [{ labelKey: "launcher.section.hr", href: "/hr/home" }],
+  },
   { pattern: "/hr", trail: [{ labelKey: "nav.hr", href: "/hr" }] },
+  // KPI-Hub (die einzelnen KPI-Dashboards haben eigene Einträge).
+  { pattern: "/kpi", trail: [{ labelKey: "launcher.section.kpi", href: "/kpi" }] },
   { pattern: "/procurement", trail: [{ labelKey: "nav.procurement", href: "/procurement" }] },
   // Qualität hub + Audit-Modul (v1.84) — deeper patterns first so the audit
   // detail collapses to the "Audits" leaf (D-02).
