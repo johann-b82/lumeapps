@@ -20,6 +20,7 @@ import {
 } from "@/lib/kompetenzApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { SeitenNavigation } from "@/components/hr/SeitenNavigation";
 
 /** Erfüllungsgrad → Farbe. Rot = Lücke, Grün = erfüllt. */
 function gradFarbe(grad: number): string {
@@ -678,6 +679,7 @@ export function KompetenzenPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <SeitenNavigation />
       <h1 className="mb-1 text-lg font-semibold">{t("kompetenzen.title")}</h1>
       <p className="mb-5 text-sm text-muted-foreground">{t("kompetenzen.untertitel")}</p>
 

@@ -33,6 +33,8 @@
   "delete_confirm": "Löschen",
   "delete_cancel": "Upload behalten",
   "lang_toggle": "DE / EN",
+  "nav.zurueck": "Zurück",
+  "nav.start": "Startseite",
   "nav.brand": "KPI Dashboard",
   "nav.sales": "Vertrieb",
   "nav.upload": "Upload",

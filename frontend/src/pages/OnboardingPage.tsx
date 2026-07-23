@@ -14,6 +14,7 @@ import {
 } from "@/lib/onboardingApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { SeitenNavigation } from "@/components/hr/SeitenNavigation";
 
 function datum(wert: string | null): string {
   if (!wert) return "—";
@@ -228,6 +229,7 @@ export function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 pt-4 pb-8">
+      <SeitenNavigation />
       <h1 className="mb-1 flex items-center gap-2 text-lg font-semibold">
         <UserPlus className="h-5 w-5" aria-hidden="true" />
         {t("hr.onboarding.title")}
