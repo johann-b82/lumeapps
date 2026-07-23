@@ -11,6 +11,7 @@ import { HrHomePage } from "./pages/HrHomePage";
 import { OrganigrammPage } from "./pages/OrganigrammPage";
 import { SchulungenPage } from "./pages/SchulungenPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { KompetenzenPage } from "./pages/KompetenzenPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
 import { EmbedWorldCupPage } from "./pages/EmbedWorldCupPage";
@@ -94,6 +95,10 @@ function AppShell() {
           {/* Schulungen: der Backend-Router ist komplett admin-gated. */}
           <Route path="/hr/schulungen">
             <AdminOnly><SchulungenPage /></AdminOnly>
+          </Route>
+          {/* Kompetenzen: Qualifikationsmatrix je Abteilung, HR-intern. */}
+          <Route path="/hr/kompetenzen">
+            <AdminOnly><KompetenzenPage /></AdminOnly>
           </Route>
           {/* Onboarding: der Backend-Router ist komplett admin-gated. */}
           <Route path="/hr/onboarding">

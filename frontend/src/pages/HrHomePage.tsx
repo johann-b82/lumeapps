@@ -1,13 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { UserPlus, Network, GraduationCap } from "lucide-react";
+import { UserPlus, Network, GraduationCap, Award } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 
 /**
  * HR hub (/hr/home). Landing page reached from the single "HR" launcher tile;
- * groups the HR sub-features (Onboarding, Organigramm) as tiles. More tiles
- * dock here later. The /hr KPI dashboard is a separate route reached from the
- * KPI-Dashboard hub.
+ * groups the HR sub-features (Onboarding, Schulungen, Kompetenzen, Organigramm)
+ * as tiles. More tiles dock here later. The /hr KPI dashboard is a separate
+ * route reached from the KPI-Dashboard hub.
  */
 export function HrHomePage() {
   const { t } = useTranslation();
@@ -58,6 +58,28 @@ export function HrHomePage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">
               {t("schulungen.title")}
+            </span>
+          </div>
+        </AdminOnly>
+
+        {/* Kompetenzen tile → /hr/kompetenzen (admin-only wie Schulungen) */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/hr/kompetenzen")}
+              aria-label={t("kompetenzen.title")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-emerald-500 to-teal-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Award className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("kompetenzen.title")}
             </span>
           </div>
         </AdminOnly>
