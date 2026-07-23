@@ -24,6 +24,7 @@ from app.models import (
     KompetenzMatrix,
     KompetenzPerson,
     KompetenzQualifikation,
+    PersonioEmployee,
 )
 from app.models.kompetenz import KOMPETENZ_BEREICHE
 from app.parsing.kompetenz_parser import parse_qualifikationsmatrix
@@ -313,6 +314,15 @@ class QualifikationAnlegen(BaseModel):
     nr: int | None = None
 
 
+class VerfuegbarePersonRead(BaseModel):
+    """Ein Personio-Mitarbeiter, der noch nicht in dieser Matrix steht."""
+
+    employee_id: int
+    name: str
+    abteilung: str | None
+    position: str | None
+
+
 async def _matrix(db: AsyncSession, matrix_id: int) -> KompetenzMatrix:
     m = (
         await db.execute(select(KompetenzMatrix).where(KompetenzMatrix.id == matrix_id))
@@ -320,6 +330,54 @@ async def _matrix(db: AsyncSession, matrix_id: int) -> KompetenzMatrix:
     if m is None:
         raise HTTPException(status_code=404, detail="Matrix nicht gefunden.")
     return m
+
+
+@router.get("/matrix/{matrix_id}/verfuegbar", response_model=list[VerfuegbarePersonRead])
+async def verfuegbare_personen(
+    matrix_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[VerfuegbarePersonRead]:
+    """Aktive Personio-Mitarbeiter, die noch keine Spalte in dieser Matrix haben.
+
+    Damit ein neuer Mitarbeiter direkt aus Personio übernommen wird, statt den
+    Namen abzutippen — abgetippte Namen finden später keinen Treffer mehr
+    (siehe die Fälle ohne Zuordnung aus dem Erstimport).
+    """
+    await _matrix(db, matrix_id)
+
+    schon_drin = set(
+        (
+            await db.execute(
+                select(KompetenzPerson.employee_id).where(
+                    KompetenzPerson.matrix_id == matrix_id,
+                    KompetenzPerson.employee_id.isnot(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    aktive = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status == "active")
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        VerfuegbarePersonRead(
+            employee_id=e.id,
+            name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
+            abteilung=e.department,
+            position=e.position,
+        )
+        for e in aktive
+        if e.id not in schon_drin
+    ]
 
 
 @router.put("/matrix/{matrix_id}/zelle", response_model=ZelleRead)
@@ -388,11 +446,41 @@ async def person_anlegen(
     eingabe: PersonAnlegen,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> PersonRead:
-    """Eine Spalte ergänzen (neue Person in der Matrix)."""
+    """Eine Spalte ergänzen (neue Person in der Matrix).
+
+    Regelfall ist die Übernahme aus Personio über ``employee_id``; der Name
+    kommt dann aus dem Stammsatz. Freitext bleibt möglich für Personen, die
+    (noch) nicht in Personio stehen — Leiharbeit, Praktikum, externe Prüfer.
+    """
+    await _matrix(db, matrix_id)
+
     name = eingabe.name.strip()
+    if eingabe.employee_id is not None:
+        emp = (
+            await db.execute(
+                select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
+            )
+        ).scalar_one_or_none()
+        if emp is None:
+            raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
+        # Der Stammsatz gewinnt: sonst driften Schreibweisen wieder auseinander.
+        name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
+
+        doppelt = (
+            await db.execute(
+                select(KompetenzPerson).where(
+                    KompetenzPerson.matrix_id == matrix_id,
+                    KompetenzPerson.employee_id == emp.id,
+                )
+            )
+        ).scalars().first()
+        if doppelt is not None:
+            raise HTTPException(
+                status_code=409, detail="Diese Person steht bereits in der Matrix."
+            )
+
     if not name:
         raise HTTPException(status_code=400, detail="Name darf nicht leer sein.")
-    await _matrix(db, matrix_id)
 
     vorhanden = (
         await db.execute(

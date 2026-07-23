@@ -54,6 +54,7 @@ export const hrKpiKeys = {
   schulungZuweisbar: () => ["hr", "schulungen", "zuweisbar"] as const,
   kompetenzMatrizen: () => ["hr", "kompetenzen", "matrizen"] as const,
   kompetenzMatrix: (id: number) => ["hr", "kompetenzen", "matrix", id] as const,
+  kompetenzVerfuegbar: (id: number) => ["hr", "kompetenzen", "verfuegbar", id] as const,
   onboardingEintritte: () => ["hr", "onboarding", "eintritte"] as const,
   onboardingPlan: (id: number) => ["hr", "onboarding", "plan", id] as const,
   onboardingRollen: () => ["hr", "onboarding", "rollen"] as const,

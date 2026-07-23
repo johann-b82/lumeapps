@@ -169,3 +169,19 @@ export function entferneQualifikation(
     { method: "DELETE" },
   );
 }
+
+export interface VerfuegbarePerson {
+  employee_id: number;
+  name: string;
+  abteilung: string | null;
+  position: string | null;
+}
+
+/** Aktive Personio-Mitarbeiter, die noch keine Spalte in dieser Matrix haben. */
+export function fetchVerfuegbarePersonen(
+  matrixId: number,
+): Promise<VerfuegbarePerson[]> {
+  return apiClient<VerfuegbarePerson[]>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/verfuegbar`,
+  );
+}
