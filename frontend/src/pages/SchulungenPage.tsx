@@ -8,18 +8,23 @@ import {
   GraduationCap,
   Loader2,
   Upload,
+  UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import {
+  entferneZuweisung,
   fetchAbteilungen,
   fetchMitarbeiter,
   fetchMitarbeiterSchulungen,
   fetchOffeneSchulungen,
   fetchPflichtMatrix,
   fetchSchulungen,
+  fetchZuweisbare,
   schulungImportCommit,
   schulungImportPreview,
   setzePflicht,
+  weiseSchulungZu,
   type PflichtEbene,
   type PflichtMatrix,
   type Schulung,
@@ -386,11 +391,23 @@ function datum(wert: string | null): string {
 }
 
 /** Einzelübersicht: alle Schulungen eines Mitarbeiters. */
-function MitarbeiterDetail({ personalnummer }: { personalnummer: string }) {
+function MitarbeiterDetail({ schluessel }: { schluessel: string }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: hrKpiKeys.schulungMitarbeiterDetail(personalnummer),
-    queryFn: () => fetchMitarbeiterSchulungen(personalnummer),
+    queryKey: hrKpiKeys.schulungMitarbeiterDetail(schluessel),
+    queryFn: () => fetchMitarbeiterSchulungen(schluessel),
+  });
+
+  const entfernen = useMutation({
+    mutationFn: entferneZuweisung,
+    onSuccess: () => {
+      toast.success(t("schulungen.zuweisen.entfernt"));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiterDetail(schluessel) });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   if (isLoading) {
@@ -410,6 +427,7 @@ function MitarbeiterDetail({ personalnummer }: { personalnummer: string }) {
           <Th>{t("schulungen.mitarbeiter.aktuell")}</Th>
           <Th>{t("schulungen.mitarbeiter.faelligAm")}</Th>
           <Th rechts>{t("schulungen.mitarbeiter.status")}</Th>
+          <Th rechts>{""}</Th>
         </tr>
       </thead>
       <tbody>
@@ -430,10 +448,124 @@ function MitarbeiterDetail({ personalnummer }: { personalnummer: string }) {
             <td className="px-4 py-1.5 text-right">
               <StatusBadge status={s.status} />
             </td>
+            <td className="px-4 py-1.5 text-right">
+              {/* Nur ohne Nachweis: mit Datum ist die Zeile ein Beleg, kein Plan. */}
+              {s.initial_datum === null && s.aktuell_datum === null && (
+                <button
+                  type="button"
+                  onClick={() => entfernen.mutate(s.teilnahme_id)}
+                  disabled={entfernen.isPending}
+                  aria-label={t("schulungen.zuweisen.entfernen")}
+                  title={t("schulungen.zuweisen.entfernen")}
+                  className="rounded-md p-1 text-muted-foreground transition-colors
+                             hover:bg-destructive/10 hover:text-destructive disabled:opacity-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** Einzelzuweisung: eine bestimmte Schulung an eine bestimmte Person.
+ *
+ *  Ergänzt die Anforderungsmatrix, die nur abteilungsweit wirkt — für alles,
+ *  was nur eine einzelne Person betrifft (Sonderqualifikation, Vertretung).
+ */
+function ZuweisenPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [mitarbeiter, setMitarbeiter] = useState("");
+  const [schulung, setSchulung] = useState("");
+
+  const { data: personen } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+  });
+
+  const zuweisen = useMutation({
+    mutationFn: weiseSchulungZu,
+    onSuccess: (z) => {
+      toast.success(t("schulungen.zuweisen.erfolg", { name: z.name, schulung: z.schulung }));
+      setSchulung("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const bereit = mitarbeiter !== "" && schulung !== "";
+  const auswahlStil =
+    "h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.zuweisen.title")}
+        icon={<UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <p className="text-xs text-muted-foreground">{t("schulungen.zuweisen.hinweis")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={mitarbeiter}
+              onChange={(e) => setMitarbeiter(e.target.value)}
+              aria-label={t("schulungen.mitarbeiter.name")}
+              className={auswahlStil}
+            >
+              <option value="">{t("schulungen.zuweisen.mitarbeiterWaehlen")}</option>
+              {(personen ?? []).map((p) => (
+                <option key={p.employee_id} value={String(p.employee_id)}>
+                  {p.name}
+                  {p.abteilung ? ` · ${p.abteilung}` : ""}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={schulung}
+              onChange={(e) => setSchulung(e.target.value)}
+              aria-label={t("schulungen.katalog.name")}
+              className={auswahlStil}
+            >
+              <option value="">{t("schulungen.zuweisen.schulungWaehlen")}</option>
+              {(schulungen ?? []).map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.bereich} · {s.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              disabled={!bereit || zuweisen.isPending}
+              onClick={() =>
+                zuweisen.mutate({
+                  employee_id: Number(mitarbeiter),
+                  schulung_id: Number(schulung),
+                })
+              }
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                         text-primary-foreground disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {zuweisen.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              )}
+              {t("schulungen.zuweisen.aktion")}
+            </button>
+          </div>
+        </div>
+      </Klappbar>
+    </section>
   );
 }
 
@@ -469,16 +601,16 @@ function MitarbeiterPanel() {
           </thead>
           <tbody>
             {data.map((m) => {
-              const offen = offenFuer === m.personalnummer;
+              const offen = offenFuer === m.schluessel;
               return [
                 <tr
-                  key={m.personalnummer}
-                  onClick={() => setOffenFuer(offen ? null : m.personalnummer)}
+                  key={m.schluessel}
+                  onClick={() => setOffenFuer(offen ? null : m.schluessel)}
                   className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40"
                 >
                   <td className="px-4 py-2">
                     <span className="font-mono text-xs text-muted-foreground">
-                      {m.personalnummer}
+                      {m.personalnummer ?? "—"}
                     </span>{" "}
                     {m.name}
                   </td>
@@ -498,9 +630,9 @@ function MitarbeiterPanel() {
                   </td>
                 </tr>,
                 offen ? (
-                  <tr key={`${m.personalnummer}-detail`} className="border-b bg-muted/10">
+                  <tr key={`${m.schluessel}-detail`} className="border-b bg-muted/10">
                     <td colSpan={5} className="p-0">
-                      <MitarbeiterDetail personalnummer={m.personalnummer} />
+                      <MitarbeiterDetail schluessel={m.schluessel} />
                     </td>
                   </tr>
                 ) : null,
@@ -780,6 +912,9 @@ export function SchulungenPage() {
 
       {/* Anforderungsmatrix: Pflichtschulungen je Abteilung ankreuzen. */}
       <PflichtMatrixPanel schulungen={schulungen} />
+
+      {/* Einzelzuweisung — für alles, was die Matrix abteilungsweit nicht trifft. */}
+      <ZuweisenPanel schulungen={schulungen} />
 
       {/* Mitarbeiter mit Fälligkeiten; Zeile aufklappen = Einzelübersicht. */}
       <MitarbeiterPanel />
