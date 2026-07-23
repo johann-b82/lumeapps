@@ -2,15 +2,28 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Check, Loader2, UserPlus, Wrench } from "lucide-react";
 import {
+  AlertTriangle,
+  Check,
+  FileDown,
+  FileText,
+  Loader2,
+  UserPlus,
+  Wrench,
+} from "lucide-react";
+import {
+  erzeugeDokumente,
   erzeugePlan,
+  fetchDokumente,
   fetchEintritte,
   fetchPlan,
   fetchKuerzel,
   fetchRollen,
+  ladeDokument,
+  ladeSchulungsuebersicht,
   setzeRolle,
   type Eintritt,
+  type OnboardingDokument,
 } from "@/lib/onboardingApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
@@ -39,6 +52,11 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
       // Die Schulungssichten zeigen die neuen Zeilen ebenfalls.
       qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const pdfLaden = useMutation({
+    mutationFn: () => ladeSchulungsuebersicht(eintritt.employee_id, eintritt.name),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -99,25 +117,177 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
               ))}
             </tbody>
           </table>
-
-          {data.fehlend > 0 && (
-            <button
-              type="button"
-              onClick={() => anlegen.mutate()}
-              disabled={anlegen.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
-                         text-primary-foreground disabled:opacity-60
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {anlegen.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              )}
-              {t("onboarding.planAnlegen", { count: data.fehlend })}
-            </button>
-          )}
         </>
       )}
+
+      {/* Außerhalb der Soll-Bedingung: das Formblatt lässt sich auch leer
+          ausdrucken und von Hand ausfüllen — und solange die Anforderungsmatrix
+          nicht gepflegt ist, ist das Soll bei jedem leer. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {data.fehlend > 0 && (
+          <button
+            type="button"
+            onClick={() => anlegen.mutate()}
+            disabled={anlegen.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
+                       text-primary-foreground disabled:opacity-60
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {anlegen.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            {t("onboarding.planAnlegen", { count: data.fehlend })}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => pdfLaden.mutate()}
+          disabled={pdfLaden.isPending}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
+                     transition-colors hover:bg-muted disabled:opacity-60
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {pdfLaden.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+          )}
+          {t("onboarding.uebersichtPdf")}
+        </button>
+      </div>
     </div>
+  );
+}
+
+/** Automatisch erzeugte Schulungsübersichten.
+ *
+ *  Der Lauf hängt am Personio-Abgleich; der Knopf hier ist für den Fall, dass
+ *  gerade die Anforderungsmatrix gepflegt wurde und man nicht bis zum nächsten
+ *  Abgleich warten will.
+ */
+function DokumentePanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.onboardingDokumente(),
+    queryFn: fetchDokumente,
+  });
+
+  const erzeugen = useMutation({
+    mutationFn: erzeugeDokumente,
+    onSuccess: (r) => {
+      toast.success(
+        t("onboarding.dokumente.lauf", {
+          erzeugt: r.erzeugt,
+          aktualisiert: r.aktualisiert,
+        }),
+      );
+      if (r.uebersprungen_leer > 0) {
+        // Kein Fehler, aber der häufigste Grund für "es passiert nichts".
+        toast.warning(
+          t("onboarding.dokumente.ohneSoll", { count: r.uebersprungen_leer }),
+        );
+      }
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingDokumente() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const laden = useMutation({
+    mutationFn: (d: OnboardingDokument) => ladeDokument(d.employee_id, d.dateiname),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const veraltet = (data ?? []).filter((d) => d.veraltet).length;
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("onboarding.dokumente.title")}
+        anzahl={data?.length ?? 0}
+        icon={<FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              {t("onboarding.dokumente.hinweis")}
+            </p>
+            <button
+              type="button"
+              onClick={() => erzeugen.mutate()}
+              disabled={erzeugen.isPending}
+              className="ml-auto inline-flex items-center gap-2 rounded-md border px-3 py-1.5
+                         text-xs transition-colors hover:bg-muted disabled:opacity-60
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {erzeugen.isPending && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              )}
+              {t("onboarding.dokumente.jetztErzeugen")}
+            </button>
+          </div>
+
+          {veraltet > 0 && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+              {t("onboarding.dokumente.veraltetHinweis", { count: veraltet })}
+            </p>
+          )}
+
+          {(data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("onboarding.dokumente.leer")}
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/20">
+                  <Th>{t("onboarding.dokumente.datei")}</Th>
+                  <Th rechts>{t("onboarding.schulung")}</Th>
+                  <Th rechts>{t("onboarding.dokumente.erzeugtAm")}</Th>
+                  <Th rechts>{""}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data ?? []).map((d) => (
+                  <tr
+                    key={d.employee_id}
+                    className="border-b border-border/40 last:border-0"
+                  >
+                    <td className="px-4 py-1.5">
+                      {d.dateiname}
+                      {d.veraltet && (
+                        <span className="ml-2 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                          {t("onboarding.dokumente.veraltet")}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-1.5 text-right tabular-nums">{d.schulungen}</td>
+                    <td className="px-4 py-1.5 text-right whitespace-nowrap tabular-nums text-muted-foreground">
+                      {datum(d.erzeugt_am)}
+                    </td>
+                    <td className="px-4 py-1.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => laden.mutate(d)}
+                        aria-label={t("onboarding.dokumente.herunterladen")}
+                        title={t("onboarding.dokumente.herunterladen")}
+                        className="rounded-md p-1 text-muted-foreground transition-colors
+                                   hover:bg-muted hover:text-foreground
+                                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <FileDown className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Klappbar>
+    </section>
   );
 }
 
@@ -234,6 +404,7 @@ export function OnboardingPage() {
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">{t("onboarding.untertitel")}</p>
 
+      <DokumentePanel />
       <RollenPanel />
 
       <section>

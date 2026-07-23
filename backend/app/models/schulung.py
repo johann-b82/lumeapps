@@ -156,3 +156,27 @@ class SchulungTeilnahme(Base):
     schulung: Mapped["SchulungKatalog"] = relationship(
         "SchulungKatalog", back_populates="teilnahmen"
     )
+
+
+class OnboardingDokument(Base):
+    """Automatisch erzeugte Schulungsübersicht (Formblatt 71) einer Person.
+
+    Die Datei liegt in Directus; hier steht nur der Verweis. ``plan_signatur``
+    ist ein Hash über die Menge der Soll-Schulungen — ändert sich die
+    Anforderungsmatrix oder die Positions-Zuordnung, weicht die Signatur ab und
+    das Dokument wird beim nächsten Abgleich neu erzeugt.
+    """
+
+    __tablename__ = "onboarding_dokument"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("personio_employees.id", ondelete="CASCADE"), nullable=False
+    )
+    directus_file_uuid: Mapped[str] = mapped_column(String(64), nullable=False)
+    dateiname: Mapped[str] = mapped_column(Text, nullable=False)
+    plan_signatur: Mapped[str] = mapped_column(String(64), nullable=False)
+    schulungen: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    erzeugt_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
