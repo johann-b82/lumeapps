@@ -2,12 +2,17 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Info, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, Info, Loader2, Pencil, Upload, X } from "lucide-react";
 import {
+  entfernePerson,
+  entferneQualifikation,
   fetchMatrix,
   fetchMatrizen,
   kompetenzImportCommit,
   kompetenzImportPreview,
+  legePersonAn,
+  legeQualifikationAn,
+  setzeZelle,
   KOMPETENZ_BEREICHE,
   type KompetenzBereich,
   type KompetenzImportVorschau,
@@ -50,6 +55,105 @@ function ZelleAnzeige({
           {grad}
         </span>
       )}
+    </span>
+  );
+}
+
+/** Eine Zelle im Bearbeiten-Modus: Anforderungslevel als Auswahl, Grad als Zahl.
+ *
+ *  Gespeichert wird pro Zelle sofort — bei bis zu 31 Personen × 90 Zeilen wäre
+ *  ein "Alles speichern" am Ende ein Berg unklarer ungesicherter Änderungen.
+ *  Der Erfüllungsgrad geht erst beim Verlassen des Feldes raus, sonst käme
+ *  jeder Tastendruck als eigener Aufruf an.
+ */
+function ZelleBearbeiten({
+  matrixId,
+  qualifikationId,
+  personId,
+  level,
+  grad,
+}: {
+  matrixId: number;
+  qualifikationId: number;
+  personId: number;
+  level: number | null;
+  grad: number | null;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [entwurf, setEntwurf] = useState(grad === null ? "" : String(grad));
+
+  const speichern = useMutation({
+    mutationFn: (w: { al: number | null; e: number | null }) =>
+      setzeZelle(matrixId, {
+        qualifikation_id: qualifikationId,
+        person_id: personId,
+        anforderungslevel: w.al,
+        erfuellungsgrad: w.e,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrixId) });
+    },
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setEntwurf(grad === null ? "" : String(grad)); // verworfenen Wert zurücksetzen
+    },
+  });
+
+  const gradAbschicken = () => {
+    const roh = entwurf.trim();
+    if (roh === "") {
+      if (grad !== null) speichern.mutate({ al: level, e: null });
+      return;
+    }
+    const zahl = Number(roh);
+    if (!Number.isFinite(zahl) || zahl < 0 || zahl > 100) {
+      toast.error(t("kompetenzen.gradUngueltig"));
+      setEntwurf(grad === null ? "" : String(grad));
+      return;
+    }
+    const gerundet = Math.round(zahl);
+    if (gerundet !== grad) speichern.mutate({ al: level, e: gerundet });
+  };
+
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <select
+        value={level === null ? "" : String(level)}
+        disabled={speichern.isPending}
+        onChange={(e) =>
+          speichern.mutate({
+            al: e.target.value === "" ? null : Number(e.target.value),
+            e: grad,
+          })
+        }
+        aria-label={t("kompetenzen.anforderungslevel")}
+        className="h-6 w-9 rounded border bg-background px-0.5 text-[11px] tabular-nums
+                   focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="">—</option>
+        {[0, 1, 2, 3, 4].map((n) => (
+          <option key={n} value={String(n)}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={entwurf}
+        disabled={speichern.isPending}
+        onChange={(e) => setEntwurf(e.target.value)}
+        onBlur={gradAbschicken}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setEntwurf(grad === null ? "" : String(grad));
+        }}
+        aria-label={t("kompetenzen.erfuellungsgrad")}
+        className={`h-6 w-11 rounded border px-1 text-center text-[11px] tabular-nums
+                    focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring
+                    ${grad === null ? "bg-background" : gradFarbe(grad)}`}
+      />
     </span>
   );
 }
@@ -107,10 +211,144 @@ function LegendePanel() {
   );
 }
 
+const feldStil =
+  "h-8 rounded-md border bg-background px-2 text-xs " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const knopfStil =
+  "inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs " +
+  "text-primary-foreground disabled:opacity-50 focus-visible:outline-none " +
+  "focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Neue Qualifikation (Zeile). Kategorie als Auswahl der bestehenden, damit
+ *  keine Tippfehler-Gruppe neben einer bestehenden entsteht. */
+function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [bezeichnung, setBezeichnung] = useState("");
+  const [kategorie, setKategorie] = useState("");
+
+  const kategorien = useMemo(
+    () =>
+      [...new Set(matrix.qualifikationen.map((q) => q.kategorie).filter(Boolean))].sort() as string[],
+    [matrix.qualifikationen],
+  );
+
+  const anlegen = useMutation({
+    mutationFn: () =>
+      legeQualifikationAn(matrix.id, {
+        bezeichnung,
+        kategorie: kategorie || null,
+      }),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.zeileAngelegt"));
+      setBezeichnung("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrizen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium">{t("kompetenzen.neueZeile")}</span>
+      <input
+        value={bezeichnung}
+        onChange={(e) => setBezeichnung(e.target.value)}
+        placeholder={t("kompetenzen.qualifikation")}
+        className={`${feldStil} w-52`}
+      />
+      <select
+        value={kategorie}
+        onChange={(e) => setKategorie(e.target.value)}
+        aria-label={t("kompetenzen.kategorie")}
+        className={feldStil}
+      >
+        <option value="">{t("kompetenzen.ohneKategorie")}</option>
+        {kategorien.map((k) => (
+          <option key={k} value={k}>
+            {k}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={!bezeichnung.trim() || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className={knopfStil}
+      >
+        {anlegen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+        {t("kompetenzen.hinzufuegen")}
+      </button>
+    </div>
+  );
+}
+
+/** Neue Person (Spalte). */
+function SpalteAnlegen({ matrix }: { matrix: Matrix }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+
+  const anlegen = useMutation({
+    mutationFn: () => legePersonAn(matrix.id, { name }),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.personAngelegt"));
+      setName("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrizen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium">{t("kompetenzen.neueSpalte")}</span>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t("kompetenzen.person")}
+        className={`${feldStil} w-44`}
+      />
+      <button
+        type="button"
+        disabled={!name.trim() || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className={knopfStil}
+      >
+        {anlegen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+        {t("kompetenzen.hinzufuegen")}
+      </button>
+    </div>
+  );
+}
+
 /** Die Matrix selbst — Zeilen nach Kategorie gruppiert, Spalten sind Personen. */
 function MatrixTabelle({ matrix }: { matrix: Matrix }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [nurLuecken, setNurLuecken] = useState(false);
+  const [bearbeiten, setBearbeiten] = useState(false);
+
+  const aktualisieren = () =>
+    qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+
+  const personEntfernen = useMutation({
+    mutationFn: (id: number) => entfernePerson(matrix.id, id),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.personEntfernt"));
+      aktualisieren();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const qualEntfernen = useMutation({
+    mutationFn: (id: number) => entferneQualifikation(matrix.id, id),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.zeileEntfernt"));
+      aktualisieren();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const gruppen = useMemo(() => {
     const map = new Map<string, Qualifikation[]>();
@@ -149,7 +387,33 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
           {t("kompetenzen.nurLuecken")}
         </label>
         <span className="text-xs text-muted-foreground">{t("kompetenzen.legende")}</span>
+
+        <button
+          type="button"
+          onClick={() => setBearbeiten((v) => !v)}
+          aria-pressed={bearbeiten}
+          className={`ml-auto inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs
+                      transition-colors focus-visible:outline-none focus-visible:ring-2
+                      focus-visible:ring-ring ${
+                        bearbeiten
+                          ? "bg-primary text-primary-foreground"
+                          : "border text-muted-foreground hover:bg-muted"
+                      }`}
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          {bearbeiten ? t("kompetenzen.bearbeitenAus") : t("kompetenzen.bearbeitenAn")}
+        </button>
       </div>
+
+      {bearbeiten && (
+        <div className="mb-3 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+          <p className="text-xs text-muted-foreground">{t("kompetenzen.bearbeitenHinweis")}</p>
+          <div className="flex flex-wrap gap-4">
+            <ZeileAnlegen matrix={matrix} />
+            <SpalteAnlegen matrix={matrix} />
+          </div>
+        </div>
+      )}
 
       {gruppen.map(([kategorie, zeilen]) => {
         const gezeigt = nurLuecken
@@ -194,6 +458,20 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
                               *
                             </span>
                           )}
+                          {bearbeiten && (
+                            <button
+                              type="button"
+                              onClick={() => personEntfernen.mutate(p.id)}
+                              disabled={personEntfernen.isPending}
+                              aria-label={t("kompetenzen.spalteEntfernen", { name: p.name })}
+                              title={t("kompetenzen.spalteEntfernen", { name: p.name })}
+                              className="ml-1 rounded p-0.5 align-middle text-muted-foreground
+                                         transition-colors hover:bg-destructive/10
+                                         hover:text-destructive disabled:opacity-50"
+                            >
+                              <X className="h-3 w-3" aria-hidden="true" />
+                            </button>
+                          )}
                         </th>
                       ))}
                     </tr>
@@ -213,6 +491,24 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
                               </span>
                             )}
                             {q.bezeichnung}
+                            {bearbeiten && (
+                              <button
+                                type="button"
+                                onClick={() => qualEntfernen.mutate(q.id)}
+                                disabled={qualEntfernen.isPending}
+                                aria-label={t("kompetenzen.zeileEntfernen2", {
+                                  name: q.bezeichnung,
+                                })}
+                                title={t("kompetenzen.zeileEntfernen2", {
+                                  name: q.bezeichnung,
+                                })}
+                                className="ml-2 rounded p-0.5 align-middle text-muted-foreground
+                                           transition-colors hover:bg-destructive/10
+                                           hover:text-destructive disabled:opacity-50"
+                              >
+                                <X className="h-3 w-3" aria-hidden="true" />
+                              </button>
+                            )}
                           </td>
                           <td className="px-4 py-1.5 text-right tabular-nums text-muted-foreground">
                             {q.durchschnitt === null ? "—" : `${q.durchschnitt}%`}
@@ -221,10 +517,20 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
                             const z = proPerson?.get(p.id);
                             return (
                               <td key={p.id} className="px-2 py-1.5 text-center">
-                                <ZelleAnzeige
-                                  level={z?.al ?? null}
-                                  grad={z?.e ?? null}
-                                />
+                                {bearbeiten ? (
+                                  <ZelleBearbeiten
+                                    // Neu montieren, sobald der Server andere Werte
+                                    // liefert — sonst bliebe der lokale Entwurf stehen.
+                                    key={`${z?.al ?? "-"}:${z?.e ?? "-"}`}
+                                    matrixId={matrix.id}
+                                    qualifikationId={q.id}
+                                    personId={p.id}
+                                    level={z?.al ?? null}
+                                    grad={z?.e ?? null}
+                                  />
+                                ) : (
+                                  <ZelleAnzeige level={z?.al ?? null} grad={z?.e ?? null} />
+                                )}
                               </td>
                             );
                           })}
