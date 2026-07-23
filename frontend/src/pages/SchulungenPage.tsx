@@ -32,6 +32,7 @@ import {
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { SeitenNavigation } from "@/components/hr/SeitenNavigation";
 
 type KatalogZeile = Schulung;
 
@@ -860,6 +861,7 @@ export function SchulungenPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <SeitenNavigation />
       <h1 className="mb-6 flex items-center gap-2 text-lg font-semibold">
         <GraduationCap className="h-5 w-5" aria-hidden="true" />
         {t("schulungen.title")}
