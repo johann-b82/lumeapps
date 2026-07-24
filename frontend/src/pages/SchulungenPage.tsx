@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  FileDown,
   GraduationCap,
   Loader2,
   Upload,
@@ -20,6 +21,7 @@ import {
   fetchPflichtMatrix,
   fetchSchulungen,
   fetchZuweisbare,
+  ladeSchulungsprotokoll,
   schulungImportCommit,
   schulungImportPreview,
   setzePflicht,
@@ -35,6 +37,33 @@ import { Klappbar, Th } from "@/components/hr/Klappbar";
 
 type KatalogZeile = Schulung;
 
+/** Lädt den Schulungsnachweis (Formblatt 68) einer Schulung als PDF. */
+function ProtokollKnopf({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const laden = useMutation({
+    mutationFn: () => ladeSchulungsprotokoll(schulung.id, schulung.name),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <button
+      type="button"
+      onClick={() => laden.mutate()}
+      disabled={laden.isPending}
+      aria-label={t("schulungen.katalog.protokoll")}
+      title={t("schulungen.katalog.protokoll")}
+      className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted
+                 hover:text-foreground disabled:opacity-50 focus-visible:outline-none
+                 focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {laden.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : (
+        <FileDown className="h-4 w-4" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 /** Schulungen eines Bereichs. */
 function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
   const { t } = useTranslation();
@@ -46,6 +75,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
             <Th>{t("schulungen.katalog.name")}</Th>
             <Th>{t("schulungen.katalog.turnus")}</Th>
             <Th rechts>{t("schulungen.katalog.teilnahmen")}</Th>
+            <Th rechts>{""}</Th>
           </tr>
         </thead>
         <tbody>
@@ -65,6 +95,9 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
                 )}
               </td>
               <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
+              <td className="px-4 py-2 text-right">
+                <ProtokollKnopf schulung={s} />
+              </td>
             </tr>
           ))}
         </tbody>
