@@ -347,6 +347,12 @@ function EinarbeitungMatrixPanel() {
     gruppen.set(z.abteilung, liste);
   }
 
+  // Bereits erfasste Inhalte als Vorschläge — so lässt sich derselbe Inhalt
+  // über Abteilungen hinweg wiederverwenden, ohne ihn abzutippen.
+  const inhaltVorschlaege = [
+    ...new Set((data ?? []).map((z) => z.inhalt.trim()).filter(Boolean)),
+  ].sort();
+
   const feldStil =
     "h-8 rounded-md border bg-background px-2 text-xs " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -391,11 +397,17 @@ function EinarbeitungMatrixPanel() {
               ))}
             </datalist>
             <input
+              list="einarb-inhalte"
               value={inhalt}
               onChange={(e) => setInhalt(e.target.value)}
               placeholder={t("onboarding.einarbeitung.inhalt")}
               className={`${feldStil} min-w-[16rem] flex-1`}
             />
+            <datalist id="einarb-inhalte">
+              {inhaltVorschlaege.map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
             <button
               type="button"
               onClick={() => anlegen.mutate()}
