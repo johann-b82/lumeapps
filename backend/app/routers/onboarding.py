@@ -33,6 +33,7 @@ from app.services.onboarding import (
     schulungsplan,
 )
 from app.services.onboarding_dokumente import plan_signatur, uebersichten_erzeugen
+from app.services.pdf_logo import lade_logo
 from app.services.schulungsuebersicht_pdf import (
     UebersichtZeile,
     dateiname,
@@ -304,6 +305,7 @@ async def plan_als_pdf(
         name=plan.name,
         funktion=plan.position or "",
         zeilen=zeilen,
+        logo=await lade_logo(db),
     )
     name = dateiname(plan.name, date.today())
     return Response(

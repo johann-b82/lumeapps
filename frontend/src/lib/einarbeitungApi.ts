@@ -69,3 +69,8 @@ export async function ladeEinarbeitungsplan(
   ].join(".");
   openBlob(blob, `${stand}_${name.split(" ").join("_")}_Einarbeitungsplan.pdf`);
 }
+
+/** Aktive Personio-Mitarbeiter als Vorschläge für den Ansprechpartner. */
+export function fetchAnsprechpartner(): Promise<string[]> {
+  return apiClient<string[]>("/api/hr/einarbeitung/ansprechpartner");
+}

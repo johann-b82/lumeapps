@@ -6,6 +6,8 @@ asyncpg==0.31.0
 alembic==1.18.4
 pandas==3.0.2
 openpyxl==3.1.5
+# Von openpyxl benötigt, um Bilder (Logo) in die generierten Blätter einzubetten.
+Pillow==11.3.0
 nh3==0.3.4
 cryptography==46.0.7
 httpx==0.28.1

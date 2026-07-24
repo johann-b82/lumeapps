@@ -30,6 +30,7 @@ import {
 import {
   entferneInhalt,
   fetchEinarbeitungAbteilungen,
+  fetchAnsprechpartner,
   fetchEinarbeitungMatrix,
   ladeEinarbeitungsplan,
   legeInhaltAn,
@@ -281,6 +282,10 @@ function EinarbeitungMatrixPanel() {
     queryKey: hrKpiKeys.einarbeitungAbteilungen(),
     queryFn: fetchEinarbeitungAbteilungen,
   });
+  const { data: partnerVorschlaege } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungAnsprechpartner(),
+    queryFn: fetchAnsprechpartner,
+  });
 
   const auffrischen = () => {
     qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungMatrix() });
@@ -348,11 +353,17 @@ function EinarbeitungMatrixPanel() {
               ))}
             </datalist>
             <input
+              list="einarb-ansprechpartner"
               value={partner}
               onChange={(e) => setPartner(e.target.value)}
               placeholder={t("onboarding.einarbeitung.ansprechpartner")}
               className={`${feldStil} w-44`}
             />
+            <datalist id="einarb-ansprechpartner">
+              {(partnerVorschlaege ?? []).map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
             <input
               value={inhalt}
               onChange={(e) => setInhalt(e.target.value)}

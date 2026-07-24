@@ -19,6 +19,7 @@ from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.worksheet.page import PageMargins
 
 from app.services.maintenance_pdf import convert_xlsx_to_pdf
+from app.services.pdf_logo import LogoBild, bild_einsetzen
 
 FORMBLATT = "Einarbeitungsplan"
 
@@ -53,16 +54,22 @@ def _fett(ws, ref: str, size: int = 11) -> None:
     ws[ref].font = Font(size=size, bold=True)
 
 
-def _kopf(ws, name: str, stelle: str, beginn: date | None) -> int:
-    ws["B2"] = FORMBLATT
-    _fett(ws, "B2", 16)
+def _kopf(ws, name: str, stelle: str, beginn: date | None, logo: LogoBild | None = None) -> int:
+    # Mit Logo entsteht oben ein Logo-Band; der Titel rückt darunter.
+    titelzeile = 2
+    if logo is not None:
+        bild_einsetzen(ws, logo, "B1")
+        for r in (1, 2, 3):
+            ws.row_dimensions[r].height = 20
+        titelzeile = 4
+    ws.cell(row=titelzeile, column=2, value=FORMBLATT).font = Font(size=16, bold=True)
 
     zeilen = [
         ("Name des Mitarbeiters:", name),
         ("Stellenbezeichnung:", stelle or "—"),
         ("Beginn der Tätigkeit:", beginn.strftime("%d.%m.%Y") if beginn else "—"),
     ]
-    r = 4
+    r = titelzeile + 2
     for label, wert in zeilen:
         ws.cell(row=r, column=2, value=label).font = Font(bold=True)
         z = ws.cell(row=r, column=4, value=wert)
@@ -151,7 +158,11 @@ def _fuss(ws, r: int) -> int:
 
 
 def baue_xlsx(
-    name: str, stelle: str, beginn: date | None, zeilen: list[EinarbeitungZeile]
+    name: str,
+    stelle: str,
+    beginn: date | None,
+    zeilen: list[EinarbeitungZeile],
+    logo: LogoBild | None = None,
 ) -> bytes:
     wb = Workbook()
     ws = wb.active
@@ -160,7 +171,7 @@ def baue_xlsx(
     for spalte, breite in zip("ABCDEFGH", (3, 13, 20, 14, 14, 14, 9, 16)):
         ws.column_dimensions[spalte].width = breite
 
-    r = _kopf(ws, name, stelle, beginn)
+    r = _kopf(ws, name, stelle, beginn, logo)
     r = _einleitung(ws, r)
     tab_start = r
     r = _tabelle(ws, r, zeilen)
@@ -182,9 +193,13 @@ def baue_xlsx(
 
 
 async def erzeuge_einarbeitung_pdf(
-    name: str, stelle: str, beginn: date | None, zeilen: list[EinarbeitungZeile]
+    name: str,
+    stelle: str,
+    beginn: date | None,
+    zeilen: list[EinarbeitungZeile],
+    logo: LogoBild | None = None,
 ) -> bytes:
-    return await convert_xlsx_to_pdf(baue_xlsx(name, stelle, beginn, zeilen))
+    return await convert_xlsx_to_pdf(baue_xlsx(name, stelle, beginn, zeilen, logo))
 
 
 def dateiname(name: str, stand: date) -> str:

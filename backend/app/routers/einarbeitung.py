@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db_session
 from app.models import EinarbeitungInhalt, PersonioEmployee
 from app.security.directus_auth import get_current_user, require_admin
+from app.services.pdf_logo import lade_logo
 from app.services.einarbeitung_pdf import (
     EinarbeitungZeile,
     dateiname,
@@ -97,6 +98,33 @@ async def abteilungen(
         await db.execute(select(EinarbeitungInhalt.abteilung).distinct())
     ).scalars().all()
     return sorted({a.strip() for a in [*aus_personio, *aus_matrix] if a and a.strip()})
+
+
+@router.get("/ansprechpartner", response_model=list[str])
+async def ansprechpartner_vorschlaege(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[str]:
+    """Aktive Personio-Mitarbeiter als Auswahl für den Ansprechpartner.
+
+    Der Ansprechpartner bleibt ein Name (Freitext erlaubt) — das Dropdown ist
+    nur eine durchsuchbare Vorschlagsliste, damit Schreibweisen einheitlich
+    bleiben und externe Personen trotzdem eintragbar sind.
+    """
+    aktive = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status == "active")
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    namen = [
+        f"{e.first_name or ''} {e.last_name or ''}".strip() for e in aktive
+    ]
+    return sorted({n for n in namen if n})
 
 
 @router.post("/inhalt", response_model=InhaltRead, status_code=201)
@@ -241,7 +269,11 @@ async def plan_pdf(
 
     name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
     pdf = await erzeuge_einarbeitung_pdf(
-        name=name, stelle=emp.position or "", beginn=emp.hire_date, zeilen=zeilen
+        name=name,
+        stelle=emp.position or "",
+        beginn=emp.hire_date,
+        zeilen=zeilen,
+        logo=await lade_logo(db),
     )
     datei = dateiname(name, date.today())
     return Response(
