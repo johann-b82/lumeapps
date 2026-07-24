@@ -37,6 +37,7 @@ import {
   legeInhaltAn,
   type EinarbeitungInhalt,
 } from "@/lib/einarbeitungApi";
+import { fetchSchulungen } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 
@@ -312,6 +313,11 @@ function EinarbeitungMatrixPanel() {
     queryKey: hrKpiKeys.einarbeitungAnsprechpartner(),
     queryFn: fetchAnsprechpartner,
   });
+  // Schulungskatalog als Inhalts-Vorschläge (die Basis der Anforderungsmatrix).
+  const { data: katalog } = useQuery({
+    queryKey: hrKpiKeys.schulungen(),
+    queryFn: fetchSchulungen,
+  });
 
   const auffrischen = () => {
     qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungMatrix() });
@@ -347,10 +353,15 @@ function EinarbeitungMatrixPanel() {
     gruppen.set(z.abteilung, liste);
   }
 
-  // Bereits erfasste Inhalte als Vorschläge — so lässt sich derselbe Inhalt
-  // über Abteilungen hinweg wiederverwenden, ohne ihn abzutippen.
+  // Vorschläge fürs Inhaltsfeld: die Schulungen aus dem Katalog (woraus die
+  // Anforderungsmatrix besteht) plus die bereits erfassten Einarbeitungsinhalte.
+  // So ist die Liste von Anfang an nützlich und derselbe Inhalt lässt sich über
+  // Abteilungen hinweg wiederverwenden, ohne ihn abzutippen.
   const inhaltVorschlaege = [
-    ...new Set((data ?? []).map((z) => z.inhalt.trim()).filter(Boolean)),
+    ...new Set([
+      ...(katalog ?? []).map((s) => s.name.trim()),
+      ...(data ?? []).map((z) => z.inhalt.trim()),
+    ].filter(Boolean)),
   ].sort();
 
   const feldStil =
