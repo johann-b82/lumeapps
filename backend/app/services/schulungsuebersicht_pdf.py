@@ -197,19 +197,21 @@ def _fuss(ws, freigegeben_von: str, erstellt_von: str) -> None:
     ws.evenFooter.right.text = ws.oddFooter.right.text
 
 
-def baue_xlsx(
+def fuelle_blatt(
+    ws,
     name: str,
     funktion: str,
     zeilen: list[UebersichtZeile],
-    freigegeben_von: str,
-    erstellt_von: str,
+    freigegeben_von: str = "",
+    erstellt_von: str = "",
     logo: LogoBild | None = None,
-) -> bytes:
-    """Formblatt 71 als .xlsx (Zwischenschritt zur PDF-Erzeugung)."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Schulungsübersicht"
+) -> None:
+    """Formblatt 71 in ein vorhandenes Arbeitsblatt schreiben.
 
+    Herausgezogen aus ``baue_xlsx``, damit das Blatt auch als zweite Seite eines
+    kombinierten Onboarding-Pakets (mit dem Einarbeitungsplan) dienen kann.
+    """
+    ws.title = "Schulungsübersicht"
     for spalte, breite in zip("ABCDEFG", (11, 16, 58, 5, 5, 5, 6)):
         ws.column_dimensions[spalte].width = breite
 
@@ -236,6 +238,18 @@ def baue_xlsx(
     # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
     ws.print_title_rows = f"{kopfzeile}:{kopfzeile + 1}"
 
+
+def baue_xlsx(
+    name: str,
+    funktion: str,
+    zeilen: list[UebersichtZeile],
+    freigegeben_von: str,
+    erstellt_von: str,
+    logo: LogoBild | None = None,
+) -> bytes:
+    """Formblatt 71 als .xlsx (Zwischenschritt zur PDF-Erzeugung)."""
+    wb = Workbook()
+    fuelle_blatt(wb.active, name, funktion, zeilen, freigegeben_von, erstellt_von, logo)
     puffer = BytesIO()
     wb.save(puffer)
     return puffer.getvalue()

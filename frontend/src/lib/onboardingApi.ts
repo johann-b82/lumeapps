@@ -103,6 +103,26 @@ export async function ladeSchulungsuebersicht(
   openBlob(blob, `${stand}_${name.split(" ").join("_")}_Schulungsuebersicht.pdf`);
 }
 
+/** Lädt das Onboarding-Paket (Einarbeitungsplan + Schulungsübersicht) als ein PDF. */
+export async function ladeOnboardingPaket(
+  employeeId: number,
+  name: string,
+  abteilungen: string[],
+): Promise<void> {
+  const q = abteilungen
+    .map((a) => `abteilungen=${encodeURIComponent(a)}`)
+    .join("&");
+  const url = `/api/hr/onboarding/plan/${employeeId}/paket/pdf${q ? `?${q}` : ""}`;
+  const blob = await fetchBlob(url);
+  const heute = new Date();
+  const stand = [
+    heute.getFullYear(),
+    String(heute.getMonth() + 1).padStart(2, "0"),
+    String(heute.getDate()).padStart(2, "0"),
+  ].join(".");
+  openBlob(blob, `${stand}_${name.split(" ").join("_")}_Onboarding-Paket.pdf`);
+}
+
 export interface OnboardingDokument {
   employee_id: number;
   dateiname: string;

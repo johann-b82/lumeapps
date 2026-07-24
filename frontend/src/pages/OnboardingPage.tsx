@@ -22,6 +22,7 @@ import {
   fetchKuerzel,
   fetchRollen,
   ladeDokument,
+  ladeOnboardingPaket,
   ladeSchulungsuebersicht,
   setzeRolle,
   type Eintritt,
@@ -167,18 +168,39 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           {t("onboarding.uebersichtPdf")}
         </button>
 
-        <EinarbeitungKnopf eintritt={eintritt} />
+        <AbteilungsDownload
+          eintritt={eintritt}
+          label={t("onboarding.einarbeitung.pdf")}
+          laden={(a) => ladeEinarbeitungsplan(eintritt.employee_id, eintritt.name, a)}
+        />
+
+        <AbteilungsDownload
+          eintritt={eintritt}
+          primaer
+          label={t("onboarding.paket.pdf")}
+          laden={(a) => ladeOnboardingPaket(eintritt.employee_id, eintritt.name, a)}
+        />
       </div>
     </div>
   );
 }
 
-/** Einarbeitungsbogen als PDF — mit Abteilungsauswahl.
+/** Download mit Abteilungsauswahl — geteilt von Einarbeitungsplan und Paket.
  *
  *  Vorbelegt mit der Personio-Abteilung der Person; weitere lassen sich
  *  dazuwählen, für Rollen über mehrere Bereiche (z. B. QS und Produktion).
  */
-function EinarbeitungKnopf({ eintritt }: { eintritt: Eintritt }) {
+function AbteilungsDownload({
+  eintritt,
+  label,
+  laden,
+  primaer = false,
+}: {
+  eintritt: Eintritt;
+  label: string;
+  laden: (abteilungen: string[]) => Promise<void>;
+  primaer?: boolean;
+}) {
   const { t } = useTranslation();
   const [offen, setOffen] = useState(false);
   const [gewaehlt, setGewaehlt] = useState<string[]>(
@@ -191,25 +213,29 @@ function EinarbeitungKnopf({ eintritt }: { eintritt: Eintritt }) {
     enabled: offen,
   });
 
-  const laden = useMutation({
-    mutationFn: () => ladeEinarbeitungsplan(eintritt.employee_id, eintritt.name, gewaehlt),
+  const download = useMutation({
+    mutationFn: () => laden(gewaehlt),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const umschalten = (a: string) =>
     setGewaehlt((v) => (v.includes(a) ? v.filter((x) => x !== a) : [...v, a]));
 
+  const knopfStil = primaer
+    ? "bg-primary text-primary-foreground"
+    : "border hover:bg-muted";
+
   if (!offen) {
     return (
       <button
         type="button"
         onClick={() => setOffen(true)}
-        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
-                   transition-colors hover:bg-muted
-                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm
+                    transition-colors focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-ring ${knopfStil}`}
       >
         <FileDown className="h-4 w-4" aria-hidden="true" />
-        {t("onboarding.einarbeitung.pdf")}
+        {label}
       </button>
     );
   }
@@ -237,13 +263,13 @@ function EinarbeitungKnopf({ eintritt }: { eintritt: Eintritt }) {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => laden.mutate()}
-          disabled={laden.isPending || gewaehlt.length === 0}
+          onClick={() => download.mutate()}
+          disabled={download.isPending || gewaehlt.length === 0}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
                      text-primary-foreground disabled:opacity-60
                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {laden.isPending ? (
+          {download.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
             <FileDown className="h-4 w-4" aria-hidden="true" />

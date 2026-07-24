@@ -932,6 +932,7 @@
   "onboarding.planAnlegen": "Create {{count}} missing training(s)",
   "onboarding.uebersichtPdf": "Training overview (PDF)",
   "onboarding.einarbeitung.pdf": "Onboarding plan (PDF)",
+  "onboarding.paket.pdf": "Onboarding package (PDF)",
   "onboarding.einarbeitung.abteilungen": "Departments for the sheet:",
   "onboarding.einarbeitung.erzeugen": "Generate",
   "onboarding.einarbeitung.abbrechen": "Cancel",

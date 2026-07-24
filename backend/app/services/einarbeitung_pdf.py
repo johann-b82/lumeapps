@@ -157,17 +157,20 @@ def _fuss(ws, r: int) -> int:
     return r
 
 
-def baue_xlsx(
+def fuelle_blatt(
+    ws,
     name: str,
     stelle: str,
     beginn: date | None,
     zeilen: list[EinarbeitungZeile],
     logo: LogoBild | None = None,
-) -> bytes:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Einarbeitungsplan"
+) -> None:
+    """Einarbeitungsplan in ein vorhandenes Arbeitsblatt schreiben.
 
+    Herausgezogen aus ``baue_xlsx``, damit das Blatt auch als erste Seite eines
+    kombinierten Onboarding-Pakets (mit der Schulungsübersicht) dienen kann.
+    """
+    ws.title = "Einarbeitungsplan"
     for spalte, breite in zip("ABCDEFGH", (3, 13, 20, 14, 14, 14, 9, 16)):
         ws.column_dimensions[spalte].width = breite
 
@@ -187,6 +190,16 @@ def baue_xlsx(
     # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
     ws.print_title_rows = f"{tab_start}:{tab_start}"
 
+
+def baue_xlsx(
+    name: str,
+    stelle: str,
+    beginn: date | None,
+    zeilen: list[EinarbeitungZeile],
+    logo: LogoBild | None = None,
+) -> bytes:
+    wb = Workbook()
+    fuelle_blatt(wb.active, name, stelle, beginn, zeilen, logo)
     puffer = BytesIO()
     wb.save(puffer)
     return puffer.getvalue()

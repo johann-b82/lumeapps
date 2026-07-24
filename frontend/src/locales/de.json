@@ -928,6 +928,7 @@
   "onboarding.planAnlegen": "{{count}} fehlende Schulung(en) anlegen",
   "onboarding.uebersichtPdf": "Schulungsübersicht (PDF)",
   "onboarding.einarbeitung.pdf": "Einarbeitungsplan (PDF)",
+  "onboarding.paket.pdf": "Onboarding-Paket (PDF)",
   "onboarding.einarbeitung.abteilungen": "Abteilungen für den Bogen:",
   "onboarding.einarbeitung.erzeugen": "Erzeugen",
   "onboarding.einarbeitung.abbrechen": "Abbrechen",
