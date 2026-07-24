@@ -6,6 +6,7 @@
  * die Oberfläche Vorschau und Ergebnis identisch darstellen kann.
  */
 import { apiClient } from "./apiClient";
+import { fetchBlob, openBlob } from "./download";
 
 export interface NichtZugeordnet {
   personalnummer: string;
@@ -196,4 +197,19 @@ export function entferneZuweisung(teilnahmeId: number): Promise<void> {
   return apiClient<void>(`/api/hr/schulungen/zuweisung/${teilnahmeId}`, {
     method: "DELETE",
   });
+}
+
+/** Lädt den Schulungsnachweis (Formblatt 68) einer Schulung als PDF herunter. */
+export async function ladeSchulungsprotokoll(
+  schulungId: number,
+  name: string,
+): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/schulungen/${schulungId}/protokoll/pdf`);
+  const heute = new Date();
+  const stand = [
+    heute.getFullYear(),
+    String(heute.getMonth() + 1).padStart(2, "0"),
+    String(heute.getDate()).padStart(2, "0"),
+  ].join(".");
+  openBlob(blob, `${stand}_${name.split(" ").join("_")}_Schulungsnachweis.pdf`);
 }

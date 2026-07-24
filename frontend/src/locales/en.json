@@ -1039,6 +1039,7 @@
   "schulungen.katalog.name": "Training",
   "schulungen.katalog.turnus": "Interval",
   "schulungen.katalog.teilnahmen": "Employees",
+  "schulungen.katalog.protokoll": "Download training record (form 68)",
   "schulungen.katalog.suche": "Search training, area or interval …",
   "schulungen.katalog.keinTreffer": "No training matches the search.",
   "schulungen.zuweisen.title": "Assign a single training",

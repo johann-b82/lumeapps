@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,11 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
 from app.routers.hr_kpis import _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
+from app.services.pdf_logo import lade_logo
+from app.services.schulungsprotokoll_pdf import (
+    dateiname as protokoll_dateiname,
+    erzeuge_schulungsprotokoll_pdf,
+)
 from app.services.schulung_import import (
     ImportVorschau,
     _personalnummer,
@@ -701,3 +706,32 @@ async def liste_schulungen(
         )
         for k in katalog
     ]
+
+
+@router.get("/{schulung_id}/protokoll/pdf")
+async def schulungsprotokoll_pdf(
+    schulung_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Schulungsnachweis (Formblatt 68) für eine Schulung als PDF.
+
+    Titel kommt aus dem Katalog; Datum, Trainer, Teilnehmer bleiben leer und
+    werden bei der Schulung von Hand ausgefüllt (Unterschriften).
+
+    Compute-justified: clause 2 (document generation) — openpyxl-Aufbau plus
+    LibreOffice-Konvertierung laufen serverseitig.
+    """
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+
+    titel = f"{k.bereich}: {k.name}" if k.bereich else k.name
+    pdf = await erzeuge_schulungsprotokoll_pdf(titel=titel, logo=await lade_logo(db))
+    name = protokoll_dateiname(k.name, date.today())
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
+    )
