@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import OnboardingDokument, PersonioEmployee
 from app.services.onboarding import schulungsplan
+from app.services.pdf_logo import lade_logo
 from app.services.schulungsuebersicht_pdf import (
     UebersichtZeile,
     dateiname,
@@ -116,6 +117,7 @@ async def dokument_erzeugen(
             )
             for s in plan.soll
         ],
+        logo=await lade_logo(db),
     )
     name = f"{dateiname(plan.name, date.today())}.pdf"
     datei_uuid = await _nach_directus(name, pdf)

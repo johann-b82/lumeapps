@@ -6,10 +6,12 @@ import {
   AlertTriangle,
   Check,
   FileDown,
+  ClipboardList,
   FileText,
   Loader2,
   UserPlus,
   Wrench,
+  X,
 } from "lucide-react";
 import {
   erzeugeDokumente,
@@ -20,11 +22,21 @@ import {
   fetchKuerzel,
   fetchRollen,
   ladeDokument,
+  ladeOnboardingPaket,
   ladeSchulungsuebersicht,
   setzeRolle,
   type Eintritt,
   type OnboardingDokument,
 } from "@/lib/onboardingApi";
+import {
+  entferneInhalt,
+  fetchEinarbeitungAbteilungen,
+  fetchAnsprechpartner,
+  fetchEinarbeitungMatrix,
+  ladeEinarbeitungsplan,
+  legeInhaltAn,
+  type EinarbeitungInhalt,
+} from "@/lib/einarbeitungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 
@@ -155,8 +167,298 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           )}
           {t("onboarding.uebersichtPdf")}
         </button>
+
+        <AbteilungsDownload
+          eintritt={eintritt}
+          label={t("onboarding.einarbeitung.pdf")}
+          laden={(a) => ladeEinarbeitungsplan(eintritt.employee_id, eintritt.name, a)}
+        />
+
+        <AbteilungsDownload
+          eintritt={eintritt}
+          primaer
+          label={t("onboarding.paket.pdf")}
+          laden={(a) => ladeOnboardingPaket(eintritt.employee_id, eintritt.name, a)}
+        />
       </div>
     </div>
+  );
+}
+
+/** Download mit Abteilungsauswahl — geteilt von Einarbeitungsplan und Paket.
+ *
+ *  Vorbelegt mit der Personio-Abteilung der Person; weitere lassen sich
+ *  dazuwählen, für Rollen über mehrere Bereiche (z. B. QS und Produktion).
+ */
+function AbteilungsDownload({
+  eintritt,
+  label,
+  laden,
+  primaer = false,
+}: {
+  eintritt: Eintritt;
+  label: string;
+  laden: (abteilungen: string[]) => Promise<void>;
+  primaer?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [offen, setOffen] = useState(false);
+  const [gewaehlt, setGewaehlt] = useState<string[]>(
+    eintritt.abteilung ? [eintritt.abteilung] : [],
+  );
+
+  const { data: abteilungen } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungAbteilungen(),
+    queryFn: fetchEinarbeitungAbteilungen,
+    enabled: offen,
+  });
+
+  const download = useMutation({
+    mutationFn: () => laden(gewaehlt),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const umschalten = (a: string) =>
+    setGewaehlt((v) => (v.includes(a) ? v.filter((x) => x !== a) : [...v, a]));
+
+  const knopfStil = primaer
+    ? "bg-primary text-primary-foreground"
+    : "border hover:bg-muted";
+
+  if (!offen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOffen(true)}
+        className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm
+                    transition-colors focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-ring ${knopfStil}`}
+      >
+        <FileDown className="h-4 w-4" aria-hidden="true" />
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2 rounded-md border bg-muted/30 p-3">
+      <span className="text-xs font-medium">{t("onboarding.einarbeitung.abteilungen")}</span>
+      <div className="flex flex-wrap gap-2">
+        {(abteilungen ?? []).map((a) => (
+          <label
+            key={a}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border
+                       bg-background px-2 py-1 text-xs"
+          >
+            <input
+              type="checkbox"
+              checked={gewaehlt.includes(a)}
+              onChange={() => umschalten(a)}
+              className="h-3.5 w-3.5 rounded border-input"
+            />
+            {a}
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => download.mutate()}
+          disabled={download.isPending || gewaehlt.length === 0}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
+                     text-primary-foreground disabled:opacity-60
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {download.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+          )}
+          {t("onboarding.einarbeitung.erzeugen")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffen(false)}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          {t("onboarding.einarbeitung.abbrechen")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Einarbeitungsmatrix: je Abteilung die Einarbeitungsinhalte + Ansprechpartner.
+ *
+ *  App-gepflegt. Aus diesen Zeilen setzt sich der Einarbeitungsbogen einer
+ *  Person zusammen (über ihre Abteilung).
+ */
+function EinarbeitungMatrixPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [abteilung, setAbteilung] = useState("");
+  const [inhalt, setInhalt] = useState("");
+  const [partner, setPartner] = useState("");
+
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungMatrix(),
+    queryFn: fetchEinarbeitungMatrix,
+  });
+  const { data: abteilungen } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungAbteilungen(),
+    queryFn: fetchEinarbeitungAbteilungen,
+  });
+  const { data: partnerVorschlaege } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungAnsprechpartner(),
+    queryFn: fetchAnsprechpartner,
+  });
+
+  const auffrischen = () => {
+    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungMatrix() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungAbteilungen() });
+  };
+
+  const anlegen = useMutation({
+    mutationFn: () =>
+      legeInhaltAn({ abteilung, inhalt, ansprechpartner: partner || null }),
+    onSuccess: () => {
+      toast.success(t("onboarding.einarbeitung.inhaltAngelegt"));
+      setInhalt("");
+      setPartner("");
+      auffrischen();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const entfernen = useMutation({
+    mutationFn: entferneInhalt,
+    onSuccess: () => {
+      toast.success(t("onboarding.einarbeitung.inhaltEntfernt"));
+      auffrischen();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Nach Abteilung gruppieren, Reihenfolge kommt schon sortiert vom Server.
+  const gruppen = new Map<string, EinarbeitungInhalt[]>();
+  for (const z of data ?? []) {
+    const liste = gruppen.get(z.abteilung) ?? [];
+    liste.push(z);
+    gruppen.set(z.abteilung, liste);
+  }
+
+  const feldStil =
+    "h-8 rounded-md border bg-background px-2 text-xs " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("onboarding.einarbeitung.matrixTitle")}
+        anzahl={data?.length ?? 0}
+        icon={<ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-4 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            {t("onboarding.einarbeitung.matrixHinweis")}
+          </p>
+
+          {/* Neue Zeile anlegen */}
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              list="einarb-abteilungen"
+              value={abteilung}
+              onChange={(e) => setAbteilung(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.abteilung")}
+              className={`${feldStil} w-40`}
+            />
+            <datalist id="einarb-abteilungen">
+              {(abteilungen ?? []).map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
+            <input
+              list="einarb-ansprechpartner"
+              value={partner}
+              onChange={(e) => setPartner(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.ansprechpartner")}
+              className={`${feldStil} w-44`}
+            />
+            <datalist id="einarb-ansprechpartner">
+              {(partnerVorschlaege ?? []).map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <input
+              value={inhalt}
+              onChange={(e) => setInhalt(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.inhalt")}
+              className={`${feldStil} min-w-[16rem] flex-1`}
+            />
+            <button
+              type="button"
+              onClick={() => anlegen.mutate()}
+              disabled={!abteilung.trim() || !inhalt.trim() || anlegen.isPending}
+              className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-xs
+                         text-primary-foreground disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {anlegen.isPending && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              )}
+              {t("onboarding.einarbeitung.hinzufuegen")}
+            </button>
+          </div>
+
+          {gruppen.size === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("onboarding.einarbeitung.matrixLeer")}
+            </p>
+          ) : (
+            [...gruppen.entries()].map(([abt, zeilen]) => (
+              <div key={abt}>
+                <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{abt}</h3>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/20">
+                      <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
+                      <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
+                      <Th rechts>{""}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zeilen.map((z) => (
+                      <tr key={z.id} className="border-b border-border/40 last:border-0">
+                        <td className="px-4 py-1.5 text-muted-foreground">
+                          {z.ansprechpartner ?? "—"}
+                        </td>
+                        <td className="px-4 py-1.5">{z.inhalt}</td>
+                        <td className="px-4 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => entfernen.mutate(z.id)}
+                            disabled={entfernen.isPending}
+                            aria-label={t("onboarding.einarbeitung.zeileEntfernen")}
+                            title={t("onboarding.einarbeitung.zeileEntfernen")}
+                            className="rounded-md p-1 text-muted-foreground transition-colors
+                                       hover:bg-destructive/10 hover:text-destructive
+                                       disabled:opacity-50 focus-visible:outline-none
+                                       focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
+        </div>
+      </Klappbar>
+    </section>
   );
 }
 
@@ -404,6 +706,7 @@ export function OnboardingPage() {
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">{t("onboarding.untertitel")}</p>
 
+      <EinarbeitungMatrixPanel />
       <DokumentePanel />
       <RollenPanel />
 

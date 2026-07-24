@@ -12,13 +12,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import (
+    EinarbeitungInhalt,
     OnboardingDokument,
     PersonioEmployee,
     SchulungPflicht,
@@ -33,6 +34,10 @@ from app.services.onboarding import (
     schulungsplan,
 )
 from app.services.onboarding_dokumente import plan_signatur, uebersichten_erzeugen
+from app.services.einarbeitung_pdf import EinarbeitungZeile
+from app.services.einarbeitung_pdf import dateiname as einarb_dateiname
+from app.services.onboarding_paket_pdf import erzeuge_onboarding_paket_pdf
+from app.services.pdf_logo import lade_logo
 from app.services.schulungsuebersicht_pdf import (
     UebersichtZeile,
     dateiname,
@@ -304,8 +309,81 @@ async def plan_als_pdf(
         name=plan.name,
         funktion=plan.position or "",
         zeilen=zeilen,
+        logo=await lade_logo(db),
     )
     name = dateiname(plan.name, date.today())
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
+    )
+
+
+@router.get("/plan/{employee_id}/paket/pdf")
+async def onboarding_paket_pdf(
+    employee_id: int,
+    abteilungen: list[str] | None = Query(default=None),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Onboarding-Paket: Einarbeitungsplan UND Schulungsübersicht als ein PDF.
+
+    Zwei Blätter einer Arbeitsmappe, in einem Rutsch zu einem mehrseitigen PDF
+    konvertiert — ein Dokument zur Übergabe an den Vorgesetzten. Reihenfolge:
+    erst Einarbeitungsplan, dann Schulungsübersicht.
+
+    Der Einarbeitungsteil nimmt ohne ``abteilungen``-Parameter die Personio-
+    Abteilung der Person; weitere lassen sich ergänzen (z. B. QS + Produktion).
+
+    Compute-justified: clause 2 (document generation) — openpyxl-Aufbau plus
+    LibreOffice-Konvertierung laufen serverseitig.
+    """
+    emp = await _employee(db, employee_id)
+    plan = await schulungsplan(db, emp)
+
+    # Einarbeitungsinhalte für die gewählten Abteilungen (Standard: Personio-Abt.).
+    gewaehlt = [a.strip() for a in (abteilungen or []) if a and a.strip()]
+    if not gewaehlt and emp.department:
+        gewaehlt = [emp.department]
+    einarb_zeilen: list[EinarbeitungZeile] = []
+    if gewaehlt:
+        rows = (
+            (
+                await db.execute(
+                    select(EinarbeitungInhalt)
+                    .where(EinarbeitungInhalt.abteilung.in_(gewaehlt))
+                    .order_by(
+                        EinarbeitungInhalt.abteilung, EinarbeitungInhalt.reihenfolge
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        einarb_zeilen = [
+            EinarbeitungZeile(
+                abteilung=x.abteilung,
+                inhalt=x.inhalt,
+                ansprechpartner=x.ansprechpartner or "",
+            )
+            for x in rows
+        ]
+
+    schul_zeilen = [
+        UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)
+        for s in plan.soll
+    ]
+
+    pdf = await erzeuge_onboarding_paket_pdf(
+        name=plan.name,
+        stelle=plan.position or "",
+        beginn=emp.hire_date,
+        einarbeitung=einarb_zeilen,
+        schulungen=schul_zeilen,
+        logo=await lade_logo(db),
+    )
+    name = f"{einarb_dateiname(plan.name, date.today())}".replace(
+        "Einarbeitungsplan", "Onboarding-Paket"
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",

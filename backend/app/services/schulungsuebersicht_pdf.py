@@ -23,6 +23,7 @@ from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.worksheet.page import PageMargins
 
 from app.services.maintenance_pdf import convert_xlsx_to_pdf
+from app.services.pdf_logo import LogoBild, bild_einsetzen
 
 #: Kopfangaben des Formblatts. Stehen so auf dem Papierformular und ändern sich
 #: nur mit einer neuen Revision des Formblatts selbst.
@@ -56,21 +57,25 @@ class UebersichtZeile:
     nachweis: bool | None = None
 
 
-def _kopf(ws, name: str, funktion: str) -> int:
-    """Titelblock und Personenangaben. Gibt die nächste freie Zeile zurück."""
-    ws["A1"] = "Schulungsübersicht"
-    ws["A1"].font = Font(size=16, bold=True)
-    # Nur A:B — ab Spalte C steht rechtsbündig der Formblatt-Block.
-    ws.merge_cells("A1:B2")
-    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+def _kopf(ws, name: str, funktion: str, logo: LogoBild | None = None) -> int:
+    """Titelblock und Personenangaben. Gibt die nächste freie Zeile zurück.
 
-    # Über C:G zusammengefasst und rechtsbündig — in einer schmalen Spalte
-    # allein würde "Revisions-Stand: 22.03.2022" abgeschnitten.
-    # "Blatt x von y" steht nicht hier, sondern als Seitenkopf (&P/&N) — fest
-    # verdrahtet wäre es falsch, sobald die Liste auf eine zweite Seite läuft.
+    Mit Logo entsteht oben ein Logo-Band; Titel und Formblatt-Block rücken
+    darunter. Ohne Logo bleibt das Layout wie zuvor (Titel ab Zeile 1).
+    """
+    # "Blatt x von y" steht als Seitenkopf (&P/&N) — fest verdrahtet wäre es
+    # falsch, sobald die Liste auf eine zweite Seite läuft.
     ws.oddHeader.right.text = "&9Blatt &P von &N"
     ws.evenHeader.right.text = ws.oddHeader.right.text
 
+    top = 1
+    if logo is not None:
+        bild_einsetzen(ws, logo, "A1")
+        for r in (1, 2, 3):
+            ws.row_dimensions[r].height = 20
+        top = 4  # Titel/Formblatt beginnen unter dem Logo-Band
+
+    # Formblatt-Block rechts (C:G zusammengefasst), auf Höhe des Titels.
     for i, text in enumerate(
         [
             FORMBLATT,
@@ -78,21 +83,26 @@ def _kopf(ws, name: str, funktion: str) -> int:
             f"Revisions-Stand: {REVISIONS_STAND}",
         ]
     ):
-        zeile = 1 + i
+        zeile = top + i
         ws.merge_cells(start_row=zeile, start_column=3, end_row=zeile, end_column=SP_NEIN)
         zelle = ws.cell(row=zeile, column=3, value=text)
         zelle.font = Font(size=9)
         zelle.alignment = Alignment(horizontal="right", vertical="center")
 
-    ws["A5"] = "Name:"
-    ws["A5"].font = Font(bold=True)
-    ws["B5"] = name
-    ws["A6"] = "Funktion:"
-    ws["A6"].font = Font(bold=True)
-    ws["B6"] = funktion or "—"
-    for zeile in (5, 6):
+    # Titel links, über A:B.
+    titel = ws.cell(row=top, column=1, value="Schulungsübersicht")
+    titel.font = Font(size=16, bold=True)
+    titel.alignment = Alignment(horizontal="left", vertical="center")
+    ws.merge_cells(start_row=top, start_column=1, end_row=top + 1, end_column=2)
+
+    nz = top + 4
+    ws.cell(row=nz, column=1, value="Name:").font = Font(bold=True)
+    ws.cell(row=nz, column=2, value=name)
+    ws.cell(row=nz + 1, column=1, value="Funktion:").font = Font(bold=True)
+    ws.cell(row=nz + 1, column=2, value=funktion or "—")
+    for zeile in (nz, nz + 1):
         ws.merge_cells(start_row=zeile, start_column=2, end_row=zeile, end_column=SP_NEIN)
-    return 8
+    return nz + 2
 
 
 def _tabellenkopf(ws, zeile: int) -> int:
@@ -187,22 +197,25 @@ def _fuss(ws, freigegeben_von: str, erstellt_von: str) -> None:
     ws.evenFooter.right.text = ws.oddFooter.right.text
 
 
-def baue_xlsx(
+def fuelle_blatt(
+    ws,
     name: str,
     funktion: str,
     zeilen: list[UebersichtZeile],
-    freigegeben_von: str,
-    erstellt_von: str,
-) -> bytes:
-    """Formblatt 71 als .xlsx (Zwischenschritt zur PDF-Erzeugung)."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Schulungsübersicht"
+    freigegeben_von: str = "",
+    erstellt_von: str = "",
+    logo: LogoBild | None = None,
+) -> None:
+    """Formblatt 71 in ein vorhandenes Arbeitsblatt schreiben.
 
+    Herausgezogen aus ``baue_xlsx``, damit das Blatt auch als zweite Seite eines
+    kombinierten Onboarding-Pakets (mit dem Einarbeitungsplan) dienen kann.
+    """
+    ws.title = "Schulungsübersicht"
     for spalte, breite in zip("ABCDEFG", (11, 16, 58, 5, 5, 5, 6)):
         ws.column_dimensions[spalte].width = breite
 
-    r = _kopf(ws, name, funktion)
+    r = _kopf(ws, name, funktion, logo)
     kopfzeile = r
     r = _tabellenkopf(ws, r)
     for i, z in enumerate(zeilen, start=1):
@@ -225,6 +238,18 @@ def baue_xlsx(
     # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
     ws.print_title_rows = f"{kopfzeile}:{kopfzeile + 1}"
 
+
+def baue_xlsx(
+    name: str,
+    funktion: str,
+    zeilen: list[UebersichtZeile],
+    freigegeben_von: str,
+    erstellt_von: str,
+    logo: LogoBild | None = None,
+) -> bytes:
+    """Formblatt 71 als .xlsx (Zwischenschritt zur PDF-Erzeugung)."""
+    wb = Workbook()
+    fuelle_blatt(wb.active, name, funktion, zeilen, freigegeben_von, erstellt_von, logo)
     puffer = BytesIO()
     wb.save(puffer)
     return puffer.getvalue()
@@ -236,9 +261,10 @@ async def erzeuge_schulungsuebersicht_pdf(
     zeilen: list[UebersichtZeile],
     freigegeben_von: str = "",
     erstellt_von: str = "",
+    logo: LogoBild | None = None,
 ) -> bytes:
     return await convert_xlsx_to_pdf(
-        baue_xlsx(name, funktion, zeilen, freigegeben_von, erstellt_von)
+        baue_xlsx(name, funktion, zeilen, freigegeben_von, erstellt_von, logo)
     )
 
 
