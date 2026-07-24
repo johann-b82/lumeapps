@@ -24,6 +24,7 @@ import {
   ladeDokument,
   ladeOnboardingPaket,
   ladeSchulungsuebersicht,
+  entferneRolle,
   setzeRolle,
   type Eintritt,
   type OnboardingDokument,
@@ -630,15 +631,28 @@ function KuerzelAuswahl({ eintritt }: { eintritt: Eintritt }) {
     queryFn: fetchKuerzel,
   });
 
+  const invalidieren = () => {
+    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingRollen() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingKuerzel() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
+  };
+
   const speichern = useMutation({
     mutationFn: (wert: string) =>
       setzeRolle({ position: eintritt.position ?? "", abteilung_kuerzel: wert }),
     onSuccess: (r) => {
       toast.success(t("onboarding.rolleGespeichert", { kuerzel: r.abteilung_kuerzel }));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingRollen() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingKuerzel() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
+      invalidieren();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const entfernen = useMutation({
+    mutationFn: () => entferneRolle(eintritt.position ?? ""),
+    onSuccess: () => {
+      toast.success(t("onboarding.rolleEntfernt"));
+      invalidieren();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -650,11 +664,13 @@ function KuerzelAuswahl({ eintritt }: { eintritt: Eintritt }) {
   return (
     <select
       value={eintritt.abteilung_kuerzel ?? ""}
-      disabled={speichern.isPending}
+      disabled={speichern.isPending || entfernen.isPending}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
         const wert = e.target.value;
+        // Leere Auswahl = Zuordnung entfernen (falls eine bestand).
         if (wert) speichern.mutate(wert);
+        else if (eintritt.abteilung_kuerzel) entfernen.mutate();
       }}
       aria-label={t("onboarding.rollen.kuerzel")}
       className={`h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50

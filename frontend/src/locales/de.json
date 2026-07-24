@@ -965,6 +965,7 @@
   "onboarding.kuerzelWaehlen": "Kürzel wählen …",
   "onboarding.ohnePosition": "keine Position",
   "onboarding.rolleGespeichert": "Zuordnung gespeichert: {{kuerzel}}",
+  "onboarding.rolleEntfernt": "Zuordnung entfernt.",
   "kompetenzen.title": "Kompetenzen",
   "kompetenzen.untertitel": "Qualifikationsmatrix je Abteilung — wer kann was.",
   "kompetenzen.abteilung.produktion": "Produktion",
