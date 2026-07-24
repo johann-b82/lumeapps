@@ -88,6 +88,14 @@ export function setzeRolle(eingabe: {
   });
 }
 
+/** Entfernt die Kürzel-Zuordnung einer Position (zurück auf „nicht gewählt"). */
+export function entferneRolle(position: string): Promise<void> {
+  return apiClient<void>(
+    `/api/hr/onboarding/rollen?position=${encodeURIComponent(position)}`,
+    { method: "DELETE" },
+  );
+}
+
 /** Lädt die Schulungsübersicht (Formblatt 71) der Person als PDF herunter. */
 export async function ladeSchulungsuebersicht(
   employeeId: number,

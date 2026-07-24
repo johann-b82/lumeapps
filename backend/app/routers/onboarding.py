@@ -283,6 +283,26 @@ async def rolle_setzen(
     )
 
 
+@router.delete("/rollen", status_code=204)
+async def rolle_entfernen(
+    position: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Zuordnung einer Position entfernen — das Kürzel wird wieder „nicht gewählt".
+
+    Idempotent: gibt es keine Zuordnung, ist das kein Fehler.
+    """
+    norm = normalisiere_position(position)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Position darf nicht leer sein.")
+    vorhanden = (
+        await db.execute(select(SchulungRolle).where(SchulungRolle.position_norm == norm))
+    ).scalar_one_or_none()
+    if vorhanden is not None:
+        await db.delete(vorhanden)
+        await db.commit()
+
+
 @router.get("/plan/{employee_id}/pdf")
 async def plan_als_pdf(
     employee_id: int,

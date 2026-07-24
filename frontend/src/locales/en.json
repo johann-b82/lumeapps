@@ -969,6 +969,7 @@
   "onboarding.kuerzelWaehlen": "Select code …",
   "onboarding.ohnePosition": "no position",
   "onboarding.rolleGespeichert": "Mapping saved: {{kuerzel}}",
+  "onboarding.rolleEntfernt": "Mapping removed.",
   "kompetenzen.title": "Competencies",
   "kompetenzen.untertitel": "Qualification matrix per department — who can do what.",
   "kompetenzen.abteilung.produktion": "Production",
