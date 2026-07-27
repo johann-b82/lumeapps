@@ -22,6 +22,7 @@ import {
   fetchSchulungen,
   fetchZuweisbare,
   ladeSchulungsprotokoll,
+  setzeFrist,
   schulungImportCommit,
   schulungImportPreview,
   setzePflicht,
@@ -64,6 +65,62 @@ function ProtokollKnopf({ schulung }: { schulung: Schulung }) {
   );
 }
 
+/** Editierbares Frist-Feld (Tage nach Eintritt/Zuweisung) je Schulung.
+ *
+ *  Speichert beim Verlassen des Feldes bzw. mit Enter; leer = Frist gelöscht.
+ */
+function FristFeld({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [wert, setWert] = useState(
+    schulung.frist_tage === null ? "" : String(schulung.frist_tage),
+  );
+
+  const speichern = useMutation({
+    mutationFn: (tage: number | null) => setzeFrist(schulung.id, tage),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+    },
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(schulung.frist_tage === null ? "" : String(schulung.frist_tage));
+    },
+  });
+
+  const abschicken = () => {
+    const roh = wert.trim();
+    const neu = roh === "" ? null : Math.round(Number(roh));
+    if (roh !== "" && (!Number.isFinite(neu) || (neu as number) < 0 || (neu as number) > 3650)) {
+      toast.error(t("schulungen.katalog.fristUngueltig"));
+      setWert(schulung.frist_tage === null ? "" : String(schulung.frist_tage));
+      return;
+    }
+    if (neu !== schulung.frist_tage) speichern.mutate(neu);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={wert}
+      disabled={speichern.isPending}
+      onChange={(e) => setWert(e.target.value)}
+      onBlur={abschicken}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape")
+          setWert(schulung.frist_tage === null ? "" : String(schulung.frist_tage));
+      }}
+      placeholder="—"
+      aria-label={t("schulungen.katalog.frist")}
+      className="h-7 w-16 rounded-md border bg-background px-2 text-right text-xs tabular-nums
+                 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2
+                 focus-visible:ring-ring"
+    />
+  );
+}
+
 /** Schulungen eines Bereichs. */
 function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
   const { t } = useTranslation();
@@ -74,6 +131,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
           <tr className="border-b bg-muted/30">
             <Th>{t("schulungen.katalog.name")}</Th>
             <Th>{t("schulungen.katalog.turnus")}</Th>
+            <Th rechts>{t("schulungen.katalog.frist")}</Th>
             <Th rechts>{t("schulungen.katalog.teilnahmen")}</Th>
             <Th rechts>{""}</Th>
           </tr>
@@ -93,6 +151,9 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
+              </td>
+              <td className="px-4 py-2 text-right">
+                <FristFeld schulung={s} />
               </td>
               <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
               <td className="px-4 py-2 text-right">

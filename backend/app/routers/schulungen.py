@@ -69,6 +69,8 @@ class SchulungRead(BaseModel):
     name: str
     turnus: str | None
     turnus_monate: int | None
+    #: Frist in Tagen nach Eintritt/Zuweisung (v1.93); None = nicht definiert.
+    frist_tage: int | None
     aktiv: bool
     teilnahmen: int
 
@@ -701,11 +703,35 @@ async def liste_schulungen(
             name=k.name,
             turnus=k.turnus,
             turnus_monate=k.turnus_monate,
+            frist_tage=k.frist_tage,
             aktiv=k.aktiv,
             teilnahmen=zaehler.get(k.id, 0),
         )
         for k in katalog
     ]
+
+
+class FristSetzen(BaseModel):
+    #: Tage nach Eintritt/Zuweisung; None löscht die Frist.
+    frist_tage: int | None = None
+
+
+@router.put("/{schulung_id}/frist", status_code=204)
+async def frist_setzen(
+    schulung_id: int,
+    eingabe: FristSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Frist (Tage nach Eintritt/Zuweisung) einer Schulung setzen oder löschen."""
+    if eingabe.frist_tage is not None and not 0 <= eingabe.frist_tage <= 3650:
+        raise HTTPException(status_code=400, detail="Frist muss 0-3650 Tage sein.")
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    k.frist_tage = eingabe.frist_tage
+    await db.commit()
 
 
 @router.get("/{schulung_id}/protokoll/pdf")

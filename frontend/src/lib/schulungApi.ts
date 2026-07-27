@@ -33,8 +33,19 @@ export interface Schulung {
   turnus: string | null;
   /** Abgeleitete Periode; null bei "bei Bedarf" / Spannen — dann keine Fälligkeit. */
   turnus_monate: number | null;
+  /** Frist in Tagen nach Eintritt/Zuweisung; null = nicht definiert. */
+  frist_tage: number | null;
   aktiv: boolean;
   teilnahmen: number;
+}
+
+/** Setzt die Frist (Tage nach Eintritt/Zuweisung) einer Schulung; null löscht sie. */
+export function setzeFrist(schulungId: number, fristTage: number | null): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}/frist`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ frist_tage: fristTage }),
+  });
 }
 
 function upload(pfad: string, file: File): Promise<SchulungImportVorschau> {

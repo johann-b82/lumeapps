@@ -1040,6 +1040,8 @@
   "schulungen.katalog.turnus": "Interval",
   "schulungen.katalog.teilnahmen": "Employees",
   "schulungen.katalog.protokoll": "Download training record (form 68)",
+  "schulungen.katalog.frist": "Deadline (days)",
+  "schulungen.katalog.fristUngueltig": "Deadline must be between 0 and 3650 days.",
   "schulungen.katalog.suche": "Search training, area or interval …",
   "schulungen.katalog.keinTreffer": "No training matches the search.",
   "schulungen.zuweisen.title": "Assign a single training",
