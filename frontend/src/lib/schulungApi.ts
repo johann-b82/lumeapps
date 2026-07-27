@@ -140,7 +140,9 @@ export function setzePflicht(eingabe: {
 }
 
 export interface OffeneSchulung {
-  personalnummer: string;
+  /** Stabiler Schlüssel je Mitarbeiter ("p:<persnr>" / "e:<id>"). */
+  schluessel: string;
+  personalnummer: string | null;
   mitarbeiter_name: string;
   abteilung: string | null;
   abteilung_kuerzel: string | null;

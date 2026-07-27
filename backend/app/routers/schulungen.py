@@ -313,6 +313,25 @@ def _status(faellig_am: date | None, heute: date) -> str:
     return "ok"
 
 
+def _effektive_faelligkeit(
+    teilnahme: SchulungTeilnahme, frist_tage: int | None, hire_date: date | None
+) -> date | None:
+    """Fälligkeitsdatum einer Teilnahme.
+
+    * Absolviert (``aktuell_datum`` gesetzt): ``naechste_faellig_am`` aus dem
+      Wiederholungs-Turnus.
+    * Noch offen (kein ``aktuell_datum``): Eintrittsdatum + Frist-Tage der
+      Schulung, sofern beide bekannt — so wird eine neu zugewiesene Pflicht­
+      schulung fristgerecht fällig statt "ohne Frist" zu bleiben.
+    * Sonst None (keine berechenbare Frist).
+    """
+    if teilnahme.naechste_faellig_am is not None:
+        return teilnahme.naechste_faellig_am
+    if teilnahme.aktuell_datum is None and frist_tage is not None and hire_date is not None:
+        return hire_date + timedelta(days=frist_tage)
+    return None
+
+
 class ZuweisbarerMitarbeiterRead(BaseModel):
     """Auswahl für die Einzelzuweisung — alle aktiven Personio-Mitarbeiter."""
 
@@ -459,7 +478,10 @@ async def zuweisung_entfernen(
 class OffeneSchulungRead(BaseModel):
     """Eine offene Fälligkeit — überfällig oder in den nächsten 3 Monaten."""
 
-    personalnummer: str
+    #: Stabiler Schlüssel je Mitarbeiter ("p:<persnr>" / "e:<id>") für Frontend-Keys.
+    schluessel: str
+    #: NULL, wenn die Person nur über Personio (ohne DATEV-Nr.) geführt wird.
+    personalnummer: str | None
     mitarbeiter_name: str
     abteilung: str | None
     abteilung_kuerzel: str | None
@@ -485,38 +507,46 @@ async def offene_schulungen(
     heute = date.today()
     grenze = heute + timedelta(days=BALD_FAELLIG_TAGE)
 
+    # Kein SQL-Filter auf naechste_faellig_am mehr: die Fälligkeit einer noch
+    # offenen Schulung ergibt sich erst aus Eintritt + Frist (in Python).
     zeilen = (
         await db.execute(
-            select(SchulungTeilnahme, SchulungKatalog)
-            .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
-            .where(
-                SchulungTeilnahme.naechste_faellig_am.isnot(None),
-                SchulungTeilnahme.naechste_faellig_am <= grenze,
+            select(SchulungTeilnahme, SchulungKatalog).join(
+                SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
             )
         )
     ).all()
 
-    abteilungen: dict[int, str | None] = {
-        e.id: e.department
-        for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    mitarbeiter = {
+        e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
     }
 
-    ergebnis = [
-        OffeneSchulungRead(
-            personalnummer=t.personalnummer,
-            mitarbeiter_name=t.mitarbeiter_name or f"#{t.personalnummer}",
-            abteilung=abteilungen.get(t.employee_id or -1),
-            abteilung_kuerzel=t.abteilung_kuerzel,
-            bereich=k.bereich,
-            schulung=k.name,
-            turnus=k.turnus,
-            aktuell_datum=t.aktuell_datum,
-            faellig_am=t.naechste_faellig_am,
-            tage=(t.naechste_faellig_am - heute).days,
-            status=_status(t.naechste_faellig_am, heute),
+    ergebnis: list[OffeneSchulungRead] = []
+    for t, k in zeilen:
+        emp = mitarbeiter.get(t.employee_id or -1)
+        faellig = _effektive_faelligkeit(
+            t, k.frist_tage, emp.hire_date if emp else None
         )
-        for t, k in zeilen
-    ]
+        # Nur was eine berechenbare Frist hat und im Fenster (überfällig / ≤ 3 Mon.) liegt.
+        if faellig is None or faellig > grenze:
+            continue
+        ergebnis.append(
+            OffeneSchulungRead(
+                schluessel=_schluessel(t) or f"t:{t.id}",
+                personalnummer=t.personalnummer,
+                mitarbeiter_name=t.mitarbeiter_name
+                or f"#{t.personalnummer or t.employee_id}",
+                abteilung=emp.department if emp else None,
+                abteilung_kuerzel=t.abteilung_kuerzel,
+                bereich=k.bereich,
+                schulung=k.name,
+                turnus=k.turnus,
+                aktuell_datum=t.aktuell_datum,
+                faellig_am=faellig,
+                tage=(faellig - heute).days,
+                status=_status(faellig, heute),
+            )
+        )
     # Dringendstes zuerst.
     return sorted(ergebnis, key=lambda o: (o.faellig_am, o.mitarbeiter_name.lower()))
 
@@ -542,17 +572,17 @@ async def liste_mitarbeiter(
         .all()
     )
 
-    # Abteilung aus Personio, wo zugeordnet.
-    abteilungen: dict[int, str | None] = {
-        e.id: e.department
-        for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    # Abteilung + Eintrittsdatum aus Personio, wo zugeordnet.
+    mitarbeiter = {
+        e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
     }
 
     gruppen: dict[str, MitarbeiterRead] = {}
-    for teilnahme, _katalog in zeilen:
+    for teilnahme, katalog in zeilen:
         schluessel = _schluessel(teilnahme)
         if schluessel is None:
             continue  # weder Personalnummer noch Personio-Zuordnung — nicht adressierbar
+        emp = mitarbeiter.get(teilnahme.employee_id or -1)
         eintrag = gruppen.get(schluessel)
         if eintrag is None:
             eintrag = MitarbeiterRead(
@@ -561,7 +591,7 @@ async def liste_mitarbeiter(
                 personalnummer=teilnahme.personalnummer,
                 name=teilnahme.mitarbeiter_name
                 or f"#{teilnahme.personalnummer or teilnahme.employee_id}",
-                abteilung=abteilungen.get(teilnahme.employee_id or -1),
+                abteilung=emp.department if emp else None,
                 schulungen=0,
                 ueberfaellig=0,
                 bald_faellig=0,
@@ -570,16 +600,19 @@ async def liste_mitarbeiter(
             gruppen[schluessel] = eintrag
 
         eintrag.schulungen += 1
-        status = _status(teilnahme.naechste_faellig_am, heute)
+        faellig = _effektive_faelligkeit(
+            teilnahme, katalog.frist_tage, emp.hire_date if emp else None
+        )
+        status = _status(faellig, heute)
         if status == "ueberfaellig":
             eintrag.ueberfaellig += 1
         elif status == "bald":
             eintrag.bald_faellig += 1
-        if teilnahme.naechste_faellig_am is not None and (
+        if faellig is not None and (
             eintrag.naechste_faelligkeit is None
-            or teilnahme.naechste_faellig_am < eintrag.naechste_faelligkeit
+            or faellig < eintrag.naechste_faelligkeit
         ):
-            eintrag.naechste_faelligkeit = teilnahme.naechste_faellig_am
+            eintrag.naechste_faelligkeit = faellig
 
     return sorted(
         gruppen.values(),
@@ -608,21 +641,34 @@ async def mitarbeiter_schulungen(
     if not zeilen:
         raise HTTPException(status_code=404, detail="Keine Schulungen zu diesem Mitarbeiter.")
 
-    ergebnis = [
-        MitarbeiterSchulungRead(
-            teilnahme_id=t.id,
-            schulung_id=k.id,
-            bereich=k.bereich,
-            name=k.name,
-            turnus=k.turnus,
-            initial_datum=t.initial_datum,
-            aktuell_datum=t.aktuell_datum,
-            naechste_faellig=t.naechste_faellig,
-            naechste_faellig_am=t.naechste_faellig_am,
-            status=_status(t.naechste_faellig_am, heute),
+    # Eintrittsdatum der Person (für die Frist-basierte Fälligkeit offener Schulungen).
+    emp_id = zeilen[0][0].employee_id
+    hire_date = None
+    if emp_id is not None:
+        emp = (
+            await db.execute(
+                select(PersonioEmployee).where(PersonioEmployee.id == emp_id)
+            )
+        ).scalar_one_or_none()
+        hire_date = emp.hire_date if emp else None
+
+    ergebnis = []
+    for t, k in zeilen:
+        faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
+        ergebnis.append(
+            MitarbeiterSchulungRead(
+                teilnahme_id=t.id,
+                schulung_id=k.id,
+                bereich=k.bereich,
+                name=k.name,
+                turnus=k.turnus,
+                initial_datum=t.initial_datum,
+                aktuell_datum=t.aktuell_datum,
+                naechste_faellig=t.naechste_faellig,
+                naechste_faellig_am=faellig,
+                status=_status(faellig, heute),
+            )
         )
-        for t, k in zeilen
-    ]
     rang = {"ueberfaellig": 0, "bald": 1, "ok": 2, "ohne_frist": 3}
     return sorted(ergebnis, key=lambda s: (rang[s.status], s.bereich, s.name))
 

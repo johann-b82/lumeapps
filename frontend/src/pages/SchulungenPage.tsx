@@ -269,13 +269,15 @@ function OffenePanel() {
           <tbody>
             {gezeigt.map((o) => (
               <tr
-                key={`${o.personalnummer}-${o.schulung}`}
+                key={`${o.schluessel}-${o.schulung}`}
                 className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
               >
                 <td className="px-4 py-1.5 whitespace-nowrap">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {o.personalnummer}
-                  </span>{" "}
+                  {o.personalnummer && (
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {o.personalnummer}
+                    </span>
+                  )}{" "}
                   {o.mitarbeiter_name}
                 </td>
                 <td className="px-4 py-1.5 whitespace-nowrap text-muted-foreground">
