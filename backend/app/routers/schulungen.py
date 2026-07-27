@@ -71,6 +71,8 @@ class SchulungRead(BaseModel):
     turnus_monate: int | None
     #: Frist in Tagen nach Eintritt/Zuweisung (v1.93); None = nicht definiert.
     frist_tage: int | None
+    #: Verantwortlicher/Trainer (v1.94); None = nicht gesetzt.
+    verantwortlicher: str | None
     aktiv: bool
     teilnahmen: int
 
@@ -750,6 +752,7 @@ async def liste_schulungen(
             turnus=k.turnus,
             turnus_monate=k.turnus_monate,
             frist_tage=k.frist_tage,
+            verantwortlicher=k.verantwortlicher,
             aktiv=k.aktiv,
             teilnahmen=zaehler.get(k.id, 0),
         )
@@ -780,6 +783,27 @@ async def frist_setzen(
     await db.commit()
 
 
+class VerantwortlicherSetzen(BaseModel):
+    #: Name; None/leer löscht die Zuordnung.
+    verantwortlicher: str | None = None
+
+
+@router.put("/{schulung_id}/verantwortlicher", status_code=204)
+async def verantwortlicher_setzen(
+    schulung_id: int,
+    eingabe: VerantwortlicherSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Verantwortlichen/Trainer einer Schulung setzen oder löschen."""
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    k.verantwortlicher = (eingabe.verantwortlicher or "").strip() or None
+    await db.commit()
+
+
 @router.get("/{schulung_id}/protokoll/pdf")
 async def schulungsprotokoll_pdf(
     schulung_id: int,
@@ -800,7 +824,9 @@ async def schulungsprotokoll_pdf(
         raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
 
     titel = f"{k.bereich}: {k.name}" if k.bereich else k.name
-    pdf = await erzeuge_schulungsprotokoll_pdf(titel=titel, logo=await lade_logo(db))
+    pdf = await erzeuge_schulungsprotokoll_pdf(
+        titel=titel, trainer=k.verantwortlicher or "", logo=await lade_logo(db)
+    )
     name = protokoll_dateiname(k.name, date.today())
     return Response(
         content=pdf,
