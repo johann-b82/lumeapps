@@ -24,6 +24,31 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 # In-container default for Directus integration tests; host runs override via .env.
 os.environ.setdefault("DIRECTUS_BASE_URL", "http://directus:8055")
 
+# ---------------------------------------------------------------------------
+# SICHERHEITSNETZ — niemals gegen eine Nicht-Test-Datenbank testen.
+#
+# Viele Tests löschen ganze Tabellen (DELETE FROM ...). Läuft pytest
+# versehentlich mit den echten POSTGRES_* (z. B. im Prod-api-Container), trifft
+# das die Produktivdatenbank — genau so gingen am 2026-06-11 und am 2026-07-24
+# Daten verloren. Das setdefault oben schützt nur, wenn POSTGRES_DB gar nicht
+# gesetzt ist; eine vorgesetzte Prod-DB gewinnt sonst still.
+#
+# Der Riegel bricht die gesamte Test-Session ab, BEVOR app.database importiert
+# und irgendeine Verbindung aufgebaut wird, wenn der DB-Name nicht wie eine
+# Test-DB aussieht (Konvention: enthält "test", z. B. acm_kpi_test).
+# ---------------------------------------------------------------------------
+_ziel_db = os.environ["POSTGRES_DB"]
+if "test" not in _ziel_db.lower():
+    import pytest
+
+    pytest.exit(
+        f"ABBRUCH: POSTGRES_DB={_ziel_db!r} sieht nicht nach einer Test-Datenbank "
+        f"aus. Backend-Tests löschen Tabellen — das würde eine echte Datenbank "
+        f"leeren. Gegen eine Wegwerf-DB testen, z. B. POSTGRES_DB=acm_kpi_test "
+        f"(siehe Memo pytest-wipes-prod-db).",
+        returncode=3,
+    )
+
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
