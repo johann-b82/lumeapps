@@ -194,10 +194,19 @@ export function legeKategorieAn(matrixId: number, name: string): Promise<{ name:
   });
 }
 
-/** Entfernt eine leere Kategorie; mit Qualifikationen liefert das Backend 409. */
-export function entferneKategorie(matrixId: number, name: string): Promise<void> {
+/**
+ * Entfernt eine Kategorie.
+ * - "aufloesen": Qualifikationen bleiben, rutschen nach „Ohne Kategorie".
+ * - "komplett": Kategorie samt Qualifikationen und Bewertungen löschen.
+ * Eine leere Kategorie verschwindet in beiden Fällen einfach.
+ */
+export function entferneKategorie(
+  matrixId: number,
+  name: string,
+  modus: "aufloesen" | "komplett" = "aufloesen",
+): Promise<void> {
   return apiClient<void>(
-    `/api/hr/kompetenzen/matrix/${matrixId}/kategorie/${encodeURIComponent(name)}`,
+    `/api/hr/kompetenzen/matrix/${matrixId}/kategorie/${encodeURIComponent(name)}?modus=${modus}`,
     { method: "DELETE" },
   );
 }

@@ -11,10 +11,11 @@ in einer Transaktion.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -769,20 +770,40 @@ async def kategorie_umbenennen(
 async def kategorie_entfernen(
     matrix_id: int,
     name: str,
+    modus: Literal["aufloesen", "komplett"] = "aufloesen",
     db: AsyncSession = Depends(get_async_db_session),
 ) -> None:
-    """Eine deklarierte Kategorie entfernen — nur solange sie leer ist.
+    """Eine Kategorie entfernen.
 
-    Trägt noch eine Qualifikation die Kategorie, kommt 409: erst die Zeilen
-    entfernen oder umkategorisieren.
+    ``modus=aufloesen`` (Standard): löst die Kategorie auf — ihre
+    Qualifikationen (samt Bewertungen) bleiben erhalten und rutschen auf „Ohne
+    Kategorie". ``modus=komplett``: löscht die Kategorie samt allen ihren
+    Qualifikationen und deren Bewertungen. Eine leere Kategorie verschwindet in
+    beiden Fällen einfach (nur die deklarierte Zeile fällt weg).
     """
+    await _matrix(db, matrix_id)
     deklariert = await _deklarierte_kategorie(db, matrix_id, name)
-    if deklariert is None:
+    belegt = await _kategorie_belegt(db, matrix_id, name)
+    if deklariert is None and not belegt:
         raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
-    if await _kategorie_belegt(db, matrix_id, name):
-        raise HTTPException(
-            status_code=409,
-            detail="Kategorie enthält Qualifikationen — erst leeren.",
+
+    if modus == "komplett":
+        # Bewertungen hängen per FK ondelete=CASCADE an der Qualifikation.
+        await db.execute(
+            delete(KompetenzQualifikation).where(
+                KompetenzQualifikation.matrix_id == matrix_id,
+                KompetenzQualifikation.kategorie == name,
+            )
         )
-    await db.delete(deklariert)
+    else:
+        await db.execute(
+            update(KompetenzQualifikation)
+            .where(
+                KompetenzQualifikation.matrix_id == matrix_id,
+                KompetenzQualifikation.kategorie == name,
+            )
+            .values(kategorie=None)
+        )
+    if deklariert is not None:
+        await db.delete(deklariert)
     await db.commit()

@@ -326,16 +326,17 @@ function KategorieAnlegen({ matrix }: { matrix: Matrix }) {
 function KategorieUmbenennenFeld({
   matrix,
   alt,
-  leer,
+  anzahl,
 }: {
   matrix: Matrix;
   alt: string;
-  /** Kategorie ohne Qualifikationen — dann ist zusätzlich Löschen möglich. */
-  leer: boolean;
+  /** Anzahl Qualifikationen in dieser Kategorie (0 = leer). */
+  anzahl: number;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [neu, setNeu] = useState(alt);
+  const leer = anzahl === 0;
 
   const aktualisieren = () =>
     qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
@@ -349,16 +350,32 @@ function KategorieUmbenennenFeld({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const loeschen = useMutation({
-    mutationFn: () => entferneKategorie(matrix.id, alt),
-    onSuccess: () => {
-      toast.success(t("kompetenzen.kategorieEntfernt"));
+  const entfernen = useMutation({
+    mutationFn: (modus: "aufloesen" | "komplett") =>
+      entferneKategorie(matrix.id, alt, modus),
+    onSuccess: (_data, modus) => {
+      toast.success(
+        modus === "komplett"
+          ? t("kompetenzen.kategorieKomplettWeg")
+          : leer
+            ? t("kompetenzen.kategorieEntfernt")
+            : t("kompetenzen.kategorieAufgeloest"),
+      );
       aktualisieren();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const komplettLoeschen = () => {
+    if (window.confirm(t("kompetenzen.kategorieKomplettBestaetigen", { name: alt, anzahl }))) {
+      entfernen.mutate("komplett");
+    }
+  };
+
   const bereit = neu.trim() !== "" && neu.trim() !== alt;
+  const loeschStil =
+    "inline-flex items-center gap-1 text-xs underline underline-offset-2 " +
+    "hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-2">
@@ -378,18 +395,38 @@ function KategorieUmbenennenFeld({
         {umbenennen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
         {t("kompetenzen.speichern")}
       </button>
-      {leer && (
+
+      {leer ? (
         <button
           type="button"
-          disabled={loeschen.isPending}
-          onClick={() => loeschen.mutate()}
-          className="inline-flex items-center gap-1 text-xs text-destructive underline
-                     underline-offset-2 hover:opacity-80 focus-visible:outline-none
-                     focus-visible:ring-2 focus-visible:ring-ring"
+          disabled={entfernen.isPending}
+          onClick={() => entfernen.mutate("aufloesen")}
+          className={`${loeschStil} text-destructive`}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
           {t("kompetenzen.kategorieEntfernen")}
         </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={entfernen.isPending}
+            onClick={() => entfernen.mutate("aufloesen")}
+            className={`${loeschStil} text-muted-foreground hover:text-foreground`}
+            title={t("kompetenzen.kategorieAufloesenHinweis")}
+          >
+            {t("kompetenzen.kategorieAufloesen")}
+          </button>
+          <button
+            type="button"
+            disabled={entfernen.isPending}
+            onClick={komplettLoeschen}
+            className={`${loeschStil} text-destructive`}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("kompetenzen.kategorieKomplettLoeschen")}
+          </button>
+        </>
       )}
     </div>
   );
@@ -608,7 +645,7 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
                 <KategorieUmbenennenFeld
                   matrix={matrix}
                   alt={kategorie}
-                  leer={zeilen.length === 0}
+                  anzahl={zeilen.length}
                 />
               )}
               {/* Die Matrix ist von Natur aus breit (bis 31 Personen). Der
