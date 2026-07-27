@@ -48,6 +48,10 @@ class SchulungKatalog(Base):
     #: Daraus abgeleitete Periode in Monaten; NULL wenn nicht berechenbar
     #: ("bei Bedarf", "alle 3 - 5 Jahre").
     turnus_monate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Frist in Tagen nach Eintritt/Zuweisung, bis zu der die Schulung absolviert
+    #: sein muss (v1.93). Getrennt vom Wiederholungs-Turnus; in der Oberfläche
+    #: gepflegt, NULL = keine Frist definiert.
+    frist_tage: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
