@@ -170,6 +170,19 @@ export function entferneQualifikation(
   );
 }
 
+/** Benennt eine Kategorie in dieser Matrix um (auf allen ihren Zeilen). */
+export function benenneKategorieUm(
+  matrixId: number,
+  alt: string,
+  neu: string,
+): Promise<void> {
+  return apiClient<void>(`/api/hr/kompetenzen/matrix/${matrixId}/kategorie`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alt, neu }),
+  });
+}
+
 export interface VerfuegbarePerson {
   employee_id: number;
   name: string;

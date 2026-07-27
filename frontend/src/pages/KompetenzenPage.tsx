@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Info, Loader2, Pencil, Table2, X } from "lucide-react";
 import {
+  benenneKategorieUm,
   entfernePerson,
   entferneQualifikation,
   fetchMatrix,
@@ -282,6 +283,47 @@ function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
   );
 }
 
+/** Eine bestehende Kategorie umbenennen — ändert den Namen auf allen ihren
+ *  Zeilen in dieser Matrix. Nur im Bearbeiten-Modus und nicht für die
+ *  Platzhaltergruppe „Ohne Kategorie" (deren Zeilen haben keine Kategorie). */
+function KategorieUmbenennenFeld({ matrix, alt }: { matrix: Matrix; alt: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [neu, setNeu] = useState(alt);
+
+  const umbenennen = useMutation({
+    mutationFn: () => benenneKategorieUm(matrix.id, alt, neu.trim()),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.kategorieUmbenannt"));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const bereit = neu.trim() !== "" && neu.trim() !== alt;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+      <span className="text-xs font-medium">{t("kompetenzen.kategorieUmbenennen")}</span>
+      <input
+        value={neu}
+        onChange={(e) => setNeu(e.target.value)}
+        aria-label={t("kompetenzen.kategorie")}
+        className={`${feldStil} w-52`}
+      />
+      <button
+        type="button"
+        disabled={!bereit || umbenennen.isPending}
+        onClick={() => umbenennen.mutate()}
+        className={knopfStil}
+      >
+        {umbenennen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+        {t("kompetenzen.speichern")}
+      </button>
+    </div>
+  );
+}
+
 /** Neue Person (Spalte).
  *
  *  Regelfall ist die Übernahme aus Personio — abgetippte Namen finden später
@@ -474,10 +516,16 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
             )
           : zeilen;
         if (gezeigt.length === 0) return null;
+        // Echter Kategoriewert (NULL = Platzhaltergruppe „Ohne Kategorie");
+        // die Gruppierung stellt sicher, dass alle Zeilen denselben Wert tragen.
+        const rohKategorie = zeilen[0]?.kategorie ?? null;
 
         return (
           <section key={kategorie} className="mb-4">
             <Klappbar titel={kategorie} anzahl={gezeigt.length}>
+              {bearbeiten && rohKategorie !== null && (
+                <KategorieUmbenennenFeld matrix={matrix} alt={rohKategorie} />
+              )}
               {/* Die Matrix ist von Natur aus breit (bis 31 Personen). Der
                   Rahmen scrollt daher selbst, statt die Seite zu dehnen; die
                   Qualifikationsspalte bleibt dabei stehen. */}

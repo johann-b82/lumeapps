@@ -321,6 +321,13 @@ class QualifikationAnlegen(BaseModel):
     nr: int | None = None
 
 
+class KategorieUmbenennen(BaseModel):
+    #: Bestehender Kategoriename in dieser Matrix.
+    alt: str
+    #: Neuer Name; darf nicht leer sein.
+    neu: str
+
+
 class VerfuegbarePersonRead(BaseModel):
     """Ein Personio-Mitarbeiter, der noch nicht in dieser Matrix steht."""
 
@@ -611,4 +618,36 @@ async def qualifikation_entfernen(
     if qual is None:
         raise HTTPException(status_code=404, detail="Qualifikation nicht gefunden.")
     await db.delete(qual)
+    await db.commit()
+
+
+@router.put("/matrix/{matrix_id}/kategorie", status_code=204)
+async def kategorie_umbenennen(
+    matrix_id: int,
+    eingabe: KategorieUmbenennen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Kategorie in dieser Matrix umbenennen.
+
+    Setzt ``kategorie`` auf allen Qualifikationen dieser Matrix, die aktuell
+    ``alt`` tragen, auf ``neu``. Kategorie ist Freitext je Zeile — es gibt kein
+    eigenes Kategorie-Objekt, daher wird zeilenweise aktualisiert.
+    """
+    neu = eingabe.neu.strip()
+    if not neu:
+        raise HTTPException(status_code=400, detail="Neuer Name darf nicht leer sein.")
+    await _matrix(db, matrix_id)
+
+    zeilen = (
+        await db.execute(
+            select(KompetenzQualifikation).where(
+                KompetenzQualifikation.matrix_id == matrix_id,
+                KompetenzQualifikation.kategorie == eingabe.alt,
+            )
+        )
+    ).scalars().all()
+    if not zeilen:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+    for q in zeilen:
+        q.kategorie = neu
     await db.commit()
