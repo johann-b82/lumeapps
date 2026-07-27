@@ -23,6 +23,7 @@ import {
   fetchZuweisbare,
   ladeSchulungsprotokoll,
   setzeFrist,
+  setzeVerantwortlicher,
   schulungImportCommit,
   schulungImportPreview,
   setzePflicht,
@@ -121,6 +122,64 @@ function FristFeld({ schulung }: { schulung: Schulung }) {
   );
 }
 
+/** Editierbarer Verantwortlicher/Trainer je Schulung — aus Personio wählbar.
+ *
+ *  Durchsuchbares Dropdown (Freitext für Externe erlaubt). Speichert beim
+ *  Verlassen/Enter; leer = Zuordnung gelöscht. Füllt später das Trainer-Feld
+ *  im Schulungsnachweis vor.
+ */
+function VerantwortlicherFeld({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [wert, setWert] = useState(schulung.verantwortlicher ?? "");
+
+  const { data: personen } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+  });
+
+  const speichern = useMutation({
+    mutationFn: (name: string | null) => setzeVerantwortlicher(schulung.id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() }),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(schulung.verantwortlicher ?? "");
+    },
+  });
+
+  const abschicken = () => {
+    const neu = wert.trim() || null;
+    if (neu !== (schulung.verantwortlicher ?? null)) speichern.mutate(neu);
+  };
+
+  const listId = `verantw-${schulung.id}`;
+  return (
+    <>
+      <input
+        type="text"
+        list={listId}
+        value={wert}
+        disabled={speichern.isPending}
+        onChange={(e) => setWert(e.target.value)}
+        onBlur={abschicken}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setWert(schulung.verantwortlicher ?? "");
+        }}
+        placeholder="—"
+        aria-label={t("schulungen.katalog.verantwortlicher")}
+        className="h-7 w-44 rounded-md border bg-background px-2 text-xs disabled:opacity-50
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <datalist id={listId}>
+        {(personen ?? []).map((p) => (
+          <option key={p.employee_id} value={p.name} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 /** Schulungen eines Bereichs. */
 function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
   const { t } = useTranslation();
@@ -131,6 +190,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
           <tr className="border-b bg-muted/30">
             <Th>{t("schulungen.katalog.name")}</Th>
             <Th>{t("schulungen.katalog.turnus")}</Th>
+            <Th>{t("schulungen.katalog.verantwortlicher")}</Th>
             <Th rechts>{t("schulungen.katalog.frist")}</Th>
             <Th rechts>{t("schulungen.katalog.teilnahmen")}</Th>
             <Th rechts>{""}</Th>
@@ -151,6 +211,9 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
+              </td>
+              <td className="px-4 py-2">
+                <VerantwortlicherFeld schulung={s} />
               </td>
               <td className="px-4 py-2 text-right">
                 <FristFeld schulung={s} />

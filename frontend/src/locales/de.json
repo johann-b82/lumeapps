@@ -1036,6 +1036,7 @@
   "schulungen.katalog.turnus": "Turnus",
   "schulungen.katalog.teilnahmen": "Mitarbeiter",
   "schulungen.katalog.protokoll": "Schulungsnachweis (Formblatt 68) herunterladen",
+  "schulungen.katalog.verantwortlicher": "Verantwortlicher",
   "schulungen.katalog.frist": "Frist (Tage)",
   "schulungen.katalog.fristUngueltig": "Frist muss zwischen 0 und 3650 Tagen liegen.",
   "schulungen.katalog.suche": "Schulung, Bereich oder Turnus suchen …",

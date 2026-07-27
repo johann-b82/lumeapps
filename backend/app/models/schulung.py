@@ -52,6 +52,9 @@ class SchulungKatalog(Base):
     #: sein muss (v1.93). Getrennt vom Wiederholungs-Turnus; in der Oberfläche
     #: gepflegt, NULL = keine Frist definiert.
     frist_tage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Verantwortlicher/Trainer (v1.94) — Name, Freitext (Externe erlaubt).
+    #: Füllt das Trainer-Feld im Schulungsnachweis vor.
+    verantwortlicher: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

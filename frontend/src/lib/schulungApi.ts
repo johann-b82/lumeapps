@@ -35,6 +35,8 @@ export interface Schulung {
   turnus_monate: number | null;
   /** Frist in Tagen nach Eintritt/Zuweisung; null = nicht definiert. */
   frist_tage: number | null;
+  /** Verantwortlicher/Trainer; null = nicht gesetzt. */
+  verantwortlicher: string | null;
   aktiv: boolean;
   teilnahmen: number;
 }
@@ -45,6 +47,18 @@ export function setzeFrist(schulungId: number, fristTage: number | null): Promis
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ frist_tage: fristTage }),
+  });
+}
+
+/** Setzt den Verantwortlichen/Trainer einer Schulung; leer löscht ihn. */
+export function setzeVerantwortlicher(
+  schulungId: number,
+  verantwortlicher: string | null,
+): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}/verantwortlicher`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ verantwortlicher }),
   });
 }
 
