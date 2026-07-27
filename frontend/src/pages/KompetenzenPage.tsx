@@ -217,8 +217,9 @@ const knopfStil =
   "text-primary-foreground disabled:opacity-50 focus-visible:outline-none " +
   "focus-visible:ring-2 focus-visible:ring-ring";
 
-/** Neue Qualifikation (Zeile). Kategorie als Auswahl der bestehenden, damit
- *  keine Tippfehler-Gruppe neben einer bestehenden entsteht. */
+/** Neue Qualifikation (Zeile). Kategorie als Eingabe mit Vorschlagsliste der
+ *  bestehenden Kategorien: das vermeidet Tippfehler-Gruppen neben einer
+ *  bestehenden, lässt aber eine neue Kategorie zu (frei eingebbar). */
 function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -255,19 +256,19 @@ function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
         placeholder={t("kompetenzen.qualifikation")}
         className={`${feldStil} w-52`}
       />
-      <select
+      <input
         value={kategorie}
         onChange={(e) => setKategorie(e.target.value)}
+        list={`kategorien-${matrix.id}`}
         aria-label={t("kompetenzen.kategorie")}
-        className={feldStil}
-      >
-        <option value="">{t("kompetenzen.ohneKategorie")}</option>
+        placeholder={t("kompetenzen.kategorie")}
+        className={`${feldStil} w-44`}
+      />
+      <datalist id={`kategorien-${matrix.id}`}>
         {kategorien.map((k) => (
-          <option key={k} value={k}>
-            {k}
-          </option>
+          <option key={k} value={k} />
         ))}
-      </select>
+      </datalist>
       <button
         type="button"
         disabled={!bezeichnung.trim() || anlegen.isPending}
