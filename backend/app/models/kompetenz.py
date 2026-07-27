@@ -39,6 +39,28 @@ class KompetenzMatrix(Base):
     )
 
 
+class KompetenzKategorie(Base):
+    """Eine deklarierte Kategorie einer Matrix (v1.95).
+
+    Kategorie bleibt zusätzlich Freitext an der Qualifikation (die Gruppierung).
+    Diese Tabelle hält den Namen auch dann fest, wenn (noch) keine Qualifikation
+    ihn trägt — so lässt sich eine Kategorie zuerst leer anlegen und danach
+    füllen. Beim Umbenennen werden beide Seiten synchron gehalten.
+    """
+
+    __tablename__ = "kompetenz_kategorie"
+    __table_args__ = (
+        UniqueConstraint("matrix_id", "name", name="uq_kompetenz_kategorie"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    matrix_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("kompetenz_matrix.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class KompetenzQualifikation(Base):
     """Eine Zeile der Matrix."""
 

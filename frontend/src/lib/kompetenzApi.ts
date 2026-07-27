@@ -60,6 +60,8 @@ export interface Matrix {
   importiert_am: string;
   personen: KompetenzPerson[];
   qualifikationen: Qualifikation[];
+  /** Alle Kategorien in Anzeigereihenfolge — auch leere; ohne „Ohne Kategorie". */
+  kategorien: string[];
 }
 
 export interface MatrixVorschau {
@@ -181,6 +183,23 @@ export function benenneKategorieUm(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ alt, neu }),
   });
+}
+
+/** Legt eine neue, zunächst leere Kategorie an (eigener Schritt). */
+export function legeKategorieAn(matrixId: number, name: string): Promise<{ name: string }> {
+  return apiClient<{ name: string }>(`/api/hr/kompetenzen/matrix/${matrixId}/kategorie`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Entfernt eine leere Kategorie; mit Qualifikationen liefert das Backend 409. */
+export function entferneKategorie(matrixId: number, name: string): Promise<void> {
+  return apiClient<void>(
+    `/api/hr/kompetenzen/matrix/${matrixId}/kategorie/${encodeURIComponent(name)}`,
+    { method: "DELETE" },
+  );
 }
 
 export interface VerfuegbarePerson {

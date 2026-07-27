@@ -5,11 +5,13 @@ import { toast } from "sonner";
 import { Info, Loader2, Pencil, Table2, X } from "lucide-react";
 import {
   benenneKategorieUm,
+  entferneKategorie,
   entfernePerson,
   entferneQualifikation,
   fetchMatrix,
   fetchMatrizen,
   fetchVerfuegbarePersonen,
+  legeKategorieAn,
   legePersonAn,
   legeQualifikationAn,
   setzeZelle,
@@ -227,11 +229,7 @@ function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
   const [bezeichnung, setBezeichnung] = useState("");
   const [kategorie, setKategorie] = useState("");
 
-  const kategorien = useMemo(
-    () =>
-      [...new Set(matrix.qualifikationen.map((q) => q.kategorie).filter(Boolean))].sort() as string[],
-    [matrix.qualifikationen],
-  );
+  const kategorien = matrix.kategorien;
 
   const anlegen = useMutation({
     mutationFn: () =>
@@ -283,19 +281,79 @@ function ZeileAnlegen({ matrix }: { matrix: Matrix }) {
   );
 }
 
+/** Neue Kategorie als eigener Schritt: legt sie zunächst leer an. Sie erscheint
+ *  sofort als eigene Gruppe und lässt sich danach mit Qualifikationen füllen. */
+function KategorieAnlegen({ matrix }: { matrix: Matrix }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+
+  const anlegen = useMutation({
+    mutationFn: () => legeKategorieAn(matrix.id, name.trim()),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.kategorieAngelegt"));
+      setName("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium">{t("kompetenzen.neueKategorie")}</span>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t("kompetenzen.kategorie")}
+        className={`${feldStil} w-52`}
+      />
+      <button
+        type="button"
+        disabled={!name.trim() || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className={knopfStil}
+      >
+        {anlegen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+        {t("kompetenzen.hinzufuegen")}
+      </button>
+    </div>
+  );
+}
+
 /** Eine bestehende Kategorie umbenennen — ändert den Namen auf allen ihren
  *  Zeilen in dieser Matrix. Nur im Bearbeiten-Modus und nicht für die
  *  Platzhaltergruppe „Ohne Kategorie" (deren Zeilen haben keine Kategorie). */
-function KategorieUmbenennenFeld({ matrix, alt }: { matrix: Matrix; alt: string }) {
+function KategorieUmbenennenFeld({
+  matrix,
+  alt,
+  leer,
+}: {
+  matrix: Matrix;
+  alt: string;
+  /** Kategorie ohne Qualifikationen — dann ist zusätzlich Löschen möglich. */
+  leer: boolean;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [neu, setNeu] = useState(alt);
+
+  const aktualisieren = () =>
+    qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
 
   const umbenennen = useMutation({
     mutationFn: () => benenneKategorieUm(matrix.id, alt, neu.trim()),
     onSuccess: () => {
       toast.success(t("kompetenzen.kategorieUmbenannt"));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
+      aktualisieren();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const loeschen = useMutation({
+    mutationFn: () => entferneKategorie(matrix.id, alt),
+    onSuccess: () => {
+      toast.success(t("kompetenzen.kategorieEntfernt"));
+      aktualisieren();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -320,6 +378,19 @@ function KategorieUmbenennenFeld({ matrix, alt }: { matrix: Matrix; alt: string 
         {umbenennen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
         {t("kompetenzen.speichern")}
       </button>
+      {leer && (
+        <button
+          type="button"
+          disabled={loeschen.isPending}
+          onClick={() => loeschen.mutate()}
+          className="inline-flex items-center gap-1 text-xs text-destructive underline
+                     underline-offset-2 hover:opacity-80 focus-visible:outline-none
+                     focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("kompetenzen.kategorieEntfernen")}
+        </button>
+      )}
     </div>
   );
 }
@@ -440,15 +511,24 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
   });
 
   const gruppen = useMemo(() => {
+    // Alle Kategorien in Reihenfolge vorbelegen — auch leere erscheinen so als
+    // eigene Gruppe. Zeilen ohne Kategorie sammeln sich in einer Extra-Gruppe.
     const map = new Map<string, Qualifikation[]>();
+    for (const k of matrix.kategorien) map.set(k, []);
+    const ohne: Qualifikation[] = [];
     for (const q of matrix.qualifikationen) {
-      const k = q.kategorie ?? t("kompetenzen.ohneKategorie");
-      const liste = map.get(k) ?? [];
+      if (q.kategorie == null) {
+        ohne.push(q);
+        continue;
+      }
+      const liste = map.get(q.kategorie) ?? [];
       liste.push(q);
-      map.set(k, liste);
+      map.set(q.kategorie, liste);
     }
-    return [...map.entries()];
-  }, [matrix.qualifikationen, t]);
+    const eintraege = [...map.entries()];
+    if (ohne.length) eintraege.push([t("kompetenzen.ohneKategorie"), ohne]);
+    return eintraege;
+  }, [matrix.kategorien, matrix.qualifikationen, t]);
 
   /** Zellen einer Zeile nach Person-ID, damit die Spaltenordnung stimmt. */
   const zellenIndex = useMemo(() => {
@@ -498,6 +578,7 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
         <div className="mb-3 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
           <p className="text-xs text-muted-foreground">{t("kompetenzen.bearbeitenHinweis")}</p>
           <div className="flex flex-wrap gap-4">
+            <KategorieAnlegen matrix={matrix} />
             <ZeileAnlegen matrix={matrix} />
             <SpalteAnlegen matrix={matrix} />
           </div>
@@ -505,6 +586,7 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
       )}
 
       {gruppen.map(([kategorie, zeilen]) => {
+        const istEcht = matrix.kategorien.includes(kategorie);
         const gezeigt = nurLuecken
           ? zeilen.filter((q) =>
               q.zellen.some(
@@ -515,20 +597,28 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
               ),
             )
           : zeilen;
-        if (gezeigt.length === 0) return null;
-        // Echter Kategoriewert (NULL = Platzhaltergruppe „Ohne Kategorie");
-        // die Gruppierung stellt sicher, dass alle Zeilen denselben Wert tragen.
-        const rohKategorie = zeilen[0]?.kategorie ?? null;
+        // Leere echte Kategorie im Normalmodus zeigen (damit man sie füllen
+        // kann); unter „nur Lücken" und die Ohne-Kategorie-Gruppe nur mit Zeilen.
+        if (gezeigt.length === 0 && (nurLuecken || !istEcht)) return null;
 
         return (
           <section key={kategorie} className="mb-4">
             <Klappbar titel={kategorie} anzahl={gezeigt.length}>
-              {bearbeiten && rohKategorie !== null && (
-                <KategorieUmbenennenFeld matrix={matrix} alt={rohKategorie} />
+              {bearbeiten && istEcht && (
+                <KategorieUmbenennenFeld
+                  matrix={matrix}
+                  alt={kategorie}
+                  leer={zeilen.length === 0}
+                />
               )}
               {/* Die Matrix ist von Natur aus breit (bis 31 Personen). Der
                   Rahmen scrollt daher selbst, statt die Seite zu dehnen; die
                   Qualifikationsspalte bleibt dabei stehen. */}
+              {gezeigt.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-muted-foreground">
+                  {t("kompetenzen.kategorieLeer")}
+                </p>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -635,6 +725,7 @@ function MatrixTabelle({ matrix }: { matrix: Matrix }) {
                   </tbody>
                 </table>
               </div>
+              )}
             </Klappbar>
           </section>
         );

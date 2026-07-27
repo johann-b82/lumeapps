@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_async_db_session
 from app.models import (
     KompetenzBewertung,
+    KompetenzKategorie,
     KompetenzMatrix,
     KompetenzPerson,
     KompetenzQualifikation,
@@ -108,6 +109,10 @@ class MatrixRead(BaseModel):
     importiert_am: datetime
     personen: list[PersonRead]
     qualifikationen: list[QualifikationRead]
+    #: Alle Kategorien der Matrix in Anzeigereihenfolge — deklarierte (auch leere)
+    #: und aus Qualifikationen abgeleitete, ohne Dubletten. "Ohne Kategorie" ist
+    #: nicht enthalten (das ist die Sammelgruppe der Zeilen ohne Kategorie).
+    kategorien: list[str]
 
 
 def _als_read(v: ImportVorschau) -> ImportVorschauRead:
@@ -266,6 +271,28 @@ async def matrix_ansehen(
             )
         )
 
+    # Kategorien in Anzeigereihenfolge: erst wie sie in den Qualifikationen
+    # (nach reihenfolge sortiert) zuerst auftauchen, dann deklarierte, die noch
+    # keine Qualifikation tragen (leere Kategorien), am Ende.
+    kategorien: list[str] = []
+    for q in qualifikationen:
+        if q.kategorie and q.kategorie not in kategorien:
+            kategorien.append(q.kategorie)
+    deklariert = (
+        (
+            await db.execute(
+                select(KompetenzKategorie)
+                .where(KompetenzKategorie.matrix_id == matrix_id)
+                .order_by(KompetenzKategorie.reihenfolge, KompetenzKategorie.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for k in deklariert:
+        if k.name not in kategorien:
+            kategorien.append(k.name)
+
     personen = sorted(matrix.personen, key=lambda p: p.reihenfolge)
     return MatrixRead(
         id=matrix.id,
@@ -274,6 +301,7 @@ async def matrix_ansehen(
         titel=matrix.titel,
         stand=matrix.stand,
         importiert_am=matrix.importiert_am,
+        kategorien=kategorien,
         personen=[
             PersonRead(
                 id=p.id,
@@ -326,6 +354,11 @@ class KategorieUmbenennen(BaseModel):
     alt: str
     #: Neuer Name; darf nicht leer sein.
     neu: str
+
+
+class KategorieAnlegen(BaseModel):
+    #: Name der neuen (zunächst leeren) Kategorie.
+    name: str
 
 
 class VerfuegbarePersonRead(BaseModel):
@@ -621,6 +654,72 @@ async def qualifikation_entfernen(
     await db.commit()
 
 
+async def _deklarierte_kategorie(
+    db: AsyncSession, matrix_id: int, name: str
+) -> KompetenzKategorie | None:
+    return (
+        await db.execute(
+            select(KompetenzKategorie).where(
+                KompetenzKategorie.matrix_id == matrix_id,
+                KompetenzKategorie.name == name,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def _kategorie_belegt(db: AsyncSession, matrix_id: int, name: str) -> bool:
+    """Ob eine Qualifikation dieser Matrix die Kategorie trägt."""
+    return (
+        await db.execute(
+            select(KompetenzQualifikation.id)
+            .where(
+                KompetenzQualifikation.matrix_id == matrix_id,
+                KompetenzQualifikation.kategorie == name,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none() is not None
+
+
+@router.post("/matrix/{matrix_id}/kategorie", status_code=201)
+async def kategorie_anlegen(
+    matrix_id: int,
+    eingabe: KategorieAnlegen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> dict:
+    """Eine neue, zunächst leere Kategorie anlegen.
+
+    Sie erscheint sofort als eigene Gruppe und kann danach gefüllt werden.
+    409, wenn es die Kategorie schon gibt — deklariert oder an einer
+    Qualifikation.
+    """
+    name = eingabe.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name darf nicht leer sein.")
+    await _matrix(db, matrix_id)
+
+    if await _deklarierte_kategorie(db, matrix_id, name) or await _kategorie_belegt(
+        db, matrix_id, name
+    ):
+        raise HTTPException(status_code=409, detail="Kategorie existiert bereits.")
+
+    letzte = (
+        await db.execute(
+            select(KompetenzKategorie.reihenfolge)
+            .where(KompetenzKategorie.matrix_id == matrix_id)
+            .order_by(KompetenzKategorie.reihenfolge.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    db.add(
+        KompetenzKategorie(
+            matrix_id=matrix_id, name=name, reihenfolge=(letzte or 0) + 1
+        )
+    )
+    await db.commit()
+    return {"name": name}
+
+
 @router.put("/matrix/{matrix_id}/kategorie", status_code=204)
 async def kategorie_umbenennen(
     matrix_id: int,
@@ -629,13 +728,16 @@ async def kategorie_umbenennen(
 ) -> None:
     """Eine Kategorie in dieser Matrix umbenennen.
 
-    Setzt ``kategorie`` auf allen Qualifikationen dieser Matrix, die aktuell
-    ``alt`` tragen, auf ``neu``. Kategorie ist Freitext je Zeile — es gibt kein
-    eigenes Kategorie-Objekt, daher wird zeilenweise aktualisiert.
+    Setzt ``kategorie`` auf allen Qualifikationen dieser Matrix, die ``alt``
+    tragen, auf ``neu`` und benennt zusätzlich die deklarierte Kategorie (falls
+    vorhanden) um — beide Seiten bleiben synchron. Funktioniert auch für eine
+    noch leere, nur deklarierte Kategorie.
     """
     neu = eingabe.neu.strip()
     if not neu:
         raise HTTPException(status_code=400, detail="Neuer Name darf nicht leer sein.")
+    if neu == eingabe.alt:
+        return
     await _matrix(db, matrix_id)
 
     zeilen = (
@@ -646,8 +748,41 @@ async def kategorie_umbenennen(
             )
         )
     ).scalars().all()
-    if not zeilen:
+    deklariert = await _deklarierte_kategorie(db, matrix_id, eingabe.alt)
+    if not zeilen and deklariert is None:
         raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+
+    # Zielname darf nicht schon als andere Kategorie existieren (kein Merge).
+    if await _kategorie_belegt(db, matrix_id, neu) or await _deklarierte_kategorie(
+        db, matrix_id, neu
+    ):
+        raise HTTPException(status_code=409, detail="Zielname existiert bereits.")
+
     for q in zeilen:
         q.kategorie = neu
+    if deklariert is not None:
+        deklariert.name = neu
+    await db.commit()
+
+
+@router.delete("/matrix/{matrix_id}/kategorie/{name}", status_code=204)
+async def kategorie_entfernen(
+    matrix_id: int,
+    name: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine deklarierte Kategorie entfernen — nur solange sie leer ist.
+
+    Trägt noch eine Qualifikation die Kategorie, kommt 409: erst die Zeilen
+    entfernen oder umkategorisieren.
+    """
+    deklariert = await _deklarierte_kategorie(db, matrix_id, name)
+    if deklariert is None:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden.")
+    if await _kategorie_belegt(db, matrix_id, name):
+        raise HTTPException(
+            status_code=409,
+            detail="Kategorie enthält Qualifikationen — erst leeren.",
+        )
+    await db.delete(deklariert)
     await db.commit()
