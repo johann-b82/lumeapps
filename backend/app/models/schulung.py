@@ -186,6 +186,28 @@ class OnboardingAbteilung(Base):
     abteilung: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class OnboardingPaketDownload(Base):
+    """Vermerk, dass das Onboarding-Paket einer Person heruntergeladen wurde (v1.97).
+
+    Existiert eine Zeile, gilt die Onboarding-Übergabe als erledigt und die Person
+    verliert die „neu"-Markierung in der Eintritte-Tabelle. Der Zeitstempel hält den
+    Zeitpunkt des ersten Downloads (Übergabezeitpunkt).
+    """
+
+    __tablename__ = "onboarding_paket_download"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("personio_employees.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    heruntergeladen_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class OnboardingDokument(Base):
     """Automatisch erzeugte Schulungsübersicht (Formblatt 71) einer Person.
 

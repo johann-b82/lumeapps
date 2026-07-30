@@ -170,6 +170,11 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           primaer
           label={t("onboarding.paket.pdf")}
           laden={(a) => ladeOnboardingPaket(eintritt.employee_id, eintritt.name, a)}
+          nachDownload={() => {
+            // Paket geladen → "neu"-Markierung fällt weg; Liste + Detail neu laden.
+            qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
+            qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
+          }}
         />
       </div>
     </div>
@@ -186,11 +191,14 @@ function AbteilungsDownload({
   label,
   laden,
   primaer = false,
+  nachDownload,
 }: {
   eintritt: Eintritt;
   label: string;
   laden: (abteilungen: string[]) => Promise<void>;
   primaer?: boolean;
+  /** Nach erfolgreichem Download aufgerufen (z. B. um die "neu"-Markierung zu aktualisieren). */
+  nachDownload?: () => void;
 }) {
   const { t } = useTranslation();
   const [offen, setOffen] = useState(false);
@@ -206,6 +214,7 @@ function AbteilungsDownload({
 
   const download = useMutation({
     mutationFn: () => laden(gewaehlt),
+    onSuccess: () => nachDownload?.(),
     onError: (e: Error) => toast.error(e.message),
   });
 

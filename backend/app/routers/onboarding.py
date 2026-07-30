@@ -22,6 +22,7 @@ from app.models import (
     EinarbeitungInhalt,
     OnboardingAbteilung,
     OnboardingDokument,
+    OnboardingPaketDownload,
     PersonioEmployee,
     SchulungPflicht,
     SchulungRolle,
@@ -139,11 +140,25 @@ async def neue_eintritte(
         .all()
     )
 
+    # Wessen Onboarding-Paket bereits heruntergeladen wurde, gilt nicht mehr als
+    # neu — unabhängig vom Eintrittsdatum.
+    paket_geladen = set(
+        (
+            await db.execute(select(OnboardingPaketDownload.employee_id))
+        )
+        .scalars()
+        .all()
+    )
+
     heute = date.today()
     ergebnis: list[EintrittRead] = []
     for emp in aktive:
         plan = await schulungsplan(db, emp)
-        ist_neu = emp.hire_date is not None and emp.hire_date >= grenze
+        ist_neu = (
+            emp.hire_date is not None
+            and emp.hire_date >= grenze
+            and emp.id not in paket_geladen
+        )
         ergebnis.append(
             EintrittRead(
                 employee_id=emp.id,
@@ -483,6 +498,21 @@ async def onboarding_paket_pdf(
     name = f"{einarb_dateiname(plan.name, date.today())}".replace(
         "Einarbeitungsplan", "Onboarding-Paket"
     )
+
+    # Paket ausgeliefert → Onboarding-Übergabe als erledigt vermerken; das
+    # entfernt die „neu"-Markierung dieser Person. Idempotent: nur beim ersten
+    # Download anlegen, der Zeitstempel bleibt dann der Übergabezeitpunkt.
+    schon_vermerkt = (
+        await db.execute(
+            select(OnboardingPaketDownload.id).where(
+                OnboardingPaketDownload.employee_id == employee_id
+            )
+        )
+    ).scalar_one_or_none()
+    if schon_vermerkt is None:
+        db.add(OnboardingPaketDownload(employee_id=employee_id))
+        await db.commit()
+
     return Response(
         content=pdf,
         media_type="application/pdf",
