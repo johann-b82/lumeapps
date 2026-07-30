@@ -15,7 +15,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -479,6 +479,44 @@ async def zelle_setzen(
         db.add(zelle)
     zelle.anforderungslevel = eingabe.anforderungslevel
     zelle.erfuellungsgrad = eingabe.erfuellungsgrad
+
+    # Sync über alle Matrizen: dieselbe (Mitarbeiter, Qualifikation) bekommt
+    # denselben Wert. Gematcht wird über die Personio-ID und die normalisierte
+    # Bezeichnung; ohne employee_id (nicht mit Personio verknüpft) bleibt es lokal.
+    if person.employee_id is not None:
+        ziel_bez = qual.bezeichnung.strip().lower()
+        andere_personen = (
+            await db.execute(
+                select(KompetenzPerson).where(
+                    KompetenzPerson.employee_id == person.employee_id,
+                    KompetenzPerson.id != person.id,
+                )
+            )
+        ).scalars().all()
+        for p2 in andere_personen:
+            quals2 = (
+                await db.execute(
+                    select(KompetenzQualifikation).where(
+                        KompetenzQualifikation.matrix_id == p2.matrix_id,
+                        func.lower(func.trim(KompetenzQualifikation.bezeichnung)) == ziel_bez,
+                    )
+                )
+            ).scalars().all()
+            for q2 in quals2:
+                z2 = (
+                    await db.execute(
+                        select(KompetenzBewertung).where(
+                            KompetenzBewertung.qualifikation_id == q2.id,
+                            KompetenzBewertung.person_id == p2.id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if z2 is None:
+                    z2 = KompetenzBewertung(qualifikation_id=q2.id, person_id=p2.id)
+                    db.add(z2)
+                z2.anforderungslevel = eingabe.anforderungslevel
+                z2.erfuellungsgrad = eingabe.erfuellungsgrad
+
     await db.commit()
     await db.refresh(zelle)
     return ZelleRead(
