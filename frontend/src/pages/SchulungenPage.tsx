@@ -35,6 +35,7 @@ import {
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
+import { vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 
 type KatalogZeile = Schulung;
@@ -469,7 +470,7 @@ function PflichtMatrixPanel({ schulungen }: { schulungen: Schulung[] | undefined
                   <th
                     key={a}
                     className="px-2 py-2 text-xs font-medium whitespace-nowrap text-muted-foreground"
-                    title={a}
+                    title={vollwort(a)}
                   >
                     {a}
                   </th>
