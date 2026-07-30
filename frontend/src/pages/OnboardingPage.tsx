@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   Check,
   FileDown,
   ClipboardList,
@@ -19,13 +18,10 @@ import {
   fetchDokumente,
   fetchEintritte,
   fetchPlan,
-  fetchKuerzel,
   fetchRollen,
   ladeDokument,
   ladeOnboardingPaket,
   ladeSchulungsuebersicht,
-  entferneRolle,
-  setzeRolle,
   type Eintritt,
   type OnboardingDokument,
 } from "@/lib/onboardingApi";
@@ -85,13 +81,6 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
 
   return (
     <div className="space-y-3 px-4 py-3">
-      {data.kuerzel_fehlt && (
-        <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{t("onboarding.kuerzelFehlt", { position: data.position ?? "—" })}</span>
-        </div>
-      )}
-
       {data.soll.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("onboarding.keinSoll")}</p>
       ) : (
@@ -617,77 +606,7 @@ function DokumentePanel() {
   );
 }
 
-/** Dropdown in der Zeile: Kürzel für die Position dieses Mitarbeiters wählen.
- *
- *  Die Zuordnung hängt an der POSITION, nicht an der Person — die Auswahl gilt
- *  daher für alle Mitarbeiter mit derselben Positionsbezeichnung. Der Hinweis
- *  über der Tabelle sagt das ausdrücklich.
- */
-function KuerzelAuswahl({ eintritt }: { eintritt: Eintritt }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { data: kuerzel } = useQuery({
-    queryKey: hrKpiKeys.onboardingKuerzel(),
-    queryFn: fetchKuerzel,
-  });
-
-  const invalidieren = () => {
-    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
-    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingRollen() });
-    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingKuerzel() });
-    qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
-  };
-
-  const speichern = useMutation({
-    mutationFn: (wert: string) =>
-      setzeRolle({ position: eintritt.position ?? "", abteilung_kuerzel: wert }),
-    onSuccess: (r) => {
-      toast.success(t("onboarding.rolleGespeichert", { kuerzel: r.abteilung_kuerzel }));
-      invalidieren();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const entfernen = useMutation({
-    mutationFn: () => entferneRolle(eintritt.position ?? ""),
-    onSuccess: () => {
-      toast.success(t("onboarding.rolleEntfernt"));
-      invalidieren();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  if (!eintritt.position) {
-    return <span className="text-xs text-muted-foreground">{t("onboarding.ohnePosition")}</span>;
-  }
-
-  return (
-    <select
-      value={eintritt.abteilung_kuerzel ?? ""}
-      disabled={speichern.isPending || entfernen.isPending}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const wert = e.target.value;
-        // Leere Auswahl = Zuordnung entfernen (falls eine bestand).
-        if (wert) speichern.mutate(wert);
-        else if (eintritt.abteilung_kuerzel) entfernen.mutate();
-      }}
-      aria-label={t("onboarding.rollen.kuerzel")}
-      className={`h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                  ${eintritt.abteilung_kuerzel ? "" : "border-amber-500/60 text-muted-foreground"}`}
-    >
-      <option value="">{t("onboarding.kuerzelWaehlen")}</option>
-      {(kuerzel ?? []).map((k) => (
-        <option key={k} value={k}>
-          {k}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-/** Übersicht der bestehenden Zuordnungen (Pflege läuft über die Zeilen-Dropdowns). */
+/** Übersicht der bestehenden Positions→Kürzel-Zuordnungen (nur Anzeige). */
 function RollenPanel() {
   const { t } = useTranslation();
   const { data } = useQuery({
@@ -775,7 +694,6 @@ export function OnboardingPage() {
                   <Th>{t("onboarding.eintritte.name")}</Th>
                   <Th>{t("onboarding.eintritte.position")}</Th>
                   <Th>{t("onboarding.eintritte.abteilung")}</Th>
-                  <Th>{t("onboarding.rollen.kuerzel")}</Th>
                   <Th>{t("onboarding.eintritte.eintritt")}</Th>
                   <Th rechts>{t("onboarding.eintritte.plan")}</Th>
                 </tr>
@@ -789,20 +707,9 @@ export function OnboardingPage() {
                       onClick={() => setOffenFuer(offen ? null : e.employee_id)}
                       className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40"
                     >
-                      <td className="px-4 py-2">
-                        {e.name}
-                        {e.kuerzel_fehlt && (
-                          <AlertTriangle
-                            className="ml-1.5 inline h-3.5 w-3.5 text-amber-500"
-                            aria-label={t("onboarding.kuerzelFehltKurz")}
-                          />
-                        )}
-                      </td>
+                      <td className="px-4 py-2">{e.name}</td>
                       <td className="px-4 py-2 text-muted-foreground">{e.position ?? "—"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{e.abteilung ?? "—"}</td>
-                      <td className="px-4 py-2">
-                        <KuerzelAuswahl eintritt={e} />
-                      </td>
                       <td className="px-4 py-2 whitespace-nowrap tabular-nums">
                         {datum(e.hire_date)}
                       </td>
@@ -827,7 +734,7 @@ export function OnboardingPage() {
                     </tr>,
                     offen ? (
                       <tr key={`${e.employee_id}-detail`} className="border-b bg-muted/10">
-                        <td colSpan={6} className="p-0">
+                        <td colSpan={5} className="p-0">
                           <PlanDetail eintritt={e} />
                         </td>
                       </tr>

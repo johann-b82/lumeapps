@@ -95,12 +95,12 @@ async def schulungsplan(
         kuerzel_fehlt=kuerzel is None and bool(normalisiere_position(employee.position)),
     )
 
-    # Passende Regeln beider Ebenen einsammeln.
+    # Pflichtschulungen ergeben sich aus der Personio-Abteilung (Ebene
+    # "personio"). Die feine Kürzel-Ebene fließt bewusst NICHT mehr in den Plan
+    # ein — die Anordnung erfolgt abteilungsbasiert.
     bedingungen = []
     if employee.department:
         bedingungen.append(("personio", employee.department.strip()))
-    if kuerzel:
-        bedingungen.append(("kuerzel", kuerzel))
     if not bedingungen:
         return ergebnis
 
