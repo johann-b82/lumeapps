@@ -186,6 +186,33 @@ class OnboardingAbteilung(Base):
     abteilung: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class OnboardingExtern(Base):
+    """Manuell gepflegter Onboarding-Eintritt für Personen, die (noch) nicht in
+    Personio stehen (v1.98).
+
+    Erscheinen in der Eintritte-Liste mit Markierung „nicht in Personio" und
+    bekommen — wie Personio-Mitarbeiter — einen abteilungsbasierten Plan und die
+    Dokument-Downloads. Im API laufen sie über eine negative ``employee_id``
+    (``-id``). Die Onboarding-Paket-„neu"-Logik trägt hier ihren eigenen
+    Zeitstempel (statt in onboarding_paket_download, das an Personio hängt).
+    """
+
+    __tablename__ = "onboarding_extern"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    abteilung: Mapped[str | None] = mapped_column(Text, nullable=True)
+    position: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hire_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    #: Zeitpunkt des ersten Onboarding-Paket-Downloads (entfernt die „neu"-Markierung).
+    paket_heruntergeladen_am: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    angelegt_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class OnboardingPaketDownload(Base):
     """Vermerk, dass das Onboarding-Paket einer Person heruntergeladen wurde (v1.97).
 

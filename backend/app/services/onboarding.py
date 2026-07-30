@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     OnboardingAbteilung,
+    OnboardingExtern,
     PersonioEmployee,
     SchulungKatalog,
     SchulungPflicht,
@@ -164,6 +165,57 @@ async def schulungsplan(
                 quelle=pflicht.ebene,
                 abteilung=pflicht.abteilung,
                 vorhanden=katalog.id in vorhandene,
+            )
+        )
+    ergebnis.soll.sort(key=lambda s: (s.bereich, s.name))
+    return ergebnis
+
+
+async def schulungsplan_extern(
+    db: AsyncSession, extern: OnboardingExtern
+) -> SchulungsplanErgebnis:
+    """Soll für einen manuell gepflegten (Nicht-Personio-)Eintritt.
+
+    Abteilungsbasiert wie bei Personio-Mitarbeitern (Ebene ``personio``). Es gibt
+    keine Teilnahme-Historie, daher ist alles Soll auch fehlend (``vorhanden``
+    False).
+    """
+    ergebnis = SchulungsplanErgebnis(
+        personalnummer=None,
+        name=extern.name,
+        position=extern.position,
+        abteilung=extern.abteilung,
+        abteilung_kuerzel=None,
+        kuerzel_fehlt=False,
+    )
+    if not extern.abteilung:
+        return ergebnis
+
+    regeln = (
+        await db.execute(
+            select(SchulungPflicht, SchulungKatalog)
+            .join(SchulungKatalog, SchulungKatalog.id == SchulungPflicht.schulung_id)
+            .where(
+                SchulungPflicht.ebene == "personio",
+                SchulungPflicht.abteilung == extern.abteilung.strip(),
+            )
+        )
+    ).all()
+
+    gesehen: set[int] = set()
+    for pflicht, katalog in regeln:
+        if katalog.id in gesehen:
+            continue
+        gesehen.add(katalog.id)
+        ergebnis.soll.append(
+            SollSchulung(
+                schulung_id=katalog.id,
+                bereich=katalog.bereich,
+                name=katalog.name,
+                turnus=katalog.turnus,
+                quelle=pflicht.ebene,
+                abteilung=pflicht.abteilung,
+                vorhanden=False,
             )
         )
     ergebnis.soll.sort(key=lambda s: (s.bereich, s.name))

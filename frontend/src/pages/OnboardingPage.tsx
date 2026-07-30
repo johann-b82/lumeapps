@@ -13,8 +13,10 @@ import {
   X,
 } from "lucide-react";
 import {
+  entferneExtern,
   erzeugeDokumente,
   erzeugePlan,
+  fetchAbteilungen,
   fetchDokumente,
   fetchEintritte,
   fetchPlan,
@@ -22,6 +24,7 @@ import {
   ladeDokument,
   ladeOnboardingPaket,
   ladeSchulungsuebersicht,
+  legeExternAn,
   type Eintritt,
   type OnboardingDokument,
 } from "@/lib/onboardingApi";
@@ -127,7 +130,7 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           ausdrucken und von Hand ausfüllen — und solange die Anforderungsmatrix
           nicht gepflegt ist, ist das Soll bei jedem leer. */}
       <div className="flex flex-wrap items-center gap-2">
-        {data.fehlend > 0 && (
+        {eintritt.in_personio && data.fehlend > 0 && (
           <button
             type="button"
             onClick={() => anlegen.mutate()}
@@ -657,12 +660,99 @@ function RollenPanel() {
   );
 }
 
+const externFeldStil =
+  "h-8 rounded-md border bg-background px-2 text-sm focus-visible:outline-none " +
+  "focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Manuellen Eintritt (nicht in Personio) anlegen: Name + Abteilung + Eintrittsdatum. */
+function ExternAnlegen() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [abteilung, setAbteilung] = useState("");
+  const [eintritt, setEintritt] = useState("");
+
+  const { data: abteilungen } = useQuery({
+    queryKey: hrKpiKeys.onboardingAbteilungen(),
+    queryFn: fetchAbteilungen,
+  });
+
+  const anlegen = useMutation({
+    mutationFn: () =>
+      legeExternAn({
+        name: name.trim(),
+        abteilung: abteilung.trim() || null,
+        hire_date: eintritt || null,
+      }),
+    onSuccess: () => {
+      toast.success(t("onboarding.extern.angelegt"));
+      setName("");
+      setAbteilung("");
+      setEintritt("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
+      <span className="text-xs font-medium">{t("onboarding.extern.titel")}</span>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t("onboarding.eintritte.name")}
+        className={`${externFeldStil} w-44`}
+      />
+      <input
+        value={abteilung}
+        onChange={(e) => setAbteilung(e.target.value)}
+        list="extern-abteilungen"
+        placeholder={t("onboarding.eintritte.abteilung")}
+        className={`${externFeldStil} w-48`}
+      />
+      <datalist id="extern-abteilungen">
+        {(abteilungen ?? []).map((a) => (
+          <option key={a} value={a} />
+        ))}
+      </datalist>
+      <input
+        type="date"
+        value={eintritt}
+        onChange={(e) => setEintritt(e.target.value)}
+        aria-label={t("onboarding.eintritte.eintritt")}
+        className={externFeldStil}
+      />
+      <button
+        type="button"
+        disabled={!name.trim() || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm
+                   text-primary-foreground disabled:opacity-60 focus-visible:outline-none
+                   focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {anlegen.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        {t("onboarding.extern.hinzufuegen")}
+      </button>
+    </div>
+  );
+}
+
 export function OnboardingPage() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [offenFuer, setOffenFuer] = useState<number | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: hrKpiKeys.onboardingEintritte(),
     queryFn: fetchEintritte,
+  });
+
+  const externLoeschen = useMutation({
+    mutationFn: (externId: number) => entferneExtern(externId),
+    onSuccess: () => {
+      toast.success(t("onboarding.extern.entfernt"));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -682,6 +772,8 @@ export function OnboardingPage() {
         <p className="mb-3 text-xs text-muted-foreground">
           {t("onboarding.eintritte.hinweis")}
         </p>
+
+        <ExternAnlegen />
 
         {isLoading && (
           <div className="flex h-32 items-center justify-center">
@@ -724,6 +816,11 @@ export function OnboardingPage() {
                             {t("onboarding.eintritte.neu")}
                           </span>
                         )}
+                        {!e.in_personio && (
+                          <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                            {t("onboarding.eintritte.extern")}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{e.position ?? "—"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{e.abteilung ?? "—"}</td>
@@ -746,6 +843,23 @@ export function OnboardingPage() {
                               gesamt: e.soll_gesamt,
                             })}
                           </span>
+                        )}
+                        {!e.in_personio && (
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              externLoeschen.mutate(-e.employee_id);
+                            }}
+                            disabled={externLoeschen.isPending}
+                            aria-label={t("onboarding.extern.loeschen")}
+                            title={t("onboarding.extern.loeschen")}
+                            className="ml-2 rounded p-0.5 align-middle text-muted-foreground
+                                       transition-colors hover:bg-destructive/10 hover:text-destructive
+                                       disabled:opacity-50"
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
                         )}
                       </td>
                     </tr>,

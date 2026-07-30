@@ -24,6 +24,8 @@ export interface Eintritt {
   fehlend: number;
   /** Position hat keine Zuordnung → feine Matrix-Ebene greift nicht. */
   kuerzel_fehlt: boolean;
+  /** False = manuell gepflegter Eintrag (nicht in Personio); employee_id ist dann negativ. */
+  in_personio: boolean;
 }
 
 export interface SollSchulung {
@@ -67,6 +69,27 @@ export function fetchPlan(employeeId: number): Promise<Schulungsplan> {
 export function erzeugePlan(employeeId: number): Promise<Schulungsplan> {
   return apiClient<Schulungsplan>(`/api/hr/onboarding/plan/${employeeId}`, {
     method: "POST",
+  });
+}
+
+/** Legt einen manuellen Eintritt (nicht in Personio) an. */
+export function legeExternAn(eingabe: {
+  name: string;
+  abteilung?: string | null;
+  position?: string | null;
+  hire_date?: string | null;
+}): Promise<Eintritt> {
+  return apiClient<Eintritt>("/api/hr/onboarding/extern", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Entfernt einen manuellen Eintrag (employee_id ist negativ → -id übergeben). */
+export function entferneExtern(externId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/onboarding/extern/${externId}`, {
+    method: "DELETE",
   });
 }
 

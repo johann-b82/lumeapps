@@ -10,7 +10,7 @@ konvertiert es über LibreOffice.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
@@ -22,6 +22,7 @@ from app.models import (
     EinarbeitungInhalt,
     OnboardingAbteilung,
     OnboardingDokument,
+    OnboardingExtern,
     OnboardingPaketDownload,
     PersonioEmployee,
     SchulungPflicht,
@@ -34,6 +35,7 @@ from app.services.onboarding import (
     normalisiere_position,
     plan_anlegen,
     schulungsplan,
+    schulungsplan_extern,
 )
 from app.services.onboarding_dokumente import plan_signatur, uebersichten_erzeugen
 from app.services.einarbeitung_pdf import EinarbeitungZeile
@@ -96,6 +98,9 @@ class EintrittRead(BaseModel):
     soll_gesamt: int
     fehlend: int
     kuerzel_fehlt: bool
+    #: False = manuell gepflegter Eintrag (nicht in Personio). Für diese ist
+    #: ``employee_id`` negativ (= -onboarding_extern.id).
+    in_personio: bool = True
 
 
 class RolleRead(BaseModel):
@@ -118,6 +123,26 @@ async def _employee(db: AsyncSession, employee_id: int) -> PersonioEmployee:
     if emp is None:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
     return emp
+
+
+async def _extern(db: AsyncSession, extern_id: int) -> OnboardingExtern:
+    ext = await db.get(OnboardingExtern, extern_id)
+    if ext is None:
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden.")
+    return ext
+
+
+async def _plan_und_zeitpunkt(db: AsyncSession, employee_id: int):
+    """Plan, Eintrittsdatum und (falls extern) der Eintrag zu einer employee_id.
+
+    Positive ID = Personio-Mitarbeiter, negative ID = manueller Eintrag
+    (``-onboarding_extern.id``).
+    """
+    if employee_id < 0:
+        ext = await _extern(db, -employee_id)
+        return await schulungsplan_extern(db, ext), ext.hire_date, ext
+    emp = await _employee(db, employee_id)
+    return await schulungsplan(db, emp), emp.hire_date, None
 
 
 @router.get("/eintritte", response_model=list[EintrittRead])
@@ -173,6 +198,36 @@ async def neue_eintritte(
                 soll_gesamt=len(plan.soll),
                 fehlend=len(plan.fehlend),
                 kuerzel_fehlt=plan.kuerzel_fehlt,
+                in_personio=True,
+            )
+        )
+
+    # Manuell gepflegte Einträge (nicht in Personio) — negative employee_id.
+    externe = (
+        (await db.execute(select(OnboardingExtern))).scalars().all()
+    )
+    for ext in externe:
+        plan = await schulungsplan_extern(db, ext)
+        ist_neu = (
+            ext.hire_date is not None
+            and ext.hire_date >= grenze
+            and ext.paket_heruntergeladen_am is None
+        )
+        ergebnis.append(
+            EintrittRead(
+                employee_id=-ext.id,
+                personalnummer=None,
+                name=ext.name,
+                position=ext.position,
+                abteilung=ext.abteilung,
+                abteilung_kuerzel=None,
+                hire_date=ext.hire_date,
+                tage_bis_eintritt=(ext.hire_date - heute).days if ext.hire_date else None,
+                ist_neu=ist_neu,
+                soll_gesamt=len(plan.soll),
+                fehlend=len(plan.fehlend),
+                kuerzel_fehlt=False,
+                in_personio=False,
             )
         )
 
@@ -183,6 +238,70 @@ async def neue_eintritte(
         return (1, 0, e.name.lower())
 
     return sorted(ergebnis, key=sortier)
+
+
+class ExternAnlegen(BaseModel):
+    name: str
+    abteilung: str | None = None
+    position: str | None = None
+    hire_date: date | None = None
+
+
+def _extern_read(ext: OnboardingExtern, plan) -> EintrittRead:
+    heute = date.today()
+    grenze = heute - timedelta(days=NEU_TAGE)
+    ist_neu = (
+        ext.hire_date is not None
+        and ext.hire_date >= grenze
+        and ext.paket_heruntergeladen_am is None
+    )
+    return EintrittRead(
+        employee_id=-ext.id,
+        personalnummer=None,
+        name=ext.name,
+        position=ext.position,
+        abteilung=ext.abteilung,
+        abteilung_kuerzel=None,
+        hire_date=ext.hire_date,
+        tage_bis_eintritt=(ext.hire_date - heute).days if ext.hire_date else None,
+        ist_neu=ist_neu,
+        soll_gesamt=len(plan.soll),
+        fehlend=len(plan.fehlend),
+        kuerzel_fehlt=False,
+        in_personio=False,
+    )
+
+
+@router.post("/extern", response_model=EintrittRead, status_code=201)
+async def extern_anlegen(
+    eingabe: ExternAnlegen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> EintrittRead:
+    """Einen manuellen Onboarding-Eintritt (nicht in Personio) anlegen."""
+    name = eingabe.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name darf nicht leer sein.")
+    ext = OnboardingExtern(
+        name=name,
+        abteilung=(eingabe.abteilung or "").strip() or None,
+        position=(eingabe.position or "").strip() or None,
+        hire_date=eingabe.hire_date,
+    )
+    db.add(ext)
+    await db.commit()
+    await db.refresh(ext)
+    return _extern_read(ext, await schulungsplan_extern(db, ext))
+
+
+@router.delete("/extern/{extern_id}", status_code=204)
+async def extern_entfernen(
+    extern_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Einen manuellen Eintrag entfernen (``extern_id`` = positive ID)."""
+    ext = await _extern(db, extern_id)
+    await db.delete(ext)
+    await db.commit()
 
 
 class AbteilungSetzen(BaseModel):
@@ -261,10 +380,9 @@ async def plan_ansehen(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> SchulungsplanRead:
     """Soll/Ist einer Person — schreibt nichts."""
-    emp = await _employee(db, employee_id)
-    plan = await schulungsplan(db, emp)
+    plan, _, _ = await _plan_und_zeitpunkt(db, employee_id)
     return SchulungsplanRead(
-        employee_id=emp.id,
+        employee_id=employee_id,
         personalnummer=plan.personalnummer,
         name=plan.name,
         position=plan.position,
@@ -282,6 +400,11 @@ async def plan_erzeugen(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> SchulungsplanRead:
     """Fehlende Pflichtschulungen als offene Zeilen anlegen (idempotent)."""
+    if employee_id < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Für manuelle Einträge (nicht in Personio) nicht verfügbar.",
+        )
     emp = await _employee(db, employee_id)
     plan = await plan_anlegen(db, emp)
     return SchulungsplanRead(
@@ -412,8 +535,7 @@ async def plan_als_pdf(
     Compute-justified: clause 2 (document generation) — openpyxl-Aufbau plus
     LibreOffice-Konvertierung laufen serverseitig.
     """
-    emp = await _employee(db, employee_id)
-    plan = await schulungsplan(db, emp)
+    plan, _, _ = await _plan_und_zeitpunkt(db, employee_id)
 
     zeilen = [
         UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)
@@ -451,13 +573,12 @@ async def onboarding_paket_pdf(
     Compute-justified: clause 2 (document generation) — openpyxl-Aufbau plus
     LibreOffice-Konvertierung laufen serverseitig.
     """
-    emp = await _employee(db, employee_id)
-    plan = await schulungsplan(db, emp)
+    plan, hire_date, ext = await _plan_und_zeitpunkt(db, employee_id)
 
-    # Einarbeitungsinhalte für die gewählten Abteilungen (Standard: Personio-Abt.).
+    # Einarbeitungsinhalte für die gewählten Abteilungen (Standard: Abt. der Person).
     gewaehlt = [a.strip() for a in (abteilungen or []) if a and a.strip()]
-    if not gewaehlt and emp.department:
-        gewaehlt = [emp.department]
+    if not gewaehlt and plan.abteilung:
+        gewaehlt = [plan.abteilung]
     einarb_zeilen: list[EinarbeitungZeile] = []
     if gewaehlt:
         rows = (
@@ -490,7 +611,7 @@ async def onboarding_paket_pdf(
     pdf = await erzeuge_onboarding_paket_pdf(
         name=plan.name,
         stelle=plan.position or "",
-        beginn=emp.hire_date,
+        beginn=hire_date,
         einarbeitung=einarb_zeilen,
         schulungen=schul_zeilen,
         logo=await lade_logo(db),
@@ -499,19 +620,24 @@ async def onboarding_paket_pdf(
         "Einarbeitungsplan", "Onboarding-Paket"
     )
 
-    # Paket ausgeliefert → Onboarding-Übergabe als erledigt vermerken; das
-    # entfernt die „neu"-Markierung dieser Person. Idempotent: nur beim ersten
-    # Download anlegen, der Zeitstempel bleibt dann der Übergabezeitpunkt.
-    schon_vermerkt = (
-        await db.execute(
-            select(OnboardingPaketDownload.id).where(
-                OnboardingPaketDownload.employee_id == employee_id
+    # Paket ausgeliefert → Onboarding-Übergabe als erledigt vermerken; das entfernt
+    # die „neu"-Markierung. Idempotent (nur beim ersten Download). Externe Einträge
+    # tragen den Zeitstempel an sich selbst, Personio-Leute in onboarding_paket_download.
+    if ext is not None:
+        if ext.paket_heruntergeladen_am is None:
+            ext.paket_heruntergeladen_am = datetime.now(timezone.utc)
+            await db.commit()
+    else:
+        schon_vermerkt = (
+            await db.execute(
+                select(OnboardingPaketDownload.id).where(
+                    OnboardingPaketDownload.employee_id == employee_id
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if schon_vermerkt is None:
-        db.add(OnboardingPaketDownload(employee_id=employee_id))
-        await db.commit()
+        ).scalar_one_or_none()
+        if schon_vermerkt is None:
+            db.add(OnboardingPaketDownload(employee_id=employee_id))
+            await db.commit()
 
     return Response(
         content=pdf,
