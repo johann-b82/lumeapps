@@ -25,6 +25,7 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
 from app.routers.hr_kpis import _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
+from app.services.verantwortlicher_sync import sync_person_nach_name
 from app.services.pdf_logo import lade_logo
 from app.services.schulungsprotokoll_pdf import (
     dateiname as protokoll_dateiname,
@@ -794,13 +795,18 @@ async def verantwortlicher_setzen(
     eingabe: VerantwortlicherSetzen,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> None:
-    """Verantwortlichen/Trainer einer Schulung setzen oder löschen."""
+    """Verantwortlichen/Trainer einer Schulung setzen oder löschen.
+
+    Wird je Schulungs-Name geteilt: derselbe Verantwortliche erscheint auf allen
+    gleichnamigen Schulungen (alle Bereiche) und der gleichnamigen Einarbeitung.
+    """
     k = (
         await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
     ).scalar_one_or_none()
     if k is None:
         raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
-    k.verantwortlicher = (eingabe.verantwortlicher or "").strip() or None
+    person = (eingabe.verantwortlicher or "").strip() or None
+    await sync_person_nach_name(db, k.name, person)
     await db.commit()
 
 

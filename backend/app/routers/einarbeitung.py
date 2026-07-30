@@ -20,6 +20,7 @@ from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
 from app.services.einarbeitung_pdf import dateiname, erzeuge_einarbeitung_pdf
 from app.services.einarbeitung_query import zeilen_fuer_abteilungen
+from app.services.verantwortlicher_sync import person_fuer_name, sync_person_nach_name
 
 router = APIRouter(
     prefix="/api/hr/einarbeitung",
@@ -91,12 +92,18 @@ async def katalog_anlegen(
             .limit(1)
         )
     ).scalar_one_or_none()
+    person = (eingabe.ansprechpartner or "").strip() or None
+    # Ohne Angabe: eine bereits zum Namen gesetzte Person übernehmen (überall gleich).
+    if person is None:
+        person = await person_fuer_name(db, inhalt)
     k = EinarbeitungKatalog(
         inhalt=inhalt,
-        ansprechpartner=(eingabe.ansprechpartner or "").strip() or None,
+        ansprechpartner=person,
         reihenfolge=(letzte or 0) + 1,
     )
     db.add(k)
+    if person is not None:
+        await sync_person_nach_name(db, inhalt, person)
     await db.commit()
     await db.refresh(k)
     return _katalog_read(k)
@@ -119,6 +126,8 @@ async def katalog_aendern(
         k.inhalt = neu
     if eingabe.ansprechpartner is not None:
         k.ansprechpartner = eingabe.ansprechpartner.strip() or None
+        # Person je Name teilen: gleichnamige Schulungen + Einarbeitungen mitziehen.
+        await sync_person_nach_name(db, k.inhalt, k.ansprechpartner)
     await db.commit()
     await db.refresh(k)
     return _katalog_read(k)
