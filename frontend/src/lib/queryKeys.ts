@@ -59,6 +59,7 @@ export const hrKpiKeys = {
   onboardingPlan: (id: number) => ["hr", "onboarding", "plan", id] as const,
   onboardingRollen: () => ["hr", "onboarding", "rollen"] as const,
   onboardingKuerzel: () => ["hr", "onboarding", "kuerzel"] as const,
+  onboardingAbteilungen: () => ["hr", "onboarding", "abteilungen"] as const,
   onboardingDokumente: () => ["hr", "onboarding", "dokumente"] as const,
   einarbeitungMatrix: () => ["hr", "einarbeitung", "matrix"] as const,
   einarbeitungAbteilungen: () => ["hr", "einarbeitung", "abteilungen"] as const,

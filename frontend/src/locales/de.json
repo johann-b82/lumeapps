@@ -963,6 +963,8 @@
   "onboarding.rollen.position": "Position aus Personio",
   "onboarding.rollen.kuerzel": "Kürzel",
   "onboarding.kuerzelWaehlen": "Kürzel wählen …",
+  "onboarding.abteilungWaehlen": "Abteilung wählen …",
+  "onboarding.abteilungAktualisiert": "Abteilung aktualisiert.",
   "onboarding.ohnePosition": "keine Position",
   "onboarding.rolleGespeichert": "Zuordnung gespeichert: {{kuerzel}}",
   "onboarding.rolleEntfernt": "Zuordnung entfernt.",

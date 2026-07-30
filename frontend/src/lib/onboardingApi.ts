@@ -96,6 +96,23 @@ export function entferneRolle(position: string): Promise<void> {
   );
 }
 
+/** Wählbare Abteilungen fürs Dropdown (Personio + Overrides + Matrix-Abteilungen). */
+export function fetchAbteilungen(): Promise<string[]> {
+  return apiClient<string[]>("/api/hr/onboarding/abteilungen");
+}
+
+/**
+ * Setzt den app-seitigen Abteilungs-Override eines Mitarbeiters.
+ * Leerer Wert entfernt den Override (Personio-Abteilung gilt wieder).
+ */
+export function setzeAbteilung(employeeId: number, abteilung: string): Promise<void> {
+  return apiClient<void>("/api/hr/onboarding/abteilung", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ employee_id: employeeId, abteilung }),
+  });
+}
+
 /** Lädt die Schulungsübersicht (Formblatt 71) der Person als PDF herunter. */
 export async function ladeSchulungsuebersicht(
   employeeId: number,

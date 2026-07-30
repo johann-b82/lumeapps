@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db_session
 from app.models import (
     EinarbeitungInhalt,
+    OnboardingAbteilung,
     OnboardingDokument,
     PersonioEmployee,
     SchulungPflicht,
@@ -149,7 +150,7 @@ async def neue_eintritte(
                 personalnummer=plan.personalnummer,
                 name=plan.name,
                 position=emp.position,
-                abteilung=emp.department,
+                abteilung=plan.abteilung,
                 abteilung_kuerzel=plan.abteilung_kuerzel,
                 hire_date=emp.hire_date,
                 tage_bis_eintritt=(emp.hire_date - heute).days if emp.hire_date else None,
@@ -159,6 +160,76 @@ async def neue_eintritte(
             )
         )
     return sorted(ergebnis, key=lambda e: (e.hire_date or date.max), reverse=True)
+
+
+class AbteilungSetzen(BaseModel):
+    employee_id: int
+    #: Abteilungsname; leer = Override entfernen (Personio-Wert gilt wieder).
+    abteilung: str
+
+
+@router.get("/abteilungen", response_model=list[str])
+async def verfuegbare_abteilungen(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[str]:
+    """Wählbare Abteilungen fürs Dropdown.
+
+    Vereinigt die Personio-Abteilungen, bereits gesetzte App-Overrides und die
+    Abteilungen mit Anforderungsregeln (Ebene "personio") — dedupliziert, sortiert.
+    """
+    aus_personio = (
+        await db.execute(
+            select(PersonioEmployee.department)
+            .where(PersonioEmployee.department.isnot(None))
+            .distinct()
+        )
+    ).scalars().all()
+    aus_override = (
+        await db.execute(select(OnboardingAbteilung.abteilung).distinct())
+    ).scalars().all()
+    aus_matrix = (
+        await db.execute(
+            select(SchulungPflicht.abteilung)
+            .where(SchulungPflicht.ebene == "personio")
+            .distinct()
+        )
+    ).scalars().all()
+    alle = {a.strip() for a in [*aus_personio, *aus_override, *aus_matrix] if a and a.strip()}
+    return sorted(alle)
+
+
+@router.put("/abteilung", status_code=204)
+async def abteilung_setzen(
+    eingabe: AbteilungSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """App-seitigen Abteilungs-Override setzen oder entfernen.
+
+    Leerer ``abteilung``-Wert entfernt den Override — dann gilt wieder die
+    Personio-Abteilung. Der Override ersetzt den Personio-Wert bei der
+    Plan-Berechnung und übersteht den nächsten Sync.
+    """
+    await _employee(db, eingabe.employee_id)
+    vorhanden = (
+        await db.execute(
+            select(OnboardingAbteilung).where(
+                OnboardingAbteilung.employee_id == eingabe.employee_id
+            )
+        )
+    ).scalar_one_or_none()
+
+    wert = eingabe.abteilung.strip()
+    if not wert:
+        if vorhanden is not None:
+            await db.delete(vorhanden)
+            await db.commit()
+        return
+
+    if vorhanden is None:
+        db.add(OnboardingAbteilung(employee_id=eingabe.employee_id, abteilung=wert))
+    else:
+        vorhanden.abteilung = wert
+    await db.commit()
 
 
 @router.get("/plan/{employee_id}", response_model=SchulungsplanRead)

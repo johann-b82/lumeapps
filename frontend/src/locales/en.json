@@ -967,6 +967,8 @@
   "onboarding.rollen.position": "Position from Personio",
   "onboarding.rollen.kuerzel": "Code",
   "onboarding.kuerzelWaehlen": "Select code …",
+  "onboarding.abteilungWaehlen": "Choose department …",
+  "onboarding.abteilungAktualisiert": "Department updated.",
   "onboarding.ohnePosition": "no position",
   "onboarding.rolleGespeichert": "Mapping saved: {{kuerzel}}",
   "onboarding.rolleEntfernt": "Mapping removed.",

@@ -80,6 +80,7 @@ from app.models.schulung import (  # noqa: F401
     SchulungKatalog,
     SchulungPflicht,
     SchulungRolle,
+    OnboardingAbteilung,
     OnboardingDokument,
     SchulungTeilnahme,
 )
@@ -129,7 +130,7 @@ __all__ = [
     "Audit", "AuditNormLink", "AuditCategoryLink", "AuditPhase", "AuditTrailEntry",
     # Schulungen
     "SchulungKatalog", "SchulungImport", "SchulungTeilnahme", "SchulungPflicht", "SchulungRolle",
-    "OnboardingDokument",
+    "OnboardingAbteilung", "OnboardingDokument",
     "KompetenzMatrix", "KompetenzQualifikation", "KompetenzPerson", "KompetenzBewertung",
     "KompetenzKategorie",
     "EinarbeitungInhalt",

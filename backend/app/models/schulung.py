@@ -165,6 +165,27 @@ class SchulungTeilnahme(Base):
     )
 
 
+class OnboardingAbteilung(Base):
+    """App-seitige Abteilungs-Zuordnung je Mitarbeiter (Override, v1.96).
+
+    Personio ist read-only; manche Mitarbeiter haben dort keine Abteilung. Diese
+    Tabelle hält eine in der App gesetzte Abteilung, die den Personio-Wert bei der
+    Plan-Berechnung ersetzt. Fehlt eine Zeile, gilt die Personio-Abteilung. Der
+    Override übersteht den nächsten Personio-Sync.
+    """
+
+    __tablename__ = "onboarding_abteilung"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("personio_employees.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    abteilung: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class OnboardingDokument(Base):
     """Automatisch erzeugte Schulungsübersicht (Formblatt 71) einer Person.
 

@@ -21,6 +21,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    OnboardingAbteilung,
     PersonioEmployee,
     SchulungKatalog,
     SchulungPflicht,
@@ -78,29 +79,42 @@ async def _kuerzel_fuer_position(db: AsyncSession, position: str | None) -> str 
     return treffer.abteilung_kuerzel if treffer else None
 
 
+async def _effektive_abteilung(db: AsyncSession, employee: PersonioEmployee) -> str | None:
+    """App-Override, sonst Personio-Abteilung. Basis des abteilungsbasierten Plans."""
+    override = (
+        await db.execute(
+            select(OnboardingAbteilung.abteilung).where(
+                OnboardingAbteilung.employee_id == employee.id
+            )
+        )
+    ).scalar_one_or_none()
+    return override or employee.department
+
+
 async def schulungsplan(
     db: AsyncSession, employee: PersonioEmployee
 ) -> SchulungsplanErgebnis:
     """Soll/Ist für eine Person ermitteln (schreibt nichts)."""
     persnr = _personalnummer(employee.raw_json)
     kuerzel = await _kuerzel_fuer_position(db, employee.position)
+    abteilung = await _effektive_abteilung(db, employee)
 
     ergebnis = SchulungsplanErgebnis(
         personalnummer=persnr,
         name=" ".join(x for x in (employee.first_name, employee.last_name) if x).strip()
         or f"#{employee.id}",
         position=employee.position,
-        abteilung=employee.department,
+        abteilung=abteilung,
         abteilung_kuerzel=kuerzel,
         kuerzel_fehlt=kuerzel is None and bool(normalisiere_position(employee.position)),
     )
 
-    # Pflichtschulungen ergeben sich aus der Personio-Abteilung (Ebene
-    # "personio"). Die feine Kürzel-Ebene fließt bewusst NICHT mehr in den Plan
-    # ein — die Anordnung erfolgt abteilungsbasiert.
+    # Pflichtschulungen ergeben sich aus der (effektiven) Abteilung — Personio-
+    # Wert oder App-Override (Ebene "personio"). Die feine Kürzel-Ebene fließt
+    # bewusst NICHT mehr in den Plan ein.
     bedingungen = []
-    if employee.department:
-        bedingungen.append(("personio", employee.department.strip()))
+    if abteilung:
+        bedingungen.append(("personio", abteilung.strip()))
     if not bedingungen:
         return ergebnis
 
