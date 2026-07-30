@@ -29,13 +29,17 @@ import {
   type OnboardingDokument,
 } from "@/lib/onboardingApi";
 import {
-  entferneInhalt,
-  fetchEinarbeitungAbteilungen,
+  aendereKatalog,
+  entferneKatalog,
   fetchAnsprechpartner,
-  fetchEinarbeitungMatrix,
+  fetchEinarbeitungAbteilungen,
+  fetchEinarbeitungKatalog,
+  fetchEinarbeitungPflicht,
   ladeEinarbeitungsplan,
-  legeInhaltAn,
-  type EinarbeitungInhalt,
+  legeKatalogAn,
+  setzeEinarbeitungPflicht,
+  type EinarbeitungKatalog,
+  type EinarbeitungPflicht,
 } from "@/lib/einarbeitungApi";
 import { fetchSchulungen } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
@@ -291,44 +295,87 @@ function AbteilungsDownload({
   );
 }
 
-/** Einarbeitungsmatrix: je Abteilung die Einarbeitungsinhalte + Ansprechpartner.
- *
- *  App-gepflegt. Aus diesen Zeilen setzt sich der Einarbeitungsbogen einer
- *  Person zusammen (über ihre Abteilung).
- */
-function EinarbeitungMatrixPanel() {
+const einarbFeldStil =
+  "h-8 rounded-md border bg-background px-2 text-xs " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Inline editierbarer Ansprechpartner einer Katalog-Einarbeitung. */
+function KatalogAnsprechpartner({
+  zeile,
+  vorschlaege,
+}: {
+  zeile: EinarbeitungKatalog;
+  vorschlaege: string[] | undefined;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [abteilung, setAbteilung] = useState("");
+  const [wert, setWert] = useState(zeile.ansprechpartner ?? "");
+
+  const speichern = useMutation({
+    mutationFn: (name: string | null) => aendereKatalog(zeile.id, { ansprechpartner: name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungKatalog() }),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(zeile.ansprechpartner ?? "");
+    },
+  });
+
+  const listId = `einarb-ap-${zeile.id}`;
+  return (
+    <>
+      <input
+        list={listId}
+        value={wert}
+        disabled={speichern.isPending}
+        onChange={(e) => setWert(e.target.value)}
+        onBlur={() => {
+          const neu = wert.trim() || null;
+          if (neu !== (zeile.ansprechpartner ?? null)) speichern.mutate(neu);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setWert(zeile.ansprechpartner ?? "");
+        }}
+        placeholder={t("onboarding.einarbeitung.ansprechpartnerPlaceholder")}
+        aria-label={t("onboarding.einarbeitung.ansprechpartner")}
+        className={`${einarbFeldStil} w-52`}
+      />
+      <datalist id={listId}>
+        {(vorschlaege ?? []).map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
+/** Liste aller Einarbeitungen (Katalog) mit Ansprechpartner — anlegen/ändern/löschen. */
+function EinarbeitungKatalogPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
   const [inhalt, setInhalt] = useState("");
   const [partner, setPartner] = useState("");
 
   const { data } = useQuery({
-    queryKey: hrKpiKeys.einarbeitungMatrix(),
-    queryFn: fetchEinarbeitungMatrix,
-  });
-  const { data: abteilungen } = useQuery({
-    queryKey: hrKpiKeys.einarbeitungAbteilungen(),
-    queryFn: fetchEinarbeitungAbteilungen,
+    queryKey: hrKpiKeys.einarbeitungKatalog(),
+    queryFn: fetchEinarbeitungKatalog,
   });
   const { data: partnerVorschlaege } = useQuery({
     queryKey: hrKpiKeys.einarbeitungAnsprechpartner(),
     queryFn: fetchAnsprechpartner,
   });
-  // Schulungskatalog als Inhalts-Vorschläge (die Basis der Anforderungsmatrix).
-  const { data: katalog } = useQuery({
+  const { data: schulKatalog } = useQuery({
     queryKey: hrKpiKeys.schulungen(),
     queryFn: fetchSchulungen,
   });
 
   const auffrischen = () => {
-    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungMatrix() });
-    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungAbteilungen() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungKatalog() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungPflicht() });
   };
 
   const anlegen = useMutation({
-    mutationFn: () =>
-      legeInhaltAn({ abteilung, inhalt, ansprechpartner: partner || null }),
+    mutationFn: () => legeKatalogAn({ inhalt, ansprechpartner: partner || null }),
     onSuccess: () => {
       toast.success(t("onboarding.einarbeitung.inhaltAngelegt"));
       setInhalt("");
@@ -339,7 +386,7 @@ function EinarbeitungMatrixPanel() {
   });
 
   const entfernen = useMutation({
-    mutationFn: entferneInhalt,
+    mutationFn: entferneKatalog,
     onSuccess: () => {
       toast.success(t("onboarding.einarbeitung.inhaltEntfernt"));
       auffrischen();
@@ -347,54 +394,39 @@ function EinarbeitungMatrixPanel() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Nach Abteilung gruppieren, Reihenfolge kommt schon sortiert vom Server.
-  const gruppen = new Map<string, EinarbeitungInhalt[]>();
-  for (const z of data ?? []) {
-    const liste = gruppen.get(z.abteilung) ?? [];
-    liste.push(z);
-    gruppen.set(z.abteilung, liste);
-  }
-
-  // Vorschläge fürs Inhaltsfeld: die Schulungen aus dem Katalog (woraus die
-  // Anforderungsmatrix besteht) plus die bereits erfassten Einarbeitungsinhalte.
-  // So ist die Liste von Anfang an nützlich und derselbe Inhalt lässt sich über
-  // Abteilungen hinweg wiederverwenden, ohne ihn abzutippen.
   const inhaltVorschlaege = [
-    ...new Set([
-      ...(katalog ?? []).map((s) => s.name.trim()),
-      ...(data ?? []).map((z) => z.inhalt.trim()),
-    ].filter(Boolean)),
+    ...new Set(
+      [
+        ...(schulKatalog ?? []).map((s) => s.name.trim()),
+        ...(data ?? []).map((z) => z.inhalt.trim()),
+      ].filter(Boolean),
+    ),
   ].sort();
-
-  const feldStil =
-    "h-8 rounded-md border bg-background px-2 text-xs " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
     <section className="mb-6">
       <Klappbar
-        titel={t("onboarding.einarbeitung.matrixTitle")}
+        titel={t("onboarding.einarbeitung.katalogTitle")}
         anzahl={data?.length ?? 0}
         icon={<ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
         offenStart={false}
       >
         <div className="space-y-4 px-4 py-3">
           <p className="text-xs text-muted-foreground">
-            {t("onboarding.einarbeitung.matrixHinweis")}
+            {t("onboarding.einarbeitung.katalogHinweis")}
           </p>
 
-          {/* Neue Zeile anlegen */}
           <div className="flex flex-wrap items-end gap-2">
             <input
-              list="einarb-abteilungen"
-              value={abteilung}
-              onChange={(e) => setAbteilung(e.target.value)}
-              placeholder={t("onboarding.einarbeitung.abteilung")}
-              className={`${feldStil} w-40`}
+              list="einarb-inhalte"
+              value={inhalt}
+              onChange={(e) => setInhalt(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.inhalt")}
+              className={`${einarbFeldStil} min-w-[16rem] flex-1`}
             />
-            <datalist id="einarb-abteilungen">
-              {(abteilungen ?? []).map((a) => (
-                <option key={a} value={a} />
+            <datalist id="einarb-inhalte">
+              {inhaltVorschlaege.map((i) => (
+                <option key={i} value={i} />
               ))}
             </datalist>
             <input
@@ -402,29 +434,17 @@ function EinarbeitungMatrixPanel() {
               value={partner}
               onChange={(e) => setPartner(e.target.value)}
               placeholder={t("onboarding.einarbeitung.ansprechpartner")}
-              className={`${feldStil} w-44`}
+              className={`${einarbFeldStil} w-44`}
             />
             <datalist id="einarb-ansprechpartner">
               {(partnerVorschlaege ?? []).map((n) => (
                 <option key={n} value={n} />
               ))}
             </datalist>
-            <input
-              list="einarb-inhalte"
-              value={inhalt}
-              onChange={(e) => setInhalt(e.target.value)}
-              placeholder={t("onboarding.einarbeitung.inhalt")}
-              className={`${feldStil} min-w-[16rem] flex-1`}
-            />
-            <datalist id="einarb-inhalte">
-              {inhaltVorschlaege.map((i) => (
-                <option key={i} value={i} />
-              ))}
-            </datalist>
             <button
               type="button"
               onClick={() => anlegen.mutate()}
-              disabled={!abteilung.trim() || !inhalt.trim() || anlegen.isPending}
+              disabled={!inhalt.trim() || anlegen.isPending}
               className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-xs
                          text-primary-foreground disabled:opacity-50
                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -436,50 +456,158 @@ function EinarbeitungMatrixPanel() {
             </button>
           </div>
 
-          {gruppen.size === 0 ? (
+          {!data || data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("onboarding.einarbeitung.katalogLeer")}
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/20">
+                  <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
+                  <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
+                  <Th rechts>{""}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((z) => (
+                  <tr key={z.id} className="border-b border-border/40 last:border-0">
+                    <td className="px-4 py-1.5">{z.inhalt}</td>
+                    <td className="px-4 py-1.5">
+                      <KatalogAnsprechpartner zeile={z} vorschlaege={partnerVorschlaege} />
+                    </td>
+                    <td className="px-4 py-1.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => entfernen.mutate(z.id)}
+                        disabled={entfernen.isPending}
+                        aria-label={t("onboarding.einarbeitung.zeileEntfernen")}
+                        title={t("onboarding.einarbeitung.zeileEntfernen")}
+                        className="rounded-md p-1 text-muted-foreground transition-colors
+                                   hover:bg-destructive/10 hover:text-destructive
+                                   disabled:opacity-50 focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
+/** Matrix: für welche Abteilung welche Einarbeitung nötig ist (Häkchen). */
+function EinarbeitungMatrixPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+
+  const { data: katalog } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungKatalog(),
+    queryFn: fetchEinarbeitungKatalog,
+  });
+  const { data: matrix } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungPflicht(),
+    queryFn: fetchEinarbeitungPflicht,
+  });
+
+  const setzen = useMutation({
+    mutationFn: setzeEinarbeitungPflicht,
+    onMutate: async (eingabe) => {
+      const key = hrKpiKeys.einarbeitungPflicht();
+      await qc.cancelQueries({ queryKey: key });
+      const vorher = qc.getQueryData<EinarbeitungPflicht>(key);
+      if (vorher) {
+        const marke = `${eingabe.einarbeitung_id}:${eingabe.abteilung}`;
+        qc.setQueryData<EinarbeitungPflicht>(key, {
+          ...vorher,
+          regeln: eingabe.pflicht
+            ? [...vorher.regeln, marke]
+            : vorher.regeln.filter((r) => r !== marke),
+        });
+      }
+      return { key, vorher };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.vorher) qc.setQueryData(ctx.key, ctx.vorher);
+      toast.error(e.message);
+    },
+  });
+
+  const gesetzt = new Set(matrix?.regeln ?? []);
+  const abteilungen = matrix?.abteilungen ?? [];
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("onboarding.einarbeitung.matrixTitle")}
+        icon={<ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            {t("onboarding.einarbeitung.matrixHinweis")}
+          </p>
+
+          {!katalog || katalog.length === 0 || abteilungen.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {t("onboarding.einarbeitung.matrixLeer")}
             </p>
           ) : (
-            [...gruppen.entries()].map(([abt, zeilen]) => (
-              <div key={abt}>
-                <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{abt}</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/20">
-                      <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
-                      <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
-                      <Th rechts>{""}</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {zeilen.map((z) => (
-                      <tr key={z.id} className="border-b border-border/40 last:border-0">
-                        <td className="px-4 py-1.5 text-muted-foreground">
-                          {z.ansprechpartner ?? "—"}
-                        </td>
-                        <td className="px-4 py-1.5">{z.inhalt}</td>
-                        <td className="px-4 py-1.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => entfernen.mutate(z.id)}
-                            disabled={entfernen.isPending}
-                            aria-label={t("onboarding.einarbeitung.zeileEntfernen")}
-                            title={t("onboarding.einarbeitung.zeileEntfernen")}
-                            className="rounded-md p-1 text-muted-foreground transition-colors
-                                       hover:bg-destructive/10 hover:text-destructive
-                                       disabled:opacity-50 focus-visible:outline-none
-                                       focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <X className="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                        </td>
-                      </tr>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="sticky left-0 z-10 min-w-[16rem] bg-muted/30 px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                      {t("onboarding.einarbeitung.inhalt")}
+                    </th>
+                    {abteilungen.map((a) => (
+                      <th
+                        key={a}
+                        title={a}
+                        className="px-2 py-2 text-xs font-medium whitespace-nowrap text-muted-foreground"
+                      >
+                        {a}
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            ))
+                  </tr>
+                </thead>
+                <tbody>
+                  {katalog.map((k) => (
+                    <tr key={k.id} className="border-b border-border/40 last:border-0">
+                      <td className="sticky left-0 z-10 max-w-[24rem] truncate bg-card px-4 py-1.5">
+                        {k.inhalt}
+                      </td>
+                      {abteilungen.map((a) => {
+                        const an = gesetzt.has(`${k.id}:${a}`);
+                        return (
+                          <td key={a} className="px-2 py-1.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={an}
+                              aria-label={`${k.inhalt} – ${a}`}
+                              onChange={() =>
+                                setzen.mutate({
+                                  einarbeitung_id: k.id,
+                                  abteilung: a,
+                                  pflicht: !an,
+                                })
+                              }
+                              className="h-4 w-4 cursor-pointer accent-primary"
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </Klappbar>
@@ -763,6 +891,7 @@ export function OnboardingPage() {
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">{t("onboarding.untertitel")}</p>
 
+      <EinarbeitungKatalogPanel />
       <EinarbeitungMatrixPanel />
       <DokumentePanel />
       <RollenPanel />

@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import (
-    EinarbeitungInhalt,
     OnboardingAbteilung,
     OnboardingDokument,
     OnboardingExtern,
@@ -38,8 +37,8 @@ from app.services.onboarding import (
     schulungsplan_extern,
 )
 from app.services.onboarding_dokumente import plan_signatur, uebersichten_erzeugen
-from app.services.einarbeitung_pdf import EinarbeitungZeile
 from app.services.einarbeitung_pdf import dateiname as einarb_dateiname
+from app.services.einarbeitung_query import zeilen_fuer_abteilungen
 from app.services.onboarding_paket_pdf import erzeuge_onboarding_paket_pdf
 from app.services.pdf_logo import lade_logo
 from app.services.schulungsuebersicht_pdf import (
@@ -579,29 +578,7 @@ async def onboarding_paket_pdf(
     gewaehlt = [a.strip() for a in (abteilungen or []) if a and a.strip()]
     if not gewaehlt and plan.abteilung:
         gewaehlt = [plan.abteilung]
-    einarb_zeilen: list[EinarbeitungZeile] = []
-    if gewaehlt:
-        rows = (
-            (
-                await db.execute(
-                    select(EinarbeitungInhalt)
-                    .where(EinarbeitungInhalt.abteilung.in_(gewaehlt))
-                    .order_by(
-                        EinarbeitungInhalt.abteilung, EinarbeitungInhalt.reihenfolge
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        einarb_zeilen = [
-            EinarbeitungZeile(
-                abteilung=x.abteilung,
-                inhalt=x.inhalt,
-                ansprechpartner=x.ansprechpartner or "",
-            )
-            for x in rows
-        ]
+    einarb_zeilen = await zeilen_fuer_abteilungen(db, gewaehlt)
 
     schul_zeilen = [
         UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)

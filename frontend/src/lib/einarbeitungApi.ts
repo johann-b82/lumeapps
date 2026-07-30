@@ -7,47 +7,69 @@
 import { apiClient } from "./apiClient";
 import { fetchBlob, openBlob } from "./download";
 
-export interface EinarbeitungInhalt {
+/** Eine Einarbeitung im Katalog (mit Ansprechpartner, abteilungsunabhängig). */
+export interface EinarbeitungKatalog {
   id: number;
-  abteilung: string;
-  ansprechpartner: string | null;
   inhalt: string;
+  ansprechpartner: string | null;
   reihenfolge: number;
 }
 
-export function fetchEinarbeitungMatrix(): Promise<EinarbeitungInhalt[]> {
-  return apiClient<EinarbeitungInhalt[]>("/api/hr/einarbeitung/matrix");
+/** Achse + gesetzte Häkchen der Einarbeitungs-Matrix. */
+export interface EinarbeitungPflicht {
+  abteilungen: string[];
+  /** "<einarbeitung_id>:<abteilung>" */
+  regeln: string[];
+}
+
+export function fetchEinarbeitungKatalog(): Promise<EinarbeitungKatalog[]> {
+  return apiClient<EinarbeitungKatalog[]>("/api/hr/einarbeitung/katalog");
 }
 
 export function fetchEinarbeitungAbteilungen(): Promise<string[]> {
   return apiClient<string[]>("/api/hr/einarbeitung/abteilungen");
 }
 
-export function legeInhaltAn(eingabe: {
-  abteilung: string;
+export function legeKatalogAn(eingabe: {
   inhalt: string;
   ansprechpartner?: string | null;
-}): Promise<EinarbeitungInhalt> {
-  return apiClient<EinarbeitungInhalt>("/api/hr/einarbeitung/inhalt", {
+}): Promise<EinarbeitungKatalog> {
+  return apiClient<EinarbeitungKatalog>("/api/hr/einarbeitung/katalog", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(eingabe),
   });
 }
 
-export function aendereInhalt(
+export function aendereKatalog(
   id: number,
-  eingabe: { abteilung?: string; inhalt?: string; ansprechpartner?: string | null },
-): Promise<EinarbeitungInhalt> {
-  return apiClient<EinarbeitungInhalt>(`/api/hr/einarbeitung/inhalt/${id}`, {
+  eingabe: { inhalt?: string; ansprechpartner?: string | null },
+): Promise<EinarbeitungKatalog> {
+  return apiClient<EinarbeitungKatalog>(`/api/hr/einarbeitung/katalog/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(eingabe),
   });
 }
 
-export function entferneInhalt(id: number): Promise<void> {
-  return apiClient<void>(`/api/hr/einarbeitung/inhalt/${id}`, { method: "DELETE" });
+export function entferneKatalog(id: number): Promise<void> {
+  return apiClient<void>(`/api/hr/einarbeitung/katalog/${id}`, { method: "DELETE" });
+}
+
+export function fetchEinarbeitungPflicht(): Promise<EinarbeitungPflicht> {
+  return apiClient<EinarbeitungPflicht>("/api/hr/einarbeitung/pflicht");
+}
+
+export function setzeEinarbeitungPflicht(eingabe: {
+  einarbeitung_id: number;
+  abteilung: string;
+  pflicht: boolean;
+}): Promise<void> {
+  return apiClient<void>("/api/hr/einarbeitung/pflicht", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
 }
 
 /** Lädt den Einarbeitungsbogen als PDF herunter (für die gewählten Abteilungen). */

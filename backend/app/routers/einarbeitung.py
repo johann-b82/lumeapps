@@ -1,4 +1,4 @@
-"""Einarbeitung — Matrix je Abteilung und personalisierter Einarbeitungsbogen.
+"""Einarbeitung — Katalog, Abteilungs-Matrix und personalisierter Bogen.
 
 Der Router ist komplett admin-gated (HR-intern), wie das übrige Onboarding.
 
@@ -15,14 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import EinarbeitungInhalt, PersonioEmployee
+from app.models import EinarbeitungKatalog, EinarbeitungPflicht, PersonioEmployee
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
-from app.services.einarbeitung_pdf import (
-    EinarbeitungZeile,
-    dateiname,
-    erzeuge_einarbeitung_pdf,
-)
+from app.services.einarbeitung_pdf import dateiname, erzeuge_einarbeitung_pdf
+from app.services.einarbeitung_query import zeilen_fuer_abteilungen
 
 router = APIRouter(
     prefix="/api/hr/einarbeitung",
@@ -31,59 +28,186 @@ router = APIRouter(
 )
 
 
-class InhaltRead(BaseModel):
+# --------------------------------------------------------------------------
+# Katalog: alle Einarbeitungen mit Ansprechpartner (abteilungsunabhängig)
+# --------------------------------------------------------------------------
+
+
+class KatalogRead(BaseModel):
     id: int
-    abteilung: str
-    ansprechpartner: str | None
     inhalt: str
+    ansprechpartner: str | None
     reihenfolge: int
 
 
-class InhaltAnlegen(BaseModel):
-    abteilung: str
+class KatalogAnlegen(BaseModel):
     inhalt: str
     ansprechpartner: str | None = None
 
 
-class InhaltAendern(BaseModel):
-    abteilung: str | None = None
+class KatalogAendern(BaseModel):
     inhalt: str | None = None
     ansprechpartner: str | None = None
 
 
-@router.get("/matrix", response_model=list[InhaltRead])
-async def matrix(
+def _katalog_read(k: EinarbeitungKatalog) -> KatalogRead:
+    return KatalogRead(
+        id=k.id, inhalt=k.inhalt, ansprechpartner=k.ansprechpartner, reihenfolge=k.reihenfolge
+    )
+
+
+@router.get("/katalog", response_model=list[KatalogRead])
+async def katalog(
     db: AsyncSession = Depends(get_async_db_session),
-) -> list[InhaltRead]:
-    """Alle Einarbeitungsinhalte, nach Abteilung und Reihenfolge sortiert."""
+) -> list[KatalogRead]:
+    """Alle Einarbeitungen, nach Reihenfolge sortiert."""
     rows = (
         (
             await db.execute(
-                select(EinarbeitungInhalt).order_by(
-                    EinarbeitungInhalt.abteilung, EinarbeitungInhalt.reihenfolge
+                select(EinarbeitungKatalog).order_by(
+                    EinarbeitungKatalog.reihenfolge, EinarbeitungKatalog.id
                 )
             )
         )
         .scalars()
         .all()
     )
-    return [
-        InhaltRead(
-            id=x.id,
-            abteilung=x.abteilung,
-            ansprechpartner=x.ansprechpartner,
-            inhalt=x.inhalt,
-            reihenfolge=x.reihenfolge,
-        )
-        for x in rows
-    ]
+    return [_katalog_read(k) for k in rows]
 
 
-@router.get("/abteilungen", response_model=list[str])
-async def abteilungen(
+@router.post("/katalog", response_model=KatalogRead, status_code=201)
+async def katalog_anlegen(
+    eingabe: KatalogAnlegen,
     db: AsyncSession = Depends(get_async_db_session),
-) -> list[str]:
-    """Wählbare Abteilungen: aktive Personio-Abteilungen plus bereits gepflegte."""
+) -> KatalogRead:
+    """Eine Einarbeitung dem Katalog hinzufügen."""
+    inhalt = eingabe.inhalt.strip()
+    if not inhalt:
+        raise HTTPException(status_code=400, detail="Inhalt ist Pflicht.")
+    letzte = (
+        await db.execute(
+            select(EinarbeitungKatalog.reihenfolge)
+            .order_by(EinarbeitungKatalog.reihenfolge.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    k = EinarbeitungKatalog(
+        inhalt=inhalt,
+        ansprechpartner=(eingabe.ansprechpartner or "").strip() or None,
+        reihenfolge=(letzte or 0) + 1,
+    )
+    db.add(k)
+    await db.commit()
+    await db.refresh(k)
+    return _katalog_read(k)
+
+
+@router.put("/katalog/{katalog_id}", response_model=KatalogRead)
+async def katalog_aendern(
+    katalog_id: int,
+    eingabe: KatalogAendern,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> KatalogRead:
+    """Inhalt und/oder Ansprechpartner einer Einarbeitung ändern (nur gesetzte Felder)."""
+    k = await db.get(EinarbeitungKatalog, katalog_id)
+    if k is None:
+        raise HTTPException(status_code=404, detail="Einarbeitung nicht gefunden.")
+    if eingabe.inhalt is not None:
+        neu = eingabe.inhalt.strip()
+        if not neu:
+            raise HTTPException(status_code=400, detail="Inhalt darf nicht leer sein.")
+        k.inhalt = neu
+    if eingabe.ansprechpartner is not None:
+        k.ansprechpartner = eingabe.ansprechpartner.strip() or None
+    await db.commit()
+    await db.refresh(k)
+    return _katalog_read(k)
+
+
+@router.delete("/katalog/{katalog_id}", status_code=204)
+async def katalog_entfernen(
+    katalog_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Einarbeitung samt ihrer Abteilungs-Zuordnungen entfernen."""
+    k = await db.get(EinarbeitungKatalog, katalog_id)
+    if k is None:
+        raise HTTPException(status_code=404, detail="Einarbeitung nicht gefunden.")
+    await db.delete(k)
+    await db.commit()
+
+
+# --------------------------------------------------------------------------
+# Matrix: welche Einarbeitung ist für welche Abteilung nötig
+# --------------------------------------------------------------------------
+
+
+class PflichtMatrixRead(BaseModel):
+    #: Achse der Abteilungen (Spalten).
+    abteilungen: list[str]
+    #: Gesetzte Häkchen als "<einarbeitung_id>:<abteilung>".
+    regeln: list[str]
+
+
+class PflichtSetzen(BaseModel):
+    einarbeitung_id: int
+    abteilung: str
+    pflicht: bool
+
+
+@router.get("/pflicht", response_model=PflichtMatrixRead)
+async def pflicht_matrix(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> PflichtMatrixRead:
+    """Abteilungs-Achse und gesetzte Zuordnungen der Einarbeitungs-Matrix."""
+    regeln = (
+        await db.execute(
+            select(EinarbeitungPflicht.einarbeitung_id, EinarbeitungPflicht.abteilung)
+        )
+    ).all()
+    return PflichtMatrixRead(
+        abteilungen=await _abteilungen(db),
+        regeln=[f"{eid}:{abt}" for eid, abt in regeln],
+    )
+
+
+@router.put("/pflicht", status_code=204)
+async def pflicht_setzen(
+    eingabe: PflichtSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Einarbeitung für eine Abteilung als nötig markieren oder entfernen."""
+    abteilung = eingabe.abteilung.strip()
+    if not abteilung:
+        raise HTTPException(status_code=400, detail="Abteilung darf nicht leer sein.")
+    if await db.get(EinarbeitungKatalog, eingabe.einarbeitung_id) is None:
+        raise HTTPException(status_code=404, detail="Einarbeitung nicht gefunden.")
+
+    vorhanden = (
+        await db.execute(
+            select(EinarbeitungPflicht).where(
+                EinarbeitungPflicht.einarbeitung_id == eingabe.einarbeitung_id,
+                EinarbeitungPflicht.abteilung == abteilung,
+            )
+        )
+    ).scalar_one_or_none()
+    if eingabe.pflicht and vorhanden is None:
+        db.add(
+            EinarbeitungPflicht(
+                einarbeitung_id=eingabe.einarbeitung_id, abteilung=abteilung
+            )
+        )
+    elif not eingabe.pflicht and vorhanden is not None:
+        await db.delete(vorhanden)
+    await db.commit()
+
+
+# --------------------------------------------------------------------------
+# Hilfslisten + Bogen
+# --------------------------------------------------------------------------
+
+
+async def _abteilungen(db: AsyncSession) -> list[str]:
     aus_personio = (
         await db.execute(
             select(PersonioEmployee.department)
@@ -95,20 +219,27 @@ async def abteilungen(
         )
     ).scalars().all()
     aus_matrix = (
-        await db.execute(select(EinarbeitungInhalt.abteilung).distinct())
+        await db.execute(select(EinarbeitungPflicht.abteilung).distinct())
     ).scalars().all()
     return sorted({a.strip() for a in [*aus_personio, *aus_matrix] if a and a.strip()})
+
+
+@router.get("/abteilungen", response_model=list[str])
+async def abteilungen(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[str]:
+    """Wählbare Abteilungen: aktive Personio-Abteilungen plus bereits gepflegte."""
+    return await _abteilungen(db)
 
 
 @router.get("/ansprechpartner", response_model=list[str])
 async def ansprechpartner_vorschlaege(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[str]:
-    """Aktive Personio-Mitarbeiter als Auswahl für den Ansprechpartner.
+    """Aktive Personio-Mitarbeiter als Vorschlag für den Ansprechpartner.
 
-    Der Ansprechpartner bleibt ein Name (Freitext erlaubt) — das Dropdown ist
-    nur eine durchsuchbare Vorschlagsliste, damit Schreibweisen einheitlich
-    bleiben und externe Personen trotzdem eintragbar sind.
+    Der Ansprechpartner bleibt Freitext (auch Externe) — das Dropdown ist nur eine
+    durchsuchbare Vorschlagsliste für einheitliche Schreibweisen.
     """
     aktive = (
         (
@@ -121,102 +252,8 @@ async def ansprechpartner_vorschlaege(
         .scalars()
         .all()
     )
-    namen = [
-        f"{e.first_name or ''} {e.last_name or ''}".strip() for e in aktive
-    ]
+    namen = [f"{e.first_name or ''} {e.last_name or ''}".strip() for e in aktive]
     return sorted({n for n in namen if n})
-
-
-@router.post("/inhalt", response_model=InhaltRead, status_code=201)
-async def inhalt_anlegen(
-    eingabe: InhaltAnlegen,
-    db: AsyncSession = Depends(get_async_db_session),
-) -> InhaltRead:
-    """Eine Inhalts-Zeile für eine Abteilung ergänzen."""
-    abteilung = eingabe.abteilung.strip()
-    inhalt = eingabe.inhalt.strip()
-    if not abteilung or not inhalt:
-        raise HTTPException(status_code=400, detail="Abteilung und Inhalt sind Pflicht.")
-
-    letzte = (
-        await db.execute(
-            select(EinarbeitungInhalt.reihenfolge)
-            .where(EinarbeitungInhalt.abteilung == abteilung)
-            .order_by(EinarbeitungInhalt.reihenfolge.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    zeile = EinarbeitungInhalt(
-        abteilung=abteilung,
-        inhalt=inhalt,
-        ansprechpartner=(eingabe.ansprechpartner or "").strip() or None,
-        reihenfolge=(letzte or 0) + 1,
-    )
-    db.add(zeile)
-    await db.commit()
-    await db.refresh(zeile)
-    return InhaltRead(
-        id=zeile.id,
-        abteilung=zeile.abteilung,
-        ansprechpartner=zeile.ansprechpartner,
-        inhalt=zeile.inhalt,
-        reihenfolge=zeile.reihenfolge,
-    )
-
-
-@router.put("/inhalt/{inhalt_id}", response_model=InhaltRead)
-async def inhalt_aendern(
-    inhalt_id: int,
-    eingabe: InhaltAendern,
-    db: AsyncSession = Depends(get_async_db_session),
-) -> InhaltRead:
-    """Eine Inhalts-Zeile ändern (nur gesetzte Felder)."""
-    zeile = (
-        await db.execute(
-            select(EinarbeitungInhalt).where(EinarbeitungInhalt.id == inhalt_id)
-        )
-    ).scalar_one_or_none()
-    if zeile is None:
-        raise HTTPException(status_code=404, detail="Zeile nicht gefunden.")
-
-    if eingabe.abteilung is not None:
-        neu = eingabe.abteilung.strip()
-        if not neu:
-            raise HTTPException(status_code=400, detail="Abteilung darf nicht leer sein.")
-        zeile.abteilung = neu
-    if eingabe.inhalt is not None:
-        neu = eingabe.inhalt.strip()
-        if not neu:
-            raise HTTPException(status_code=400, detail="Inhalt darf nicht leer sein.")
-        zeile.inhalt = neu
-    if eingabe.ansprechpartner is not None:
-        zeile.ansprechpartner = eingabe.ansprechpartner.strip() or None
-
-    await db.commit()
-    await db.refresh(zeile)
-    return InhaltRead(
-        id=zeile.id,
-        abteilung=zeile.abteilung,
-        ansprechpartner=zeile.ansprechpartner,
-        inhalt=zeile.inhalt,
-        reihenfolge=zeile.reihenfolge,
-    )
-
-
-@router.delete("/inhalt/{inhalt_id}", status_code=204)
-async def inhalt_entfernen(
-    inhalt_id: int,
-    db: AsyncSession = Depends(get_async_db_session),
-) -> None:
-    zeile = (
-        await db.execute(
-            select(EinarbeitungInhalt).where(EinarbeitungInhalt.id == inhalt_id)
-        )
-    ).scalar_one_or_none()
-    if zeile is None:
-        raise HTTPException(status_code=404, detail="Zeile nicht gefunden.")
-    await db.delete(zeile)
-    await db.commit()
 
 
 @router.get("/plan/{employee_id}/pdf")
@@ -228,8 +265,8 @@ async def plan_pdf(
     """Einarbeitungsbogen einer Person als PDF.
 
     Ohne ``abteilungen``-Parameter werden die Inhalte der Personio-Abteilung der
-    Person genommen. Über den Parameter lassen sich weitere Abteilungen ergänzen
-    — für Rollen, die mehrere Bereiche abdecken (z. B. QS und Produktion).
+    Person genommen. Über den Parameter lassen sich weitere Abteilungen ergänzen —
+    für Rollen, die mehrere Bereiche abdecken (z. B. QS und Produktion).
     """
     emp = (
         await db.execute(
@@ -243,29 +280,7 @@ async def plan_pdf(
     if not gewaehlt and emp.department:
         gewaehlt = [emp.department]
 
-    zeilen: list[EinarbeitungZeile] = []
-    if gewaehlt:
-        rows = (
-            (
-                await db.execute(
-                    select(EinarbeitungInhalt)
-                    .where(EinarbeitungInhalt.abteilung.in_(gewaehlt))
-                    .order_by(
-                        EinarbeitungInhalt.abteilung, EinarbeitungInhalt.reihenfolge
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        zeilen = [
-            EinarbeitungZeile(
-                abteilung=x.abteilung,
-                inhalt=x.inhalt,
-                ansprechpartner=x.ansprechpartner or "",
-            )
-            for x in rows
-        ]
+    zeilen = await zeilen_fuer_abteilungen(db, gewaehlt)
 
     name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
     pdf = await erzeuge_einarbeitung_pdf(

@@ -1,30 +1,52 @@
-"""Einarbeitungsmatrix (v1.92).
+"""Einarbeitung — Katalog + Abteilungs-Matrix (v1.99, zuvor v1.92).
 
-Stammdaten für den Einarbeitungsbogen: je Abteilung eine Liste von
-Einarbeitungsinhalten mit Ansprechpartner. App-gepflegt — kein Excel-Import.
+Der Einarbeitungsinhalt (mit Ansprechpartner) ist jetzt abteilungsunabhängiger
+Katalog; eine Matrix legt fest, welche Inhalte für welche Abteilung nötig sind.
+App-gepflegt — kein Excel-Import.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
-class EinarbeitungInhalt(Base):
-    """Eine Zeile der Einarbeitungsmatrix — ein Inhalt für eine Abteilung."""
+class EinarbeitungKatalog(Base):
+    """Ein Einarbeitungsinhalt mit Ansprechpartner — abteilungsunabhängig."""
 
-    __tablename__ = "einarbeitung_inhalt"
+    __tablename__ = "einarbeitung_katalog"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    #: Personio-Abteilungsname; nach ihm wird der Bogen einer Person zusammengestellt.
-    abteilung: Mapped[str] = mapped_column(String(120), nullable=False)
-    #: Wer die Einarbeitung durchführt — Freitext (Name), leer erlaubt.
-    ansprechpartner: Mapped[str | None] = mapped_column(Text, nullable=True)
     inhalt: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Wer die Einarbeitung durchführt — Freitext (Name), auch Externe.
+    ansprechpartner: Mapped[str | None] = mapped_column(Text, nullable=True)
     reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     erstellt_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class EinarbeitungPflicht(Base):
+    """Matrix: dieser Einarbeitungsinhalt ist für diese Abteilung nötig."""
+
+    __tablename__ = "einarbeitung_pflicht"
+    __table_args__ = (
+        UniqueConstraint("einarbeitung_id", "abteilung", name="uq_einarbeitung_pflicht"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    einarbeitung_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("einarbeitung_katalog.id", ondelete="CASCADE"), nullable=False
+    )
+    abteilung: Mapped[str] = mapped_column(String(120), nullable=False)
