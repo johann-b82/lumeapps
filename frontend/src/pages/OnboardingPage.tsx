@@ -718,7 +718,7 @@ export function OnboardingPage() {
       <section>
         <h2 className="mb-1 text-sm font-medium">{t("onboarding.eintritte.title")}</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          {t("onboarding.rollen.hinweis")}
+          {t("onboarding.eintritte.hinweis")}
         </p>
 
         {isLoading && (
@@ -752,9 +752,17 @@ export function OnboardingPage() {
                     <tr
                       key={e.employee_id}
                       onClick={() => setOffenFuer(offen ? null : e.employee_id)}
-                      className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40"
+                      className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40
+                        ${e.ist_neu ? "bg-emerald-500/5" : ""}`}
                     >
-                      <td className="px-4 py-2">{e.name}</td>
+                      <td className="px-4 py-2">
+                        {e.name}
+                        {e.ist_neu && (
+                          <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                            {t("onboarding.eintritte.neu")}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-muted-foreground">{e.position ?? "—"}</td>
                       <td className="px-4 py-2">
                         <AbteilungAuswahl eintritt={e} />

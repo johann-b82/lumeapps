@@ -18,6 +18,8 @@ export interface Eintritt {
   hire_date: string | null;
   /** Negativ = liegt n Tage zurück, positiv = beginnt in n Tagen. */
   tage_bis_eintritt: number | null;
+  /** Neuer/bevorstehender Eintritt — in der Tabelle markiert. */
+  ist_neu: boolean;
   soll_gesamt: number;
   fehlend: number;
   /** Position hat keine Zuordnung → feine Matrix-Ebene greift nicht. */

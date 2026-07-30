@@ -89,6 +89,9 @@ class EintrittRead(BaseModel):
     hire_date: date | None
     #: Negativ = liegt n Tage zurück, positiv = beginnt in n Tagen.
     tage_bis_eintritt: int | None
+    #: Neuer/bevorstehender Eintritt (Eintritt höchstens NEU_TAGE zurück oder in
+    #: der Zukunft). Steuert die Markierung in der Tabelle.
+    ist_neu: bool
     soll_gesamt: int
     fehlend: int
     kuerzel_fehlt: bool
@@ -120,20 +123,16 @@ async def _employee(db: AsyncSession, employee_id: int) -> PersonioEmployee:
 async def neue_eintritte(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[EintrittRead]:
-    """Neue und bevorstehende Eintritte samt Umfang ihres Schulungsplans.
+    """Alle aktiven Mitarbeiter samt Umfang ihres Schulungsplans.
 
-    "Neu" heißt: Eintrittsdatum liegt höchstens 90 Tage zurück oder in der
-    Zukunft. Ohne Eintrittsdatum taucht niemand auf.
+    Neue/bevorstehende Eintritte (Eintrittsdatum höchstens 90 Tage zurück oder in
+    der Zukunft) werden über ``ist_neu`` markiert und stehen oben.
     """
     grenze = date.today() - timedelta(days=NEU_TAGE)
     aktive = (
         (
             await db.execute(
-                select(PersonioEmployee).where(
-                    PersonioEmployee.status == "active",
-                    PersonioEmployee.hire_date.isnot(None),
-                    PersonioEmployee.hire_date >= grenze,
-                )
+                select(PersonioEmployee).where(PersonioEmployee.status == "active")
             )
         )
         .scalars()
@@ -144,6 +143,7 @@ async def neue_eintritte(
     ergebnis: list[EintrittRead] = []
     for emp in aktive:
         plan = await schulungsplan(db, emp)
+        ist_neu = emp.hire_date is not None and emp.hire_date >= grenze
         ergebnis.append(
             EintrittRead(
                 employee_id=emp.id,
@@ -154,12 +154,20 @@ async def neue_eintritte(
                 abteilung_kuerzel=plan.abteilung_kuerzel,
                 hire_date=emp.hire_date,
                 tage_bis_eintritt=(emp.hire_date - heute).days if emp.hire_date else None,
+                ist_neu=ist_neu,
                 soll_gesamt=len(plan.soll),
                 fehlend=len(plan.fehlend),
                 kuerzel_fehlt=plan.kuerzel_fehlt,
             )
         )
-    return sorted(ergebnis, key=lambda e: (e.hire_date or date.max), reverse=True)
+
+    # Neue/bevorstehende zuerst (nach Eintritt absteigend), dann die übrigen nach Name.
+    def sortier(e: EintrittRead):
+        if e.ist_neu and e.hire_date:
+            return (0, -e.hire_date.toordinal(), "")
+        return (1, 0, e.name.lower())
+
+    return sorted(ergebnis, key=sortier)
 
 
 class AbteilungSetzen(BaseModel):
