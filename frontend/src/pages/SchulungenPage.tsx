@@ -23,6 +23,7 @@ import {
   fetchZuweisbare,
   ladeSchulungsprotokoll,
   setzeFrist,
+  setzeTurnus,
   setzeVerantwortlicher,
   schulungImportCommit,
   schulungImportPreview,
@@ -167,9 +168,10 @@ function VerantwortlicherFeld({ schulung }: { schulung: Schulung }) {
           if (e.key === "Enter") e.currentTarget.blur();
           if (e.key === "Escape") setWert(schulung.verantwortlicher ?? "");
         }}
-        placeholder="—"
+        placeholder={t("schulungen.katalog.verantwortlicherPlaceholder")}
+        title={t("schulungen.katalog.verantwortlicherHinweis")}
         aria-label={t("schulungen.katalog.verantwortlicher")}
-        className="h-7 w-44 rounded-md border bg-background px-2 text-xs disabled:opacity-50
+        className="h-7 w-52 rounded-md border bg-background px-2 text-xs disabled:opacity-50
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <datalist id={listId}>
@@ -178,6 +180,45 @@ function VerantwortlicherFeld({ schulung }: { schulung: Schulung }) {
         ))}
       </datalist>
     </>
+  );
+}
+
+const TURNUS_PRESETS = [6, 12, 24, 36, 60] as const;
+
+/** Turnus (Wiederholung) einer Schulung setzen — treibt die Fälligkeit. */
+function TurnusFeld({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const speichern = useMutation({
+    mutationFn: (monate: number | null) => setzeTurnus(schulung.id, monate),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const monate = schulung.turnus_monate;
+  const istPreset = monate != null && (TURNUS_PRESETS as readonly number[]).includes(monate);
+
+  return (
+    <select
+      value={monate == null ? "" : String(monate)}
+      disabled={speichern.isPending}
+      onChange={(e) => speichern.mutate(e.target.value === "" ? null : Number(e.target.value))}
+      aria-label={t("schulungen.katalog.turnus")}
+      className="h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50
+                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <option value="">
+        {monate == null ? (schulung.turnus ?? t("schulungen.turnus.beiBedarf")) : t("schulungen.turnus.beiBedarf")}
+      </option>
+      <option value="6">{t("schulungen.turnus.m6")}</option>
+      <option value="12">{t("schulungen.turnus.m12")}</option>
+      <option value="24">{t("schulungen.turnus.m24")}</option>
+      <option value="36">{t("schulungen.turnus.m36")}</option>
+      <option value="60">{t("schulungen.turnus.m60")}</option>
+      {monate != null && !istPreset && (
+        <option value={String(monate)}>{schulung.turnus ?? `${monate} Mon.`}</option>
+      )}
+    </select>
   );
 }
 
@@ -205,13 +246,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
             >
               <td className="px-4 py-2">{s.name}</td>
               <td className="px-4 py-2 whitespace-nowrap">
-                {s.turnus ? (
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {s.turnus}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
+                <TurnusFeld schulung={s} />
               </td>
               <td className="px-4 py-2">
                 <VerantwortlicherFeld schulung={s} />

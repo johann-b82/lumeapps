@@ -804,6 +804,52 @@ async def verantwortlicher_setzen(
     await db.commit()
 
 
+class TurnusSetzen(BaseModel):
+    #: Wiederholungs-Turnus in Monaten; None = bei Bedarf / kein fester Turnus.
+    turnus_monate: int | None = None
+
+
+def _turnus_label(monate: int | None) -> str | None:
+    """Anzeigetext zu einem Monats-Turnus (treibt zusätzlich die Suche/Anzeige)."""
+    if monate is None:
+        return "bei Bedarf"
+    fest = {
+        3: "vierteljährlich",
+        6: "halbjährlich",
+        12: "jährlich",
+        24: "alle 2 Jahre",
+        36: "alle 3 Jahre",
+        60: "alle 5 Jahre",
+    }
+    if monate in fest:
+        return fest[monate]
+    if monate % 12 == 0:
+        return f"alle {monate // 12} Jahre"
+    return f"alle {monate} Monate"
+
+
+@router.put("/{schulung_id}/turnus", status_code=204)
+async def turnus_setzen(
+    schulung_id: int,
+    eingabe: TurnusSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Wiederholungs-Turnus einer Schulung setzen (Monate) — treibt die Fälligkeit.
+
+    Der Anzeigetext ``turnus`` wird passend abgeleitet; ``None`` = bei Bedarf.
+    """
+    if eingabe.turnus_monate is not None and not 1 <= eingabe.turnus_monate <= 600:
+        raise HTTPException(status_code=400, detail="Turnus muss 1-600 Monate sein.")
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    k.turnus_monate = eingabe.turnus_monate
+    k.turnus = _turnus_label(eingabe.turnus_monate)
+    await db.commit()
+
+
 @router.get("/{schulung_id}/protokoll/pdf")
 async def schulungsprotokoll_pdf(
     schulung_id: int,

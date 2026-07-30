@@ -41,6 +41,15 @@ export interface Schulung {
   teilnahmen: number;
 }
 
+/** Setzt den Wiederholungs-Turnus (Monate) einer Schulung; null = bei Bedarf. */
+export function setzeTurnus(schulungId: number, turnusMonate: number | null): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}/turnus`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turnus_monate: turnusMonate }),
+  });
+}
+
 /** Setzt die Frist (Tage nach Eintritt/Zuweisung) einer Schulung; null löscht sie. */
 export function setzeFrist(schulungId: number, fristTage: number | null): Promise<void> {
   return apiClient<void>(`/api/hr/schulungen/${schulungId}/frist`, {
