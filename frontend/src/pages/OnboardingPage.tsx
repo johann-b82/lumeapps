@@ -15,7 +15,6 @@ import {
 import {
   erzeugeDokumente,
   erzeugePlan,
-  fetchAbteilungen,
   fetchDokumente,
   fetchEintritte,
   fetchPlan,
@@ -23,7 +22,6 @@ import {
   ladeDokument,
   ladeOnboardingPaket,
   ladeSchulungsuebersicht,
-  setzeAbteilung,
   type Eintritt,
   type OnboardingDokument,
 } from "@/lib/onboardingApi";
@@ -650,51 +648,6 @@ function RollenPanel() {
   );
 }
 
-/** Dropdown in der Zeile: Abteilung dieses Mitarbeiters wählen/ändern.
- *
- *  Personio ist read-only — die Auswahl wird als app-seitiger Override
- *  gespeichert und ersetzt den Personio-Wert für die Plan-Berechnung. Leere
- *  Auswahl entfernt den Override (Personio-Abteilung gilt wieder). */
-function AbteilungAuswahl({ eintritt }: { eintritt: Eintritt }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { data: abteilungen } = useQuery({
-    queryKey: hrKpiKeys.onboardingAbteilungen(),
-    queryFn: fetchAbteilungen,
-  });
-
-  const speichern = useMutation({
-    mutationFn: (wert: string) => setzeAbteilung(eintritt.employee_id, wert),
-    onSuccess: () => {
-      toast.success(t("onboarding.abteilungAktualisiert"));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingAbteilungen() });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <select
-      value={eintritt.abteilung ?? ""}
-      disabled={speichern.isPending}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => speichern.mutate(e.target.value)}
-      aria-label={t("onboarding.eintritte.abteilung")}
-      className={`h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                  ${eintritt.abteilung ? "" : "border-amber-500/60 text-muted-foreground"}`}
-    >
-      <option value="">{t("onboarding.abteilungWaehlen")}</option>
-      {(abteilungen ?? []).map((a) => (
-        <option key={a} value={a}>
-          {a}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 export function OnboardingPage() {
   const { t } = useTranslation();
   const [offenFuer, setOffenFuer] = useState<number | null>(null);
@@ -764,9 +717,7 @@ export function OnboardingPage() {
                         )}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{e.position ?? "—"}</td>
-                      <td className="px-4 py-2">
-                        <AbteilungAuswahl eintritt={e} />
-                      </td>
+                      <td className="px-4 py-2 text-muted-foreground">{e.abteilung ?? "—"}</td>
                       <td className="px-4 py-2 whitespace-nowrap tabular-nums">
                         {datum(e.hire_date)}
                       </td>
