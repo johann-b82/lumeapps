@@ -17,7 +17,7 @@ import {
 } from "@/lib/apiClient";
 import { toApiError } from "@/lib/toApiError";
 
-export type Role = "admin" | "viewer";
+export type Role = "admin" | "viewer" | "qs";
 
 export interface AuthUser {
   id: string;
@@ -46,6 +46,10 @@ function mapRoleName(name: string | null | undefined): Role | null {
       return "admin";
     case "Viewer":
       return "viewer";
+    // Interim module-scoped role (FAIR + ATR only). The Directus role must be
+    // named exactly "QS" or login is rejected (D-09).
+    case "QS":
+      return "qs";
     default:
       return null;
   }

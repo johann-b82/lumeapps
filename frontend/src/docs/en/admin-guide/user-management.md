@@ -2,14 +2,28 @@
 
 ## Roles
 
-The KPI Dashboard has two roles:
+The KPI Dashboard has three roles:
 
 | Role          | Access                                                         |
 |---------------|----------------------------------------------------------------|
 | Administrator | Full access -- upload data, configure settings, view admin guide |
 | Viewer        | Read-only dashboards and user guide only                       |
+| QS            | Module access to **FAIR** and **ATR** only -- no dashboards, no settings |
 
 The Viewer role has a fixed UUID: `a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb`, set in the `bootstrap-roles.sh` script during initial deployment.
+
+## QS Role (FAIR + ATR only)
+
+The QS role is an interim, hard-wired role for quality assurance staff: it grants access **exclusively** to the FAIR and ATR modules. Dashboards (Sales, HR, Quality, Finance, Production, Procurement) and all admin areas stay blocked.
+
+To set up the QS role:
+
+1. In the Directus admin panel under **Settings -> Access Control**, create a new role named exactly **`QS`** (**App Access = yes**, **Admin Access = no**). A different name is rejected by the app at login.
+2. Give the QS role the same **read permissions as Viewer** on `directus_users` (own profile) and `directus_roles` (field `name`). Without them, login fails.
+3. Copy the new role's UUID and set it as `DIRECTUS_QS_ROLE_UUID` in your `.env` file. Without this variable, the QS role is disabled.
+4. Under **Users**, create a user and assign the **QS** role.
+
+> **Note:** This role is a stopgap until the planned AD-based rights system lands.
 
 ## Creating a User
 
@@ -17,7 +31,7 @@ The Viewer role has a fixed UUID: `a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb`, set in
 2. Log in with the credentials from your `.env` file (`DIRECTUS_ADMIN_EMAIL` / `DIRECTUS_ADMIN_PASSWORD`).
 3. Navigate to **Users** in the left sidebar.
 4. Click **+ New User**.
-5. Set the user's **email**, **password**, and **role** (Administrator or Viewer).
+5. Set the user's **email**, **password**, and **role** (Administrator, Viewer, or QS).
 6. Click **Save**.
 
 The new user can now log in to the KPI Dashboard with the assigned role.

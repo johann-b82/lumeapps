@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     DIRECTUS_SECRET: str = Field(..., description="Directus JWT signing secret (HS256)")
     DIRECTUS_ADMINISTRATOR_ROLE_UUID: UUID
     DIRECTUS_VIEWER_ROLE_UUID: UUID
+    # QS role UUID — optional so environments without a provisioned QS role
+    # still boot. Only mapped to Role.QS when set (see directus_auth._role_map).
+    DIRECTUS_QS_ROLE_UUID: UUID | None = None
 
     # Phase 44 D-11: Directus is the binary store for raw PPTX uploads.
     # The backend streams multipart bodies into Directus /files using its

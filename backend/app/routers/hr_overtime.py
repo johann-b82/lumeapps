@@ -18,13 +18,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.models import PersonioAttendance, PersonioEmployee
 
 router = APIRouter(
     prefix="/api/data",
     tags=["data"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

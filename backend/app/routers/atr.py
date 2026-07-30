@@ -30,13 +30,13 @@ from app.schemas import (
     AtrTemplateRead,
     AtrTemplateUpdate,
 )
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import get_current_user, require_atr_fair
 from app.services.atr_reference_import import ParsedWorkbook, norm_partno, parse_workbook
 
 router = APIRouter(
     prefix="/api/atr",
     tags=["atr"],
-    dependencies=[Depends(get_current_user), Depends(require_admin)],
+    dependencies=[Depends(get_current_user), Depends(require_atr_fair)],
 )
 
 

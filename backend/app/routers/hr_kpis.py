@@ -19,7 +19,7 @@ from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.security.fernet import decrypt_credential
 from app.models import AppSettings, PersonioEmployee
 from app.schemas import HrKpiHistoryPoint, HrKpiResponse
@@ -39,7 +39,7 @@ from app.services.hr_kpi_aggregation import (
 router = APIRouter(
     prefix="/api/hr",
     tags=["hr-kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

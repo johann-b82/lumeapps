@@ -23,7 +23,7 @@ from app.schemas import (
     AtrDeliveryItemRead, AtrDeliveryItemUpdate, AtrDeliveryRead,
     AtrDeliverySummary, AtrDeliveryUpdate, AtrGenerateManifest,
 )
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import get_current_user, require_atr_fair
 from app.services.atr_lieferschein import parse_lieferschein
 from app.services.atr_match import MatchedDelivery, match_positions
 
@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/atr/deliveries", tags=["atr"],
-    dependencies=[Depends(get_current_user), Depends(require_admin)],
+    dependencies=[Depends(get_current_user), Depends(require_atr_fair)],
 )
 
 

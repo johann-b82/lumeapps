@@ -27,7 +27,7 @@ from app.schemas import (
     PersonnelCostRatioRow,
     PersonnelCostRatioValue,
 )
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.services.hr_kpi_aggregation import _month_bounds
 from app.services.material_cost_aggregation import (
     compute_material_cost_ratio,
@@ -44,7 +44,7 @@ from app.services.personnel_cost_aggregation import (
 router = APIRouter(
     prefix="/api/finance",
     tags=["finance-kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

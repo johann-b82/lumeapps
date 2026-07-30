@@ -47,7 +47,7 @@ from app.schemas.fair import (
     ProjectOut,
     ProjectPatch,
 )
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import get_current_user, require_atr_fair
 from app.services.fair_files import (
     fetch_directus_asset,
     upload_drawing_to_directus,
@@ -55,7 +55,7 @@ from app.services.fair_files import (
 
 router = APIRouter(
     prefix="/api/fair",
-    dependencies=[Depends(get_current_user), Depends(require_admin)],
+    dependencies=[Depends(get_current_user), Depends(require_atr_fair)],
 )
 
 # ext -> (file_kind, canonical content-type sent to Directus)

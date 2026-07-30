@@ -11,6 +11,7 @@ import os
 os.environ.setdefault("DIRECTUS_SECRET", "test-directus-secret-phase-27")
 os.environ.setdefault("DIRECTUS_ADMINISTRATOR_ROLE_UUID", "c1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 os.environ.setdefault("DIRECTUS_VIEWER_ROLE_UUID", "a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+os.environ.setdefault("DIRECTUS_QS_ROLE_UUID", "b3333333-cccc-cccc-cccc-cccccccccccc")
 os.environ.setdefault("SIGNAGE_DEVICE_JWT_SECRET", "test-signage-device-jwt-secret-phase-42")
 # Force NullPool in the async engine so no asyncpg connection is shared across
 # pytest-asyncio's per-test event loops (avoids "attached to a different loop").

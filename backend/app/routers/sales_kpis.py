@@ -18,7 +18,7 @@ from app.schemas import (
     CustomerShareResponse,
     OrdersDistributionResponse,
 )
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.services.sales_kpi_aggregation import (
     compute_contacts_weekly,
     compute_customer_share,
@@ -27,7 +27,7 @@ from app.services.sales_kpi_aggregation import (
 
 router = APIRouter(
     prefix="/api/data/sales",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
     tags=["sales-kpis"],
 )
 
