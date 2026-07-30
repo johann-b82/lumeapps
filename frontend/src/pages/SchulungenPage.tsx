@@ -35,7 +35,7 @@ import {
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
-import { vollwort } from "@/lib/abkuerzungen";
+import { abteilungAusgeblendet, vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 
 type KatalogZeile = Schulung;
@@ -424,7 +424,9 @@ function PflichtMatrixPanel({ schulungen }: { schulungen: Schulung[] | undefined
     return [...map.entries()].sort((a, b) => rang(a[0]) - rang(b[0]));
   }, [schulungen]);
 
-  const abteilungen = data?.abteilungen ?? [];
+  const abteilungen = (data?.abteilungen ?? []).filter(
+    (a) => !abteilungAusgeblendet(a),
+  );
 
   return (
     <section className="mb-6">
