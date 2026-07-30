@@ -16,13 +16,17 @@ The Viewer role has a fixed UUID: `a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb`, set in
 
 The QS role is an interim, hard-wired role for quality assurance staff: it grants access **exclusively** to the FAIR and ATR modules. Dashboards (Sales, HR, Quality, Finance, Production, Procurement) and all admin areas stay blocked.
 
-To set up the QS role:
+The role, its policy, and its login-only read permissions are **auto-provisioned** by the bootstrap services (`directus-bootstrap-roles` / `-permissions`) on every `docker compose up`, at the fixed UUID `b3333333-cccc-cccc-cccc-cccccccccccc`. You do **not** need to configure the role by hand in Directus.
 
-1. In the Directus admin panel under **Settings -> Access Control**, create a new role named exactly **`QS`** (**App Access = yes**, **Admin Access = no**). A different name is rejected by the app at login.
-2. Give the QS role the same **read permissions as Viewer** on `directus_users` (own profile) and `directus_roles` (field `name`). Without them, login fails.
-3. Copy the new role's UUID and set it as `DIRECTUS_QS_ROLE_UUID` in your `.env` file. Without this variable, the QS role is disabled.
-4. Under **Users**, create a user and assign the **QS** role.
+To activate the QS role:
 
+1. In your `.env` file, set
+   `DIRECTUS_QS_ROLE_UUID=b3333333-cccc-cccc-cccc-cccccccccccc`
+   and recreate the `api` container (`docker compose up -d --force-recreate api`). Without this variable the QS role is inactive.
+2. Under **Users**, create a user (e.g. email `qs@acm-aerospace.com`) and assign the **QS** role.
+
+> **Important:** What matters is the **role name** `QS` (not the user's first name). Set the password directly in Directus.
+>
 > **Note:** This role is a stopgap until the planned AD-based rights system lands.
 
 ## Creating a User

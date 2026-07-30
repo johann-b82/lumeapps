@@ -16,13 +16,17 @@ Die Viewer-Rolle hat eine feste UUID: `a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb`, di
 
 Die QS-Rolle ist eine uebergangsweise, fest verdrahtete Rolle fuer die Qualitaetssicherung: Sie gewaehrt Zugriff **ausschliesslich** auf das FAIR- und das ATR-Modul. Dashboards (Vertrieb, HR, Qualitaet, Finanzen, Produktion, Einkauf) und alle Admin-Bereiche bleiben gesperrt.
 
-So richten Sie die QS-Rolle ein:
+Die Rolle, ihre Policy und die login-relevanten Leserechte werden **automatisch** von den Bootstrap-Diensten (`directus-bootstrap-roles` / `-permissions`) bei jedem `docker compose up` angelegt — mit der festen UUID `b3333333-cccc-cccc-cccc-cccccccccccc`. Sie muessen die Rolle also **nicht** von Hand in Directus konfigurieren.
 
-1. Legen Sie im Directus-Admin-Panel unter **Settings -> Access Control** eine neue Rolle mit dem exakten Namen **`QS`** an (**App Access = ja**, **Admin Access = nein**). Ein abweichender Name wird von der Anwendung beim Login abgelehnt.
-2. Geben Sie der QS-Rolle dieselben **Lese-Berechtigungen wie Viewer** auf `directus_users` (eigenes Profil) und `directus_roles` (Feld `name`). Ohne diese Berechtigungen schlaegt der Login fehl.
-3. Kopieren Sie die UUID der neuen Rolle und setzen Sie sie als `DIRECTUS_QS_ROLE_UUID` in Ihrer `.env`-Datei. Ohne diese Variable ist die QS-Rolle deaktiviert.
-4. Legen Sie unter **Users** einen Benutzer an und weisen Sie ihm die Rolle **QS** zu.
+So aktivieren Sie die QS-Rolle:
 
+1. Setzen Sie in Ihrer `.env`-Datei die Zeile
+   `DIRECTUS_QS_ROLE_UUID=b3333333-cccc-cccc-cccc-cccccccccccc`
+   und starten Sie den `api`-Container neu (`docker compose up -d --force-recreate api`). Ohne diese Variable ist die QS-Rolle inaktiv.
+2. Legen Sie unter **Users** einen Benutzer an (z. B. E-Mail `qs@acm-aerospace.com`) und weisen Sie ihm die Rolle **QS** zu.
+
+> **Wichtig:** Ausschlaggebend ist der **Rollen-Name** `QS` (nicht der Vorname des Benutzers). Vergeben Sie das Passwort direkt in Directus.
+>
 > **Hinweis:** Diese Rolle ist ein Uebergang bis zum geplanten AD-basierten Rechtesystem.
 
 ## Benutzer erstellen
