@@ -47,7 +47,34 @@ import { hrKpiKeys } from "@/lib/queryKeys";
 import { abteilungAusgeblendet, vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 
-type KatalogZeile = Schulung;
+/** Eine über Bereiche zusammengefasste Schulung (ein Eintrag je Name). */
+type DedupSchulung = Schulung & { bereiche: string[] };
+
+const BEREICH_RANG = (b: string) =>
+  b === "betrieblich" ? 0 : b === "Produktion" ? 1 : b === "Verwaltung" ? 2 : 3;
+
+/** Fasst gleichnamige Schulungen (über Bereiche) zu einem Eintrag zusammen.
+ *  Turnus/Frist/Verantwortlicher/Beschreibung sind je Name geteilt; die ID des
+ *  ersten Vorkommens dient als kanonischer Bezug (Bearbeiten/Zuweisen wirkt je
+ *  Name). Teilnahmen werden summiert, Bereiche gesammelt. */
+function dedupliziere(schulungen: Schulung[]): DedupSchulung[] {
+  const map = new Map<string, DedupSchulung>();
+  for (const s of schulungen) {
+    const key = s.name.trim().toLowerCase();
+    const vorhanden = map.get(key);
+    if (vorhanden) {
+      vorhanden.teilnahmen += s.teilnahmen;
+      if (!vorhanden.bereiche.includes(s.bereich)) vorhanden.bereiche.push(s.bereich);
+    } else {
+      map.set(key, { ...s, bereiche: [s.bereich] });
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) =>
+      BEREICH_RANG(a.bereiche[0]) - BEREICH_RANG(b.bereiche[0]) ||
+      a.name.localeCompare(b.name),
+  );
+}
 
 /** Lädt den Schulungsnachweis (Formblatt 68) einer Schulung als PDF. */
 function ProtokollKnopf({ schulung }: { schulung: Schulung }) {
@@ -372,8 +399,8 @@ function SchulungDetail({ schulung }: { schulung: Schulung }) {
   );
 }
 
-/** Eine Katalogzeile mit aufklappbarem Detail. */
-function KatalogZeileRow({ s }: { s: Schulung }) {
+/** Eine Katalogzeile (je Name, über Bereiche zusammengefasst) mit aufklappbarem Detail. */
+function KatalogZeileRow({ s }: { s: DedupSchulung }) {
   const { t } = useTranslation();
   const [offen, setOffen] = useState(false);
   return (
@@ -394,17 +421,14 @@ function KatalogZeileRow({ s }: { s: Schulung }) {
             />
           </button>
           {s.name}
-          {(s.beschreibung || s.anzahl_unterlagen > 0) && (
+          {s.anzahl_unterlagen > 0 && (
             <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs text-muted-foreground">
-              {s.anzahl_unterlagen > 0 && (
-                <>
-                  <Paperclip className="h-3 w-3" aria-hidden="true" />
-                  {s.anzahl_unterlagen}
-                </>
-              )}
+              <Paperclip className="h-3 w-3" aria-hidden="true" />
+              {s.anzahl_unterlagen}
             </span>
           )}
         </td>
+        <td className="px-4 py-2 text-xs text-muted-foreground">{s.bereiche.join(", ")}</td>
         <td className="px-4 py-2 whitespace-nowrap">
           <TurnusFeld schulung={s} />
         </td>
@@ -421,7 +445,7 @@ function KatalogZeileRow({ s }: { s: Schulung }) {
       </tr>
       {offen && (
         <tr className="border-b border-border/50">
-          <td colSpan={6} className="p-0">
+          <td colSpan={7} className="p-0">
             <SchulungDetail schulung={s} />
           </td>
         </tr>
@@ -430,15 +454,16 @@ function KatalogZeileRow({ s }: { s: Schulung }) {
   );
 }
 
-/** Schulungen eines Bereichs. */
-function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
+/** Der Schulungskatalog als eine Tabelle — jede Schulung nur einmal. */
+function KatalogTabelle({ zeilen }: { zeilen: DedupSchulung[] }) {
   const { t } = useTranslation();
   return (
-    <Klappbar titel={bereich} anzahl={zeilen.length}>
+    <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/30">
             <Th>{t("schulungen.katalog.name")}</Th>
+            <Th>{t("schulungen.katalog.bereich")}</Th>
             <Th>{t("schulungen.katalog.turnus")}</Th>
             <Th>{t("schulungen.katalog.verantwortlicher")}</Th>
             <Th rechts>{t("schulungen.katalog.frist")}</Th>
@@ -452,7 +477,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
           ))}
         </tbody>
       </table>
-    </Klappbar>
+    </div>
   );
 }
 
@@ -1185,38 +1210,30 @@ export function SchulungenPage() {
   const [committed, setCommitted] = useState(false);
 
   const [suche, setSuche] = useState("");
+  const [tab, setTab] = useState<"bearbeiten" | "zuweisen" | "stand">("bearbeiten");
 
   const { data: schulungen, isLoading } = useQuery({
     queryKey: hrKpiKeys.schulungen(),
     queryFn: fetchSchulungen,
   });
 
-  const gefiltert = useMemo<KatalogZeile[] | undefined>(() => {
-    if (!schulungen) return undefined;
+  /** Jede Schulung nur einmal (über Bereiche zusammengefasst). */
+  const entdoppelt = useMemo<DedupSchulung[] | undefined>(
+    () => (schulungen ? dedupliziere(schulungen) : undefined),
+    [schulungen],
+  );
+
+  const gefiltert = useMemo<DedupSchulung[] | undefined>(() => {
+    if (!entdoppelt) return undefined;
     const q = suche.trim().toLowerCase();
-    const zeilen = schulungen as KatalogZeile[];
-    if (!q) return zeilen;
-    return zeilen.filter(
+    if (!q) return entdoppelt;
+    return entdoppelt.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
-        s.bereich.toLowerCase().includes(q) ||
+        s.bereiche.some((b) => b.toLowerCase().includes(q)) ||
         (s.turnus ?? "").toLowerCase().includes(q),
     );
-  }, [schulungen, suche]);
-
-  /** Nach Bereich gruppiert; Reihenfolge folgt der Excel (betrieblich zuerst). */
-  const gruppen = useMemo<[string, KatalogZeile[]][]>(() => {
-    if (!gefiltert) return [];
-    const map = new Map<string, KatalogZeile[]>();
-    for (const s of gefiltert) {
-      const liste = map.get(s.bereich);
-      if (liste) liste.push(s);
-      else map.set(s.bereich, [s]);
-    }
-    const rang = (b: string) =>
-      b === "betrieblich" ? 0 : b === "Produktion" ? 1 : b === "Verwaltung" ? 2 : 3;
-    return [...map.entries()].sort((a, b) => rang(a[0]) - rang(b[0]) || a[0].localeCompare(b[0]));
-  }, [gefiltert]);
+  }, [entdoppelt, suche]);
 
   const preview = useMutation({
     mutationFn: (f: File) => schulungImportPreview(f),
@@ -1245,101 +1262,125 @@ export function SchulungenPage() {
     if (f) preview.mutate(f);
   }
 
+  const tabs: { key: typeof tab; label: string }[] = [
+    { key: "bearbeiten", label: t("schulungen.tabs.bearbeiten") },
+    { key: "zuweisen", label: t("schulungen.tabs.zuweisen") },
+    { key: "stand", label: t("schulungen.tabs.stand") },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
-      <h1 className="mb-6 flex items-center gap-2 text-lg font-semibold">
+      <h1 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <GraduationCap className="h-5 w-5" aria-hidden="true" />
         {t("schulungen.title")}
       </h1>
 
-      {/* Import */}
-      <section className="mb-8">
-        <h2 className="mb-2 text-sm font-medium">{t("schulungen.import.title")}</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          {t("schulungen.import.hinweis")}
-        </p>
+      <div className="mb-6 flex gap-1 border-b" role="tablist">
+        {tabs.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          tab === key
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <input
-          ref={dateiRef}
-          type="file"
-          accept=".xlsx,.xlsm"
-          className="hidden"
-          onChange={(e) => waehle(e.target.files?.[0] ?? null)}
-        />
-        <button
-          type="button"
-          onClick={() => dateiRef.current?.click()}
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
-                     hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Upload className="h-4 w-4" aria-hidden="true" />
-          {datei ? datei.name : t("schulungen.import.dateiWaehlen")}
-        </button>
+      {tab === "bearbeiten" && (
+        <>
+          <section className="mb-8">
+            <h2 className="mb-2 text-sm font-medium">{t("schulungen.import.title")}</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              {t("schulungen.import.hinweis")}
+            </p>
 
-        {preview.isPending && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            {t("schulungen.import.analysiere")}
-          </div>
-        )}
+            <input
+              ref={dateiRef}
+              type="file"
+              accept=".xlsx,.xlsm"
+              className="hidden"
+              onChange={(e) => waehle(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => dateiRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
+                         hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              {datei ? datei.name : t("schulungen.import.dateiWaehlen")}
+            </button>
 
-        {vorschau && datei && (
-          <Vorschau
-            v={vorschau}
-            committing={commit.isPending}
-            committed={committed}
-            onCommit={() => commit.mutate(datei)}
-          />
-        )}
-      </section>
+            {preview.isPending && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {t("schulungen.import.analysiere")}
+              </div>
+            )}
 
-      {/* Handlungsliste zuerst: was ist überfällig oder wird bald fällig. */}
-      <OffenePanel />
+            {vorschau && datei && (
+              <Vorschau
+                v={vorschau}
+                committing={commit.isPending}
+                committed={committed}
+                onCommit={() => commit.mutate(datei)}
+              />
+            )}
+          </section>
 
-      {/* Anforderungsmatrix: Pflichtschulungen je Abteilung ankreuzen. */}
-      <PflichtMatrixPanel schulungen={schulungen} />
+          <section>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-medium">{t("schulungen.katalog.title")}</h2>
+              <input
+                type="search"
+                value={suche}
+                onChange={(e) => setSuche(e.target.value)}
+                placeholder={t("schulungen.katalog.suche")}
+                className="h-8 w-72 rounded-md border bg-background px-3 text-sm
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
 
-      {/* Einzelzuweisung — für alles, was die Matrix abteilungsweit nicht trifft. */}
-      <ZuweisenPanel schulungen={schulungen} />
+            {isLoading && (
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+              </div>
+            )}
 
-      {/* Mitarbeiter mit Fälligkeiten; Zeile aufklappen = Einzelübersicht. */}
-      <MitarbeiterPanel />
+            {gefiltert && gefiltert.length === 0 && (
+              <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                {suche ? t("schulungen.katalog.keinTreffer") : t("schulungen.katalog.leer")}
+              </p>
+            )}
 
-      {/* Abteilungen & Vorgesetzte — abgeleitet aus den Personio-Daten. */}
-      <AbteilungenPanel />
+            {gefiltert && gefiltert.length > 0 && <KatalogTabelle zeilen={gefiltert} />}
+          </section>
+        </>
+      )}
 
-      {/* Katalog — nach Bereich gruppiert, Abschnitte einklappbar. */}
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">{t("schulungen.katalog.title")}</h2>
-          <input
-            type="search"
-            value={suche}
-            onChange={(e) => setSuche(e.target.value)}
-            placeholder={t("schulungen.katalog.suche")}
-            className="h-8 w-72 rounded-md border bg-background px-3 text-sm
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+      {tab === "zuweisen" && (
+        <>
+          <PflichtMatrixPanel schulungen={entdoppelt} />
+          <ZuweisenPanel schulungen={entdoppelt} />
+        </>
+      )}
 
-        {isLoading && (
-          <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
-          </div>
-        )}
-
-        {gefiltert && gefiltert.length === 0 && (
-          <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            {suche ? t("schulungen.katalog.keinTreffer") : t("schulungen.katalog.leer")}
-          </p>
-        )}
-
-        <div className="space-y-3">
-          {gruppen.map(([bereich, zeilen]) => (
-            <BereichGruppe key={bereich} bereich={bereich} zeilen={zeilen} />
-          ))}
-        </div>
-      </section>
+      {tab === "stand" && (
+        <>
+          <OffenePanel />
+          <MitarbeiterPanel />
+          <AbteilungenPanel />
+        </>
+      )}
     </div>
   );
 }
