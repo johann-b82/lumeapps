@@ -49,6 +49,12 @@ const MIN_REGION = 0.004;
 // Zoom-proportional oversampling caps: sharp when zoomed in, bounded memory.
 const MIN_DPR = 2;
 const MAX_DPR = 6;
+// Hard cap on the PDF backing-canvas edge (px). A large raster scan (e.g. a
+// 13000px page) would otherwise demand a canvas beyond the browser's max size,
+// which pdf.js renders as a BLANK page. Kept safely below the ~16384px browser
+// limit; oversized pages are rendered at dpr < 1 (still sharp, and OCR uses a
+// separate high-res region render, so recognition is unaffected).
+const MAX_CANVAS_EDGE = 8192;
 // OCR tries the crop in all four orientations, preferring the drag direction,
 // and keeps the highest-confidence reading; it stops early once one is strong.
 const OCR_ORIENTATIONS: Rotation[] = [0, 90, 180, 270];
@@ -139,7 +145,10 @@ export function FairEditorCanvas({
   const [rotation, setRotation] = useState<Rotation>(() =>
     asRotation(project.rotation),
   );
-  const [renderDpr, setRenderDpr] = useState(MIN_DPR);
+  // Start at 1 (not MIN_DPR): before `natural` is known the page renders at full
+  // PDF width, so a lower initial dpr keeps the very first backing canvas within
+  // the browser limit for large scans. The effect raises it once size is known.
+  const [renderDpr, setRenderDpr] = useState(1);
   // Global bubble size — persisted across sessions/projects via localStorage.
   const [balloonScale, setBalloonScale] = useState<number>(() => {
     const v = parseFloat(localStorage.getItem("fair.balloonScale") ?? "1");
@@ -183,13 +192,16 @@ export function FairEditorCanvas({
   }, [rotation, project.id]);
 
   // Raise the PDF backing-store resolution with zoom (debounced) so dimension
-  // text stays sharp instead of upscaling a low-DPI raster. Capped by page size
-  // so an A1/A0 sheet doesn't blow up the canvas (long edge ≲ 5000 backing px).
+  // text stays sharp instead of upscaling a low-DPI raster. A HARD cap keeps the
+  // backing canvas edge (longEdge × dpr) within MAX_CANVAS_EDGE — without it a
+  // large raster scan (e.g. a 13000px page) demands an oversized canvas and
+  // renders BLANK. The hard cap can push dpr below 1 for such pages.
   useEffect(() => {
     const longEdge = natural ? Math.max(natural.w, natural.h) : 1000;
-    const cap = clamp(Math.floor(5000 / longEdge), MIN_DPR, MAX_DPR);
-    const target = clamp(Math.ceil(transform.scale) + 1, MIN_DPR, cap);
-    if (target === renderDpr) return;
+    const hardCap = MAX_CANVAS_EDGE / longEdge;
+    const desired = clamp(Math.ceil(transform.scale) + 1, MIN_DPR, MAX_DPR);
+    const target = Math.max(0.2, Math.min(desired, hardCap));
+    if (Math.abs(target - renderDpr) < 0.01) return;
     const id = window.setTimeout(() => setRenderDpr(target), 200);
     return () => window.clearTimeout(id);
   }, [transform.scale, renderDpr, natural]);
