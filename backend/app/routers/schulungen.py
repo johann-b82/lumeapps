@@ -128,19 +128,16 @@ class SchulungRead(BaseModel):
 
 
 class AbteilungRead(BaseModel):
-    """Abteilung mit ihrem Hauptverantwortlichen.
+    """Abteilung mit ihren Vorgesetzten.
 
-    ``vorgesetzter`` ist die Person, die innerhalb der Abteilung die meisten
-    Mitarbeiter führt. ``weitere_vorgesetzte`` zählt zusätzliche Führungskräfte
-    derselben Abteilung — mehrere sind der Normalfall (z. B. Production), und
-    eine davon willkürlich als "die" Leitung auszugeben wäre falsch.
+    ``vorgesetzte`` listet alle Personen, die mindestens einen Mitarbeiter dieser
+    Abteilung führen — absteigend nach Anzahl Unterstellter. Mehrere sind der
+    Normalfall (z. B. Production).
     """
 
     abteilung: str
     mitarbeiter: int
-    vorgesetzter: str | None
-    unterstellte: int
-    weitere_vorgesetzte: int
+    vorgesetzte: list[str]
 
 
 def _als_read(v: ImportVorschau) -> ImportVorschauRead:
@@ -768,14 +765,11 @@ async def liste_abteilungen(
         kandidaten = sorted(
             fuehrung.get(abteilung, {}).items(), key=lambda kv: kv[1], reverse=True
         )
-        top = kandidaten[0] if kandidaten else None
         ergebnis.append(
             AbteilungRead(
                 abteilung=abteilung,
                 mitarbeiter=anzahl,
-                vorgesetzter=namen.get(top[0]) if top else None,
-                unterstellte=top[1] if top else 0,
-                weitere_vorgesetzte=max(0, len(kandidaten) - 1),
+                vorgesetzte=[namen.get(sid, f"#{sid}") for sid, _ in kandidaten],
             )
         )
     return sorted(ergebnis, key=lambda a: (-a.mitarbeiter, a.abteilung))

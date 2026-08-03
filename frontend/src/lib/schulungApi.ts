@@ -137,11 +137,8 @@ export function fetchSchulungen(): Promise<Schulung[]> {
 export interface Abteilung {
   abteilung: string;
   mitarbeiter: number;
-  /** Führungskraft mit den meisten Unterstellten in dieser Abteilung. */
-  vorgesetzter: string | null;
-  unterstellte: number;
-  /** Weitere Führungskräfte derselben Abteilung (häufig > 0). */
-  weitere_vorgesetzte: number;
+  /** Alle Vorgesetzten dieser Abteilung, absteigend nach Unterstellten. */
+  vorgesetzte: string[];
 }
 
 export function fetchAbteilungen(): Promise<Abteilung[]> {

@@ -1092,11 +1092,10 @@ function AbteilungenPanel() {
               >
                 <td className="px-4 py-2">{a.abteilung}</td>
                 <td className="px-4 py-2">
-                  {a.vorgesetzter ?? <span className="text-muted-foreground">—</span>}
-                  {a.weitere_vorgesetzte > 0 && (
-                    <span className="ml-2 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      {t("schulungen.abteilungen.weitere", { count: a.weitere_vorgesetzte })}
-                    </span>
+                  {a.vorgesetzte.length > 0 ? (
+                    a.vorgesetzte.join(", ")
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
                   )}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{a.mitarbeiter}</td>
