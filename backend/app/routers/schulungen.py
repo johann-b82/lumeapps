@@ -408,16 +408,18 @@ class ZuweisungSetzen(BaseModel):
 async def zuweisbare_mitarbeiter(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[ZuweisbarerMitarbeiterRead]:
-    """Aktive Mitarbeiter für die Einzelzuweisung.
+    """Aktive und neu eintretende Mitarbeiter für Zuweisung/Durchführung.
 
-    Quelle ist Personio, nicht der Teilnahme-Bestand: zuweisen muss auch für
-    jemanden möglich sein, der noch gar keine Schulung hat.
+    Quelle ist Personio, nicht der Teilnahme-Bestand: zuweisen/eintragen muss auch
+    für jemanden möglich sein, der noch gar keine Schulung hat. Neben ``active``
+    zählen auch ``onboarding`` (frisch Eingestellte) — genau die, denen man erste
+    Schulungen einträgt. Ausgetretene (``inactive``) bleiben außen vor.
     """
     aktive = (
         (
             await db.execute(
                 select(PersonioEmployee)
-                .where(PersonioEmployee.status == "active")
+                .where(PersonioEmployee.status.in_(("active", "onboarding")))
                 .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
             )
         )
