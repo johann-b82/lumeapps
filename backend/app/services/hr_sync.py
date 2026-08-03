@@ -58,34 +58,56 @@ async def run_sync(session: AsyncSession) -> SyncResult:
 
     client = PersonioClient(client_id=client_id, client_secret=client_secret)
     emp_count = att_count = abs_count = 0
+    # Nicht-fataler Teilausfall (z. B. Personio-V1-Attendances-Deprecation): der
+    # Mitarbeiter-Abgleich gilt trotzdem als geglückt, damit Stamm-/Org-Daten
+    # (Abteilungen, Vorgesetzte, Ein-/Austritte) aktuell werden.
+    teil_fehler: str | None = None
 
     try:
-        # Sequential fetches — employees first for FK ordering
+        # 1) Mitarbeiter — Pflichtteil. Sofort upserten (und committen), damit
+        # Org-/Stammdaten selbst dann aktuell werden, wenn Anwesenheiten scheitern.
         raw_employees = await client.fetch_employees()
+        employees = [_normalize_employee(r) for r in raw_employees]
+        emp_count = await _upsert(session, PersonioEmployee, employees)
 
+        # 2) Anwesenheiten — optional. Personios V1-Endpoint antwortet mit 422,
+        # sobald eine mehrtägige Anwesenheitsperiode im Bestand liegt (V1 dafür
+        # abgekündigt → V2). Ein solcher Ausfall darf den Sync nicht kippen.
+        #
         # Attendance window (D-??, Phase 60 follow-up): first run fetches from
         # earliest employee hire_date (full backfill); subsequent runs fetch
         # max(stored_date) - 14d → today for an incremental update that
         # re-captures late-entered corrections.
-        today = date_type.today()
-        att_start = await _compute_attendance_window_start(session, raw_employees)
-        raw_attendances = await client.fetch_attendances(
-            start_date=att_start.isoformat(),
-            end_date=today.isoformat(),
+        try:
+            today = date_type.today()
+            att_start = await _compute_attendance_window_start(session, raw_employees)
+            raw_attendances = await client.fetch_attendances(
+                start_date=att_start.isoformat(),
+                end_date=today.isoformat(),
+            )
+            attendances = [_normalize_attendance(r) for r in raw_attendances]
+            att_count = await _upsert(session, PersonioAttendance, attendances)
+        except PersonioAPIError as exc:
+            teil_fehler = f"Anwesenheiten: {exc}"
+            log.warning("Anwesenheits-Sync fehlgeschlagen (nicht fatal): %s", exc)
+
+        # 3) Abwesenheiten — ebenfalls optional.
+        try:
+            raw_absences = await client.fetch_absences()
+            absences = [_normalize_absence(r) for r in raw_absences]
+            abs_count = await _upsert(session, PersonioAbsence, absences)
+        except PersonioAPIError as exc:
+            teil_fehler = teil_fehler or f"Abwesenheiten: {exc}"
+            log.warning("Abwesenheits-Sync fehlgeschlagen (nicht fatal): %s", exc)
+
+        await _update_sync_meta(
+            session,
+            emp_count,
+            att_count,
+            abs_count,
+            "ok" if teil_fehler is None else "partial",
+            teil_fehler,
         )
-        raw_absences = await client.fetch_absences()
-
-        # Normalize
-        employees = [_normalize_employee(r) for r in raw_employees]
-        attendances = [_normalize_attendance(r) for r in raw_attendances]
-        absences = [_normalize_absence(r) for r in raw_absences]
-
-        # Upsert in FK order: employees -> attendances -> absences
-        emp_count = await _upsert(session, PersonioEmployee, employees)
-        att_count = await _upsert(session, PersonioAttendance, attendances)
-        abs_count = await _upsert(session, PersonioAbsence, absences)
-
-        await _update_sync_meta(session, emp_count, att_count, abs_count, "ok")
 
         # Nach dem Abgleich: für neue Eintritte die Schulungsübersicht anlegen
         # bzw. auffrischen. Bewusst NACH _update_sync_meta und in eigenem
@@ -115,7 +137,8 @@ async def run_sync(session: AsyncSession) -> SyncResult:
         employees_synced=emp_count,
         attendance_synced=att_count,
         absences_synced=abs_count,
-        status="ok",
+        status="ok" if teil_fehler is None else "partial",
+        error_message=teil_fehler,
     )
 
 

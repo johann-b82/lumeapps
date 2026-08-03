@@ -57,13 +57,20 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
     error: string | null;
   } | null>(null);
 
-  const [syncFeedback, setSyncFeedback] = useState<"idle" | "success" | "error">("idle");
+  const [syncFeedback, setSyncFeedback] = useState<"idle" | "success" | "partial" | "error">("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
   const syncMutation = useMutation({
     mutationFn: triggerSync,
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: syncKeys.meta() });
       queryClient.invalidateQueries({ queryKey: hrKpiKeys.all() });
+      if (result.status === "partial") {
+        // Mitarbeiter-Abgleich geglückt, aber ein Teil (z. B. Anwesenheiten)
+        // scheiterte — sichtbar machen statt als vollen Erfolg zu zeigen.
+        setSyncFeedback("partial");
+        setSyncError(result.error_message);
+        return;
+      }
       setSyncFeedback("success");
       setTimeout(() => setSyncFeedback("idle"), 3000);
     },
@@ -230,6 +237,12 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
               {testResult.success
                 ? t("settings.personio.test_connection.success")
                 : (testResult.error ?? t("settings.personio.test_connection.failure"))}
+            </p>
+          )}
+          {syncFeedback === "partial" && (
+            <p className="text-xs text-[var(--color-warning)]">
+              {t("hr.sync.partial")}
+              {syncError ? `: ${syncError}` : ""}
             </p>
           )}
           {syncFeedback === "error" && (

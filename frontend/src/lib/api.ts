@@ -427,7 +427,7 @@ export async function testPersonioConnection(): Promise<SyncTestResult> {
 
 export interface SyncMetaResponse {
   last_synced_at: string | null;
-  last_sync_status: "ok" | "error" | null;
+  last_sync_status: "ok" | "partial" | "error" | null;
   last_sync_error: string | null;
 }
 
@@ -439,7 +439,7 @@ export interface SyncResult {
   employees_synced: number;
   attendance_synced: number;
   absences_synced: number;
-  status: "ok" | "error";
+  status: "ok" | "partial" | "error";
   error_message: string | null;
 }
 

@@ -56,6 +56,7 @@
   "hr.sync.configureHint": "Configure Personio credentials in Settings",
   "hr.sync.button": "Refresh data",
   "hr.sync.success": "Sync complete",
+  "hr.sync.partial": "Employee data updated, attendances skipped",
   "hr.sync.error": "Sync failed",
   "hr.kpi.overtimeRatio.label": "Overtime Ratio",
   "hr.kpi.overtimeRatio.subtitle": "Overhours / total worked hours of active employees",

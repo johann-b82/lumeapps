@@ -56,6 +56,7 @@
   "hr.sync.configureHint": "Personio-Zugangsdaten in den Einstellungen konfigurieren",
   "hr.sync.button": "Daten aktualisieren",
   "hr.sync.success": "Synchronisierung abgeschlossen",
+  "hr.sync.partial": "Mitarbeiterdaten aktualisiert, Anwesenheiten übersprungen",
   "hr.sync.error": "Synchronisierung fehlgeschlagen",
   "hr.kpi.overtimeRatio.label": "Überstunden-Quote",
   "hr.kpi.overtimeRatio.subtitle": "Überstunden / Gesamtarbeitsstunden aktiver Mitarbeiter",

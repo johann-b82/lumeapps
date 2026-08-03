@@ -347,7 +347,7 @@ class SyncResult(BaseModel):
     employees_synced: int
     attendance_synced: int
     absences_synced: int
-    status: Literal["ok", "error"]
+    status: Literal["ok", "partial", "error"]
     error_message: str | None = None
 
 
