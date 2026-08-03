@@ -5,7 +5,7 @@
 normalisierten Schulungs-Namen, damit sie bei allen gleichnamigen Schulungen
 erscheinen).
 
-Revision ID: v1_100_schulung_beschreibung_unterlagen
+Revision ID: v1_100_schulung_unterlagen
 Revises: v1_99_einarbeitung_katalog
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "v1_100_schulung_beschreibung_unterlagen"
+revision = "v1_100_schulung_unterlagen"
 down_revision = "v1_99_einarbeitung_katalog"
 branch_labels = None
 depends_on = None
