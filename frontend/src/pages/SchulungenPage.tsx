@@ -1093,7 +1093,11 @@ function AbteilungenPanel() {
                 <td className="px-4 py-2">{a.abteilung}</td>
                 <td className="px-4 py-2">
                   {a.vorgesetzte.length > 0 ? (
-                    a.vorgesetzte.join(", ")
+                    <ul className="space-y-0.5">
+                      {a.vorgesetzte.map((v) => (
+                        <li key={v}>{v}</li>
+                      ))}
+                    </ul>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
