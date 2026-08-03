@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
+import { RoleGate } from "@/auth/RoleGate";
 
 export function LauncherPage() {
   const { t } = useTranslation();
@@ -22,7 +23,9 @@ export function LauncherPage() {
       >
         {/* KPI-Dashboard tile → /kpi hub. The six business KPI dashboards
             (Vertrieb, Einkauf, Produktion, HR, Qualität, Finanzperspektive)
-            live behind this tile on KpiDashboardHomePage. */}
+            live behind this tile on KpiDashboardHomePage.
+            Hidden from the module-scoped QS role. */}
+        <RoleGate allow={["admin", "viewer"]}>
         <div className="flex flex-col items-center gap-2">
           {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}
           <button
@@ -42,10 +45,12 @@ export function LauncherPage() {
             {t("launcher.tile.kpi")}
           </span>
         </div>
+        </RoleGate>
 
         {/* HR-Dashboard tile → /hr/home hub. Opens the HR sub-menu
             (Onboarding, Organigramm) on HrHomePage, mirroring the
-            KPI-Dashboard tile pattern. */}
+            KPI-Dashboard tile pattern. Hidden from the QS role. */}
+        <RoleGate allow={["admin", "viewer"]}>
         <div className="flex flex-col items-center gap-2">
           {/* CTRL-02 exception: launcher tile — card-surface click target, Button's fixed chrome does not fit the grid-tile visual. */}
           <button
@@ -65,6 +70,7 @@ export function LauncherPage() {
             {t("launcher.tile.hr_dashboard")}
           </span>
         </div>
+        </RoleGate>
 
         {/* Produktion-Hub tile → /production/home. Opens the Produktion
             sub-menu (Wartung, …) on ProductionHomePage, mirroring the
@@ -169,8 +175,8 @@ export function LauncherPage() {
           </div>
         </AdminOnly>
 
-        {/* ATR parts catalog tile (admin-only) */}
-        <AdminOnly>
+        {/* ATR parts catalog tile — Admin + QS module. */}
+        <RoleGate allow={["admin", "qs"]}>
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"
@@ -187,10 +193,10 @@ export function LauncherPage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">{t("atr.tile")}</span>
           </div>
-        </AdminOnly>
+        </RoleGate>
 
-        {/* v1.73: FAIR (Erstmusterprüfung / drawing ballooning) tile — admin-only. */}
-        <AdminOnly>
+        {/* v1.73: FAIR (Erstmusterprüfung / drawing ballooning) tile — Admin + QS module. */}
+        <RoleGate allow={["admin", "qs"]}>
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"
@@ -209,7 +215,7 @@ export function LauncherPage() {
               {t("launcher.tile.fair")}
             </span>
           </div>
-        </AdminOnly>
+        </RoleGate>
 
         {/* Coming-soon tiles (1x) — opacity-40 + pointer-events-none per D-04 */}
         {[0].map((i) => (

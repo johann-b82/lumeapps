@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.models import Revenue, SalesRecord, UploadBatch
 from app.schemas import (
     ChartPoint,
@@ -30,7 +30,7 @@ _TRUNC_MAP: dict[str, str] = {"daily": "day", "weekly": "week", "monthly": "mont
 router = APIRouter(
     prefix="/api/kpis",
     tags=["kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

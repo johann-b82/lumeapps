@@ -27,7 +27,7 @@ from app.schemas import (
     ProductionVerzugRow,
     ProductionVerzugValue,
 )
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.services.hr_kpi_aggregation import _month_bounds
 from app.services.production_kpi_aggregation import (
     compute_verzug,
@@ -40,7 +40,7 @@ from app.services.production_kpi_aggregation import (
 router = APIRouter(
     prefix="/api/production",
     tags=["production-kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

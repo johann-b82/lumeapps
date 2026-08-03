@@ -36,7 +36,7 @@ from app.schemas import (
     InspectionsHistoryPoint,
     InspectionsValue,
 )
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import require_admin, require_dashboard_read
 from app.services.complaint_rate_aggregation import (
     compute_complaint_rate,
     compute_complaint_rate_history,
@@ -61,7 +61,7 @@ from app.services.quality_kpi_aggregation import (
 router = APIRouter(
     prefix="/api/quality",
     tags=["quality-kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

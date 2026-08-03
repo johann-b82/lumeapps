@@ -27,6 +27,13 @@ VIEWER_POLICY_ID="a2222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 VIEWER_ROLE_ID="a2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 VIEWER_ACCESS_ID="a2222222-cccc-cccc-cccc-cccccccccccc"
 
+# QS role — interim, module-scoped (FAIR + ATR only, backend-enforced via
+# require_atr_fair). Fixed UUIDs so re-runs are idempotent and the backend can
+# pin DIRECTUS_QS_ROLE_UUID. QS_ROLE_ID MUST equal DIRECTUS_QS_ROLE_UUID in .env.
+QS_POLICY_ID="b3333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+QS_ROLE_ID="b3333333-cccc-cccc-cccc-cccccccccccc"
+QS_ACCESS_ID="b3333333-eeee-eeee-eeee-eeeeeeeeeeee"
+
 log() { printf '[bootstrap-roles] %s\n' "$*"; }
 
 # ensure_permission: GET-before-POST idempotent permission row creation.
@@ -153,6 +160,78 @@ elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
     cat /tmp/api.body; exit 1
   fi
   log "Access row created"
+else
+  log "ERROR: unexpected GET /access status ${status}"
+  cat /tmp/api.body; exit 1
+fi
+
+# --- 3b. QS role (interim FAIR+ATR-only) — policy + role + access ---
+# The QS role is code-gated in the backend (require_atr_fair). At the Directus
+# layer it needs ONLY app access + read of its own profile + role.name so the
+# SPA's readMe() login call resolves. It deliberately does NOT get the Viewer
+# Read policy — that would grant direct SDK reads of personio_employees /
+# sales_records (HR + business data). QS_POLICY_ID permission rows (directus_users
+# + directus_roles only) are inserted by bootstrap-permissions.sql.
+status=$(api GET "/policies/${QS_POLICY_ID}")
+if [ "$status" = "200" ]; then
+  log "QS Read policy exists (${QS_POLICY_ID}) — skipping"
+elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
+  log "Creating QS Read policy (${QS_POLICY_ID})"
+  status=$(api POST "/policies" "{
+    \"id\":\"${QS_POLICY_ID}\",
+    \"name\":\"QS Read\",
+    \"icon\":\"fact_check\",
+    \"description\":\"Login-only reads for the interim QS role. FAIR + ATR access is enforced by the backend (require_atr_fair); no business/HR collections here.\",
+    \"admin_access\":false,
+    \"app_access\":true
+  }")
+  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
+    log "ERROR: creating QS policy returned HTTP ${status}"
+    cat /tmp/api.body; exit 1
+  fi
+  log "QS Read policy created"
+else
+  log "ERROR: unexpected GET /policies status ${status}"
+  cat /tmp/api.body; exit 1
+fi
+
+status=$(api GET "/roles/${QS_ROLE_ID}")
+if [ "$status" = "200" ]; then
+  log "QS role exists (${QS_ROLE_ID}) — skipping"
+elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
+  log "Creating QS role (${QS_ROLE_ID})"
+  status=$(api POST "/roles" "{
+    \"id\":\"${QS_ROLE_ID}\",
+    \"name\":\"QS\",
+    \"icon\":\"fact_check\",
+    \"description\":\"Qualitaetssicherung — FAIR + ATR only (interim, backend-enforced).\"
+  }")
+  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
+    log "ERROR: creating QS role returned HTTP ${status}"
+    cat /tmp/api.body; exit 1
+  fi
+  log "QS role created"
+else
+  log "ERROR: unexpected GET /roles status ${status}"
+  cat /tmp/api.body; exit 1
+fi
+
+status=$(api GET "/access/${QS_ACCESS_ID}")
+if [ "$status" = "200" ]; then
+  log "QS access row exists (${QS_ACCESS_ID}) — skipping"
+elif [ "$status" = "403" ] || [ "$status" = "404" ]; then
+  log "Creating access row linking QS role <-> QS Read policy"
+  status=$(api POST "/access" "{
+    \"id\":\"${QS_ACCESS_ID}\",
+    \"role\":\"${QS_ROLE_ID}\",
+    \"policy\":\"${QS_POLICY_ID}\",
+    \"sort\":1
+  }")
+  if [ "$status" != "200" ] && [ "$status" != "204" ]; then
+    log "ERROR: creating QS access row returned HTTP ${status}"
+    cat /tmp/api.body; exit 1
+  fi
+  log "QS access row created"
 else
   log "ERROR: unexpected GET /access status ${status}"
   cat /tmp/api.body; exit 1

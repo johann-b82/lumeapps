@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import get_current_user, require_admin, require_dashboard_read
 from app.defaults import DEFAULT_SETTINGS
 from app.models import AppSettings
 from app.schemas import AbsenceTypeOption, PersonioOptions, SettingsRead, SettingsUpdate
@@ -34,7 +34,7 @@ from app.services.personio_client import PersonioAPIError, PersonioClient
 
 router = APIRouter(
     prefix="/api/settings",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 public_router = APIRouter(prefix="/api/settings", tags=["settings"])

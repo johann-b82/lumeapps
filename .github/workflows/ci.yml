@@ -63,6 +63,9 @@ jobs:
           # Directus REST API at runtime; this placeholder just satisfies the
           # api container's required-env Pydantic check at boot.
           DIRECTUS_ADMINISTRATOR_ROLE_UUID=c1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+          # Interim QS role UUID (FAIR + ATR only). Fixed test value; must match
+          # backend/tests/conftest.py + tests/_auth.py QS_UUID.
+          DIRECTUS_QS_ROLE_UUID=b3333333-cccc-cccc-cccc-cccccccccccc
           # Required by docker-compose ${SIGNAGE_DEVICE_JWT_SECRET}; a 64-byte
           # urlsafe_b64 string is plenty (base-ui jwt HS256 is happy with it).
           SIGNAGE_DEVICE_JWT_SECRET=ci-fake-signage-jwt-secret-00000000000000000000000000000000000000000

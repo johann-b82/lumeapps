@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db_session
 from app.routers.hr_kpis import _bucket_windows, _validate_range
 from app.schemas import OtdHistoryPoint, OtdRow, OtdValue
-from app.security.directus_auth import get_current_user
+from app.security.directus_auth import require_dashboard_read
 from app.services.hr_kpi_aggregation import _month_bounds
 from app.services.otd_aggregation import (
     compute_otd,
@@ -32,7 +32,7 @@ from app.services.otd_aggregation import (
 router = APIRouter(
     prefix="/api/procurement",
     tags=["procurement-kpis"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

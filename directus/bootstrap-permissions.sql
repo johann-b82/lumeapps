@@ -83,7 +83,37 @@ VALUES (
 -- collections for Viewer. Admin reads via admin_access:true on the
 -- Administrator policy; explicit deny for Viewer is the absence of a row.
 
+-- QS role — login-only reads. Match bootstrap-roles.sh QS_POLICY_ID.
+-- Deliberately ONLY directus_users (own profile) + directus_roles (name), so
+-- the SPA readMe() login resolves. NO personio_employees / sales_records / etc.
+-- — QS must not read HR or business data; it is confined to FAIR + ATR.
+\set qs_policy_id 'b3333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+
+DELETE FROM directus_permissions WHERE policy = :'qs_policy_id';
+
+INSERT INTO directus_permissions (policy, collection, action, fields, permissions)
+VALUES (
+  :'qs_policy_id',
+  'directus_users',
+  'read',
+  'id,email,first_name,last_name,role,avatar',
+  '{}'
+);
+
+INSERT INTO directus_permissions (policy, collection, action, fields, permissions)
+VALUES (
+  :'qs_policy_id',
+  'directus_roles',
+  'read',
+  'id,name',
+  '{}'
+);
+
 -- Report what we did so the operator can see in `docker compose logs`.
 SELECT 'bootstrap-permissions: ' || count(*) || ' viewer rows inserted' AS status
 FROM directus_permissions
 WHERE policy = :'viewer_policy_id';
+
+SELECT 'bootstrap-permissions: ' || count(*) || ' QS rows inserted' AS status
+FROM directus_permissions
+WHERE policy = :'qs_policy_id';

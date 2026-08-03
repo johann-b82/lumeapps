@@ -12,6 +12,7 @@ import jwt
 DIRECTUS_SECRET = os.environ["DIRECTUS_SECRET"]
 ADMIN_UUID = os.environ["DIRECTUS_ADMINISTRATOR_ROLE_UUID"]
 VIEWER_UUID = os.environ["DIRECTUS_VIEWER_ROLE_UUID"]
+QS_UUID = os.environ.get("DIRECTUS_QS_ROLE_UUID", "b3333333-cccc-cccc-cccc-cccccccccccc")
 USER_UUID = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
 

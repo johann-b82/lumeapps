@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import require_admin, require_dashboard_read
 from app.models import AppSettings, PersonioSyncMeta
 from app.schemas import SyncMetaRead, SyncResult, SyncTestResult
 from app.security.fernet import decrypt_credential
@@ -32,7 +32,7 @@ from app.services.personio_client import (
 
 router = APIRouter(
     prefix="/api/sync",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 

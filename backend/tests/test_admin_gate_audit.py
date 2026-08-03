@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi.routing import APIRoute
 
 from app.main import app
-from app.security.directus_auth import require_admin
+from app.security.directus_auth import require_admin, require_atr_fair
 
 
 # (path, frozenset(methods)) — viewer-readable or public endpoints.
@@ -135,7 +135,10 @@ def test_every_api_route_is_admin_gated_or_allowlisted():
             # is unsupported by FastAPI's APIRoute. Document in spec.
             continue
         all_calls = _walk_deps(route.dependant.dependencies)
-        if require_admin not in all_calls:
+        # ATR + FAIR carry require_atr_fair (Admin + interim QS role) instead of
+        # require_admin; both gates block Viewer, so either satisfies the "no
+        # ungated /api route" invariant.
+        if require_admin not in all_calls and require_atr_fair not in all_calls:
             violations.append(f"{sorted(methods)} {route.path}")
 
     assert not violations, (

@@ -53,6 +53,8 @@ import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
 import { NavBar } from "./components/NavBar";
 import { AdminOnly } from "./auth/AdminOnly";
+import { RoleGate } from "./auth/RoleGate";
+import { useRole } from "./auth/useAuth";
 
 const DocsPage = lazy(() => import("./pages/DocsPage"));
 // v1.73 FAIR — lazy so the signage /embed pages (and the rest of the app) don't
@@ -72,8 +74,28 @@ import { queryClient } from "./queryClient";
 
 function AppShell() {
   const [location] = useLocation();
+  const role = useRole();
   const isLogin = location === "/login";
   const isLauncher = location === "/";
+  // The interim QS role is confined to the launcher + FAIR + ATR modules.
+  // Any other in-app route redirects to /atr (the backend also 403s those
+  // routes; this keeps the UX clean and removes the whole guard in one place
+  // when the AD-based rights system lands).
+  const qsOutOfScope =
+    role === "qs" &&
+    !(
+      isLogin ||
+      isLauncher ||
+      location.startsWith("/atr") ||
+      location.startsWith("/fair")
+    );
+  if (qsOutOfScope) {
+    return (
+      <AuthGate>
+        <Redirect to="/atr" />
+      </AuthGate>
+    );
+  }
   return (
     <AuthGate>
       {!isLogin && (
@@ -136,18 +158,18 @@ function AppShell() {
               Lazy-loaded (Suspense) so the heavy OCR/PDF modules stay out of the
               main bundle used by the signage /embed pages. */}
           <Route path="/fair/:id">
-            <AdminOnly>
+            <RoleGate allow={["admin", "qs"]}>
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading FAIR" /></div>}>
                 <FairPage />
               </Suspense>
-            </AdminOnly>
+            </RoleGate>
           </Route>
           <Route path="/fair">
-            <AdminOnly>
+            <RoleGate allow={["admin", "qs"]}>
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading FAIR" /></div>}>
                 <FairPage />
               </Suspense>
-            </AdminOnly>
+            </RoleGate>
           </Route>
           <Route path="/finance" component={FinancePage} />
           <Route path="/sensors" component={SensorsPage} />
@@ -174,11 +196,11 @@ function AppShell() {
           <Route path="/signage">
             <AdminOnly><Redirect to="/signage/media" /></AdminOnly>
           </Route>
-          <Route path="/atr/template"><AdminOnly><AtrTemplatePage /></AdminOnly></Route>
-          <Route path="/atr/import"><AdminOnly><AtrImportPage /></AdminOnly></Route>
-          <Route path="/atr/deliveries/:id"><AdminOnly><AtrDeliveryReviewPage /></AdminOnly></Route>
-          <Route path="/atr/teilekatalog"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
-          <Route path="/atr"><AdminOnly><AtrPartsPage /></AdminOnly></Route>
+          <Route path="/atr/template"><RoleGate allow={["admin", "qs"]}><AtrTemplatePage /></RoleGate></Route>
+          <Route path="/atr/import"><RoleGate allow={["admin", "qs"]}><AtrImportPage /></RoleGate></Route>
+          <Route path="/atr/deliveries/:id"><RoleGate allow={["admin", "qs"]}><AtrDeliveryReviewPage /></RoleGate></Route>
+          <Route path="/atr/teilekatalog"><RoleGate allow={["admin", "qs"]}><AtrPartsPage /></RoleGate></Route>
+          <Route path="/atr"><RoleGate allow={["admin", "qs"]}><AtrPartsPage /></RoleGate></Route>
           {/* /settings/sensors MUST appear before /settings so wouter's first-match wins */}
           <Route path="/settings/sensors" component={SensorsSettingsPage} />
           <Route path="/settings/general" component={GeneralSettingsPage} />
