@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import (
+    OnboardingExtern,
     PersonioEmployee,
     SchulungKatalog,
     SchulungPflicht,
@@ -340,6 +341,8 @@ def _schluessel(teilnahme: SchulungTeilnahme) -> str | None:
         return f"p:{teilnahme.personalnummer}"
     if teilnahme.employee_id is not None:
         return f"e:{teilnahme.employee_id}"
+    if teilnahme.extern_id is not None:
+        return f"x:{teilnahme.extern_id}"
     return None
 
 
@@ -350,6 +353,8 @@ def _schluessel_filter(schluessel: str):
         return SchulungTeilnahme.personalnummer == wert
     if art == "e" and wert.isdigit():
         return SchulungTeilnahme.employee_id == int(wert)
+    if art == "x" and wert.isdigit():
+        return SchulungTeilnahme.extern_id == int(wert)
     raise HTTPException(status_code=400, detail="Unbekannter Mitarbeiter-Schlüssel.")
 
 
@@ -426,7 +431,7 @@ async def zuweisbare_mitarbeiter(
         .scalars()
         .all()
     )
-    return [
+    ergebnis = [
         ZuweisbarerMitarbeiterRead(
             employee_id=e.id,
             personalnummer=_personalnummer(e.raw_json),
@@ -435,6 +440,44 @@ async def zuweisbare_mitarbeiter(
         )
         for e in aktive
     ]
+    # Manuell gepflegte (Nicht-Personio-)Einträge — negative ID (= -onboarding_extern.id).
+    externe = (await db.execute(select(OnboardingExtern))).scalars().all()
+    ergebnis.extend(
+        ZuweisbarerMitarbeiterRead(
+            employee_id=-x.id,
+            personalnummer=None,
+            name=x.name,
+            abteilung=x.abteilung,
+        )
+        for x in externe
+    )
+    return ergebnis
+
+
+async def _teilnahme_ident(db: AsyncSession, employee_id: int):
+    """(Name, Teilnahme-Felder, Such-Bedingungen) für eine (evtl. negative) ID.
+
+    Positiv = Personio-Mitarbeiter, negativ = externer Eintrag (= -onboarding_extern.id).
+    Gibt None zurück, wenn die Person nicht existiert.
+    """
+    if employee_id < 0:
+        ext = await db.get(OnboardingExtern, -employee_id)
+        if ext is None:
+            return None
+        return ext.name, {"extern_id": ext.id}, [SchulungTeilnahme.extern_id == ext.id]
+    emp = (
+        await db.execute(
+            select(PersonioEmployee).where(PersonioEmployee.id == employee_id)
+        )
+    ).scalar_one_or_none()
+    if emp is None:
+        return None
+    persnr = _personalnummer(emp.raw_json)
+    name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
+    conds = [SchulungTeilnahme.employee_id == emp.id]
+    if persnr:
+        conds.append(SchulungTeilnahme.personalnummer == persnr)
+    return name, {"employee_id": emp.id, "personalnummer": persnr}, conds
 
 
 @router.post("/zuweisen", response_model=ZuweisungRead, status_code=201)
@@ -445,16 +488,12 @@ async def schulung_zuweisen(
     """Eine einzelne Schulung einer einzelnen Person zuweisen.
 
     Ergänzt die Anforderungsmatrix, die nur abteilungsweit wirkt. Die Zeile
-    entsteht ohne Datumsangaben ("offen") — eine Fälligkeit wäre erfunden,
-    solange die Schulung nicht stattgefunden hat.
+    entsteht ohne Datumsangaben ("offen"). Externe (negative ID) sind erlaubt.
     """
-    emp = (
-        await db.execute(
-            select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
-        )
-    ).scalar_one_or_none()
-    if emp is None:
+    ident = await _teilnahme_ident(db, eingabe.employee_id)
+    if ident is None:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
+    name, felder, bedingungen = ident
 
     katalog = (
         await db.execute(
@@ -464,12 +503,6 @@ async def schulung_zuweisen(
     if katalog is None:
         raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
 
-    persnr = _personalnummer(emp.raw_json)
-    # Doppelzuweisung über beide Identitätsarten prüfen — die partiellen Unique-
-    # Indizes aus v1_89 greifen je nur für eine davon.
-    bedingungen = [SchulungTeilnahme.employee_id == emp.id]
-    if persnr:
-        bedingungen.append(SchulungTeilnahme.personalnummer == persnr)
     vorhanden = (
         await db.execute(
             select(SchulungTeilnahme).where(
@@ -482,19 +515,15 @@ async def schulung_zuweisen(
             status_code=409, detail="Diese Schulung ist der Person bereits zugewiesen."
         )
 
-    name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
     zeile = SchulungTeilnahme(
-        schulung_id=katalog.id,
-        employee_id=emp.id,
-        personalnummer=persnr,
-        mitarbeiter_name=name,
+        schulung_id=katalog.id, mitarbeiter_name=name, **felder
     )
     db.add(zeile)
     await db.commit()
     await db.refresh(zeile)
     return ZuweisungRead(
         teilnahme_id=zeile.id,
-        employee_id=emp.id,
+        employee_id=eingabe.employee_id,
         schulung_id=katalog.id,
         name=name,
         schulung=katalog.name,
@@ -598,17 +627,10 @@ async def sammel_durchgefuehrt(
 
     eingetragen = 0
     for eid in dict.fromkeys(eingabe.employee_ids):  # Duplikate ignorieren
-        emp = (
-            await db.execute(
-                select(PersonioEmployee).where(PersonioEmployee.id == eid)
-            )
-        ).scalar_one_or_none()
-        if emp is None:
+        ident = await _teilnahme_ident(db, eid)
+        if ident is None:
             continue
-        persnr = _personalnummer(emp.raw_json)
-        bedingungen = [SchulungTeilnahme.employee_id == emp.id]
-        if persnr:
-            bedingungen.append(SchulungTeilnahme.personalnummer == persnr)
+        name, felder, bedingungen = ident
         zeile = (
             await db.execute(
                 select(SchulungTeilnahme).where(
@@ -618,11 +640,7 @@ async def sammel_durchgefuehrt(
         ).scalars().first()
         if zeile is None:
             zeile = SchulungTeilnahme(
-                schulung_id=katalog.id,
-                employee_id=emp.id,
-                personalnummer=persnr,
-                mitarbeiter_name=f"{emp.first_name or ''} {emp.last_name or ''}".strip()
-                or f"#{emp.id}",
+                schulung_id=katalog.id, mitarbeiter_name=name, **felder
             )
             db.add(zeile)
         _teilnahme_durchgefuehrt(zeile, katalog.turnus_monate, eingabe.datum)
@@ -677,13 +695,17 @@ async def offene_schulungen(
     mitarbeiter = {
         e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
     }
+    externe = {
+        x.id: x for x in (await db.execute(select(OnboardingExtern))).scalars().all()
+    }
 
     ergebnis: list[OffeneSchulungRead] = []
     for t, k in zeilen:
         emp = mitarbeiter.get(t.employee_id or -1)
-        faellig = _effektive_faelligkeit(
-            t, k.frist_tage, emp.hire_date if emp else None
-        )
+        ext = externe.get(t.extern_id) if t.extern_id else None
+        abteilung = emp.department if emp else (ext.abteilung if ext else None)
+        hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
+        faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
         # Nur was eine berechenbare Frist hat und im Fenster (überfällig / ≤ 3 Mon.) liegt.
         if faellig is None or faellig > grenze:
             continue
@@ -693,7 +715,7 @@ async def offene_schulungen(
                 personalnummer=t.personalnummer,
                 mitarbeiter_name=t.mitarbeiter_name
                 or f"#{t.personalnummer or t.employee_id}",
-                abteilung=emp.department if emp else None,
+                abteilung=abteilung,
                 abteilung_kuerzel=t.abteilung_kuerzel,
                 bereich=k.bereich,
                 schulung=k.name,
@@ -729,17 +751,23 @@ async def liste_mitarbeiter(
         .all()
     )
 
-    # Abteilung + Eintrittsdatum aus Personio, wo zugeordnet.
+    # Abteilung + Eintrittsdatum aus Personio bzw. dem externen Eintrag.
     mitarbeiter = {
         e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    }
+    externe = {
+        x.id: x for x in (await db.execute(select(OnboardingExtern))).scalars().all()
     }
 
     gruppen: dict[str, MitarbeiterRead] = {}
     for teilnahme, katalog in zeilen:
         schluessel = _schluessel(teilnahme)
         if schluessel is None:
-            continue  # weder Personalnummer noch Personio-Zuordnung — nicht adressierbar
+            continue  # nicht adressierbar
         emp = mitarbeiter.get(teilnahme.employee_id or -1)
+        ext = externe.get(teilnahme.extern_id) if teilnahme.extern_id else None
+        abteilung = emp.department if emp else (ext.abteilung if ext else None)
+        hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
         eintrag = gruppen.get(schluessel)
         if eintrag is None:
             eintrag = MitarbeiterRead(
@@ -748,7 +776,7 @@ async def liste_mitarbeiter(
                 personalnummer=teilnahme.personalnummer,
                 name=teilnahme.mitarbeiter_name
                 or f"#{teilnahme.personalnummer or teilnahme.employee_id}",
-                abteilung=emp.department if emp else None,
+                abteilung=abteilung,
                 schulungen=0,
                 ueberfaellig=0,
                 bald_faellig=0,
@@ -757,9 +785,7 @@ async def liste_mitarbeiter(
             gruppen[schluessel] = eintrag
 
         eintrag.schulungen += 1
-        faellig = _effektive_faelligkeit(
-            teilnahme, katalog.frist_tage, emp.hire_date if emp else None
-        )
+        faellig = _effektive_faelligkeit(teilnahme, katalog.frist_tage, hire_date)
         status = _status(faellig, heute)
         if status == "ueberfaellig":
             eintrag.ueberfaellig += 1
@@ -799,15 +825,18 @@ async def mitarbeiter_schulungen(
         raise HTTPException(status_code=404, detail="Keine Schulungen zu diesem Mitarbeiter.")
 
     # Eintrittsdatum der Person (für die Frist-basierte Fälligkeit offener Schulungen).
-    emp_id = zeilen[0][0].employee_id
+    erste = zeilen[0][0]
     hire_date = None
-    if emp_id is not None:
+    if erste.employee_id is not None:
         emp = (
             await db.execute(
-                select(PersonioEmployee).where(PersonioEmployee.id == emp_id)
+                select(PersonioEmployee).where(PersonioEmployee.id == erste.employee_id)
             )
         ).scalar_one_or_none()
         hire_date = emp.hire_date if emp else None
+    elif erste.extern_id is not None:
+        ext = await db.get(OnboardingExtern, erste.extern_id)
+        hire_date = ext.hire_date if ext else None
 
     ergebnis = []
     for t, k in zeilen:

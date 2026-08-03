@@ -146,6 +146,11 @@ class SchulungTeilnahme(Base):
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("personio_employees.id", ondelete="SET NULL"), nullable=True
     )
+    #: Verweis auf einen manuell gepflegten (Nicht-Personio-)Eintrag (v1.101).
+    #: Genau eines von employee_id/extern_id trägt die Zeile.
+    extern_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("onboarding_extern.id", ondelete="CASCADE"), nullable=True
+    )
     #: Schlüssel der Excel-Historie; für rein aus Personio angelegte Zeilen NULL.
     personalnummer: Mapped[str | None] = mapped_column(String(30), nullable=True)
     mitarbeiter_name: Mapped[str | None] = mapped_column(Text, nullable=True)
