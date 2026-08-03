@@ -30,7 +30,7 @@ from app.models.schulung import PFLICHT_EBENEN
 from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
-from app.routers.hr_kpis import _extract_supervisor_id
+from app.routers.hr_kpis import _extract_office, _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.verantwortlicher_sync import (
     sync_beschreibung_nach_name,
@@ -321,6 +321,8 @@ class MitarbeiterRead(BaseModel):
     personalnummer: str | None
     name: str
     abteilung: str | None
+    #: Personio-Standort (Workplace, z. B. "Hamburg"); None bei Externen.
+    office: str | None
     schulungen: int
     ueberfaellig: int
     bald_faellig: int
@@ -394,6 +396,8 @@ class ZuweisbarerMitarbeiterRead(BaseModel):
     personalnummer: str | None
     name: str
     abteilung: str | None
+    #: Personio-Standort (Workplace, z. B. "Hamburg"); None bei Externen.
+    office: str | None
 
 
 class ZuweisungRead(BaseModel):
@@ -437,10 +441,12 @@ async def zuweisbare_mitarbeiter(
             personalnummer=_personalnummer(e.raw_json),
             name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
             abteilung=e.department,
+            office=_extract_office(e.raw_json),
         )
         for e in aktive
     ]
     # Manuell gepflegte (Nicht-Personio-)Einträge — negative ID (= -onboarding_extern.id).
+    # Externe haben keinen Personio-Standort (office=None).
     externe = (await db.execute(select(OnboardingExtern))).scalars().all()
     ergebnis.extend(
         ZuweisbarerMitarbeiterRead(
@@ -448,6 +454,7 @@ async def zuweisbare_mitarbeiter(
             personalnummer=None,
             name=x.name,
             abteilung=x.abteilung,
+            office=None,
         )
         for x in externe
     )
@@ -766,13 +773,14 @@ async def liste_mitarbeiter(
         if t.extern_id is not None:
             nach_extern.setdefault(t.extern_id, []).append((t, k))
 
-    def _eintrag(schluessel, employee_id, personalnummer, name, abteilung, hire_date, treffer):
+    def _eintrag(schluessel, employee_id, personalnummer, name, abteilung, office, hire_date, treffer):
         eintrag = MitarbeiterRead(
             schluessel=schluessel,
             employee_id=employee_id,
             personalnummer=personalnummer,
             name=name,
             abteilung=abteilung,
+            office=office,
             schulungen=len(treffer),
             ueberfaellig=0,
             bald_faellig=0,
@@ -814,14 +822,15 @@ async def liste_mitarbeiter(
             schluessel, treffer = f"e:{e.id}", nach_emp.get(e.id, [])
         name = f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
         ergebnis.append(
-            _eintrag(schluessel, e.id, persnr, name, e.department, e.hire_date, treffer)
+            _eintrag(schluessel, e.id, persnr, name, e.department,
+                     _extract_office(e.raw_json), e.hire_date, treffer)
         )
 
-    # Manuell gepflegte Externe (Schlüssel x:<id>).
+    # Manuell gepflegte Externe (Schlüssel x:<id>) — kein Personio-Standort.
     externe = (await db.execute(select(OnboardingExtern))).scalars().all()
     for x in externe:
         ergebnis.append(
-            _eintrag(f"x:{x.id}", None, None, x.name, x.abteilung, x.hire_date,
+            _eintrag(f"x:{x.id}", None, None, x.name, x.abteilung, None, x.hire_date,
                      nach_extern.get(x.id, []))
         )
 

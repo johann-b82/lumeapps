@@ -49,6 +49,7 @@ import {
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { abteilungAusgeblendet, vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { StandortChips, useStandortFilter } from "@/components/hr/StandortFilter";
 
 /** Eine über Bereiche zusammengefasste Schulung (ein Eintrag je Name). */
 type DedupSchulung = Schulung & { bereiche: string[] };
@@ -929,6 +930,12 @@ function ZuweisenPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
     queryKey: hrKpiKeys.schulungZuweisbar(),
     queryFn: fetchZuweisbare,
   });
+  const {
+    offices,
+    selected,
+    toggle,
+    filtered: personenGefiltert,
+  } = useStandortFilter(personen, (p) => p.office);
 
   const zuweisen = useMutation({
     mutationFn: weiseSchulungZu,
@@ -956,6 +963,9 @@ function ZuweisenPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
       >
         <div className="space-y-3 px-4 py-3">
           <p className="text-xs text-muted-foreground">{t("schulungen.zuweisen.hinweis")}</p>
+          {offices.length > 0 && (
+            <StandortChips offices={offices} selected={selected} onToggle={toggle} />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={mitarbeiter}
@@ -964,10 +974,11 @@ function ZuweisenPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
               className={auswahlStil}
             >
               <option value="">{t("schulungen.zuweisen.mitarbeiterWaehlen")}</option>
-              {(personen ?? []).map((p) => (
+              {personenGefiltert.map((p) => (
                 <option key={p.employee_id} value={String(p.employee_id)}>
                   {p.name}
                   {p.abteilung ? ` · ${p.abteilung}` : ""}
+                  {p.office ? ` · ${p.office}` : ""}
                 </option>
               ))}
             </select>
@@ -1146,30 +1157,40 @@ function MitarbeiterPanel() {
     queryKey: hrKpiKeys.schulungMitarbeiter(),
     queryFn: fetchMitarbeiter,
   });
+  const { offices, selected, toggle, filtered } = useStandortFilter(
+    data,
+    (m) => m.office,
+  );
   if (!data || data.length === 0) return null;
 
-  const ueberfaellig = data.filter((m) => m.ueberfaellig > 0).length;
+  const ueberfaellig = filtered.filter((m) => m.ueberfaellig > 0).length;
 
   return (
     <section className="mb-6">
       <Klappbar
         titel={t("schulungen.mitarbeiter.title")}
-        anzahl={data.length}
+        anzahl={filtered.length}
         icon={<Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
         offenStart={false}
       >
+        {offices.length > 0 && (
+          <div className="border-b bg-muted/10 px-4 py-3">
+            <StandortChips offices={offices} selected={selected} onToggle={toggle} />
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/30">
               <Th>{t("schulungen.mitarbeiter.name")}</Th>
               <Th>{t("schulungen.abteilungen.abteilung")}</Th>
+              <Th>{t("hr.organigramm.office")}</Th>
               <Th rechts>{t("schulungen.mitarbeiter.anzahl")}</Th>
               <Th rechts>{t("schulungen.status.ueberfaellig")}</Th>
               <Th rechts>{t("schulungen.status.bald")}</Th>
             </tr>
           </thead>
           <tbody>
-            {data.map((m) => {
+            {filtered.map((m) => {
               const offen = offenFuer === m.schluessel;
               return [
                 <tr
@@ -1184,6 +1205,7 @@ function MitarbeiterPanel() {
                     {m.name}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{m.abteilung ?? "—"}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{m.office ?? "—"}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{m.schulungen}</td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     {m.ueberfaellig > 0 ? (
@@ -1200,7 +1222,7 @@ function MitarbeiterPanel() {
                 </tr>,
                 offen ? (
                   <tr key={`${m.schluessel}-detail`} className="border-b bg-muted/10">
-                    <td colSpan={5} className="p-0">
+                    <td colSpan={6} className="p-0">
                       <MitarbeiterDetail schluessel={m.schluessel} />
                     </td>
                   </tr>

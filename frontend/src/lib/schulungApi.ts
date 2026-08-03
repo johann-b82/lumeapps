@@ -155,6 +155,8 @@ export interface MitarbeiterZeile {
   personalnummer: string | null;
   name: string;
   abteilung: string | null;
+  /** Personio-Standort (z. B. "Hamburg"); null bei Externen. */
+  office: string | null;
   schulungen: number;
   ueberfaellig: number;
   bald_faellig: number;
@@ -241,6 +243,8 @@ export interface ZuweisbarerMitarbeiter {
   personalnummer: string | null;
   name: string;
   abteilung: string | null;
+  /** Personio-Standort (z. B. "Hamburg"); null bei Externen. */
+  office: string | null;
 }
 
 /** Alle aktiven Personio-Mitarbeiter — auch ohne bisherige Schulung. */
