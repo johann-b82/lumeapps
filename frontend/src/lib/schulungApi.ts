@@ -37,8 +37,51 @@ export interface Schulung {
   frist_tage: number | null;
   /** Verantwortlicher/Trainer; null = nicht gesetzt. */
   verantwortlicher: string | null;
+  /** Schulungsbeschreibung; null = leer. */
+  beschreibung: string | null;
+  /** Anzahl hinterlegter Unterlagen. */
+  anzahl_unterlagen: number;
   aktiv: boolean;
   teilnahmen: number;
+}
+
+/** Eine hochgeladene Schulungsunterlage. */
+export interface Unterlage {
+  id: number;
+  dateiname: string;
+  mime: string | null;
+}
+
+/** Setzt die Beschreibung einer Schulung; leer löscht sie (je Name geteilt). */
+export function setzeBeschreibung(schulungId: number, beschreibung: string | null): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}/beschreibung`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ beschreibung }),
+  });
+}
+
+export function fetchUnterlagen(schulungId: number): Promise<Unterlage[]> {
+  return apiClient<Unterlage[]>(`/api/hr/schulungen/${schulungId}/unterlagen`);
+}
+
+export function ladeUnterlageHoch(schulungId: number, file: File): Promise<Unterlage> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiClient<Unterlage>(`/api/hr/schulungen/${schulungId}/unterlagen`, {
+    method: "POST",
+    body: fd,
+  });
+}
+
+export function entferneUnterlage(unterlageId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/unterlage/${unterlageId}`, { method: "DELETE" });
+}
+
+/** Lädt eine Unterlage herunter/öffnet sie. */
+export async function ladeUnterlage(unterlageId: number, dateiname: string): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/schulungen/unterlage/${unterlageId}/download`);
+  openBlob(blob, dateiname);
 }
 
 /** Setzt den Wiederholungs-Turnus (Monate) einer Schulung; null = bei Bedarf. */

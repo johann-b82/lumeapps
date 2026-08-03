@@ -55,6 +55,8 @@ class SchulungKatalog(Base):
     #: Verantwortlicher/Trainer (v1.94) — Name, Freitext (Externe erlaubt).
     #: Füllt das Trainer-Feld im Schulungsnachweis vor.
     verantwortlicher: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Schulungsbeschreibung (v1.100) — Freitext; wie Turnus/Frist je Name geteilt.
+    beschreibung: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -255,5 +257,24 @@ class OnboardingDokument(Base):
     plan_signatur: Mapped[str] = mapped_column(String(64), nullable=False)
     schulungen: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     erzeugt_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SchulungUnterlage(Base):
+    """Eine hochgeladene Schulungsunterlage (Directus-Datei), v1.100.
+
+    Verknüpft über den normalisierten Schulungs-Namen, damit dieselbe Unterlage
+    bei allen gleichnamigen Schulungen (alle Bereiche) erscheint.
+    """
+
+    __tablename__ = "schulung_unterlage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name_norm: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    directus_file_uuid: Mapped[str] = mapped_column(String(64), nullable=False)
+    dateiname: Mapped[str] = mapped_column(Text, nullable=False)
+    mime: Mapped[str | None] = mapped_column(String(127), nullable=True)
+    hochgeladen_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

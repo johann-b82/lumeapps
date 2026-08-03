@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ChevronDown,
   FileDown,
   GraduationCap,
   Loader2,
+  Paperclip,
   Upload,
   UserPlus,
   Users,
@@ -21,10 +23,16 @@ import {
   fetchPflichtMatrix,
   fetchSchulungen,
   fetchZuweisbare,
+  entferneUnterlage,
+  fetchUnterlagen,
   ladeSchulungsprotokoll,
+  ladeUnterlage,
+  ladeUnterlageHoch,
+  setzeBeschreibung,
   setzeFrist,
   setzeTurnus,
   setzeVerantwortlicher,
+  type Unterlage,
   schulungImportCommit,
   schulungImportPreview,
   setzePflicht,
@@ -222,6 +230,206 @@ function TurnusFeld({ schulung }: { schulung: Schulung }) {
   );
 }
 
+/** Beschreibung einer Schulung — Freitext, je Name geteilt. */
+function BeschreibungFeld({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [wert, setWert] = useState(schulung.beschreibung ?? "");
+  const speichern = useMutation({
+    mutationFn: (text: string | null) => setzeBeschreibung(schulung.id, text),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() }),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(schulung.beschreibung ?? "");
+    },
+  });
+  return (
+    <div>
+      <label className="text-xs font-medium">{t("schulungen.detail.beschreibung")}</label>
+      <textarea
+        value={wert}
+        onChange={(e) => setWert(e.target.value)}
+        onBlur={() => {
+          const neu = wert.trim() || null;
+          if (neu !== (schulung.beschreibung ?? null)) speichern.mutate(neu);
+        }}
+        rows={3}
+        placeholder={t("schulungen.detail.beschreibungPlaceholder")}
+        className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-sm
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+    </div>
+  );
+}
+
+/** Unterlagen einer Schulung — hochladen, herunterladen, entfernen (je Name geteilt). */
+function UnterlagenPanel({ schulung }: { schulung: Schulung }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const dateiRef = useRef<HTMLInputElement>(null);
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.schulungUnterlagen(schulung.id),
+    queryFn: () => fetchUnterlagen(schulung.id),
+  });
+  const auffrischen = () => {
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungUnterlagen(schulung.id) });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+  };
+  const hochladen = useMutation({
+    mutationFn: (f: File) => ladeUnterlageHoch(schulung.id, f),
+    onSuccess: () => {
+      toast.success(t("schulungen.detail.hochgeladen"));
+      auffrischen();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const entfernen = useMutation({
+    mutationFn: entferneUnterlage,
+    onSuccess: () => {
+      toast.success(t("schulungen.detail.entfernt"));
+      auffrischen();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const laden = useMutation({
+    mutationFn: (u: Unterlage) => ladeUnterlage(u.id, u.dateiname),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium">{t("schulungen.detail.unterlagen")}</label>
+        <input
+          ref={dateiRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) hochladen.mutate(f);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => dateiRef.current?.click()}
+          disabled={hochladen.isPending}
+          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs
+                     hover:bg-muted disabled:opacity-60 focus-visible:outline-none
+                     focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {hochladen.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {t("schulungen.detail.hochladen")}
+        </button>
+      </div>
+      {!data || data.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t("schulungen.detail.keineUnterlagen")}
+        </p>
+      ) : (
+        <ul className="mt-1.5 space-y-1">
+          {data.map((u) => (
+            <li key={u.id} className="flex items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => laden.mutate(u)}
+                className="inline-flex items-center gap-1.5 text-primary hover:underline
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
+                {u.dateiname}
+              </button>
+              <button
+                type="button"
+                onClick={() => entfernen.mutate(u.id)}
+                disabled={entfernen.isPending}
+                aria-label={t("schulungen.detail.entfernen")}
+                title={t("schulungen.detail.entfernen")}
+                className="rounded p-0.5 text-muted-foreground transition-colors
+                           hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Aufklappbares Detail einer Schulung: Beschreibung + Unterlagen. */
+function SchulungDetail({ schulung }: { schulung: Schulung }) {
+  return (
+    <div className="space-y-3 bg-muted/10 px-6 py-3">
+      <BeschreibungFeld schulung={schulung} />
+      <UnterlagenPanel schulung={schulung} />
+    </div>
+  );
+}
+
+/** Eine Katalogzeile mit aufklappbarem Detail. */
+function KatalogZeileRow({ s }: { s: Schulung }) {
+  const { t } = useTranslation();
+  const [offen, setOffen] = useState(false);
+  return (
+    <>
+      <tr className="border-b border-border/50 transition-colors hover:bg-muted/40">
+        <td className="px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setOffen((v) => !v)}
+            aria-expanded={offen}
+            aria-label={t("schulungen.detail.aufklappen")}
+            className="mr-1.5 inline-flex align-middle text-muted-foreground hover:text-foreground
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${offen ? "" : "-rotate-90"}`}
+              aria-hidden="true"
+            />
+          </button>
+          {s.name}
+          {(s.beschreibung || s.anzahl_unterlagen > 0) && (
+            <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs text-muted-foreground">
+              {s.anzahl_unterlagen > 0 && (
+                <>
+                  <Paperclip className="h-3 w-3" aria-hidden="true" />
+                  {s.anzahl_unterlagen}
+                </>
+              )}
+            </span>
+          )}
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap">
+          <TurnusFeld schulung={s} />
+        </td>
+        <td className="px-4 py-2">
+          <VerantwortlicherFeld schulung={s} />
+        </td>
+        <td className="px-4 py-2 text-right">
+          <FristFeld schulung={s} />
+        </td>
+        <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
+        <td className="px-4 py-2 text-right">
+          <ProtokollKnopf schulung={s} />
+        </td>
+      </tr>
+      {offen && (
+        <tr className="border-b border-border/50">
+          <td colSpan={6} className="p-0">
+            <SchulungDetail schulung={s} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 /** Schulungen eines Bereichs. */
 function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZeile[] }) {
   const { t } = useTranslation();
@@ -240,25 +448,7 @@ function BereichGruppe({ bereich, zeilen }: { bereich: string; zeilen: KatalogZe
         </thead>
         <tbody>
           {zeilen.map((s) => (
-            <tr
-              key={s.id}
-              className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
-            >
-              <td className="px-4 py-2">{s.name}</td>
-              <td className="px-4 py-2 whitespace-nowrap">
-                <TurnusFeld schulung={s} />
-              </td>
-              <td className="px-4 py-2">
-                <VerantwortlicherFeld schulung={s} />
-              </td>
-              <td className="px-4 py-2 text-right">
-                <FristFeld schulung={s} />
-              </td>
-              <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
-              <td className="px-4 py-2 text-right">
-                <ProtokollKnopf schulung={s} />
-              </td>
-            </tr>
+            <KatalogZeileRow key={s.id} s={s} />
           ))}
         </tbody>
       </table>

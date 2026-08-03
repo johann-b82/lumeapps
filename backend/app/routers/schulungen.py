@@ -14,11 +14,17 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import PersonioEmployee, SchulungKatalog, SchulungPflicht, SchulungTeilnahme
+from app.models import (
+    PersonioEmployee,
+    SchulungKatalog,
+    SchulungPflicht,
+    SchulungTeilnahme,
+    SchulungUnterlage,
+)
 from app.models.schulung import PFLICHT_EBENEN
 from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
@@ -26,9 +32,14 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 from app.routers.hr_kpis import _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.verantwortlicher_sync import (
+    sync_beschreibung_nach_name,
     sync_frist_nach_name,
     sync_person_nach_name,
     sync_turnus_nach_name,
+)
+from app.services.maintenance_files import (
+    fetch_directus_asset,
+    upload_maintenance_file_to_directus,
 )
 from app.services.pdf_logo import lade_logo
 from app.services.schulungsprotokoll_pdf import (
@@ -47,6 +58,36 @@ router = APIRouter(
     tags=["schulungen"],
     dependencies=[Depends(get_current_user), Depends(require_admin)],
 )
+
+
+def _name_norm(name: str) -> str:
+    """Normalisierter Schulungs-Name — Schlüssel für geteilte Unterlagen."""
+    return (name or "").strip().lower()
+
+
+#: Erlaubte Unterlagen-Dateitypen (Endung → MIME).
+_UNTERLAGE_TYPEN = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain",
+}
+
+
+def _unterlage_ext(dateiname: str) -> str:
+    punkt = dateiname.rfind(".")
+    return dateiname[punkt:].lower() if punkt >= 0 else ""
+
+
+def _sicherer_dateiname(name: str) -> str:
+    return name.replace('"', "").replace("\\", "").replace("/", "").strip() or "datei"
 
 
 class NichtZugeordnetRead(BaseModel):
@@ -78,6 +119,10 @@ class SchulungRead(BaseModel):
     frist_tage: int | None
     #: Verantwortlicher/Trainer (v1.94); None = nicht gesetzt.
     verantwortlicher: str | None
+    #: Schulungsbeschreibung (v1.100); None = leer.
+    beschreibung: str | None
+    #: Anzahl hinterlegter Unterlagen (v1.100).
+    anzahl_unterlagen: int
     aktiv: bool
     teilnahmen: int
 
@@ -749,6 +794,10 @@ async def liste_schulungen(
     zaehler: dict[int, int] = {}
     for (sid,) in (await db.execute(select(SchulungTeilnahme.schulung_id))).all():
         zaehler[sid] = zaehler.get(sid, 0) + 1
+    # Unterlagen je normalisiertem Namen (über Bereiche geteilt).
+    unterlagen: dict[str, int] = {}
+    for (nm,) in (await db.execute(select(SchulungUnterlage.name_norm))).all():
+        unterlagen[nm] = unterlagen.get(nm, 0) + 1
     return [
         SchulungRead(
             id=k.id,
@@ -758,6 +807,8 @@ async def liste_schulungen(
             turnus_monate=k.turnus_monate,
             frist_tage=k.frist_tage,
             verantwortlicher=k.verantwortlicher,
+            beschreibung=k.beschreibung,
+            anzahl_unterlagen=unterlagen.get(_name_norm(k.name), 0),
             aktiv=k.aktiv,
             teilnahmen=zaehler.get(k.id, 0),
         )
@@ -862,6 +913,135 @@ async def turnus_setzen(
     await sync_turnus_nach_name(
         db, k.name, _turnus_label(eingabe.turnus_monate), eingabe.turnus_monate
     )
+    await db.commit()
+
+
+class BeschreibungSetzen(BaseModel):
+    #: Freitext; None/leer löscht die Beschreibung.
+    beschreibung: str | None = None
+
+
+@router.put("/{schulung_id}/beschreibung", status_code=204)
+async def beschreibung_setzen(
+    schulung_id: int,
+    eingabe: BeschreibungSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Beschreibung einer Schulung setzen — je Name geteilt (alle Bereiche)."""
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    text = (eingabe.beschreibung or "").strip() or None
+    await sync_beschreibung_nach_name(db, k.name, text)
+    await db.commit()
+
+
+class UnterlageRead(BaseModel):
+    id: int
+    dateiname: str
+    mime: str | None
+
+
+async def _schulung_name(db: AsyncSession, schulung_id: int) -> str:
+    name = (
+        await db.execute(select(SchulungKatalog.name).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if name is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    return name
+
+
+@router.get("/{schulung_id}/unterlagen", response_model=list[UnterlageRead])
+async def unterlagen_liste(
+    schulung_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[UnterlageRead]:
+    """Unterlagen einer Schulung (über alle gleichnamigen geteilt)."""
+    name = await _schulung_name(db, schulung_id)
+    rows = (
+        (
+            await db.execute(
+                select(SchulungUnterlage)
+                .where(SchulungUnterlage.name_norm == _name_norm(name))
+                .order_by(SchulungUnterlage.hochgeladen_am)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [UnterlageRead(id=u.id, dateiname=u.dateiname, mime=u.mime) for u in rows]
+
+
+@router.post("/{schulung_id}/unterlagen", response_model=UnterlageRead, status_code=201)
+async def unterlage_hochladen(
+    schulung_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> UnterlageRead:
+    """Eine Unterlage zu einer Schulung hochladen (Directus); je Name geteilt."""
+    name = await _schulung_name(db, schulung_id)
+    dateiname = file.filename or ""
+    ext = _unterlage_ext(dateiname)
+    if ext not in _UNTERLAGE_TYPEN:
+        raise HTTPException(
+            status_code=422,
+            detail="Dateityp nicht erlaubt (PDF, Bild, Office oder Text).",
+        )
+    mime = _UNTERLAGE_TYPEN[ext]
+
+    async def _iter():
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+
+    directus_uuid, _ = await upload_maintenance_file_to_directus(
+        filename=dateiname or f"unterlage{ext}", content_type=mime, body_stream=_iter()
+    )
+    u = SchulungUnterlage(
+        name_norm=_name_norm(name),
+        directus_file_uuid=directus_uuid,
+        dateiname=dateiname or f"unterlage{ext}",
+        mime=mime,
+    )
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return UnterlageRead(id=u.id, dateiname=u.dateiname, mime=u.mime)
+
+
+@router.get("/unterlage/{unterlage_id}/download")
+async def unterlage_download(
+    unterlage_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> Response:
+    """Die gespeicherten Bytes aus Directus an den Client durchreichen."""
+    u = await db.get(SchulungUnterlage, unterlage_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="Unterlage nicht gefunden.")
+    content, content_type = await fetch_directus_asset(u.directus_file_uuid)
+    return Response(
+        content=content,
+        media_type=u.mime or content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{_sicherer_dateiname(u.dateiname)}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+@router.delete("/unterlage/{unterlage_id}", status_code=204)
+async def unterlage_entfernen(
+    unterlage_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    u = await db.get(SchulungUnterlage, unterlage_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="Unterlage nicht gefunden.")
+    await db.delete(u)
     await db.commit()
 
 

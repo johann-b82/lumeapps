@@ -50,6 +50,20 @@ async def sync_turnus_nach_name(
     )
 
 
+async def sync_beschreibung_nach_name(
+    db: AsyncSession, name: str, beschreibung: str | None
+) -> None:
+    """Setzt die Beschreibung auf allen gleichnamigen Schulungen (alle Bereiche)."""
+    ziel = (name or "").strip().lower()
+    if not ziel:
+        return
+    await db.execute(
+        update(SchulungKatalog)
+        .where(func.lower(func.trim(SchulungKatalog.name)) == ziel)
+        .values(beschreibung=beschreibung)
+    )
+
+
 async def sync_frist_nach_name(
     db: AsyncSession, name: str, frist_tage: int | None
 ) -> None:
