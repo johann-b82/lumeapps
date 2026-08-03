@@ -25,7 +25,11 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
 from app.routers.hr_kpis import _extract_supervisor_id
 from app.security.directus_auth import get_current_user, require_admin
-from app.services.verantwortlicher_sync import sync_person_nach_name
+from app.services.verantwortlicher_sync import (
+    sync_frist_nach_name,
+    sync_person_nach_name,
+    sync_turnus_nach_name,
+)
 from app.services.pdf_logo import lade_logo
 from app.services.schulungsprotokoll_pdf import (
     dateiname as protokoll_dateiname,
@@ -772,7 +776,10 @@ async def frist_setzen(
     eingabe: FristSetzen,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> None:
-    """Frist (Tage nach Eintritt/Zuweisung) einer Schulung setzen oder löschen."""
+    """Frist (Tage nach Eintritt/Zuweisung) einer Schulung setzen oder löschen.
+
+    Wird je Schulungs-Name geteilt: gilt auf allen gleichnamigen Schulungen.
+    """
     if eingabe.frist_tage is not None and not 0 <= eingabe.frist_tage <= 3650:
         raise HTTPException(status_code=400, detail="Frist muss 0-3650 Tage sein.")
     k = (
@@ -780,7 +787,7 @@ async def frist_setzen(
     ).scalar_one_or_none()
     if k is None:
         raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
-    k.frist_tage = eingabe.frist_tage
+    await sync_frist_nach_name(db, k.name, eingabe.frist_tage)
     await db.commit()
 
 
@@ -842,7 +849,8 @@ async def turnus_setzen(
 ) -> None:
     """Wiederholungs-Turnus einer Schulung setzen (Monate) — treibt die Fälligkeit.
 
-    Der Anzeigetext ``turnus`` wird passend abgeleitet; ``None`` = bei Bedarf.
+    Der Anzeigetext ``turnus`` wird passend abgeleitet; ``None`` = bei Bedarf. Wird
+    je Schulungs-Name geteilt: gilt auf allen gleichnamigen Schulungen.
     """
     if eingabe.turnus_monate is not None and not 1 <= eingabe.turnus_monate <= 600:
         raise HTTPException(status_code=400, detail="Turnus muss 1-600 Monate sein.")
@@ -851,8 +859,9 @@ async def turnus_setzen(
     ).scalar_one_or_none()
     if k is None:
         raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
-    k.turnus_monate = eingabe.turnus_monate
-    k.turnus = _turnus_label(eingabe.turnus_monate)
+    await sync_turnus_nach_name(
+        db, k.name, _turnus_label(eingabe.turnus_monate), eingabe.turnus_monate
+    )
     await db.commit()
 
 

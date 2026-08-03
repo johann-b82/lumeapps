@@ -36,6 +36,34 @@ async def sync_person_nach_name(
     )
 
 
+async def sync_turnus_nach_name(
+    db: AsyncSession, name: str, turnus: str | None, turnus_monate: int | None
+) -> None:
+    """Setzt Turnus (Text + Monate) auf allen gleichnamigen Schulungen (alle Bereiche)."""
+    ziel = (name or "").strip().lower()
+    if not ziel:
+        return
+    await db.execute(
+        update(SchulungKatalog)
+        .where(func.lower(func.trim(SchulungKatalog.name)) == ziel)
+        .values(turnus=turnus, turnus_monate=turnus_monate)
+    )
+
+
+async def sync_frist_nach_name(
+    db: AsyncSession, name: str, frist_tage: int | None
+) -> None:
+    """Setzt die Frist auf allen gleichnamigen Schulungen (alle Bereiche)."""
+    ziel = (name or "").strip().lower()
+    if not ziel:
+        return
+    await db.execute(
+        update(SchulungKatalog)
+        .where(func.lower(func.trim(SchulungKatalog.name)) == ziel)
+        .values(frist_tage=frist_tage)
+    )
+
+
 async def person_fuer_name(db: AsyncSession, name: str) -> str | None:
     """Bereits gesetzte Person zu einem Namen (Schulung bevorzugt, sonst Einarbeitung)."""
     ziel = (name or "").strip().lower()
