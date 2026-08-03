@@ -48,6 +48,7 @@ from app.services.schulungsprotokoll_pdf import (
 )
 from app.services.schulung_import import (
     ImportVorschau,
+    _faellig_am,
     _personalnummer,
     baue_vorschau,
     uebernehmen,
@@ -522,6 +523,111 @@ async def zuweisung_entfernen(
         )
     await db.delete(zeile)
     await db.commit()
+
+
+def _teilnahme_durchgefuehrt(
+    zeile: SchulungTeilnahme, monate: int | None, datum: date | None
+) -> None:
+    """Durchführungsdatum einer Teilnahme setzen/löschen und Fälligkeit nachziehen."""
+    if datum is None:
+        zeile.aktuell_datum = None
+        zeile.naechste_faellig_am = None
+        return
+    zeile.aktuell_datum = datum
+    if zeile.initial_datum is None:
+        zeile.initial_datum = datum
+    zeile.naechste_faellig_am = _faellig_am(datum, monate)
+
+
+class DurchgefuehrtSetzen(BaseModel):
+    #: Durchführungsdatum; None setzt die Zeile auf "offen" zurück.
+    datum: date | None = None
+
+
+@router.put("/teilnahme/{teilnahme_id}/durchgefuehrt", status_code=204)
+async def teilnahme_durchgefuehrt(
+    teilnahme_id: int,
+    eingabe: DurchgefuehrtSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine einzelne Teilnahme als durchgeführt eintragen (setzt das Datum)."""
+    zeile = (
+        await db.execute(
+            select(SchulungTeilnahme).where(SchulungTeilnahme.id == teilnahme_id)
+        )
+    ).scalar_one_or_none()
+    if zeile is None:
+        raise HTTPException(status_code=404, detail="Teilnahme nicht gefunden.")
+    katalog = (
+        await db.execute(
+            select(SchulungKatalog).where(SchulungKatalog.id == zeile.schulung_id)
+        )
+    ).scalar_one_or_none()
+    _teilnahme_durchgefuehrt(
+        zeile, katalog.turnus_monate if katalog else None, eingabe.datum
+    )
+    await db.commit()
+
+
+class SammelDurchgefuehrt(BaseModel):
+    schulung_id: int
+    datum: date
+    #: Personio-IDs der Teilnehmer.
+    employee_ids: list[int]
+
+
+@router.post("/durchgefuehrt", status_code=200)
+async def sammel_durchgefuehrt(
+    eingabe: SammelDurchgefuehrt,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> dict:
+    """Eine Schulung für mehrere Mitarbeiter zum selben Datum als durchgeführt eintragen.
+
+    Legt fehlende Teilnahmen an und setzt das Durchführungsdatum; passt zum
+    Formblatt-68-Ablauf (ein Termin, mehrere Teilnehmer).
+    """
+    katalog = (
+        await db.execute(
+            select(SchulungKatalog).where(SchulungKatalog.id == eingabe.schulung_id)
+        )
+    ).scalar_one_or_none()
+    if katalog is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+
+    eingetragen = 0
+    for eid in dict.fromkeys(eingabe.employee_ids):  # Duplikate ignorieren
+        emp = (
+            await db.execute(
+                select(PersonioEmployee).where(PersonioEmployee.id == eid)
+            )
+        ).scalar_one_or_none()
+        if emp is None:
+            continue
+        persnr = _personalnummer(emp.raw_json)
+        bedingungen = [SchulungTeilnahme.employee_id == emp.id]
+        if persnr:
+            bedingungen.append(SchulungTeilnahme.personalnummer == persnr)
+        zeile = (
+            await db.execute(
+                select(SchulungTeilnahme).where(
+                    SchulungTeilnahme.schulung_id == katalog.id, or_(*bedingungen)
+                )
+            )
+        ).scalars().first()
+        if zeile is None:
+            zeile = SchulungTeilnahme(
+                schulung_id=katalog.id,
+                employee_id=emp.id,
+                personalnummer=persnr,
+                mitarbeiter_name=f"{emp.first_name or ''} {emp.last_name or ''}".strip()
+                or f"#{emp.id}",
+            )
+            db.add(zeile)
+        _teilnahme_durchgefuehrt(zeile, katalog.turnus_monate, eingabe.datum)
+        eingetragen += 1
+
+    await db.commit()
+    return {"eingetragen": eingetragen}
 
 
 class OffeneSchulungRead(BaseModel):

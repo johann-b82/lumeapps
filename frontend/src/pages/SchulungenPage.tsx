@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  CalendarCheck,
   ChevronDown,
   FileDown,
   GraduationCap,
@@ -28,7 +29,9 @@ import {
   ladeSchulungsprotokoll,
   ladeUnterlage,
   ladeUnterlageHoch,
+  sammelDurchgefuehrt,
   setzeBeschreibung,
+  setzeDurchgefuehrt,
   setzeFrist,
   setzeTurnus,
   setzeVerantwortlicher,
@@ -810,13 +813,28 @@ function MitarbeiterDetail({ schluessel }: { schluessel: string }) {
     queryFn: () => fetchMitarbeiterSchulungen(schluessel),
   });
 
+  const auffrischen = () => {
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiterDetail(schluessel) });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+  };
+
   const entfernen = useMutation({
     mutationFn: entferneZuweisung,
     onSuccess: () => {
       toast.success(t("schulungen.zuweisen.entfernt"));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiterDetail(schluessel) });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
-      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      auffrischen();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const durchgefuehrt = useMutation({
+    mutationFn: ({ id, datum }: { id: number; datum: string | null }) =>
+      setzeDurchgefuehrt(id, datum),
+    onSuccess: () => {
+      toast.success(t("schulungen.durchgefuehrt.gespeichert"));
+      auffrischen();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -835,7 +853,7 @@ function MitarbeiterDetail({ schluessel }: { schluessel: string }) {
       <thead>
         <tr className="border-b bg-muted/20">
           <Th>{t("schulungen.katalog.name")}</Th>
-          <Th>{t("schulungen.mitarbeiter.aktuell")}</Th>
+          <Th>{t("schulungen.durchgefuehrt.am")}</Th>
           <Th>{t("schulungen.mitarbeiter.faelligAm")}</Th>
           <Th rechts>{t("schulungen.mitarbeiter.status")}</Th>
           <Th rechts>{""}</Th>
@@ -850,8 +868,21 @@ function MitarbeiterDetail({ schluessel }: { schluessel: string }) {
             <td className="px-4 py-1.5">
               <span className="text-muted-foreground">{s.bereich}</span> · {s.name}
             </td>
-            <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">
-              {datum(s.aktuell_datum)}
+            <td className="px-4 py-1.5">
+              <input
+                type="date"
+                value={s.aktuell_datum ? s.aktuell_datum.slice(0, 10) : ""}
+                disabled={durchgefuehrt.isPending}
+                onChange={(e) =>
+                  durchgefuehrt.mutate({
+                    id: s.teilnahme_id,
+                    datum: e.target.value || null,
+                  })
+                }
+                aria-label={t("schulungen.durchgefuehrt.am")}
+                className="h-7 rounded-md border bg-background px-2 text-xs disabled:opacity-50
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </td>
             <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">
               {datum(s.naechste_faellig_am)}
@@ -974,6 +1005,133 @@ function ZuweisenPanel({ schulungen }: { schulungen: Schulung[] | undefined }) {
               {t("schulungen.zuweisen.aktion")}
             </button>
           </div>
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
+/** Sammel-Eintrag: eine Schulung + ein Datum für mehrere Teilnehmer. */
+function SammelDurchgefuehrtPanel({ schulungen }: { schulungen: DedupSchulung[] | undefined }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [schulung, setSchulung] = useState("");
+  const [datum, setDatum] = useState("");
+  const [suche, setSuche] = useState("");
+  const [gewaehlt, setGewaehlt] = useState<Set<number>>(new Set());
+
+  const { data: personen } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+  });
+
+  const eintragen = useMutation({
+    mutationFn: () =>
+      sammelDurchgefuehrt({
+        schulung_id: Number(schulung),
+        datum,
+        employee_ids: [...gewaehlt],
+      }),
+    onSuccess: (r) => {
+      toast.success(t("schulungen.durchgefuehrt.sammelErfolg", { count: r.eingetragen }));
+      setGewaehlt(new Set());
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const gefilterte = (personen ?? []).filter((p) =>
+    p.name.toLowerCase().includes(suche.trim().toLowerCase()),
+  );
+  const bereit = schulung !== "" && datum !== "" && gewaehlt.size > 0;
+  const feldStil =
+    "h-9 rounded-md border bg-background px-2 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  const umschalten = (id: number) =>
+    setGewaehlt((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.durchgefuehrt.sammelTitle")}
+        icon={<CalendarCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            {t("schulungen.durchgefuehrt.sammelHinweis")}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={schulung}
+              onChange={(e) => setSchulung(e.target.value)}
+              aria-label={t("schulungen.katalog.name")}
+              className={`${feldStil} min-w-[16rem] flex-1`}
+            >
+              <option value="">{t("schulungen.zuweisen.schulungWaehlen")}</option>
+              {(schulungen ?? []).map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+              aria-label={t("schulungen.durchgefuehrt.am")}
+              className={feldStil}
+            />
+          </div>
+
+          <input
+            type="search"
+            value={suche}
+            onChange={(e) => setSuche(e.target.value)}
+            placeholder={t("schulungen.durchgefuehrt.teilnehmerSuche")}
+            className={`${feldStil} w-full`}
+          />
+          <div className="max-h-56 overflow-auto rounded-md border">
+            {gefilterte.map((p) => (
+              <label
+                key={p.employee_id}
+                className="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm hover:bg-muted/40"
+              >
+                <input
+                  type="checkbox"
+                  checked={gewaehlt.has(p.employee_id)}
+                  onChange={() => umschalten(p.employee_id)}
+                  className="h-4 w-4 accent-primary"
+                />
+                {p.name}
+                {p.abteilung && (
+                  <span className="text-muted-foreground">· {p.abteilung}</span>
+                )}
+              </label>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            disabled={!bereit || eintragen.isPending}
+            onClick={() => eintragen.mutate()}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                       text-primary-foreground disabled:opacity-50
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {eintragen.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            {t("schulungen.durchgefuehrt.sammelAktion", { count: gewaehlt.size })}
+          </button>
         </div>
       </Klappbar>
     </section>
@@ -1380,6 +1538,7 @@ export function SchulungenPage() {
       {tab === "stand" && (
         <>
           <OffenePanel />
+          <SammelDurchgefuehrtPanel schulungen={entdoppelt} />
           <MitarbeiterPanel />
           <AbteilungenPanel />
         </>

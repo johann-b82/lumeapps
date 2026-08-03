@@ -275,6 +275,28 @@ export function entferneZuweisung(teilnahmeId: number): Promise<void> {
   });
 }
 
+/** Setzt das Durchführungsdatum einer Teilnahme; null setzt sie auf "offen" zurück. */
+export function setzeDurchgefuehrt(teilnahmeId: number, datum: string | null): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/teilnahme/${teilnahmeId}/durchgefuehrt`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ datum }),
+  });
+}
+
+/** Trägt eine Schulung für mehrere Mitarbeiter zum selben Datum als durchgeführt ein. */
+export function sammelDurchgefuehrt(eingabe: {
+  schulung_id: number;
+  datum: string;
+  employee_ids: number[];
+}): Promise<{ eingetragen: number }> {
+  return apiClient<{ eingetragen: number }>("/api/hr/schulungen/durchgefuehrt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
 /** Lädt den Schulungsnachweis (Formblatt 68) einer Schulung als PDF herunter. */
 export async function ladeSchulungsprotokoll(
   schulungId: number,
