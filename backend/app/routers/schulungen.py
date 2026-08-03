@@ -734,71 +734,99 @@ async def offene_schulungen(
 async def liste_mitarbeiter(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[MitarbeiterRead]:
-    """Übersicht: je Mitarbeiter Anzahl Schulungen und Fälligkeiten.
+    """Stand je Mitarbeiter: Anzahl Schulungen und Fälligkeiten.
 
-    Gruppiert über die Personalnummer, weil sie auch dort trägt, wo keine
-    Personio-Zuordnung existiert.
+    Die Belegschaft kommt aus **einer** Quelle — Personio (``active`` +
+    ``onboarding``) plus manuell gepflegte Externe, identisch zur Zuweis-Auswahl
+    (:func:`zuweisbare_mitarbeiter`). So erscheinen *alle* aktuellen Mitarbeiter,
+    nicht nur die mit bereits zugewiesener Schulung; Ausgetretene fallen weg. Die
+    Fälligkeiten werden danach aus dem Teilnahme-Bestand angeheftet (0 Schulungen,
+    solange nichts zugewiesen ist).
     """
     heute = date.today()
+
+    # Teilnahme-Bestand einmal laden und nach den drei Schlüsselarten indizieren;
+    # die Schlüsselwahl unten spiegelt _schluessel/_schluessel_filter, damit Liste
+    # und Detail (/mitarbeiter/{schluessel}) exakt denselben Bestand zählen.
     zeilen = (
-        (
-            await db.execute(
-                select(SchulungTeilnahme, SchulungKatalog).join(
-                    SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
-                )
+        await db.execute(
+            select(SchulungTeilnahme, SchulungKatalog).join(
+                SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
             )
         )
+    ).all()
+    nach_emp: dict[int, list] = {}
+    nach_persnr: dict[str, list] = {}
+    nach_extern: dict[int, list] = {}
+    for t, k in zeilen:
+        if t.employee_id is not None:
+            nach_emp.setdefault(t.employee_id, []).append((t, k))
+        if t.personalnummer:
+            nach_persnr.setdefault(t.personalnummer, []).append((t, k))
+        if t.extern_id is not None:
+            nach_extern.setdefault(t.extern_id, []).append((t, k))
+
+    def _eintrag(schluessel, employee_id, personalnummer, name, abteilung, hire_date, treffer):
+        eintrag = MitarbeiterRead(
+            schluessel=schluessel,
+            employee_id=employee_id,
+            personalnummer=personalnummer,
+            name=name,
+            abteilung=abteilung,
+            schulungen=len(treffer),
+            ueberfaellig=0,
+            bald_faellig=0,
+            naechste_faelligkeit=None,
+        )
+        for t, k in treffer:
+            faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
+            status = _status(faellig, heute)
+            if status == "ueberfaellig":
+                eintrag.ueberfaellig += 1
+            elif status == "bald":
+                eintrag.bald_faellig += 1
+            if faellig is not None and (
+                eintrag.naechste_faelligkeit is None
+                or faellig < eintrag.naechste_faelligkeit
+            ):
+                eintrag.naechste_faelligkeit = faellig
+        return eintrag
+
+    ergebnis: list[MitarbeiterRead] = []
+
+    # Personio-Belegschaft (aktive + neu eintretende) — die eine Quelle.
+    personen = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status.in_(("active", "onboarding")))
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
+            )
+        )
+        .scalars()
         .all()
     )
+    for e in personen:
+        persnr = _personalnummer(e.raw_json)
+        if persnr:
+            schluessel, treffer = f"p:{persnr}", nach_persnr.get(persnr, [])
+        else:
+            schluessel, treffer = f"e:{e.id}", nach_emp.get(e.id, [])
+        name = f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
+        ergebnis.append(
+            _eintrag(schluessel, e.id, persnr, name, e.department, e.hire_date, treffer)
+        )
 
-    # Abteilung + Eintrittsdatum aus Personio bzw. dem externen Eintrag.
-    mitarbeiter = {
-        e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
-    }
-    externe = {
-        x.id: x for x in (await db.execute(select(OnboardingExtern))).scalars().all()
-    }
-
-    gruppen: dict[str, MitarbeiterRead] = {}
-    for teilnahme, katalog in zeilen:
-        schluessel = _schluessel(teilnahme)
-        if schluessel is None:
-            continue  # nicht adressierbar
-        emp = mitarbeiter.get(teilnahme.employee_id or -1)
-        ext = externe.get(teilnahme.extern_id) if teilnahme.extern_id else None
-        abteilung = emp.department if emp else (ext.abteilung if ext else None)
-        hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
-        eintrag = gruppen.get(schluessel)
-        if eintrag is None:
-            eintrag = MitarbeiterRead(
-                schluessel=schluessel,
-                employee_id=teilnahme.employee_id,
-                personalnummer=teilnahme.personalnummer,
-                name=teilnahme.mitarbeiter_name
-                or f"#{teilnahme.personalnummer or teilnahme.employee_id}",
-                abteilung=abteilung,
-                schulungen=0,
-                ueberfaellig=0,
-                bald_faellig=0,
-                naechste_faelligkeit=None,
-            )
-            gruppen[schluessel] = eintrag
-
-        eintrag.schulungen += 1
-        faellig = _effektive_faelligkeit(teilnahme, katalog.frist_tage, hire_date)
-        status = _status(faellig, heute)
-        if status == "ueberfaellig":
-            eintrag.ueberfaellig += 1
-        elif status == "bald":
-            eintrag.bald_faellig += 1
-        if faellig is not None and (
-            eintrag.naechste_faelligkeit is None
-            or faellig < eintrag.naechste_faelligkeit
-        ):
-            eintrag.naechste_faelligkeit = faellig
+    # Manuell gepflegte Externe (Schlüssel x:<id>).
+    externe = (await db.execute(select(OnboardingExtern))).scalars().all()
+    for x in externe:
+        ergebnis.append(
+            _eintrag(f"x:{x.id}", None, None, x.name, x.abteilung, x.hire_date,
+                     nach_extern.get(x.id, []))
+        )
 
     return sorted(
-        gruppen.values(),
+        ergebnis,
         key=lambda m: (-m.ueberfaellig, -m.bald_faellig, m.name.lower()),
     )
 
