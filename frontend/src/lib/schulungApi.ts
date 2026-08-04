@@ -130,6 +130,50 @@ export function schulungImportCommit(file: File): Promise<SchulungImportVorschau
   return upload("/api/hr/schulungen/import/commit", file);
 }
 
+// --- Schulungsbericht-Upload (PDF) → Stand fortschreiben ---------------------
+
+export type BerichtMitarbeiterStatus = "ok" | "nicht_gefunden" | "mehrdeutig";
+
+export interface BerichtZeile {
+  mitarbeiter_name: string;
+  schulung_name: string;
+  datum: string | null;
+  mitarbeiter_status: BerichtMitarbeiterStatus;
+  /** Aufgelöster Personio-Name (null, wenn nicht/mehrdeutig gefunden). */
+  matched_mitarbeiter: string | null;
+  schulung_im_katalog: boolean;
+  /** True = wird (bzw. wurde) geschrieben. */
+  uebernommen: boolean;
+}
+
+export interface BerichtVorschau {
+  format: string;
+  format_label: string;
+  gesamt: number;
+  uebernehmbar: number;
+  ohne_mitarbeiter: number;
+  ohne_datum: number;
+  neue_schulungen: number;
+  eingetragen: number;
+  zeilen: BerichtZeile[];
+}
+
+function uploadBericht(pfad: string, file: File): Promise<BerichtVorschau> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiClient<BerichtVorschau>(pfad, { method: "POST", body: fd });
+}
+
+/** Schulungsbericht-PDF (Fbl. 68/71) auswerten — nichts schreiben. */
+export function berichtPreview(file: File): Promise<BerichtVorschau> {
+  return uploadBericht("/api/hr/schulungen/bericht/preview", file);
+}
+
+/** Schulungsbericht übernehmen: Durchführungsdaten setzen, fehlende Schulungen anlegen. */
+export function berichtCommit(file: File): Promise<BerichtVorschau> {
+  return uploadBericht("/api/hr/schulungen/bericht/commit", file);
+}
+
 export function fetchSchulungen(): Promise<Schulung[]> {
   return apiClient<Schulung[]>("/api/hr/schulungen");
 }

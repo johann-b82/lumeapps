@@ -54,6 +54,8 @@ from app.services.schulung_import import (
     baue_vorschau,
     uebernehmen,
 )
+from app.services import schulungsbericht_import as bericht_import
+from app.parsing.schulungsbericht_parser import SchulungsberichtError
 
 router = APIRouter(
     prefix="/api/hr/schulungen",
@@ -192,6 +194,74 @@ async def import_commit(
     """Datei übernehmen (idempotent: erneuter Import aktualisiert)."""
     parsed = await _parse_upload(file)
     return _als_read(await uebernehmen(db, parsed, file.filename or "unbenannt.xlsx"))
+
+
+# --- Schulungsbericht-Upload (PDF) → Stand fortschreiben -----------------------
+
+
+class BerichtZeileRead(BaseModel):
+    mitarbeiter_name: str
+    schulung_name: str
+    datum: date | None
+    #: "ok" | "nicht_gefunden" | "mehrdeutig"
+    mitarbeiter_status: str
+    matched_mitarbeiter: str | None
+    schulung_im_katalog: bool
+    uebernommen: bool
+
+
+class BerichtVorschauRead(BaseModel):
+    """Ergebnis von Vorschau und Übernahme — bewusst identische Form."""
+
+    format: str
+    format_label: str
+    gesamt: int
+    uebernehmbar: int
+    ohne_mitarbeiter: int
+    ohne_datum: int
+    neue_schulungen: int
+    eingetragen: int
+    zeilen: list[BerichtZeileRead]
+
+
+def _bericht_read(erg: bericht_import.BerichtErgebnis) -> BerichtVorschauRead:
+    return BerichtVorschauRead(
+        format=erg.format,
+        format_label=erg.format_label,
+        gesamt=erg.gesamt,
+        uebernehmbar=erg.uebernehmbar,
+        ohne_mitarbeiter=erg.ohne_mitarbeiter,
+        ohne_datum=erg.ohne_datum,
+        neue_schulungen=erg.neue_schulungen,
+        eingetragen=erg.eingetragen,
+        zeilen=[BerichtZeileRead(**vars(z)) for z in erg.zeilen],
+    )
+
+
+@router.post("/bericht/preview", response_model=BerichtVorschauRead)
+async def bericht_preview(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BerichtVorschauRead:
+    """Schulungsbericht-PDF (Fbl. 68/71) auswerten und zuordnen — nichts schreiben."""
+    try:
+        erg = await bericht_import.vorschau(db, await file.read())
+    except SchulungsberichtError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _bericht_read(erg)
+
+
+@router.post("/bericht/commit", response_model=BerichtVorschauRead)
+async def bericht_commit(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BerichtVorschauRead:
+    """Schulungsbericht übernehmen: Durchführungsdaten setzen, fehlende Schulungen anlegen."""
+    try:
+        erg = await bericht_import.uebernehmen(db, await file.read())
+    except SchulungsberichtError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _bericht_read(erg)
 
 
 class PflichtMatrixRead(BaseModel):

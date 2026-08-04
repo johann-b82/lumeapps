@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   CalendarCheck,
+  CheckCircle2,
   ChevronDown,
   FileDown,
   GraduationCap,
@@ -38,12 +39,15 @@ import {
   type Unterlage,
   schulungImportCommit,
   schulungImportPreview,
+  berichtPreview,
+  berichtCommit,
   setzePflicht,
   weiseSchulungZu,
   type PflichtEbene,
   type PflichtMatrix,
   type Schulung,
   type SchulungImportVorschau,
+  type BerichtVorschau,
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
@@ -1149,6 +1153,209 @@ function SammelDurchgefuehrtPanel({ schulungen }: { schulungen: DedupSchulung[] 
   );
 }
 
+/** Vorschau-/Ergebnis-Ansicht eines Schulungsbericht-Uploads. */
+function BerichtVorschauView({
+  v,
+  fertig,
+  committing,
+  onCommit,
+}: {
+  v: BerichtVorschau;
+  fertig: boolean;
+  committing: boolean;
+  onCommit: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border bg-muted/30 p-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span className="font-medium">{v.format_label}</span>
+        <span className="text-muted-foreground">
+          {t("schulungen.bericht.summe", {
+            uebernehmbar: v.uebernehmbar,
+            gesamt: v.gesamt,
+          })}
+        </span>
+        {v.ohne_mitarbeiter > 0 && (
+          <span className="text-[var(--color-warning)]">
+            {t("schulungen.bericht.ohneMitarbeiter", { count: v.ohne_mitarbeiter })}
+          </span>
+        )}
+        {v.neue_schulungen > 0 && (
+          <span className="text-muted-foreground">
+            {t("schulungen.bericht.neueSchulungen", { count: v.neue_schulungen })}
+          </span>
+        )}
+      </div>
+
+      <div className="overflow-x-auto rounded-md border bg-background">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <Th>{t("schulungen.mitarbeiter.name")}</Th>
+              <Th>{t("schulungen.katalog.name")}</Th>
+              <Th>{t("schulungen.bericht.datum")}</Th>
+              <Th>{t("schulungen.bericht.status")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.zeilen.map((z, i) => (
+              <tr
+                key={i}
+                className={`border-b border-border/50 last:border-0 ${
+                  z.uebernommen ? "" : "opacity-60"
+                }`}
+              >
+                <td className="px-4 py-2">
+                  {z.mitarbeiter_status === "ok" ? (
+                    z.matched_mitarbeiter
+                  ) : (
+                    <span className="text-destructive">
+                      {z.mitarbeiter_name}{" "}
+                      <span className="text-xs">
+                        (
+                        {z.mitarbeiter_status === "mehrdeutig"
+                          ? t("schulungen.bericht.mehrdeutig")
+                          : t("schulungen.bericht.nichtGefunden")}
+                        )
+                      </span>
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  {z.schulung_name}
+                  {!z.schulung_im_katalog && (
+                    <span className="ml-2 rounded-full bg-[var(--color-warning)]/20 px-2 py-0.5 text-xs text-foreground">
+                      {t("schulungen.bericht.neu")}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2 tabular-nums text-muted-foreground">
+                  {z.datum ?? "—"}
+                </td>
+                <td className="px-4 py-2">
+                  {z.uebernommen ? (
+                    <span className="text-[var(--color-success)]">
+                      {t("schulungen.bericht.wirdUebernommen")}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t("schulungen.bericht.uebersprungen")}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {fertig ? (
+        <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          {t("schulungen.bericht.fertig", { count: v.eingetragen })}
+        </p>
+      ) : (
+        <button
+          type="button"
+          disabled={committing || v.uebernehmbar === 0}
+          onClick={onCommit}
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                     text-primary-foreground disabled:opacity-50
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {committing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {t("schulungen.bericht.uebernehmen", { count: v.uebernehmbar })}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Upload eines Schulungsberichts (PDF, Fbl. 68/71) → Stand fortschreiben. */
+function SchulungsberichtPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const dateiRef = useRef<HTMLInputElement>(null);
+  const [datei, setDatei] = useState<File | null>(null);
+  const [vorschau, setVorschau] = useState<BerichtVorschau | null>(null);
+  const [fertig, setFertig] = useState(false);
+
+  const preview = useMutation({
+    mutationFn: (f: File) => berichtPreview(f),
+    onSuccess: (v) => {
+      setVorschau(v);
+      setFertig(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const commit = useMutation({
+    mutationFn: (f: File) => berichtCommit(f),
+    onSuccess: (v) => {
+      setVorschau(v);
+      setFertig(true);
+      toast.success(t("schulungen.bericht.uebernommen", { count: v.eingetragen }));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const waehle = (f: File | null) => {
+    setDatei(f);
+    setVorschau(null);
+    setFertig(false);
+    if (f) preview.mutate(f);
+  };
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.bericht.title")}
+        icon={<Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <p className="text-xs text-muted-foreground">{t("schulungen.bericht.hinweis")}</p>
+          <input
+            ref={dateiRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            onChange={(e) => waehle(e.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => dateiRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
+                       hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            {datei ? datei.name : t("schulungen.bericht.dateiWaehlen")}
+          </button>
+
+          {preview.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              {t("schulungen.import.analysiere")}
+            </div>
+          )}
+
+          {vorschau && datei && (
+            <BerichtVorschauView
+              v={vorschau}
+              fertig={fertig}
+              committing={commit.isPending}
+              onCommit={() => commit.mutate(datei)}
+            />
+          )}
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
 /** Mitarbeiterübersicht; Zeile aufklappen zeigt die Einzelübersicht. */
 function MitarbeiterPanel() {
   const { t } = useTranslation();
@@ -1559,6 +1766,7 @@ export function SchulungenPage() {
 
       {tab === "stand" && (
         <>
+          <SchulungsberichtPanel />
           <OffenePanel />
           <SammelDurchgefuehrtPanel schulungen={entdoppelt} />
           <MitarbeiterPanel />
