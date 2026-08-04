@@ -1170,30 +1170,41 @@ function normBerichtName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Editierbare Vorschau-Tabelle (Mitarbeiter-Dropdown, Schulungstext, Datum). */
+/** Editierbare Vorschau-Tabelle (Mitarbeiter-Dropdown, Schulung Dropdown+Text, Datum). */
 function BerichtEditorTabelle({
   zeilen,
   zuweisbare,
   katalogNamen,
+  katalogOptionen,
   onPatch,
+  onDelete,
 }: {
   zeilen: EditZeile[];
   zuweisbare: ZuweisbarerMitarbeiter[];
   katalogNamen: Set<string>;
+  katalogOptionen: string[];
   onPatch: (index: number, patch: Partial<EditZeile>) => void;
+  onDelete: (index: number) => void;
 }) {
   const { t } = useTranslation();
   const feldStil =
     "h-8 w-full rounded-md border bg-background px-2 text-sm " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const listeId = "bericht-katalog-schulungen";
   return (
     <div className="overflow-x-auto rounded-md border bg-background">
+      <datalist id={listeId}>
+        {katalogOptionen.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/30">
             <Th>{t("schulungen.mitarbeiter.name")}</Th>
             <Th>{t("schulungen.katalog.name")}</Th>
             <Th>{t("schulungen.bericht.datum")}</Th>
+            <th className="w-8" />
           </tr>
         </thead>
         <tbody>
@@ -1227,8 +1238,10 @@ function BerichtEditorTabelle({
                   </span>
                 </td>
                 <td className="px-3 py-2" style={{ minWidth: "18rem" }}>
+                  {/* Dropdown (Katalog-Vorschläge) UND freier Text zugleich */}
                   <input
                     type="text"
+                    list={listeId}
                     value={z.schulung_name}
                     onChange={(e) => onPatch(i, { schulung_name: e.target.value })}
                     aria-label={t("schulungen.katalog.name")}
@@ -1248,6 +1261,18 @@ function BerichtEditorTabelle({
                     aria-label={t("schulungen.bericht.datum")}
                     className={feldStil}
                   />
+                </td>
+                <td className="px-2 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(i)}
+                    aria-label={t("schulungen.bericht.zeileLoeschen")}
+                    title={t("schulungen.bericht.zeileLoeschen")}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive
+                               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </td>
               </tr>
             );
@@ -1278,6 +1303,13 @@ function SchulungsberichtPanel() {
   });
   const katalogNamen = useMemo(
     () => new Set((katalog ?? []).map((k) => normBerichtName(k.name))),
+    [katalog],
+  );
+  const katalogOptionen = useMemo(
+    () =>
+      Array.from(new Set((katalog ?? []).map((k) => k.name))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [katalog],
   );
 
@@ -1326,6 +1358,9 @@ function SchulungsberichtPanel() {
 
   const patch = (i: number, p: Partial<EditZeile>) =>
     setZeilen((zs) => zs.map((z, idx) => (idx === i ? { ...z, ...p } : z)));
+
+  const entferneZeile = (i: number) =>
+    setZeilen((zs) => zs.filter((_, idx) => idx !== i));
 
   const uebernehmbar = zeilen.filter((z) => z.employee_id != null && z.datum !== "");
   const neueAnzahl = new Set(
@@ -1407,7 +1442,9 @@ function SchulungsberichtPanel() {
                 zeilen={zeilen}
                 zuweisbare={zuweisbare ?? []}
                 katalogNamen={katalogNamen}
+                katalogOptionen={katalogOptionen}
                 onPatch={patch}
+                onDelete={entferneZeile}
               />
 
               <div className="flex flex-wrap items-center gap-2">
@@ -1451,11 +1488,20 @@ function SchulungsberichtPanel() {
   );
 }
 
-/** Farbe einer Matrix-Zelle nach Folgetermin-Status der absolvierten Schulung. */
-function matrixZellStil(status: SchulungStatus): string {
-  if (status === "ueberfaellig") return "bg-destructive/15 text-destructive";
-  if (status === "bald") return "bg-[var(--color-warning)]/25 text-foreground";
-  return "bg-[var(--color-success)]/20 text-foreground"; // ok / ohne_frist
+/** Symbol + Farbe einer Matrix-Zelle nach Folgetermin-Status. */
+function matrixZelle(status: SchulungStatus): { symbol: string; className: string } {
+  if (status === "ueberfaellig")
+    return { symbol: "X", className: "bg-destructive/20 font-bold text-destructive" };
+  if (status === "bald")
+    return {
+      symbol: "!",
+      className: "bg-orange-500/25 font-bold text-orange-600 dark:text-orange-400",
+    };
+  // ok / ohne_frist — grün mit ✓
+  return {
+    symbol: "✓",
+    className: "bg-[var(--color-success)]/20 text-[var(--color-success)]",
+  };
 }
 
 /** yyyy-mm-dd → dd.mm.yyyy */
@@ -1486,11 +1532,7 @@ function MatrixPanel() {
 
   if (!data || data.schulungen.length === 0) return null;
 
-  const legende: [string, SchulungStatus][] = [
-    ["bg-[var(--color-success)]/20", "ok"],
-    ["bg-[var(--color-warning)]/25", "bald"],
-    ["bg-destructive/15", "ueberfaellig"],
-  ];
+  const legende: SchulungStatus[] = ["ok", "bald", "ueberfaellig"];
 
   return (
     <section className="mb-6">
@@ -1505,12 +1547,19 @@ function MatrixPanel() {
             <StandortChips offices={offices} selected={selected} onToggle={toggle} />
           )}
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            {legende.map(([cls, st]) => (
-              <span key={st} className="flex items-center gap-1">
-                <span className={`inline-block h-3 w-3 rounded-sm ${cls}`} />
-                {t(`schulungen.status.${st}`)}
-              </span>
-            ))}
+            {legende.map((st) => {
+              const zelle = matrixZelle(st);
+              return (
+                <span key={st} className="flex items-center gap-1">
+                  <span
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-[10px] ${zelle.className}`}
+                  >
+                    {zelle.symbol}
+                  </span>
+                  {t(`schulungen.status.${st}`)}
+                </span>
+              );
+            })}
           </div>
 
           <div className="overflow-auto rounded-md border" style={{ maxHeight: "72vh" }}>
@@ -1549,15 +1598,16 @@ function MatrixPanel() {
                       </td>
                       {data.schulungen.map((s) => {
                         const c = zeile?.get(s.id);
+                        const zelle = c ? matrixZelle(c.status) : null;
                         return (
                           <td
                             key={s.id}
                             title={c ? `${s.name} — ${langDatum(c.datum)}` : undefined}
                             className={`w-7 min-w-7 border-b border-l text-center ${
-                              c ? matrixZellStil(c.status) : ""
+                              zelle ? zelle.className : ""
                             }`}
                           >
-                            {c ? "✓" : ""}
+                            {zelle ? zelle.symbol : ""}
                           </td>
                         );
                       })}

@@ -992,8 +992,7 @@ async def schulungs_matrix(
     schulungen: dict[int, MatrixSchulung] = {}
 
     def _zeile(schluessel, name, abteilung, office, hire_date, treffer):
-        if not treffer:
-            return None
+        # Alle Mitarbeiter erscheinen — auch ohne Absolvierung (leere Zeile).
         zellen: list[MatrixZelle] = []
         for t, k in treffer:
             schulungen.setdefault(
@@ -1029,19 +1028,17 @@ async def schulungs_matrix(
         else:
             schluessel, treffer = f"e:{e.id}", nach_emp.get(e.id, [])
         name = f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
-        zeile = _zeile(
-            schluessel, name, e.department, _extract_office(e.raw_json), e.hire_date, treffer
+        ergebnis.append(
+            _zeile(
+                schluessel, name, e.department, _extract_office(e.raw_json), e.hire_date, treffer
+            )
         )
-        if zeile is not None:
-            ergebnis.append(zeile)
 
     externe = (await db.execute(select(OnboardingExtern))).scalars().all()
     for x in externe:
-        zeile = _zeile(
-            f"x:{x.id}", x.name, x.abteilung, None, x.hire_date, nach_extern.get(x.id, [])
+        ergebnis.append(
+            _zeile(f"x:{x.id}", x.name, x.abteilung, None, x.hire_date, nach_extern.get(x.id, []))
         )
-        if zeile is not None:
-            ergebnis.append(zeile)
 
     return MatrixRead(
         schulungen=sorted(
