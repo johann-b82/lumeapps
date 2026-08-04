@@ -196,6 +196,23 @@ export function fetchSchulungen(): Promise<Schulung[]> {
   return apiClient<Schulung[]>("/api/hr/schulungen");
 }
 
+/** Neue Schulung im Katalog anlegen (Name + Bereich; Rest danach pflegbar). */
+export function erstelleSchulung(eingabe: {
+  name: string;
+  bereich: string;
+}): Promise<Schulung> {
+  return apiClient<Schulung>("/api/hr/schulungen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Schulung entfernen (inkl. aller gleichnamigen Katalogzeilen + Teilnahmen). */
+export function entferneSchulung(schulungId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}`, { method: "DELETE" });
+}
+
 export interface Abteilung {
   abteilung: string;
   mitarbeiter: number;

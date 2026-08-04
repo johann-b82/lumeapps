@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Loader2,
   Paperclip,
+  Plus,
   Upload,
   UserPlus,
   Users,
@@ -25,6 +26,8 @@ import {
   fetchOffeneSchulungen,
   fetchPflichtMatrix,
   fetchSchulungen,
+  erstelleSchulung,
+  entferneSchulung,
   fetchZuweisbare,
   type MatrixZeile,
   entferneUnterlage,
@@ -57,6 +60,7 @@ import {
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { abteilungAusgeblendet, vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { StandortChips, useStandortFilter } from "@/components/hr/StandortFilter";
 
 /** Eine über Bereiche zusammengefasste Schulung (ein Eintrag je Name). */
@@ -414,7 +418,17 @@ function SchulungDetail({ schulung }: { schulung: Schulung }) {
 /** Eine Katalogzeile (je Name, über Bereiche zusammengefasst) mit aufklappbarem Detail. */
 function KatalogZeileRow({ s }: { s: DedupSchulung }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [offen, setOffen] = useState(false);
+  const loeschen = useMutation({
+    mutationFn: () => entferneSchulung(s.id),
+    onSuccess: () => {
+      toast.success(t("schulungen.katalog.entfernt", { name: s.name }));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   return (
     <>
       <tr className="border-b border-border/50 transition-colors hover:bg-muted/40">
@@ -452,7 +466,23 @@ function KatalogZeileRow({ s }: { s: DedupSchulung }) {
         </td>
         <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
         <td className="px-4 py-2 text-right">
-          <ProtokollKnopf schulung={s} />
+          <div className="flex items-center justify-end gap-1">
+            <ProtokollKnopf schulung={s} />
+            <DeleteButton
+              itemLabel={s.name}
+              aria-label={t("schulungen.katalog.entfernen")}
+              confirmLabel={t("schulungen.katalog.entfernen")}
+              dialogBody={
+                s.teilnahmen > 0
+                  ? t("schulungen.katalog.entfernenWarnung", {
+                      name: s.name,
+                      count: s.teilnahmen,
+                    })
+                  : undefined
+              }
+              onConfirm={() => loeschen.mutateAsync()}
+            />
+          </div>
         </td>
       </tr>
       {offen && (
@@ -489,6 +519,69 @@ function KatalogTabelle({ zeilen }: { zeilen: DedupSchulung[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Formular zum Anlegen einer neuen Schulung (Name + Bereich). */
+function NeueSchulungForm({ bereiche }: { bereiche: string[] }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [bereich, setBereich] = useState("");
+  const anlegen = useMutation({
+    mutationFn: () => erstelleSchulung({ name: name.trim(), bereich: bereich.trim() }),
+    onSuccess: (s) => {
+      toast.success(t("schulungen.katalog.hinzugefuegt", { name: s.name }));
+      setName("");
+      setBereich("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const bereit = name.trim() !== "" && bereich.trim() !== "";
+  const feldStil =
+    "h-9 rounded-md border bg-background px-3 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  return (
+    <div className="mb-3 flex flex-wrap items-end gap-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t("schulungen.katalog.neuName")}
+        aria-label={t("schulungen.katalog.neuName")}
+        className={`${feldStil} min-w-64 flex-1`}
+      />
+      <input
+        type="text"
+        list="katalog-bereiche"
+        value={bereich}
+        onChange={(e) => setBereich(e.target.value)}
+        placeholder={t("schulungen.katalog.neuBereich")}
+        aria-label={t("schulungen.katalog.bereich")}
+        className={`${feldStil} w-52`}
+      />
+      <datalist id="katalog-bereiche">
+        {bereiche.map((b) => (
+          <option key={b} value={b} />
+        ))}
+      </datalist>
+      <button
+        type="button"
+        disabled={!bereit || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                   text-primary-foreground disabled:opacity-50
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {anlegen.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        )}
+        {t("schulungen.katalog.hinzufuegen")}
+      </button>
     </div>
   );
 }
@@ -2007,6 +2100,12 @@ export function SchulungenPage() {
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
+
+            <NeueSchulungForm
+              bereiche={[...new Set((entdoppelt ?? []).flatMap((s) => s.bereiche))].sort(
+                (a, b) => a.localeCompare(b),
+              )}
+            />
 
             {isLoading && (
               <div className="flex h-32 items-center justify-center">

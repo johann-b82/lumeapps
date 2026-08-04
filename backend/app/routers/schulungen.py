@@ -1192,6 +1192,77 @@ async def liste_schulungen(
     ]
 
 
+class SchulungAnlegen(BaseModel):
+    name: str
+    bereich: str
+
+
+@router.post("", response_model=SchulungRead, status_code=201)
+async def schulung_anlegen(
+    eingabe: SchulungAnlegen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SchulungRead:
+    """Eine neue Schulung im Katalog anlegen (Name + Bereich; Rest später pflegbar)."""
+    name = eingabe.name.strip()
+    bereich = eingabe.bereich.strip()
+    if not name or not bereich:
+        raise HTTPException(status_code=422, detail="Name und Bereich sind erforderlich.")
+    # Dubletten (gleicher Name, egal welcher Bereich) verhindern — passt zur
+    # deduplizierten Katalogansicht.
+    vorhanden = (
+        await db.execute(
+            select(SchulungKatalog).where(func.lower(SchulungKatalog.name) == name.lower())
+        )
+    ).scalars().first()
+    if vorhanden is not None:
+        raise HTTPException(
+            status_code=409, detail="Eine Schulung mit diesem Namen existiert bereits."
+        )
+    k = SchulungKatalog(bereich=bereich, name=name, sort_order=0)
+    db.add(k)
+    await db.commit()
+    await db.refresh(k)
+    return SchulungRead(
+        id=k.id,
+        bereich=k.bereich,
+        name=k.name,
+        turnus=None,
+        turnus_monate=None,
+        frist_tage=None,
+        verantwortlicher=None,
+        beschreibung=None,
+        anzahl_unterlagen=0,
+        aktiv=k.aktiv,
+        teilnahmen=0,
+    )
+
+
+@router.delete("/{schulung_id}", status_code=204)
+async def schulung_entfernen(
+    schulung_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Schulung entfernen — inkl. aller gleichnamigen Katalogzeilen.
+
+    Entspricht der deduplizierten Ansicht (eine Schulung = ein Name). Teilnahmen
+    (auch Nachweise) und Anforderungsregeln kaskadieren (FK ON DELETE CASCADE) —
+    die Oberfläche warnt vorher, wenn Teilnahmen betroffen sind.
+    """
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    gleichnamig = (
+        await db.execute(
+            select(SchulungKatalog).where(func.lower(SchulungKatalog.name) == k.name.lower())
+        )
+    ).scalars().all()
+    for eintrag in gleichnamig:
+        await db.delete(eintrag)
+    await db.commit()
+
+
 class FristSetzen(BaseModel):
     #: Tage nach Eintritt/Zuweisung; None löscht die Frist.
     frist_tage: int | None = None
