@@ -10,6 +10,7 @@ in einer Transaktion.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime
 from typing import Literal
 
@@ -32,6 +33,7 @@ from app.models.kompetenz import KOMPETENZ_BEREICHE
 from app.parsing.kompetenz_parser import parse_qualifikationsmatrix
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.kompetenz_import import ImportVorschau, baue_vorschau, uebernehmen
+from app.services import personio_writeback
 
 router = APIRouter(
     prefix="/api/hr/kompetenzen",
@@ -519,6 +521,8 @@ async def zelle_setzen(
 
     await db.commit()
     await db.refresh(zelle)
+    # Personio-Rückschreiben (inert bis Freischaltung) — fire-and-forget.
+    asyncio.create_task(personio_writeback.nach_kompetenz_update(person.employee_id))
     return ZelleRead(
         person_id=person.id,
         anforderungslevel=zelle.anforderungslevel,

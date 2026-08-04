@@ -167,6 +167,13 @@ class AppSettings(Base):
     personio_production_dept: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     personio_skill_attr_key: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # v1.102 — Personio-Rückschreiben (INERT bis Freischaltung): Master-Schalter
+    # (default aus) + Dokumentenkategorie-ID, in die Schulungs-/Kompetenznachweise
+    # ins Personio-Mitarbeiterprofil hochgeladen werden. Braucht Personio-Schreib-
+    # Scopes (Dokumente lesen+schreiben) — bis dahin bleibt der Push ein No-Op.
+    personio_writeback_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    personio_writeback_kategorie_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # HR KPI target values — nullable (no target = no reference line)
     target_overtime_ratio: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     target_sick_leave_ratio: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)

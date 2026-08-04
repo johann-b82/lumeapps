@@ -269,6 +269,9 @@ export interface Settings {
   email_auth_mode: "app" | "delegated";
   email_delegated_account: string | null;
   email_delegated_connected: boolean;
+  // v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+  personio_writeback_enabled?: boolean;
+  personio_writeback_kategorie_id?: string | null;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -353,6 +356,9 @@ export interface SettingsUpdatePayload {
   email_sender_name?: string | null;
   email_enabled?: boolean;
   email_auth_mode?: "app" | "delegated";
+  // v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+  personio_writeback_enabled?: boolean;
+  personio_writeback_kategorie_id?: string | null;
 }
 
 /**

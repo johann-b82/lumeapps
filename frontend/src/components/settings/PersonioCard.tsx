@@ -307,6 +307,43 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
 
           </div>
         </div>
+
+        <hr className="border-border" />
+
+        {/* v1.102 — Personio-Rückschreiben (inert bis Freischaltung) */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.personio_writeback_enabled}
+              onChange={(e) => setField("personio_writeback_enabled", e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            {t("settings.personio.writeback.label")}
+          </label>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="personio-writeback-cat"
+              className="text-xs text-muted-foreground"
+            >
+              {t("settings.personio.writeback.category.label")}
+            </label>
+            <input
+              id="personio-writeback-cat"
+              type="text"
+              value={draft.personio_writeback_kategorie_id}
+              onChange={(e) =>
+                setField("personio_writeback_kategorie_id", e.target.value)
+              }
+              placeholder={t("settings.personio.writeback.category.placeholder")}
+              className="h-9 w-64 rounded-md border bg-background px-3 text-sm
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.personio.writeback.hint")}
+          </p>
+        </div>
     </div>
   );
 

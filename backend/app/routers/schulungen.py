@@ -10,6 +10,7 @@ hochgeladene .xlsx serverseitig ein; clause 3 (multi-row atomic compute) — die
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
@@ -31,6 +32,7 @@ from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
 # den Personio-Rohdaten soll nur an einer Stelle gepflegt werden.
 from app.routers.hr_kpis import _extract_office, _extract_supervisor_id
+from app.services import personio_writeback
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.verantwortlicher_sync import (
     sync_beschreibung_nach_name,
@@ -279,6 +281,9 @@ async def bericht_commit(
             for z in eingabe.zeilen
         ],
     )
+    # Personio-Rückschreiben (inert bis Freischaltung) — je betroffenem Mitarbeiter.
+    for eid in dict.fromkeys(z.employee_id for z in eingabe.zeilen):
+        asyncio.create_task(personio_writeback.nach_schulung_update(eid))
     return BerichtCommitErgebnis(**res)
 
 
@@ -693,6 +698,8 @@ async def teilnahme_durchgefuehrt(
         zeile, katalog.turnus_monate if katalog else None, eingabe.datum
     )
     await db.commit()
+    # Personio-Rückschreiben (inert bis Freischaltung) — fire-and-forget.
+    asyncio.create_task(personio_writeback.nach_schulung_update(zeile.employee_id))
 
 
 class SammelDurchgefuehrt(BaseModel):
@@ -742,6 +749,9 @@ async def sammel_durchgefuehrt(
         eingetragen += 1
 
     await db.commit()
+    # Personio-Rückschreiben (inert bis Freischaltung) — je Personio-Mitarbeiter.
+    for eid in dict.fromkeys(eingabe.employee_ids):
+        asyncio.create_task(personio_writeback.nach_schulung_update(eid))
     return {"eingetragen": eingetragen}
 
 
