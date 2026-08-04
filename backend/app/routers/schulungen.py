@@ -936,9 +936,12 @@ class MatrixSchulung(BaseModel):
 
 class MatrixZelle(BaseModel):
     schulung_id: int
-    datum: date
-    #: "ueberfaellig" | "bald" | "ok" | "ohne_frist" (Folgetermin-Status)
+    #: Durchführungsdatum; None = zugewiesen, noch offen.
+    datum: date | None
+    #: "ueberfaellig" | "bald" | "ok" | "ohne_frist" (Fälligkeits-Status)
     status: str
+    #: True = zugewiesen, noch nicht absolviert.
+    offen: bool
 
 
 class MatrixZeile(BaseModel):
@@ -960,22 +963,22 @@ class MatrixRead(BaseModel):
 async def schulungs_matrix(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> MatrixRead:
-    """Gesamtübersicht: wer hat welche Schulung absolviert.
+    """Gesamtübersicht: wer soll welche Schulung — und was ist erledigt.
 
-    Nur Teilnahmen MIT Durchführungsdatum. Spalten sind die tatsächlich
-    absolvierten Schulungen, Zeilen die Mitarbeiter (aus dem Teilnahme-Bestand);
-    die Zelle trägt das Durchführungsdatum und den Folgetermin-Status.
+    Verbindet Zuweisung und Absolvierung: Spalten sind alle zugewiesenen ODER
+    absolvierten Schulungen, Zeilen die Mitarbeiter (aktive/onboarding + Externe,
+    keine Ausgetretenen). Die Zelle trägt Datum (falls absolviert), den
+    Fälligkeits-Status und ob sie noch offen ist.
     """
     heute = date.today()
 
-    # Absolvierte Teilnahmen nach den drei Schlüsselarten indizieren (wie
-    # liste_mitarbeiter), damit die Matrix DIESELBE Belegschaft trägt — nur
-    # aktive/neu eintretende + Externe, keine Ausgetretenen.
+    # Alle Teilnahmen (offen + absolviert) nach den drei Schlüsselarten indizieren
+    # (wie liste_mitarbeiter), damit die Matrix DIESELBE Belegschaft trägt.
     zeilen = (
         await db.execute(
-            select(SchulungTeilnahme, SchulungKatalog)
-            .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
-            .where(SchulungTeilnahme.aktuell_datum.isnot(None))
+            select(SchulungTeilnahme, SchulungKatalog).join(
+                SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
+            )
         )
     ).all()
     nach_emp: dict[int, list] = {}
@@ -1001,7 +1004,10 @@ async def schulungs_matrix(
             faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
             zellen.append(
                 MatrixZelle(
-                    schulung_id=k.id, datum=t.aktuell_datum, status=_status(faellig, heute)
+                    schulung_id=k.id,
+                    datum=t.aktuell_datum,
+                    status=_status(faellig, heute),
+                    offen=t.aktuell_datum is None,
                 )
             )
         return MatrixZeile(

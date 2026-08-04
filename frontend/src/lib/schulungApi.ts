@@ -319,8 +319,11 @@ export interface MatrixSchulung {
 
 export interface MatrixZelle {
   schulung_id: number;
-  datum: string;
+  /** Durchführungsdatum; null = zugewiesen, noch offen. */
+  datum: string | null;
   status: SchulungStatus;
+  /** True = zugewiesen, noch nicht absolviert. */
+  offen: boolean;
 }
 
 export interface MatrixZeile {

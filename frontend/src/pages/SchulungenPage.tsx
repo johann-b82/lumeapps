@@ -1581,16 +1581,23 @@ function SchulungsberichtPanel() {
   );
 }
 
-/** Symbol + Farbe einer Matrix-Zelle nach Folgetermin-Status. */
-function matrixZelle(status: SchulungStatus): { symbol: string; className: string } {
+/** Symbol + Farbe einer Matrix-Zelle nach Status (offen = zugewiesen, nicht absolviert). */
+function matrixZelle(
+  status: SchulungStatus,
+  offen: boolean,
+): { symbol: string; className: string } {
+  // Überfällig hat Vorrang — egal ob offen oder Wiederholung.
   if (status === "ueberfaellig")
     return { symbol: "X", className: "bg-destructive/20 font-bold text-destructive" };
+  // Zugewiesen, noch offen (nicht überfällig) — neutrales ○.
+  if (offen)
+    return { symbol: "○", className: "bg-muted text-muted-foreground" };
   if (status === "bald")
     return {
       symbol: "!",
       className: "bg-orange-500/25 font-bold text-orange-600 dark:text-orange-400",
     };
-  // ok / ohne_frist — grün mit ✓
+  // absolviert & aktuell — grün mit ✓
   return {
     symbol: "✓",
     className: "bg-[var(--color-success)]/20 text-[var(--color-success)]",
@@ -1625,7 +1632,12 @@ function MatrixPanel() {
 
   if (!data || data.schulungen.length === 0) return null;
 
-  const legende: SchulungStatus[] = ["ok", "bald", "ueberfaellig"];
+  const legende: { status: SchulungStatus; offen: boolean; label: string }[] = [
+    { status: "ok", offen: false, label: t("schulungen.status.ok") },
+    { status: "bald", offen: false, label: t("schulungen.status.bald") },
+    { status: "ueberfaellig", offen: false, label: t("schulungen.status.ueberfaellig") },
+    { status: "ok", offen: true, label: t("schulungen.matrix.offen") },
+  ];
 
   return (
     <section className="mb-6">
@@ -1640,16 +1652,16 @@ function MatrixPanel() {
             <StandortChips offices={offices} selected={selected} onToggle={toggle} />
           )}
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            {legende.map((st) => {
-              const zelle = matrixZelle(st);
+            {legende.map((e, i) => {
+              const zelle = matrixZelle(e.status, e.offen);
               return (
-                <span key={st} className="flex items-center gap-1">
+                <span key={i} className="flex items-center gap-1">
                   <span
                     className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-[10px] ${zelle.className}`}
                   >
                     {zelle.symbol}
                   </span>
-                  {t(`schulungen.status.${st}`)}
+                  {e.label}
                 </span>
               );
             })}
@@ -1691,11 +1703,16 @@ function MatrixPanel() {
                       </td>
                       {data.schulungen.map((s) => {
                         const c = zeile?.get(s.id);
-                        const zelle = c ? matrixZelle(c.status) : null;
+                        const zelle = c ? matrixZelle(c.status, c.offen) : null;
+                        const titel = c
+                          ? c.datum
+                            ? `${s.name} — ${langDatum(c.datum)}`
+                            : `${s.name} — ${t("schulungen.matrix.offen")}`
+                          : undefined;
                         return (
                           <td
                             key={s.id}
-                            title={c ? `${s.name} — ${langDatum(c.datum)}` : undefined}
+                            title={titel}
                             className={`w-7 min-w-7 border-b border-l text-center ${
                               zelle ? zelle.className : ""
                             }`}
