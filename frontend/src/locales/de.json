@@ -1071,6 +1071,8 @@
   "schulungen.bericht.abbrechen": "Abbrechen",
   "schulungen.bericht.schliessen": "Schließen",
   "schulungen.bericht.ausBericht": "aus Bericht: {{name}}",
+  "schulungen.matrix.title": "Gesamtübersicht (Matrix): wer hat was absolviert",
+  "schulungen.matrix.hinweis": "Nur absolvierte Schulungen (Spalten). Zelle = Durchführungsdatum (per Maus), Farbe nach Folgetermin-Status. Nach Standort filterbar.",
   "schulungen.bericht.uebernommen": "{{count}} Durchführung(en) eingetragen",
   "schulungen.bericht.fertig": "{{count}} Durchführung(en) eingetragen — Stand aktualisiert.",
   "schulungen.import.schulungen": "Schulungen",

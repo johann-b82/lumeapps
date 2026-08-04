@@ -21,10 +21,12 @@ import {
   fetchAbteilungen,
   fetchMitarbeiter,
   fetchMitarbeiterSchulungen,
+  fetchSchulungsMatrix,
   fetchOffeneSchulungen,
   fetchPflichtMatrix,
   fetchSchulungen,
   fetchZuweisbare,
+  type MatrixZeile,
   entferneUnterlage,
   fetchUnterlagen,
   ladeSchulungsprotokoll,
@@ -1449,6 +1451,129 @@ function SchulungsberichtPanel() {
   );
 }
 
+/** Farbe einer Matrix-Zelle nach Folgetermin-Status der absolvierten Schulung. */
+function matrixZellStil(status: SchulungStatus): string {
+  if (status === "ueberfaellig") return "bg-destructive/15 text-destructive";
+  if (status === "bald") return "bg-[var(--color-warning)]/25 text-foreground";
+  return "bg-[var(--color-success)]/20 text-foreground"; // ok / ohne_frist
+}
+
+/** yyyy-mm-dd → dd.mm.yyyy */
+function langDatum(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return d && m && y ? `${d}.${m}.${y}` : iso;
+}
+
+/** Gesamtübersicht als Matrix: wer hat welche Schulung absolviert. */
+function MatrixPanel() {
+  const { t } = useTranslation();
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.schulungMatrix(),
+    queryFn: fetchSchulungsMatrix,
+  });
+  const { offices, selected, toggle, filtered } = useStandortFilter(
+    data?.zeilen,
+    (z) => z.office,
+  );
+  // pro Mitarbeiter: schulung_id → Zelle (schnelles Nachschlagen beim Rendern)
+  const zellenIndex = useMemo(() => {
+    const map = new Map<string, Map<number, MatrixZeile["zellen"][number]>>();
+    (data?.zeilen ?? []).forEach((z) =>
+      map.set(z.schluessel, new Map(z.zellen.map((c) => [c.schulung_id, c]))),
+    );
+    return map;
+  }, [data]);
+
+  if (!data || data.schulungen.length === 0) return null;
+
+  const legende: [string, SchulungStatus][] = [
+    ["bg-[var(--color-success)]/20", "ok"],
+    ["bg-[var(--color-warning)]/25", "bald"],
+    ["bg-destructive/15", "ueberfaellig"],
+  ];
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.matrix.title")}
+        anzahl={filtered.length}
+        icon={<GraduationCap className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          {offices.length > 0 && (
+            <StandortChips offices={offices} selected={selected} onToggle={toggle} />
+          )}
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {legende.map(([cls, st]) => (
+              <span key={st} className="flex items-center gap-1">
+                <span className={`inline-block h-3 w-3 rounded-sm ${cls}`} />
+                {t(`schulungen.status.${st}`)}
+              </span>
+            ))}
+          </div>
+
+          <div className="overflow-auto rounded-md border" style={{ maxHeight: "72vh" }}>
+            <table className="border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-30 border-b border-r bg-muted px-3 py-2 text-left align-bottom">
+                    {t("schulungen.mitarbeiter.name")}
+                  </th>
+                  {data.schulungen.map((s) => (
+                    <th
+                      key={s.id}
+                      title={`${s.bereich} · ${s.name}`}
+                      className="sticky top-0 z-20 border-b border-l bg-muted p-1 align-bottom"
+                    >
+                      <div
+                        className="[writing-mode:vertical-rl] mx-auto overflow-hidden whitespace-nowrap rotate-180 text-muted-foreground"
+                        style={{ height: "11rem" }}
+                      >
+                        {s.name}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((z) => {
+                  const zeile = zellenIndex.get(z.schluessel);
+                  return (
+                    <tr key={z.schluessel} className="hover:bg-muted/30">
+                      <td className="sticky left-0 z-10 border-b border-r bg-background px-3 py-1.5 whitespace-nowrap">
+                        {z.name}
+                        {z.abteilung && (
+                          <span className="ml-1 text-muted-foreground">· {z.abteilung}</span>
+                        )}
+                      </td>
+                      {data.schulungen.map((s) => {
+                        const c = zeile?.get(s.id);
+                        return (
+                          <td
+                            key={s.id}
+                            title={c ? `${s.name} — ${langDatum(c.datum)}` : undefined}
+                            className={`w-7 min-w-7 border-b border-l text-center ${
+                              c ? matrixZellStil(c.status) : ""
+                            }`}
+                          >
+                            {c ? "✓" : ""}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("schulungen.matrix.hinweis")}</p>
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
 /** Mitarbeiterübersicht; Zeile aufklappen zeigt die Einzelübersicht. */
 function MitarbeiterPanel() {
   const { t } = useTranslation();
@@ -1863,6 +1988,7 @@ export function SchulungenPage() {
           <OffenePanel />
           <SammelDurchgefuehrtPanel schulungen={entdoppelt} />
           <MitarbeiterPanel />
+          <MatrixPanel />
           <AbteilungenPanel />
         </>
       )}

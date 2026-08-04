@@ -928,6 +928,105 @@ async def liste_mitarbeiter(
     )
 
 
+class MatrixSchulung(BaseModel):
+    id: int
+    name: str
+    bereich: str
+
+
+class MatrixZelle(BaseModel):
+    schulung_id: int
+    datum: date
+    #: "ueberfaellig" | "bald" | "ok" | "ohne_frist" (Folgetermin-Status)
+    status: str
+
+
+class MatrixZeile(BaseModel):
+    schluessel: str
+    name: str
+    abteilung: str | None
+    office: str | None
+    zellen: list[MatrixZelle]
+
+
+class MatrixRead(BaseModel):
+    """Schulungsmatrix: absolvierte Schulungen (Spalten) je Mitarbeiter (Zeilen)."""
+
+    schulungen: list[MatrixSchulung]
+    zeilen: list[MatrixZeile]
+
+
+@router.get("/matrix", response_model=MatrixRead)
+async def schulungs_matrix(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> MatrixRead:
+    """Gesamtübersicht: wer hat welche Schulung absolviert.
+
+    Nur Teilnahmen MIT Durchführungsdatum. Spalten sind die tatsächlich
+    absolvierten Schulungen, Zeilen die Mitarbeiter (aus dem Teilnahme-Bestand);
+    die Zelle trägt das Durchführungsdatum und den Folgetermin-Status.
+    """
+    heute = date.today()
+    zeilen = (
+        await db.execute(
+            select(SchulungTeilnahme, SchulungKatalog)
+            .join(SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id)
+            .where(SchulungTeilnahme.aktuell_datum.isnot(None))
+        )
+    ).all()
+
+    mitarbeiter = {
+        e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
+    }
+    externe = {
+        x.id: x for x in (await db.execute(select(OnboardingExtern))).scalars().all()
+    }
+
+    schulungen: dict[int, MatrixSchulung] = {}
+    gruppen: dict[str, MatrixZeile] = {}
+    for teilnahme, katalog in zeilen:
+        schluessel = _schluessel(teilnahme)
+        if schluessel is None:
+            continue
+        emp = mitarbeiter.get(teilnahme.employee_id or -1)
+        ext = externe.get(teilnahme.extern_id) if teilnahme.extern_id else None
+        eintrag = gruppen.get(schluessel)
+        if eintrag is None:
+            name = (
+                teilnahme.mitarbeiter_name
+                or (f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else None)
+                or (ext.name if ext else None)
+                or f"#{teilnahme.personalnummer or teilnahme.employee_id}"
+            )
+            eintrag = MatrixZeile(
+                schluessel=schluessel,
+                name=name,
+                abteilung=emp.department if emp else (ext.abteilung if ext else None),
+                office=_extract_office(emp.raw_json) if emp else None,
+                zellen=[],
+            )
+            gruppen[schluessel] = eintrag
+        schulungen.setdefault(
+            katalog.id, MatrixSchulung(id=katalog.id, name=katalog.name, bereich=katalog.bereich)
+        )
+        hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
+        faellig = _effektive_faelligkeit(teilnahme, katalog.frist_tage, hire_date)
+        eintrag.zellen.append(
+            MatrixZelle(
+                schulung_id=katalog.id,
+                datum=teilnahme.aktuell_datum,
+                status=_status(faellig, heute),
+            )
+        )
+
+    return MatrixRead(
+        schulungen=sorted(
+            schulungen.values(), key=lambda s: (s.bereich.lower(), s.name.lower())
+        ),
+        zeilen=sorted(gruppen.values(), key=lambda z: z.name.lower()),
+    )
+
+
 @router.get("/mitarbeiter/{schluessel}", response_model=list[MitarbeiterSchulungRead])
 async def mitarbeiter_schulungen(
     schluessel: str,

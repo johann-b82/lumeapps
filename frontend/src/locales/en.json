@@ -1075,6 +1075,8 @@
   "schulungen.bericht.abbrechen": "Cancel",
   "schulungen.bericht.schliessen": "Close",
   "schulungen.bericht.ausBericht": "from report: {{name}}",
+  "schulungen.matrix.title": "Full overview (matrix): who completed what",
+  "schulungen.matrix.hinweis": "Only completed trainings (columns). Cell = completion date (on hover), colour by next-due status. Filterable by location.",
   "schulungen.bericht.uebernommen": "{{count}} completion(s) recorded",
   "schulungen.bericht.fertig": "{{count}} completion(s) recorded — status updated.",
   "schulungen.import.schulungen": "Trainings",

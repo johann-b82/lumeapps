@@ -292,6 +292,39 @@ export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
   return apiClient<MitarbeiterZeile[]>("/api/hr/schulungen/mitarbeiter");
 }
 
+// --- Schulungsmatrix: wer hat welche Schulung absolviert --------------------
+
+export interface MatrixSchulung {
+  id: number;
+  name: string;
+  bereich: string;
+}
+
+export interface MatrixZelle {
+  schulung_id: number;
+  datum: string;
+  status: SchulungStatus;
+}
+
+export interface MatrixZeile {
+  schluessel: string;
+  name: string;
+  abteilung: string | null;
+  office: string | null;
+  zellen: MatrixZelle[];
+}
+
+export interface SchulungsMatrix {
+  /** Absolvierte Schulungen = Spalten (nach Bereich, Name sortiert). */
+  schulungen: MatrixSchulung[];
+  /** Mitarbeiter = Zeilen (nach Name sortiert). */
+  zeilen: MatrixZeile[];
+}
+
+export function fetchSchulungsMatrix(): Promise<SchulungsMatrix> {
+  return apiClient<SchulungsMatrix>("/api/hr/schulungen/matrix");
+}
+
 export function fetchMitarbeiterSchulungen(
   schluessel: string,
 ): Promise<MitarbeiterSchulung[]> {
