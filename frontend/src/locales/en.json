@@ -1072,6 +1072,8 @@
   "schulungen.bericht.wirdUebernommen": "will be applied",
   "schulungen.bericht.uebersprungen": "skipped",
   "schulungen.bericht.uebernehmen": "Apply ({{count}})",
+  "schulungen.bericht.abbrechen": "Cancel",
+  "schulungen.bericht.schliessen": "Close",
   "schulungen.bericht.uebernommen": "{{count}} completion(s) recorded",
   "schulungen.bericht.fertig": "{{count}} completion(s) recorded — status updated.",
   "schulungen.import.schulungen": "Trainings",

@@ -1159,11 +1159,13 @@ function BerichtVorschauView({
   fertig,
   committing,
   onCommit,
+  onAbbrechen,
 }: {
   v: BerichtVorschau;
   fertig: boolean;
   committing: boolean;
   onCommit: () => void;
+  onAbbrechen: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -1251,22 +1253,44 @@ function BerichtVorschauView({
       </div>
 
       {fertig ? (
-        <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {t("schulungen.bericht.fertig", { count: v.eingetragen })}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            {t("schulungen.bericht.fertig", { count: v.eingetragen })}
+          </p>
+          <button
+            type="button"
+            onClick={onAbbrechen}
+            className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                       hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("schulungen.bericht.schliessen")}
+          </button>
+        </div>
       ) : (
-        <button
-          type="button"
-          disabled={committing || v.uebernehmbar === 0}
-          onClick={onCommit}
-          className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
-                     text-primary-foreground disabled:opacity-50
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {committing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {t("schulungen.bericht.uebernehmen", { count: v.uebernehmbar })}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={committing || v.uebernehmbar === 0}
+            onClick={onCommit}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                       text-primary-foreground disabled:opacity-50
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {committing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {t("schulungen.bericht.uebernehmen", { count: v.uebernehmbar })}
+          </button>
+          <button
+            type="button"
+            disabled={committing}
+            onClick={onAbbrechen}
+            className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                       hover:bg-muted disabled:opacity-50
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("schulungen.bericht.abbrechen")}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1309,6 +1333,13 @@ function SchulungsberichtPanel() {
     if (f) preview.mutate(f);
   };
 
+  const zuruecksetzen = () => {
+    setDatei(null);
+    setVorschau(null);
+    setFertig(false);
+    if (dateiRef.current) dateiRef.current.value = ""; // gleiche Datei erneut wählbar
+  };
+
   return (
     <section className="mb-6">
       <Klappbar
@@ -1348,6 +1379,7 @@ function SchulungsberichtPanel() {
               fertig={fertig}
               committing={commit.isPending}
               onCommit={() => commit.mutate(datei)}
+              onAbbrechen={zuruecksetzen}
             />
           )}
         </div>
