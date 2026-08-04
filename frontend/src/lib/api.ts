@@ -269,6 +269,9 @@ export interface Settings {
   email_auth_mode: "app" | "delegated";
   email_delegated_account: string | null;
   email_delegated_connected: boolean;
+  // v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+  personio_writeback_enabled?: boolean;
+  personio_writeback_kategorie_id?: string | null;
 }
 
 export async function fetchSettings(): Promise<Settings> {
@@ -353,6 +356,9 @@ export interface SettingsUpdatePayload {
   email_sender_name?: string | null;
   email_enabled?: boolean;
   email_auth_mode?: "app" | "delegated";
+  // v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+  personio_writeback_enabled?: boolean;
+  personio_writeback_kategorie_id?: string | null;
 }
 
 /**
@@ -419,6 +425,24 @@ export async function fetchPersonioOptions(): Promise<PersonioOptions> {
  */
 export async function testPersonioConnection(): Promise<SyncTestResult> {
   return apiClient<SyncTestResult>("/api/sync/test", { method: "POST" });
+}
+
+// v1.102 — Personio-Rückschreiben: kontrollierter Test-Upload
+export interface WritebackTestResult {
+  ok: boolean;
+  schritt: string;
+  detail: string;
+}
+
+export async function testPersonioWriteback(eingabe: {
+  employee_id: number;
+  art: "schulung" | "kompetenz";
+}): Promise<WritebackTestResult> {
+  return apiClient<WritebackTestResult>("/api/sync/writeback-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
 }
 
 // ---------------------------------------------------------------------------

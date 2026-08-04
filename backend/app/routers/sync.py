@@ -108,3 +108,39 @@ async def get_sync_meta(
     if row is None:
         return SyncMetaRead()
     return SyncMetaRead.model_validate(row)
+
+
+# --- Personio-Rückschreiben: kontrollierter Test-Upload (Admin) ---------------
+
+from typing import Literal  # noqa: E402
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class WritebackTestEingabe(BaseModel):
+    employee_id: int
+    art: Literal["schulung", "kompetenz"] = "schulung"
+
+
+class WritebackTestErgebnis(BaseModel):
+    ok: bool
+    #: "konfig" | "mitarbeiter" | "personio" | "upload"
+    schritt: str
+    detail: str
+
+
+@router.post(
+    "/writeback-test",
+    response_model=WritebackTestErgebnis,
+    dependencies=[Depends(require_admin)],
+)
+async def writeback_test(
+    eingabe: WritebackTestEingabe,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> WritebackTestErgebnis:
+    """Einen einzelnen Personio-Upload testen — umgeht den Schalter, meldet den
+    echten Fehler zurück (für die Freischaltung)."""
+    from app.services import personio_writeback
+
+    res = await personio_writeback.test_upload(db, eingabe.employee_id, eingabe.art)
+    return WritebackTestErgebnis(**res)

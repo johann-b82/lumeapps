@@ -201,6 +201,9 @@ class SettingsUpdate(BaseModel):
     email_sender_name: str | None = None
     email_enabled: bool | None = None
     email_auth_mode: Literal["app", "delegated"] | None = None
+    # v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+    personio_writeback_enabled: bool | None = None
+    personio_writeback_kategorie_id: str | None = None
 
 
 class SettingsRead(BaseModel):
@@ -280,6 +283,9 @@ class SettingsRead(BaseModel):
     # Delegated (device-code) mode: signed-in account + whether a token is stored.
     email_delegated_account: str | None = None
     email_delegated_connected: bool = False
+    # v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+    personio_writeback_enabled: bool = False
+    personio_writeback_kategorie_id: str | None = None
 
     model_config = {"from_attributes": True}
 

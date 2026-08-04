@@ -15,7 +15,14 @@ import {
 } from "@/components/ui/select";
 import { CheckboxList } from "@/components/settings/CheckboxList";
 import type { CheckboxOption } from "@/components/settings/CheckboxList";
-import { fetchPersonioOptions, testPersonioConnection, triggerSync } from "@/lib/api";
+import {
+  fetchPersonioOptions,
+  testPersonioConnection,
+  testPersonioWriteback,
+  triggerSync,
+  type WritebackTestResult,
+} from "@/lib/api";
+import { fetchZuweisbare } from "@/lib/schulungApi";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { syncKeys, hrKpiKeys } from "@/lib/queryKeys";
 import type { DraftFields } from "@/hooks/useSettingsDraft";
@@ -87,6 +94,36 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
     staleTime: 0,      // always fresh per D-09
     enabled: hasCredentials,
   });
+
+  // v1.102 — Writeback-Test: Mitarbeiterauswahl (nur Personio, positive ID)
+  const { data: zuweisbare } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+    enabled: hasCredentials,
+  });
+  const personioMitarbeiter = (zuweisbare ?? []).filter((p) => p.employee_id > 0);
+  const [wbEmp, setWbEmp] = useState("");
+  const [wbArt, setWbArt] = useState<"schulung" | "kompetenz">("schulung");
+  const [wbTesting, setWbTesting] = useState(false);
+  const [wbResult, setWbResult] = useState<WritebackTestResult | null>(null);
+  const handleWritebackTest = async () => {
+    if (!wbEmp) return;
+    setWbTesting(true);
+    setWbResult(null);
+    try {
+      setWbResult(
+        await testPersonioWriteback({ employee_id: Number(wbEmp), art: wbArt }),
+      );
+    } catch (err) {
+      setWbResult({
+        ok: false,
+        schritt: "fehler",
+        detail: err instanceof Error ? err.message : "Fehler",
+      });
+    } finally {
+      setWbTesting(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setTesting(true);
@@ -306,6 +343,97 @@ export function PersonioCard({ draft, setField, hasCredentials, embedded = false
         />
 
           </div>
+        </div>
+
+        <hr className="border-border" />
+
+        {/* v1.102 — Personio-Rückschreiben (inert bis Freischaltung) */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.personio_writeback_enabled}
+              onChange={(e) => setField("personio_writeback_enabled", e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            {t("settings.personio.writeback.label")}
+          </label>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="personio-writeback-cat"
+              className="text-xs text-muted-foreground"
+            >
+              {t("settings.personio.writeback.category.label")}
+            </label>
+            <input
+              id="personio-writeback-cat"
+              type="text"
+              value={draft.personio_writeback_kategorie_id}
+              onChange={(e) =>
+                setField("personio_writeback_kategorie_id", e.target.value)
+              }
+              placeholder={t("settings.personio.writeback.category.placeholder")}
+              className="h-9 w-64 rounded-md border bg-background px-3 text-sm
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.personio.writeback.hint")}
+          </p>
+
+          {/* Kontrollierter Test-Upload (für die Freischaltung) */}
+          <AdminOnly>
+            <div className="flex flex-wrap items-end gap-2 pt-1">
+              <select
+                value={wbEmp}
+                onChange={(e) => setWbEmp(e.target.value)}
+                aria-label={t("settings.personio.writeback.test.employee")}
+                className="h-9 min-w-56 rounded-md border bg-background px-2 text-sm
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">{t("settings.personio.writeback.test.employee")}</option>
+                {personioMitarbeiter.map((p) => (
+                  <option key={p.employee_id} value={p.employee_id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={wbArt}
+                onChange={(e) => setWbArt(e.target.value as "schulung" | "kompetenz")}
+                aria-label={t("settings.personio.writeback.test.art")}
+                className="h-9 rounded-md border bg-background px-2 text-sm
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="schulung">{t("settings.personio.writeback.test.schulung")}</option>
+                <option value="kompetenz">{t("settings.personio.writeback.test.kompetenz")}</option>
+              </select>
+              <button
+                type="button"
+                disabled={!wbEmp || wbTesting}
+                onClick={handleWritebackTest}
+                className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm
+                           hover:bg-muted disabled:opacity-50
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {wbTesting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {t("settings.personio.writeback.test.button")}
+              </button>
+            </div>
+          </AdminOnly>
+          {wbResult && (
+            <p
+              className={`text-xs ${
+                wbResult.ok ? "text-[var(--color-success)]" : "text-destructive"
+              }`}
+            >
+              {wbResult.ok
+                ? t("settings.personio.writeback.test.ok")
+                : t("settings.personio.writeback.test.fehler", { schritt: wbResult.schritt })}
+              {": "}
+              {wbResult.detail}
+            </p>
+          )}
         </div>
     </div>
   );

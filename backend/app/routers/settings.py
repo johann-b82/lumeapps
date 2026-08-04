@@ -135,6 +135,8 @@ def _build_read(row: AppSettings) -> SettingsRead:
         email_auth_mode=row.email_auth_mode,
         email_delegated_account=row.email_delegated_account,
         email_delegated_connected=row.email_delegated_refresh_token_enc is not None,
+        personio_writeback_enabled=row.personio_writeback_enabled,
+        personio_writeback_kategorie_id=row.personio_writeback_kategorie_id,
     )
 
 
@@ -265,6 +267,13 @@ async def put_settings(
         row.personio_production_dept = payload.personio_production_dept
     if payload.personio_skill_attr_key is not None:
         row.personio_skill_attr_key = payload.personio_skill_attr_key
+    # v1.102 — Personio-Rückschreiben (inert bis Freischaltung)
+    if payload.personio_writeback_enabled is not None:
+        row.personio_writeback_enabled = payload.personio_writeback_enabled
+    if payload.personio_writeback_kategorie_id is not None:
+        row.personio_writeback_kategorie_id = (
+            payload.personio_writeback_kategorie_id.strip() or None
+        )
     if payload.target_overtime_ratio is not None:
         row.target_overtime_ratio = payload.target_overtime_ratio
     if payload.target_sick_leave_ratio is not None:
