@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from pysnmp.hlapi.v3arch.asyncio import SnmpEngine
 from sqlalchemy import delete, select, update
@@ -91,6 +92,47 @@ async def _run_scheduled_sync() -> None:
             await hr_sync.run_sync(session)
         except Exception:
             pass  # sync meta already updated with error status inside run_sync
+
+
+# Feste Anker-Uhrzeit für den Personio-Sync (02:00 UTC ≈ 03:00/04:00 lokal, im
+# ruhigen Nachtfenster). Der Anker macht aus dem 24h-Intervall einen Lauf zu einer
+# FESTEN Uhrzeit statt "letzter Start + 24h": so überspringt der Sync auch bei
+# häufigen API-Neustarts keinen Tag mehr (das Requirement „täglich").
+PERSONIO_SYNC_ANCHOR = datetime(2020, 1, 1, 2, 0, tzinfo=timezone.utc)
+
+
+def schedule_personio_sync(interval_h: int) -> None:
+    """Personio-Sync-Job registrieren/entfernen (D-06 sofort wirksam, D-07 manual-only).
+
+    ``interval_h == 0`` → kein geplanter Job (nur manuell). ``> 0`` → Intervall-Job,
+    an :data:`PERSONIO_SYNC_ANCHOR` verankert, damit ein 24h-Intervall zuverlässig
+    zur festen Uhrzeit feuert. Wird sowohl beim Start (Lifespan) als auch bei
+    Intervall-Änderungen (PUT /api/settings) aufgerufen. Wirft nie.
+    """
+    try:
+        existing = scheduler.get_job(SYNC_JOB_ID)
+        if interval_h <= 0:
+            if existing is not None:
+                scheduler.remove_job(SYNC_JOB_ID)
+                log.info("personio_sync entfernt (manual-only)")
+            return
+        scheduler.add_job(
+            _run_scheduled_sync,
+            trigger=IntervalTrigger(hours=interval_h, start_date=PERSONIO_SYNC_ANCHOR),
+            id=SYNC_JOB_ID,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,  # verpasste Läufe (Downtime) bis 1h später nachholen
+        )
+        job = scheduler.get_job(SYNC_JOB_ID)
+        log.info(
+            "personio_sync geplant: interval_h=%s next_run=%s",
+            interval_h,
+            job.next_run_time.isoformat() if job and job.next_run_time else None,
+        )
+    except Exception:
+        log.exception("schedule_personio_sync fehlgeschlagen (interval_h=%s)", interval_h)
 
 
 # ---------------------------------------------------------------------------
@@ -459,17 +501,9 @@ async def lifespan(app: FastAPI):
     _engine = SnmpEngine()
     app.state.snmp_engine = _engine
 
-    # --- Personio sync (existing) ---
-    interval_h = await _load_sync_interval()
-    if interval_h > 0:
-        scheduler.add_job(
-            _run_scheduled_sync,
-            trigger="interval",
-            hours=interval_h,
-            id=SYNC_JOB_ID,
-            replace_existing=True,
-            max_instances=1,
-        )
+    # --- Personio sync ---
+    # An feste Uhrzeit verankert; registriert NACH scheduler.start() (weiter unten),
+    # damit next_run_time sofort feststeht und geloggt werden kann.
 
     # --- Sensor poll (v1.15) ---
     sensor_interval_s = await _load_sensor_interval()
@@ -543,6 +577,8 @@ async def lifespan(app: FastAPI):
     log.info("pptx_stuck_reset hook executed")
 
     scheduler.start()
+    # Personio-Sync an fester Uhrzeit registrieren (nach start(), s. o.).
+    schedule_personio_sync(await _load_sync_interval())
     await signage_pg_listen.start(app)
     try:
         yield

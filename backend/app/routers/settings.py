@@ -255,23 +255,10 @@ async def put_settings(
     # New Personio config fields — None means "don't change" (same pattern as credentials)
     if payload.personio_sync_interval_h is not None:
         row.personio_sync_interval_h = payload.personio_sync_interval_h
-        # Reschedule APScheduler job immediately (D-06, D-07)
-        sched = request.app.state.scheduler
-        from app.scheduler import SYNC_JOB_ID, _run_scheduled_sync
-        if payload.personio_sync_interval_h == 0:
-            # manual-only: remove job if it exists (D-07)
-            if sched.get_job(SYNC_JOB_ID):
-                sched.remove_job(SYNC_JOB_ID)
-        else:
-            # Add with replace_existing=True handles both add and reschedule (Pitfall 1)
-            sched.add_job(
-                _run_scheduled_sync,
-                trigger="interval",
-                hours=payload.personio_sync_interval_h,
-                id=SYNC_JOB_ID,
-                replace_existing=True,
-                max_instances=1,
-            )
+        # Reschedule APScheduler job immediately (D-06, D-07) — an feste Uhrzeit
+        # verankert; gemeinsame Logik mit dem Lifespan-Start.
+        from app.scheduler import schedule_personio_sync
+        schedule_personio_sync(payload.personio_sync_interval_h)
     if payload.personio_sick_leave_type_id is not None:
         row.personio_sick_leave_type_id = payload.personio_sick_leave_type_id
     if payload.personio_production_dept is not None:
