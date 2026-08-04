@@ -30,6 +30,7 @@ import {
   entferneSchulung,
   fetchZuweisbare,
   type MatrixZeile,
+  type MatrixZelle,
   entferneUnterlage,
   fetchUnterlagen,
   ladeSchulungsprotokoll,
@@ -38,6 +39,7 @@ import {
   sammelDurchgefuehrt,
   setzeBeschreibung,
   setzeDurchgefuehrt,
+  entferneTeilnahme,
   setzeFrist,
   setzeTurnus,
   setzeVerantwortlicher,
@@ -1618,6 +1620,131 @@ function langDatum(iso: string): string {
   return d && m && y ? `${d}.${m}.${y}` : iso;
 }
 
+/** Korrektur einer Matrix-Zelle: Datum ändern · auf offen · ganz entfernen. */
+function MatrixZellEditor({
+  person,
+  schulung,
+  zelle,
+  onClose,
+}: {
+  person: string;
+  schulung: string;
+  zelle: MatrixZelle;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [datum, setDatum] = useState(zelle.datum ?? "");
+  const [bestaetigen, setBestaetigen] = useState(false);
+  const auffrischen = () =>
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() }); // Prefix: Matrix + Liste + offen
+
+  const speichern = useMutation({
+    mutationFn: (d: string | null) => setzeDurchgefuehrt(zelle.teilnahme_id, d),
+    onSuccess: () => {
+      toast.success(t("schulungen.durchgefuehrt.gespeichert"));
+      auffrischen();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const entfernen = useMutation({
+    mutationFn: () => entferneTeilnahme(zelle.teilnahme_id),
+    onSuccess: () => {
+      toast.success(t("schulungen.matrix.entfernt"));
+      auffrischen();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const busy = speichern.isPending || entfernen.isPending;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <div className="text-sm font-medium">{person}</div>
+          <div className="text-xs text-muted-foreground">{schulung}</div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="matrix-datum" className="text-xs text-muted-foreground">
+            {t("schulungen.bericht.datum")}
+          </label>
+          <input
+            id="matrix-datum"
+            type="date"
+            value={datum}
+            onChange={(e) => setDatum(e.target.value)}
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy || !datum}
+            onClick={() => speichern.mutate(datum || null)}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                       text-primary-foreground disabled:opacity-50
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {speichern.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {t("schulungen.matrix.speichern")}
+          </button>
+          {!zelle.offen && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => speichern.mutate(null)}
+              className="inline-flex h-9 items-center rounded-md border px-3 text-sm
+                         hover:bg-muted disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t("schulungen.matrix.aufOffen")}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center justify-between border-t pt-2">
+          {!bestaetigen ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setBestaetigen(true)}
+              className="text-xs text-destructive hover:underline disabled:opacity-50"
+            >
+              {t("schulungen.matrix.entfernen")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => entfernen.mutate()}
+              className="inline-flex h-8 items-center gap-2 rounded-md bg-destructive px-3 text-xs
+                         text-white disabled:opacity-50"
+            >
+              {entfernen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+              {t("schulungen.matrix.entfernenBestaetigen")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-muted-foreground hover:underline"
+          >
+            {t("schulungen.bericht.schliessen")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Gesamtübersicht als Matrix: wer hat welche Schulung absolviert. */
 function MatrixPanel() {
   const { t } = useTranslation();
@@ -1629,6 +1756,11 @@ function MatrixPanel() {
     data?.zeilen,
     (z) => z.office,
   );
+  const [bearbeiten, setBearbeiten] = useState<{
+    person: string;
+    schulung: string;
+    zelle: MatrixZelle;
+  } | null>(null);
   // pro Mitarbeiter: schulung_id → Zelle (schnelles Nachschlagen beim Rendern)
   const zellenIndex = useMemo(() => {
     const map = new Map<string, Map<number, MatrixZeile["zellen"][number]>>();
@@ -1721,9 +1853,19 @@ function MatrixPanel() {
                           <td
                             key={s.id}
                             title={titel}
+                            onClick={
+                              c
+                                ? () =>
+                                    setBearbeiten({
+                                      person: z.name,
+                                      schulung: s.name,
+                                      zelle: c,
+                                    })
+                                : undefined
+                            }
                             className={`w-7 min-w-7 border-b border-l text-center ${
                               zelle ? zelle.className : ""
-                            }`}
+                            } ${c ? "cursor-pointer hover:ring-1 hover:ring-primary/50" : ""}`}
                           >
                             {zelle ? zelle.symbol : ""}
                           </td>
@@ -1738,6 +1880,15 @@ function MatrixPanel() {
           <p className="text-xs text-muted-foreground">{t("schulungen.matrix.hinweis")}</p>
         </div>
       </Klappbar>
+
+      {bearbeiten && (
+        <MatrixZellEditor
+          person={bearbeiten.person}
+          schulung={bearbeiten.schulung}
+          zelle={bearbeiten.zelle}
+          onClose={() => setBearbeiten(null)}
+        />
+      )}
     </section>
   );
 }

@@ -319,6 +319,8 @@ export interface MatrixSchulung {
 
 export interface MatrixZelle {
   schulung_id: number;
+  /** Teilnahme-ID für Korrekturen (Datum ändern / entfernen). */
+  teilnahme_id: number;
   /** Durchführungsdatum; null = zugewiesen, noch offen. */
   datum: string | null;
   status: SchulungStatus;
@@ -400,6 +402,13 @@ export function setzeDurchgefuehrt(teilnahmeId: number, datum: string | null): P
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ datum }),
+  });
+}
+
+/** Entfernt eine Teilnahme ganz (Korrektur — auch mit Nachweis; Oberfläche fragt vorher). */
+export function entferneTeilnahme(teilnahmeId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/teilnahme/${teilnahmeId}`, {
+    method: "DELETE",
   });
 }
 

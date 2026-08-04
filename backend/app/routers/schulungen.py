@@ -702,6 +702,28 @@ async def teilnahme_durchgefuehrt(
     asyncio.create_task(personio_writeback.nach_schulung_update(zeile.employee_id))
 
 
+@router.delete("/teilnahme/{teilnahme_id}", status_code=204)
+async def teilnahme_entfernen(
+    teilnahme_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Teilnahme entfernen — Korrektur aus der Gesamtübersicht.
+
+    Anders als ``/zuweisung`` (das Nachweise schützt): löscht bewusst auch
+    absolvierte Zeilen, damit eine beim FALSCHEN Mitarbeiter bestätigte Schulung
+    korrigiert werden kann. Die Oberfläche fragt vorher nach.
+    """
+    zeile = (
+        await db.execute(
+            select(SchulungTeilnahme).where(SchulungTeilnahme.id == teilnahme_id)
+        )
+    ).scalar_one_or_none()
+    if zeile is None:
+        raise HTTPException(status_code=404, detail="Teilnahme nicht gefunden.")
+    await db.delete(zeile)
+    await db.commit()
+
+
 class SammelDurchgefuehrt(BaseModel):
     schulung_id: int
     datum: date
@@ -946,6 +968,8 @@ class MatrixSchulung(BaseModel):
 
 class MatrixZelle(BaseModel):
     schulung_id: int
+    #: Teilnahme-ID für Korrekturen (Datum ändern / entfernen).
+    teilnahme_id: int
     #: Durchführungsdatum; None = zugewiesen, noch offen.
     datum: date | None
     #: "ueberfaellig" | "bald" | "ok" | "ohne_frist" (Fälligkeits-Status)
@@ -1015,6 +1039,7 @@ async def schulungs_matrix(
             zellen.append(
                 MatrixZelle(
                     schulung_id=k.id,
+                    teilnahme_id=t.id,
                     datum=t.aktuell_datum,
                     status=_status(faellig, heute),
                     offen=t.aktuell_datum is None,
