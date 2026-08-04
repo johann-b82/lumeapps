@@ -130,8 +130,87 @@ export function schulungImportCommit(file: File): Promise<SchulungImportVorschau
   return upload("/api/hr/schulungen/import/commit", file);
 }
 
+// --- Schulungsbericht-Upload (PDF) → Stand fortschreiben ---------------------
+
+export type BerichtMitarbeiterStatus = "ok" | "nicht_gefunden" | "mehrdeutig";
+
+export interface BerichtZeile {
+  mitarbeiter_name: string;
+  schulung_name: string;
+  datum: string | null;
+  mitarbeiter_status: BerichtMitarbeiterStatus;
+  /** Aufgelöste Personio-ID (null, wenn nicht/mehrdeutig) — Vorauswahl im Dropdown. */
+  employee_id: number | null;
+  /** Aufgelöster Personio-Name (null, wenn nicht/mehrdeutig gefunden). */
+  matched_mitarbeiter: string | null;
+  schulung_im_katalog: boolean;
+  /** True = Mitarbeiter + Datum vorhanden (wäre übernehmbar). */
+  uebernehmbar: boolean;
+}
+
+export interface BerichtVorschau {
+  format: string;
+  format_label: string;
+  gesamt: number;
+  uebernehmbar: number;
+  ohne_mitarbeiter: number;
+  ohne_datum: number;
+  neue_schulungen: number;
+  zeilen: BerichtZeile[];
+}
+
+/** Schulungsbericht-PDF (Fbl. 68/71) auswerten — nichts schreiben. */
+export function berichtPreview(file: File): Promise<BerichtVorschau> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiClient<BerichtVorschau>("/api/hr/schulungen/bericht/preview", {
+    method: "POST",
+    body: fd,
+  });
+}
+
+/** Eine bearbeitete Zeile zur Übernahme. */
+export interface BerichtCommitZeile {
+  employee_id: number;
+  schulung_name: string;
+  datum: string;
+}
+
+export interface BerichtCommitErgebnis {
+  eingetragen: number;
+  angelegte_schulungen: number;
+}
+
+/** Bearbeitete Berichtszeilen übernehmen (Durchführung setzen, fehlende Schulungen anlegen). */
+export function berichtCommit(
+  zeilen: BerichtCommitZeile[],
+): Promise<BerichtCommitErgebnis> {
+  return apiClient<BerichtCommitErgebnis>("/api/hr/schulungen/bericht/commit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zeilen }),
+  });
+}
+
 export function fetchSchulungen(): Promise<Schulung[]> {
   return apiClient<Schulung[]>("/api/hr/schulungen");
+}
+
+/** Neue Schulung im Katalog anlegen (Name + Bereich; Rest danach pflegbar). */
+export function erstelleSchulung(eingabe: {
+  name: string;
+  bereich: string;
+}): Promise<Schulung> {
+  return apiClient<Schulung>("/api/hr/schulungen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Schulung entfernen (inkl. aller gleichnamigen Katalogzeilen + Teilnahmen). */
+export function entferneSchulung(schulungId: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/${schulungId}`, { method: "DELETE" });
 }
 
 export interface Abteilung {
@@ -228,6 +307,42 @@ export function fetchOffeneSchulungen(): Promise<OffeneSchulung[]> {
 
 export function fetchMitarbeiter(): Promise<MitarbeiterZeile[]> {
   return apiClient<MitarbeiterZeile[]>("/api/hr/schulungen/mitarbeiter");
+}
+
+// --- Schulungsmatrix: wer hat welche Schulung absolviert --------------------
+
+export interface MatrixSchulung {
+  id: number;
+  name: string;
+  bereich: string;
+}
+
+export interface MatrixZelle {
+  schulung_id: number;
+  /** Durchführungsdatum; null = zugewiesen, noch offen. */
+  datum: string | null;
+  status: SchulungStatus;
+  /** True = zugewiesen, noch nicht absolviert. */
+  offen: boolean;
+}
+
+export interface MatrixZeile {
+  schluessel: string;
+  name: string;
+  abteilung: string | null;
+  office: string | null;
+  zellen: MatrixZelle[];
+}
+
+export interface SchulungsMatrix {
+  /** Absolvierte Schulungen = Spalten (nach Bereich, Name sortiert). */
+  schulungen: MatrixSchulung[];
+  /** Mitarbeiter = Zeilen (nach Name sortiert). */
+  zeilen: MatrixZeile[];
+}
+
+export function fetchSchulungsMatrix(): Promise<SchulungsMatrix> {
+  return apiClient<SchulungsMatrix>("/api/hr/schulungen/matrix");
 }
 
 export function fetchMitarbeiterSchulungen(

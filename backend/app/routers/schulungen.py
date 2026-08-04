@@ -54,6 +54,8 @@ from app.services.schulung_import import (
     baue_vorschau,
     uebernehmen,
 )
+from app.services import schulungsbericht_import as bericht_import
+from app.parsing.schulungsbericht_parser import SchulungsberichtError
 
 router = APIRouter(
     prefix="/api/hr/schulungen",
@@ -192,6 +194,92 @@ async def import_commit(
     """Datei übernehmen (idempotent: erneuter Import aktualisiert)."""
     parsed = await _parse_upload(file)
     return _als_read(await uebernehmen(db, parsed, file.filename or "unbenannt.xlsx"))
+
+
+# --- Schulungsbericht-Upload (PDF) → Stand fortschreiben -----------------------
+
+
+class BerichtZeileRead(BaseModel):
+    mitarbeiter_name: str
+    schulung_name: str
+    datum: date | None
+    #: "ok" | "nicht_gefunden" | "mehrdeutig"
+    mitarbeiter_status: str
+    #: aufgelöste Personio-ID (None, wenn nicht/mehrdeutig) — Vorauswahl im Dropdown.
+    employee_id: int | None
+    matched_mitarbeiter: str | None
+    schulung_im_katalog: bool
+    uebernehmbar: bool
+
+
+class BerichtVorschauRead(BaseModel):
+    format: str
+    format_label: str
+    gesamt: int
+    uebernehmbar: int
+    ohne_mitarbeiter: int
+    ohne_datum: int
+    neue_schulungen: int
+    zeilen: list[BerichtZeileRead]
+
+
+def _bericht_read(erg: bericht_import.BerichtErgebnis) -> BerichtVorschauRead:
+    return BerichtVorschauRead(
+        format=erg.format,
+        format_label=erg.format_label,
+        gesamt=erg.gesamt,
+        uebernehmbar=erg.uebernehmbar,
+        ohne_mitarbeiter=erg.ohne_mitarbeiter,
+        ohne_datum=erg.ohne_datum,
+        neue_schulungen=erg.neue_schulungen,
+        zeilen=[BerichtZeileRead(**vars(z)) for z in erg.zeilen],
+    )
+
+
+@router.post("/bericht/preview", response_model=BerichtVorschauRead)
+async def bericht_preview(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BerichtVorschauRead:
+    """Schulungsbericht-PDF (Fbl. 68/71) auswerten und zuordnen — nichts schreiben."""
+    try:
+        erg = await bericht_import.vorschau(db, await file.read())
+    except SchulungsberichtError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _bericht_read(erg)
+
+
+class BerichtCommitZeile(BaseModel):
+    employee_id: int
+    schulung_name: str
+    datum: date
+
+
+class BerichtCommitEingabe(BaseModel):
+    zeilen: list[BerichtCommitZeile]
+
+
+class BerichtCommitErgebnis(BaseModel):
+    eingetragen: int
+    angelegte_schulungen: int
+
+
+@router.post("/bericht/commit", response_model=BerichtCommitErgebnis)
+async def bericht_commit(
+    eingabe: BerichtCommitEingabe,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BerichtCommitErgebnis:
+    """Bearbeitete Berichtszeilen übernehmen: Durchführung setzen, fehlende Schulungen anlegen."""
+    res = await bericht_import.uebernehmen_zeilen(
+        db,
+        [
+            bericht_import.CommitZeile(
+                employee_id=z.employee_id, schulung_name=z.schulung_name, datum=z.datum
+            )
+            for z in eingabe.zeilen
+        ],
+    )
+    return BerichtCommitErgebnis(**res)
 
 
 class PflichtMatrixRead(BaseModel):
@@ -840,6 +928,132 @@ async def liste_mitarbeiter(
     )
 
 
+class MatrixSchulung(BaseModel):
+    id: int
+    name: str
+    bereich: str
+
+
+class MatrixZelle(BaseModel):
+    schulung_id: int
+    #: Durchführungsdatum; None = zugewiesen, noch offen.
+    datum: date | None
+    #: "ueberfaellig" | "bald" | "ok" | "ohne_frist" (Fälligkeits-Status)
+    status: str
+    #: True = zugewiesen, noch nicht absolviert.
+    offen: bool
+
+
+class MatrixZeile(BaseModel):
+    schluessel: str
+    name: str
+    abteilung: str | None
+    office: str | None
+    zellen: list[MatrixZelle]
+
+
+class MatrixRead(BaseModel):
+    """Schulungsmatrix: absolvierte Schulungen (Spalten) je Mitarbeiter (Zeilen)."""
+
+    schulungen: list[MatrixSchulung]
+    zeilen: list[MatrixZeile]
+
+
+@router.get("/matrix", response_model=MatrixRead)
+async def schulungs_matrix(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> MatrixRead:
+    """Gesamtübersicht: wer soll welche Schulung — und was ist erledigt.
+
+    Verbindet Zuweisung und Absolvierung: Spalten sind alle zugewiesenen ODER
+    absolvierten Schulungen, Zeilen die Mitarbeiter (aktive/onboarding + Externe,
+    keine Ausgetretenen). Die Zelle trägt Datum (falls absolviert), den
+    Fälligkeits-Status und ob sie noch offen ist.
+    """
+    heute = date.today()
+
+    # Alle Teilnahmen (offen + absolviert) nach den drei Schlüsselarten indizieren
+    # (wie liste_mitarbeiter), damit die Matrix DIESELBE Belegschaft trägt.
+    zeilen = (
+        await db.execute(
+            select(SchulungTeilnahme, SchulungKatalog).join(
+                SchulungKatalog, SchulungKatalog.id == SchulungTeilnahme.schulung_id
+            )
+        )
+    ).all()
+    nach_emp: dict[int, list] = {}
+    nach_persnr: dict[str, list] = {}
+    nach_extern: dict[int, list] = {}
+    for t, k in zeilen:
+        if t.employee_id is not None:
+            nach_emp.setdefault(t.employee_id, []).append((t, k))
+        if t.personalnummer:
+            nach_persnr.setdefault(t.personalnummer, []).append((t, k))
+        if t.extern_id is not None:
+            nach_extern.setdefault(t.extern_id, []).append((t, k))
+
+    schulungen: dict[int, MatrixSchulung] = {}
+
+    def _zeile(schluessel, name, abteilung, office, hire_date, treffer):
+        # Alle Mitarbeiter erscheinen — auch ohne Absolvierung (leere Zeile).
+        zellen: list[MatrixZelle] = []
+        for t, k in treffer:
+            schulungen.setdefault(
+                k.id, MatrixSchulung(id=k.id, name=k.name, bereich=k.bereich)
+            )
+            faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
+            zellen.append(
+                MatrixZelle(
+                    schulung_id=k.id,
+                    datum=t.aktuell_datum,
+                    status=_status(faellig, heute),
+                    offen=t.aktuell_datum is None,
+                )
+            )
+        return MatrixZeile(
+            schluessel=schluessel, name=name, abteilung=abteilung, office=office, zellen=zellen
+        )
+
+    ergebnis: list[MatrixZeile] = []
+
+    personen = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status.in_(("active", "onboarding")))
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for e in personen:
+        persnr = _personalnummer(e.raw_json)
+        if persnr:
+            schluessel, treffer = f"p:{persnr}", nach_persnr.get(persnr, [])
+        else:
+            schluessel, treffer = f"e:{e.id}", nach_emp.get(e.id, [])
+        name = f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
+        ergebnis.append(
+            _zeile(
+                schluessel, name, e.department, _extract_office(e.raw_json), e.hire_date, treffer
+            )
+        )
+
+    externe = (await db.execute(select(OnboardingExtern))).scalars().all()
+    for x in externe:
+        ergebnis.append(
+            _zeile(f"x:{x.id}", x.name, x.abteilung, None, x.hire_date, nach_extern.get(x.id, []))
+        )
+
+    return MatrixRead(
+        schulungen=sorted(
+            schulungen.values(), key=lambda s: (s.bereich.lower(), s.name.lower())
+        ),
+        zeilen=sorted(ergebnis, key=lambda z: z.name.lower()),
+    )
+
+
 @router.get("/mitarbeiter/{schluessel}", response_model=list[MitarbeiterSchulungRead])
 async def mitarbeiter_schulungen(
     schluessel: str,
@@ -982,6 +1196,77 @@ async def liste_schulungen(
         )
         for k in katalog
     ]
+
+
+class SchulungAnlegen(BaseModel):
+    name: str
+    bereich: str
+
+
+@router.post("", response_model=SchulungRead, status_code=201)
+async def schulung_anlegen(
+    eingabe: SchulungAnlegen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SchulungRead:
+    """Eine neue Schulung im Katalog anlegen (Name + Bereich; Rest später pflegbar)."""
+    name = eingabe.name.strip()
+    bereich = eingabe.bereich.strip()
+    if not name or not bereich:
+        raise HTTPException(status_code=422, detail="Name und Bereich sind erforderlich.")
+    # Dubletten (gleicher Name, egal welcher Bereich) verhindern — passt zur
+    # deduplizierten Katalogansicht.
+    vorhanden = (
+        await db.execute(
+            select(SchulungKatalog).where(func.lower(SchulungKatalog.name) == name.lower())
+        )
+    ).scalars().first()
+    if vorhanden is not None:
+        raise HTTPException(
+            status_code=409, detail="Eine Schulung mit diesem Namen existiert bereits."
+        )
+    k = SchulungKatalog(bereich=bereich, name=name, sort_order=0)
+    db.add(k)
+    await db.commit()
+    await db.refresh(k)
+    return SchulungRead(
+        id=k.id,
+        bereich=k.bereich,
+        name=k.name,
+        turnus=None,
+        turnus_monate=None,
+        frist_tage=None,
+        verantwortlicher=None,
+        beschreibung=None,
+        anzahl_unterlagen=0,
+        aktiv=k.aktiv,
+        teilnahmen=0,
+    )
+
+
+@router.delete("/{schulung_id}", status_code=204)
+async def schulung_entfernen(
+    schulung_id: int,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> None:
+    """Eine Schulung entfernen — inkl. aller gleichnamigen Katalogzeilen.
+
+    Entspricht der deduplizierten Ansicht (eine Schulung = ein Name). Teilnahmen
+    (auch Nachweise) und Anforderungsregeln kaskadieren (FK ON DELETE CASCADE) —
+    die Oberfläche warnt vorher, wenn Teilnahmen betroffen sind.
+    """
+    k = (
+        await db.execute(select(SchulungKatalog).where(SchulungKatalog.id == schulung_id))
+    ).scalar_one_or_none()
+    if k is None:
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    gleichnamig = (
+        await db.execute(
+            select(SchulungKatalog).where(func.lower(SchulungKatalog.name) == k.name.lower())
+        )
+    ).scalars().all()
+    for eintrag in gleichnamig:
+        await db.delete(eintrag)
+    await db.commit()
 
 
 class FristSetzen(BaseModel):

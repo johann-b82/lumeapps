@@ -1,15 +1,17 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertTriangle,
   CalendarCheck,
+  CheckCircle2,
   ChevronDown,
   FileDown,
   GraduationCap,
   Loader2,
   Paperclip,
+  Plus,
   Upload,
   UserPlus,
   Users,
@@ -20,10 +22,14 @@ import {
   fetchAbteilungen,
   fetchMitarbeiter,
   fetchMitarbeiterSchulungen,
+  fetchSchulungsMatrix,
   fetchOffeneSchulungen,
   fetchPflichtMatrix,
   fetchSchulungen,
+  erstelleSchulung,
+  entferneSchulung,
   fetchZuweisbare,
+  type MatrixZeile,
   entferneUnterlage,
   fetchUnterlagen,
   ladeSchulungsprotokoll,
@@ -38,17 +44,23 @@ import {
   type Unterlage,
   schulungImportCommit,
   schulungImportPreview,
+  berichtPreview,
+  berichtCommit,
   setzePflicht,
   weiseSchulungZu,
   type PflichtEbene,
   type PflichtMatrix,
   type Schulung,
   type SchulungImportVorschau,
+  type ZuweisbarerMitarbeiter,
+  type BerichtCommitZeile,
+  type BerichtCommitErgebnis,
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { abteilungAusgeblendet, vollwort } from "@/lib/abkuerzungen";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { StandortChips, useStandortFilter } from "@/components/hr/StandortFilter";
 
 /** Eine über Bereiche zusammengefasste Schulung (ein Eintrag je Name). */
@@ -406,7 +418,17 @@ function SchulungDetail({ schulung }: { schulung: Schulung }) {
 /** Eine Katalogzeile (je Name, über Bereiche zusammengefasst) mit aufklappbarem Detail. */
 function KatalogZeileRow({ s }: { s: DedupSchulung }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [offen, setOffen] = useState(false);
+  const loeschen = useMutation({
+    mutationFn: () => entferneSchulung(s.id),
+    onSuccess: () => {
+      toast.success(t("schulungen.katalog.entfernt", { name: s.name }));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   return (
     <>
       <tr className="border-b border-border/50 transition-colors hover:bg-muted/40">
@@ -444,7 +466,23 @@ function KatalogZeileRow({ s }: { s: DedupSchulung }) {
         </td>
         <td className="px-4 py-2 text-right tabular-nums">{s.teilnahmen}</td>
         <td className="px-4 py-2 text-right">
-          <ProtokollKnopf schulung={s} />
+          <div className="flex items-center justify-end gap-1">
+            <ProtokollKnopf schulung={s} />
+            <DeleteButton
+              itemLabel={s.name}
+              aria-label={t("schulungen.katalog.entfernen")}
+              confirmLabel={t("schulungen.katalog.entfernen")}
+              dialogBody={
+                s.teilnahmen > 0
+                  ? t("schulungen.katalog.entfernenWarnung", {
+                      name: s.name,
+                      count: s.teilnahmen,
+                    })
+                  : undefined
+              }
+              onConfirm={() => loeschen.mutateAsync()}
+            />
+          </div>
         </td>
       </tr>
       {offen && (
@@ -481,6 +519,69 @@ function KatalogTabelle({ zeilen }: { zeilen: DedupSchulung[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Formular zum Anlegen einer neuen Schulung (Name + Bereich). */
+function NeueSchulungForm({ bereiche }: { bereiche: string[] }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [bereich, setBereich] = useState("");
+  const anlegen = useMutation({
+    mutationFn: () => erstelleSchulung({ name: name.trim(), bereich: bereich.trim() }),
+    onSuccess: (s) => {
+      toast.success(t("schulungen.katalog.hinzugefuegt", { name: s.name }));
+      setName("");
+      setBereich("");
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const bereit = name.trim() !== "" && bereich.trim() !== "";
+  const feldStil =
+    "h-9 rounded-md border bg-background px-3 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  return (
+    <div className="mb-3 flex flex-wrap items-end gap-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t("schulungen.katalog.neuName")}
+        aria-label={t("schulungen.katalog.neuName")}
+        className={`${feldStil} min-w-64 flex-1`}
+      />
+      <input
+        type="text"
+        list="katalog-bereiche"
+        value={bereich}
+        onChange={(e) => setBereich(e.target.value)}
+        placeholder={t("schulungen.katalog.neuBereich")}
+        aria-label={t("schulungen.katalog.bereich")}
+        className={`${feldStil} w-52`}
+      />
+      <datalist id="katalog-bereiche">
+        {bereiche.map((b) => (
+          <option key={b} value={b} />
+        ))}
+      </datalist>
+      <button
+        type="button"
+        disabled={!bereit || anlegen.isPending}
+        onClick={() => anlegen.mutate()}
+        className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                   text-primary-foreground disabled:opacity-50
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {anlegen.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        )}
+        {t("schulungen.katalog.hinzufuegen")}
+      </button>
     </div>
   );
 }
@@ -1149,6 +1250,498 @@ function SammelDurchgefuehrtPanel({ schulungen }: { schulungen: DedupSchulung[] 
   );
 }
 
+/** Eine bearbeitbare Zeile der Schulungsbericht-Vorschau. */
+interface EditZeile {
+  /** Name aus dem Bericht (zur Nachvollziehbarkeit angezeigt). */
+  bericht_mitarbeiter: string;
+  employee_id: number | null;
+  schulung_name: string;
+  datum: string; // yyyy-mm-dd | ""
+}
+
+function normBerichtName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Editierbare Vorschau-Tabelle (Mitarbeiter-Dropdown, Schulung Dropdown+Text, Datum). */
+function BerichtEditorTabelle({
+  zeilen,
+  zuweisbare,
+  katalogNamen,
+  katalogOptionen,
+  onPatch,
+  onDelete,
+}: {
+  zeilen: EditZeile[];
+  zuweisbare: ZuweisbarerMitarbeiter[];
+  katalogNamen: Set<string>;
+  katalogOptionen: string[];
+  onPatch: (index: number, patch: Partial<EditZeile>) => void;
+  onDelete: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const feldStil =
+    "h-8 w-full rounded-md border bg-background px-2 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const listeId = "bericht-katalog-schulungen";
+  return (
+    <div className="overflow-x-auto rounded-md border bg-background">
+      <datalist id={listeId}>
+        {katalogOptionen.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30">
+            <Th>{t("schulungen.mitarbeiter.name")}</Th>
+            <Th>{t("schulungen.katalog.name")}</Th>
+            <Th>{t("schulungen.bericht.datum")}</Th>
+            <th className="w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((z, i) => {
+            const neu =
+              z.schulung_name.trim() !== "" &&
+              !katalogNamen.has(normBerichtName(z.schulung_name));
+            return (
+              <tr key={i} className="border-b border-border/50 align-top last:border-0">
+                <td className="px-3 py-2" style={{ minWidth: "12rem" }}>
+                  <select
+                    value={z.employee_id ?? ""}
+                    onChange={(e) =>
+                      onPatch(i, {
+                        employee_id: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                    aria-label={t("schulungen.mitarbeiter.name")}
+                    className={feldStil}
+                  >
+                    <option value="">{t("schulungen.zuweisen.mitarbeiterWaehlen")}</option>
+                    {zuweisbare.map((p) => (
+                      <option key={p.employee_id} value={p.employee_id}>
+                        {p.name}
+                        {p.abteilung ? ` · ${p.abteilung}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t("schulungen.bericht.ausBericht", { name: z.bericht_mitarbeiter })}
+                  </span>
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: "18rem" }}>
+                  {/* Dropdown (Katalog-Vorschläge) UND freier Text zugleich */}
+                  <input
+                    type="text"
+                    list={listeId}
+                    value={z.schulung_name}
+                    onChange={(e) => onPatch(i, { schulung_name: e.target.value })}
+                    aria-label={t("schulungen.katalog.name")}
+                    className={feldStil}
+                  />
+                  {neu && (
+                    <span className="mt-1 inline-block rounded-full bg-[var(--color-warning)]/20 px-2 py-0.5 text-xs text-foreground">
+                      {t("schulungen.bericht.neu")}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: "9rem" }}>
+                  <input
+                    type="date"
+                    value={z.datum}
+                    onChange={(e) => onPatch(i, { datum: e.target.value })}
+                    aria-label={t("schulungen.bericht.datum")}
+                    className={feldStil}
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(i)}
+                    aria-label={t("schulungen.bericht.zeileLoeschen")}
+                    title={t("schulungen.bericht.zeileLoeschen")}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive
+                               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Upload eines Schulungsberichts (PDF, Fbl. 68/71) → Stand fortschreiben. */
+function SchulungsberichtPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const dateiRef = useRef<HTMLInputElement>(null);
+  const [datei, setDatei] = useState<File | null>(null);
+  const [formatLabel, setFormatLabel] = useState("");
+  const [zeilen, setZeilen] = useState<EditZeile[]>([]);
+  const [ergebnis, setErgebnis] = useState<BerichtCommitErgebnis | null>(null);
+
+  const { data: zuweisbare } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+  });
+  const { data: katalog } = useQuery({
+    queryKey: hrKpiKeys.schulungen(),
+    queryFn: fetchSchulungen,
+  });
+  const katalogNamen = useMemo(
+    () => new Set((katalog ?? []).map((k) => normBerichtName(k.name))),
+    [katalog],
+  );
+  const katalogOptionen = useMemo(
+    () =>
+      Array.from(new Set((katalog ?? []).map((k) => k.name))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [katalog],
+  );
+
+  const preview = useMutation({
+    mutationFn: (f: File) => berichtPreview(f),
+    onSuccess: (v) => {
+      setFormatLabel(v.format_label);
+      setZeilen(
+        v.zeilen.map((z) => ({
+          bericht_mitarbeiter: z.mitarbeiter_name,
+          employee_id: z.employee_id,
+          schulung_name: z.schulung_name,
+          datum: z.datum ?? "",
+        })),
+      );
+      setErgebnis(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const commit = useMutation({
+    mutationFn: (rows: BerichtCommitZeile[]) => berichtCommit(rows),
+    onSuccess: (res) => {
+      setErgebnis(res);
+      toast.success(t("schulungen.bericht.uebernommen", { count: res.eingetragen }));
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const waehle = (f: File | null) => {
+    setDatei(f);
+    setZeilen([]);
+    setErgebnis(null);
+    if (f) preview.mutate(f);
+  };
+
+  const zuruecksetzen = () => {
+    setDatei(null);
+    setZeilen([]);
+    setErgebnis(null);
+    if (dateiRef.current) dateiRef.current.value = ""; // gleiche Datei erneut wählbar
+  };
+
+  const patch = (i: number, p: Partial<EditZeile>) =>
+    setZeilen((zs) => zs.map((z, idx) => (idx === i ? { ...z, ...p } : z)));
+
+  const entferneZeile = (i: number) =>
+    setZeilen((zs) => zs.filter((_, idx) => idx !== i));
+
+  const uebernehmbar = zeilen.filter((z) => z.employee_id != null && z.datum !== "");
+  const neueAnzahl = new Set(
+    zeilen
+      .filter(
+        (z) =>
+          z.schulung_name.trim() !== "" &&
+          !katalogNamen.has(normBerichtName(z.schulung_name)),
+      )
+      .map((z) => normBerichtName(z.schulung_name)),
+  ).size;
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.bericht.title")}
+        icon={<Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          <p className="text-xs text-muted-foreground">{t("schulungen.bericht.hinweis")}</p>
+          <input
+            ref={dateiRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            onChange={(e) => waehle(e.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => dateiRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
+                       hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            {datei ? datei.name : t("schulungen.bericht.dateiWaehlen")}
+          </button>
+
+          {preview.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              {t("schulungen.import.analysiere")}
+            </div>
+          )}
+
+          {ergebnis ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {t("schulungen.bericht.fertig", { count: ergebnis.eingetragen })}
+              </p>
+              <button
+                type="button"
+                onClick={zuruecksetzen}
+                className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                           hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t("schulungen.bericht.schliessen")}
+              </button>
+            </div>
+          ) : zeilen.length > 0 && datei ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span className="font-medium">{formatLabel}</span>
+                <span className="text-muted-foreground">
+                  {t("schulungen.bericht.summe", {
+                    uebernehmbar: uebernehmbar.length,
+                    gesamt: zeilen.length,
+                  })}
+                </span>
+                {neueAnzahl > 0 && (
+                  <span className="text-muted-foreground">
+                    {t("schulungen.bericht.neueSchulungen", { count: neueAnzahl })}
+                  </span>
+                )}
+              </div>
+
+              <BerichtEditorTabelle
+                zeilen={zeilen}
+                zuweisbare={zuweisbare ?? []}
+                katalogNamen={katalogNamen}
+                katalogOptionen={katalogOptionen}
+                onPatch={patch}
+                onDelete={entferneZeile}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={commit.isPending || uebernehmbar.length === 0}
+                  onClick={() =>
+                    commit.mutate(
+                      uebernehmbar.map((z) => ({
+                        employee_id: z.employee_id as number,
+                        schulung_name: z.schulung_name,
+                        datum: z.datum,
+                      })),
+                    )
+                  }
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                             text-primary-foreground disabled:opacity-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {commit.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  )}
+                  {t("schulungen.bericht.uebernehmen", { count: uebernehmbar.length })}
+                </button>
+                <button
+                  type="button"
+                  disabled={commit.isPending}
+                  onClick={zuruecksetzen}
+                  className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                             hover:bg-muted disabled:opacity-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {t("schulungen.bericht.abbrechen")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
+/** Symbol + Farbe einer Matrix-Zelle nach Status (offen = zugewiesen, nicht absolviert). */
+function matrixZelle(
+  status: SchulungStatus,
+  offen: boolean,
+): { symbol: ReactNode; className: string } {
+  // Überfällig hat Vorrang — egal ob offen oder Wiederholung.
+  if (status === "ueberfaellig")
+    return { symbol: "X", className: "bg-destructive/20 font-bold text-destructive" };
+  // Zugewiesen, noch offen (nicht überfällig) — leeres Kästchen mit Rahmen.
+  if (offen)
+    return {
+      symbol: (
+        <span
+          className="inline-block h-3.5 w-3.5 rounded-[3px] border border-muted-foreground/60"
+          aria-hidden="true"
+        />
+      ),
+      className: "",
+    };
+  if (status === "bald")
+    return {
+      symbol: "!",
+      className: "bg-orange-500/25 font-bold text-orange-600 dark:text-orange-400",
+    };
+  // absolviert & aktuell — grün mit ✓
+  return {
+    symbol: "✓",
+    className: "bg-[var(--color-success)]/20 text-[var(--color-success)]",
+  };
+}
+
+/** yyyy-mm-dd → dd.mm.yyyy */
+function langDatum(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return d && m && y ? `${d}.${m}.${y}` : iso;
+}
+
+/** Gesamtübersicht als Matrix: wer hat welche Schulung absolviert. */
+function MatrixPanel() {
+  const { t } = useTranslation();
+  const { data } = useQuery({
+    queryKey: hrKpiKeys.schulungMatrix(),
+    queryFn: fetchSchulungsMatrix,
+  });
+  const { offices, selected, toggle, filtered } = useStandortFilter(
+    data?.zeilen,
+    (z) => z.office,
+  );
+  // pro Mitarbeiter: schulung_id → Zelle (schnelles Nachschlagen beim Rendern)
+  const zellenIndex = useMemo(() => {
+    const map = new Map<string, Map<number, MatrixZeile["zellen"][number]>>();
+    (data?.zeilen ?? []).forEach((z) =>
+      map.set(z.schluessel, new Map(z.zellen.map((c) => [c.schulung_id, c]))),
+    );
+    return map;
+  }, [data]);
+
+  if (!data || data.schulungen.length === 0) return null;
+
+  const legende: { status: SchulungStatus; offen: boolean; label: string }[] = [
+    { status: "ok", offen: false, label: t("schulungen.status.ok") },
+    { status: "bald", offen: false, label: t("schulungen.status.bald") },
+    { status: "ueberfaellig", offen: false, label: t("schulungen.status.ueberfaellig") },
+    { status: "ok", offen: true, label: t("schulungen.matrix.offen") },
+  ];
+
+  return (
+    <section className="mb-6">
+      <Klappbar
+        titel={t("schulungen.matrix.title")}
+        anzahl={filtered.length}
+        icon={<GraduationCap className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        offenStart={false}
+      >
+        <div className="space-y-3 px-4 py-3">
+          {offices.length > 0 && (
+            <StandortChips offices={offices} selected={selected} onToggle={toggle} />
+          )}
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {legende.map((e, i) => {
+              const zelle = matrixZelle(e.status, e.offen);
+              return (
+                <span key={i} className="flex items-center gap-1">
+                  <span
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-[10px] ${zelle.className}`}
+                  >
+                    {zelle.symbol}
+                  </span>
+                  {e.label}
+                </span>
+              );
+            })}
+          </div>
+
+          <div className="overflow-auto rounded-md border" style={{ maxHeight: "72vh" }}>
+            <table className="border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-30 border-b border-r bg-muted px-3 py-2 text-left align-bottom">
+                    {t("schulungen.mitarbeiter.name")}
+                  </th>
+                  {data.schulungen.map((s) => (
+                    <th
+                      key={s.id}
+                      title={`${s.bereich} · ${s.name}`}
+                      className="sticky top-0 z-20 border-b border-l bg-muted p-1 align-bottom"
+                    >
+                      <div
+                        className="[writing-mode:vertical-rl] mx-auto overflow-hidden whitespace-nowrap rotate-180 text-muted-foreground"
+                        style={{ height: "11rem" }}
+                      >
+                        {s.name}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((z) => {
+                  const zeile = zellenIndex.get(z.schluessel);
+                  return (
+                    <tr key={z.schluessel} className="hover:bg-muted/30">
+                      <td className="sticky left-0 z-10 border-b border-r bg-background px-3 py-1.5 whitespace-nowrap">
+                        {z.name}
+                        {z.abteilung && (
+                          <span className="ml-1 text-muted-foreground">· {z.abteilung}</span>
+                        )}
+                      </td>
+                      {data.schulungen.map((s) => {
+                        const c = zeile?.get(s.id);
+                        const zelle = c ? matrixZelle(c.status, c.offen) : null;
+                        const titel = c
+                          ? c.datum
+                            ? `${s.name} — ${langDatum(c.datum)}`
+                            : `${s.name} — ${t("schulungen.matrix.offen")}`
+                          : undefined;
+                        return (
+                          <td
+                            key={s.id}
+                            title={titel}
+                            className={`w-7 min-w-7 border-b border-l text-center ${
+                              zelle ? zelle.className : ""
+                            }`}
+                          >
+                            {zelle ? zelle.symbol : ""}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("schulungen.matrix.hinweis")}</p>
+        </div>
+      </Klappbar>
+    </section>
+  );
+}
+
 /** Mitarbeiterübersicht; Zeile aufklappen zeigt die Einzelübersicht. */
 function MitarbeiterPanel() {
   const { t } = useTranslation();
@@ -1533,6 +2126,12 @@ export function SchulungenPage() {
               />
             </div>
 
+            <NeueSchulungForm
+              bereiche={[...new Set((entdoppelt ?? []).flatMap((s) => s.bereiche))].sort(
+                (a, b) => a.localeCompare(b),
+              )}
+            />
+
             {isLoading && (
               <div className="flex h-32 items-center justify-center">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
@@ -1559,9 +2158,11 @@ export function SchulungenPage() {
 
       {tab === "stand" && (
         <>
+          <SchulungsberichtPanel />
           <OffenePanel />
           <SammelDurchgefuehrtPanel schulungen={entdoppelt} />
           <MitarbeiterPanel />
+          <MatrixPanel />
           <AbteilungenPanel />
         </>
       )}

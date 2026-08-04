@@ -1,14 +1,15 @@
 # Projektstatus — LumeApps
 
-_Stand: 2026-08-03 · Prod-DB: `v1_101` (79 Migrationen) · 28 Router-Module_
+_Stand: 2026-08-04 · Prod-DB: `v1_101` (79 Migrationen) · 28 Router-Module_
 
 > Momentaufnahme des Umsetzungsstands. Kernprodukt läuft produktiv; der aktuelle
 > Schwerpunkt ist der HR-Ausbau (Onboarding / Qualifizierung / Schulungen).
 
-**Deploy-Hinweis:** Prod läuft seit 2026-07-27 auf dem Feature-Branch
-`fix/kompetenz-neue-kategorie` — aktuell **28 Commits vor `origin/main`** (0 dahinter).
-Die gesamte jüngere HR-Arbeit ist live, aber noch **nicht nach `main` gemergt**
-(siehe Offene Punkte).
+**Deploy-Hinweis:** Prod läuft über den Deploy-via-Feature-Branch-Workflow
+(einzelner Prod-Checkout) aktuell auf **`feat/schulungsbericht-upload`** —
+**10 Commits vor `origin/main`**. Der frühere Kompetenz-Branch (PR #38) ist
+inzwischen nach `main` gemergt; die seither dazugekommene Arbeit ist live, aber
+noch **nicht nach `main` gemergt** (vier offene PRs, siehe Offene Punkte).
 
 Legende: ✅ live · 🟡 gebaut, aber nicht scharf (Daten/Freigabe fehlt) · 🔴 offen/blockiert · ⚪ Rauschen
 
@@ -28,28 +29,51 @@ Legende: ✅ live · 🟡 gebaut, aber nicht scharf (Daten/Freigabe fehlt) · �
 | **HR – Organigramm** (aus Personio) | ✅ Live | Standort-Filterchips (Vorlage für Schulungen) |
 | **HR – Onboarding** | ✅ Live | inkl. Externe; „neu"-Markierung an Paket-Download gekoppelt |
 | **HR – Kompetenzen** | ✅ Live | Matrizen synchron; Kategorien pflegbar |
-| **HR – Schulungen** (Katalog, Zuweisen, Stand, Einarbeitung) | ✅ Live | aktueller Schwerpunkt — siehe unten |
+| **HR – Einarbeitung** (Katalog + Abteilungs-Matrix) | ✅ Live | Ansprechpartner je Name mit Schulungen geteilt |
+| **HR – Schulungen** (Katalog, Zuweisen, Stand, Bericht-Upload, Gesamtübersicht) | ✅ Live | aktueller Schwerpunkt — siehe unten |
 
 ## HR-Schulungen — jüngster Ausbau
 
-- 3-Tab-Struktur: **Bearbeiten / Zuweisen / Stand der Mitarbeiter**
-- Entdoppelter Schulungskatalog (jede Schulung nur einmal)
-- Beschreibung + Unterlagen je Schulung; Turnus & Frist je Name geteilt
-- Verantwortlicher/Ansprechpartner je Name überall gleich (Bereiche + Einarbeitung)
-- „Durchgeführt eintragen" (per Person + Sammel-Termin) — Stand aktualisiert sofort
-- Nicht-Personio-Mitarbeiter (Externe) voll integriert
-- Stand-Liste aus **einer** Quelle (ganze aktive Belegschaft, nicht nur mit Schulung)
-- **Personio-Sync repariert** (war ~4 Wochen still kaputt, siehe Offene Punkte)
-- **Standort-Filter wie im Organigramm** (Zuweisen + Stand)
+Drei Tabs: **Bearbeiten / Zuweisen / Stand der Mitarbeiter**.
+
+**Katalog (Bearbeiten)**
+- Entdoppelter Katalog (jede Schulung nur einmal); Beschreibung + Unterlagen je
+  Schulung; Turnus, Frist, Verantwortlicher je Name überall geteilt.
+- **Schulungen manuell anlegen und entfernen** (Löschen mit Bestätigung; warnt bei
+  betroffenen Nachweisen).
+
+**Zuweisen**
+- Einzelzuweisung + Anforderungsmatrix (Pflicht je Abteilung); Verantwortlicher
+  auch für Externe frei eintragbar.
+- **Standort-Filter** (Hamburg/Memmingen …, wie im Organigramm).
+
+**Stand der Mitarbeiter**
+- Stand-Liste aus **einer** Quelle (ganze aktive Belegschaft + Externe), Standort-Filter.
+- „Durchgeführt eintragen" (per Person + Sammel-Termin) — Stand aktualisiert sofort.
+- **Schulungsbericht-PDF-Upload** (Formblatt 68 Schulungsnachweis + Formblatt 71
+  Schulungsübersicht): Text via `pdftotext`, **editierbare Vorschau** (Mitarbeiter-
+  Dropdown, Schulung Dropdown+Text, Datum, Zeilen löschen) → schreibt Durchführungs-
+  daten fort; fehlende Schulungen werden angelegt.
+- **Gesamtübersicht (Matrix)** — alle Mitarbeiter × Schulungen; **verbindet Zuweisen
+  und Absolvierung**: ✓ aktuell · ! bald fällig · X überfällig · ☐ offen (zugewiesen).
+  Standort-Filter.
+
+**Datenanbindung**
+- **Personio-Sync repariert** (V1-Attendances-422 hatte den Sync ~4 Wochen still
+  lahmgelegt) und auf **täglich zu fester Uhrzeit** (02:00 UTC, restart-resistent)
+  umgestellt.
 
 ## Offene Punkte / technische Schuld
 
-- 🔴 **PR #38 mergen & Prod zurück auf `main`** — 28 Commits ungemergt; wichtigster
-  Aufräumpunkt. Merge erfolgt durch den Eigentümer.
+- 🔴 **Vier offene PRs mergen & Prod zurück auf `main`** — wichtigster Aufräumpunkt.
+  Empfohlene Reihenfolge: **#36** (conftest-Riegel), **#37** (HR-Status-Doku),
+  **#39** (täglicher Sync), **#40** (Stand-Tab: Bericht-Upload + Matrix + Katalog-
+  Pflege). Danach Prod-Checkout zurück auf `main`. Merge erfolgt durch den
+  Eigentümer (Classifier blockt den Assistenten).
 - 🟡 **Personio-Attendances auf API V2** — V1 ist für mehrtägige Anwesenheitsperioden
   abgekündigt (422); Sync läuft seitdem „partial", die **Überstunden-KPI** bleibt
-  veraltet, bis der Abruf auf V2 migriert ist.
-- 🟡 **HR-Datenpflege auf Prod** — Onboarding-/Schulungs-Matrizen + Logo befüllen,
+  veraltet, bis der Abruf auf V2 migriert ist. (HR-Org-Daten sind nicht betroffen.)
+- 🟡 **HR-Datenpflege auf Prod** — Anforderungs-/Onboarding-Matrizen + Logo befüllen,
   sonst bleibt die Automatik inert.
 - 🟡 **HR-Automatisierung Phase 2–4** — extern blockiert (Personio-Schreibzugriff,
   Identity, Azure).
@@ -60,7 +84,9 @@ Legende: ✅ live · 🟡 gebaut, aber nicht scharf (Daten/Freigabe fehlt) · �
 ## Kurzfassung
 
 Das Produkt ist produktiv und wird täglich genutzt; die Kern-Features stehen. Der
-aktuelle Schwerpunkt HR-Onboarding/-Qualifizierung ist funktional weitgehend fertig.
-Was noch fehlt, ist überwiegend **Datenpflege, externe Freigaben (Azure /
-Personio-Schreibzugriff) und das Zusammenführen des Feature-Branches nach `main`** —
-keine neue Kernentwicklung.
+Schwerpunkt HR-Onboarding/-Qualifizierung ist funktional weitgehend fertig —
+Onboarding, Kompetenzen, Einarbeitung und Schulungen (Katalog inkl. Anlegen/Löschen,
+Zuweisen, Stand, Bericht-Upload, Gesamtübersicht mit Zuweisen-Verbindung) stehen.
+Was bleibt, ist überwiegend **Zusammenführen der Branches nach `main`, Datenpflege
+und externe Freigaben (Azure / Personio-Schreibzugriff)** — keine große
+Kernentwicklung.
