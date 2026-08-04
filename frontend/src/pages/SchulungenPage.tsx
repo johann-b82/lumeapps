@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -1585,13 +1585,21 @@ function SchulungsberichtPanel() {
 function matrixZelle(
   status: SchulungStatus,
   offen: boolean,
-): { symbol: string; className: string } {
+): { symbol: ReactNode; className: string } {
   // Überfällig hat Vorrang — egal ob offen oder Wiederholung.
   if (status === "ueberfaellig")
     return { symbol: "X", className: "bg-destructive/20 font-bold text-destructive" };
-  // Zugewiesen, noch offen (nicht überfällig) — neutrales ○.
+  // Zugewiesen, noch offen (nicht überfällig) — leeres Kästchen mit Rahmen.
   if (offen)
-    return { symbol: "○", className: "bg-muted text-muted-foreground" };
+    return {
+      symbol: (
+        <span
+          className="inline-block h-3.5 w-3.5 rounded-[3px] border border-muted-foreground/60"
+          aria-hidden="true"
+        />
+      ),
+      className: "",
+    };
   if (status === "bald")
     return {
       symbol: "!",
