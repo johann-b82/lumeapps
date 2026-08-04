@@ -217,6 +217,62 @@ async def nach_schulung_update(employee_id: int | None) -> None:
         log.warning("personio_writeback (Schulung) fehlgeschlagen emp=%s", employee_id, exc_info=True)
 
 
+async def test_upload(session, employee_id: int, art: str = "schulung") -> dict:
+    """Kontrollierter Einzel-Test des Personio-Uploads mit klaren Diagnosen.
+
+    Anders als die Einstiegspunkte: umgeht den ``enabled``-Schalter (zum Testen VOR
+    dem Scharfschalten), läuft SYNCHRON und meldet den echten Fehler zurück
+    ({ok, schritt, detail}). Braucht Credentials + Kategorie.
+    """
+    row = (
+        await session.execute(select(AppSettings).where(AppSettings.id == 1))
+    ).scalar_one_or_none()
+    if row is None or not row.personio_writeback_kategorie_id:
+        return {"ok": False, "schritt": "konfig", "detail": "Dokumentenkategorie-ID fehlt in den Einstellungen."}
+    if not row.personio_client_id_enc or not row.personio_client_secret_enc:
+        return {"ok": False, "schritt": "konfig", "detail": "Personio-Zugangsdaten fehlen."}
+    emp = (
+        await session.execute(
+            select(PersonioEmployee).where(PersonioEmployee.id == employee_id)
+        )
+    ).scalar_one_or_none()
+    if emp is None:
+        return {"ok": False, "schritt": "mitarbeiter", "detail": "Mitarbeiter nicht in Personio gefunden."}
+
+    cid = decrypt_credential(row.personio_client_id_enc)
+    csec = decrypt_credential(row.personio_client_secret_enc)
+    kat = row.personio_writeback_kategorie_id
+    name = _name(emp)
+    if art == "kompetenz":
+        pdf = _einfaches_pdf(
+            f"Qualifikationsübersicht — {name} (TEST)",
+            await _kompetenzzeilen(session, employee_id),
+        )
+        dateiname = f"TEST_Qualifikationsuebersicht_{employee_id}.pdf"
+    else:
+        pdf = _einfaches_pdf(
+            f"Schulungsübersicht — {name} (TEST)",
+            await _schulungszeilen(session, employee_id),
+        )
+        dateiname = f"TEST_Schulungsuebersicht_{employee_id}.pdf"
+
+    try:
+        await _push(cid, csec, kat, employee_id, f"[TEST] {name}", dateiname, pdf)
+    except httpx.HTTPStatusError as exc:
+        return {
+            "ok": False,
+            "schritt": "personio",
+            "detail": f"HTTP {exc.response.status_code}: {exc.response.text[:300]}",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "schritt": "personio", "detail": str(exc)[:300]}
+    return {
+        "ok": True,
+        "schritt": "upload",
+        "detail": f"Test-Dokument in Kategorie {kat} für {name} hochgeladen.",
+    }
+
+
 async def nach_kompetenz_update(employee_id: int | None) -> None:
     """Kompetenz-Nachweis ins Personio-Profil (No-Op wenn inert/unbekannt)."""
     if employee_id is None or employee_id <= 0:

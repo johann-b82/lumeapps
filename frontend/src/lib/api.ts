@@ -427,6 +427,24 @@ export async function testPersonioConnection(): Promise<SyncTestResult> {
   return apiClient<SyncTestResult>("/api/sync/test", { method: "POST" });
 }
 
+// v1.102 — Personio-Rückschreiben: kontrollierter Test-Upload
+export interface WritebackTestResult {
+  ok: boolean;
+  schritt: string;
+  detail: string;
+}
+
+export async function testPersonioWriteback(eingabe: {
+  employee_id: number;
+  art: "schulung" | "kompetenz";
+}): Promise<WritebackTestResult> {
+  return apiClient<WritebackTestResult>("/api/sync/writeback-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Phase 14 — Sync meta and trigger
 // ---------------------------------------------------------------------------
