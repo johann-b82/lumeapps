@@ -47,7 +47,9 @@ import {
   type PflichtMatrix,
   type Schulung,
   type SchulungImportVorschau,
-  type BerichtVorschau,
+  type ZuweisbarerMitarbeiter,
+  type BerichtCommitZeile,
+  type BerichtCommitErgebnis,
   type SchulungStatus,
 } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
@@ -1153,145 +1155,103 @@ function SammelDurchgefuehrtPanel({ schulungen }: { schulungen: DedupSchulung[] 
   );
 }
 
-/** Vorschau-/Ergebnis-Ansicht eines Schulungsbericht-Uploads. */
-function BerichtVorschauView({
-  v,
-  fertig,
-  committing,
-  onCommit,
-  onAbbrechen,
+/** Eine bearbeitbare Zeile der Schulungsbericht-Vorschau. */
+interface EditZeile {
+  /** Name aus dem Bericht (zur Nachvollziehbarkeit angezeigt). */
+  bericht_mitarbeiter: string;
+  employee_id: number | null;
+  schulung_name: string;
+  datum: string; // yyyy-mm-dd | ""
+}
+
+function normBerichtName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Editierbare Vorschau-Tabelle (Mitarbeiter-Dropdown, Schulungstext, Datum). */
+function BerichtEditorTabelle({
+  zeilen,
+  zuweisbare,
+  katalogNamen,
+  onPatch,
 }: {
-  v: BerichtVorschau;
-  fertig: boolean;
-  committing: boolean;
-  onCommit: () => void;
-  onAbbrechen: () => void;
+  zeilen: EditZeile[];
+  zuweisbare: ZuweisbarerMitarbeiter[];
+  katalogNamen: Set<string>;
+  onPatch: (index: number, patch: Partial<EditZeile>) => void;
 }) {
   const { t } = useTranslation();
+  const feldStil =
+    "h-8 w-full rounded-md border bg-background px-2 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   return (
-    <div className="mt-3 space-y-3 rounded-lg border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className="font-medium">{v.format_label}</span>
-        <span className="text-muted-foreground">
-          {t("schulungen.bericht.summe", {
-            uebernehmbar: v.uebernehmbar,
-            gesamt: v.gesamt,
-          })}
-        </span>
-        {v.ohne_mitarbeiter > 0 && (
-          <span className="text-[var(--color-warning)]">
-            {t("schulungen.bericht.ohneMitarbeiter", { count: v.ohne_mitarbeiter })}
-          </span>
-        )}
-        {v.neue_schulungen > 0 && (
-          <span className="text-muted-foreground">
-            {t("schulungen.bericht.neueSchulungen", { count: v.neue_schulungen })}
-          </span>
-        )}
-      </div>
-
-      <div className="overflow-x-auto rounded-md border bg-background">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30">
-              <Th>{t("schulungen.mitarbeiter.name")}</Th>
-              <Th>{t("schulungen.katalog.name")}</Th>
-              <Th>{t("schulungen.bericht.datum")}</Th>
-              <Th>{t("schulungen.bericht.status")}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {v.zeilen.map((z, i) => (
-              <tr
-                key={i}
-                className={`border-b border-border/50 last:border-0 ${
-                  z.uebernommen ? "" : "opacity-60"
-                }`}
-              >
-                <td className="px-4 py-2">
-                  {z.mitarbeiter_status === "ok" ? (
-                    z.matched_mitarbeiter
-                  ) : (
-                    <span className="text-destructive">
-                      {z.mitarbeiter_name}{" "}
-                      <span className="text-xs">
-                        (
-                        {z.mitarbeiter_status === "mehrdeutig"
-                          ? t("schulungen.bericht.mehrdeutig")
-                          : t("schulungen.bericht.nichtGefunden")}
-                        )
-                      </span>
-                    </span>
-                  )}
+    <div className="overflow-x-auto rounded-md border bg-background">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30">
+            <Th>{t("schulungen.mitarbeiter.name")}</Th>
+            <Th>{t("schulungen.katalog.name")}</Th>
+            <Th>{t("schulungen.bericht.datum")}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {zeilen.map((z, i) => {
+            const neu =
+              z.schulung_name.trim() !== "" &&
+              !katalogNamen.has(normBerichtName(z.schulung_name));
+            return (
+              <tr key={i} className="border-b border-border/50 align-top last:border-0">
+                <td className="px-3 py-2" style={{ minWidth: "12rem" }}>
+                  <select
+                    value={z.employee_id ?? ""}
+                    onChange={(e) =>
+                      onPatch(i, {
+                        employee_id: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                    aria-label={t("schulungen.mitarbeiter.name")}
+                    className={feldStil}
+                  >
+                    <option value="">{t("schulungen.zuweisen.mitarbeiterWaehlen")}</option>
+                    {zuweisbare.map((p) => (
+                      <option key={p.employee_id} value={p.employee_id}>
+                        {p.name}
+                        {p.abteilung ? ` · ${p.abteilung}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t("schulungen.bericht.ausBericht", { name: z.bericht_mitarbeiter })}
+                  </span>
                 </td>
-                <td className="px-4 py-2">
-                  {z.schulung_name}
-                  {!z.schulung_im_katalog && (
-                    <span className="ml-2 rounded-full bg-[var(--color-warning)]/20 px-2 py-0.5 text-xs text-foreground">
+                <td className="px-3 py-2" style={{ minWidth: "18rem" }}>
+                  <input
+                    type="text"
+                    value={z.schulung_name}
+                    onChange={(e) => onPatch(i, { schulung_name: e.target.value })}
+                    aria-label={t("schulungen.katalog.name")}
+                    className={feldStil}
+                  />
+                  {neu && (
+                    <span className="mt-1 inline-block rounded-full bg-[var(--color-warning)]/20 px-2 py-0.5 text-xs text-foreground">
                       {t("schulungen.bericht.neu")}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 tabular-nums text-muted-foreground">
-                  {z.datum ?? "—"}
-                </td>
-                <td className="px-4 py-2">
-                  {z.uebernommen ? (
-                    <span className="text-[var(--color-success)]">
-                      {t("schulungen.bericht.wirdUebernommen")}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t("schulungen.bericht.uebersprungen")}
-                    </span>
-                  )}
+                <td className="px-3 py-2" style={{ minWidth: "9rem" }}>
+                  <input
+                    type="date"
+                    value={z.datum}
+                    onChange={(e) => onPatch(i, { datum: e.target.value })}
+                    aria-label={t("schulungen.bericht.datum")}
+                    className={feldStil}
+                  />
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {fertig ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            {t("schulungen.bericht.fertig", { count: v.eingetragen })}
-          </p>
-          <button
-            type="button"
-            onClick={onAbbrechen}
-            className="inline-flex h-9 items-center rounded-md border px-4 text-sm
-                       hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t("schulungen.bericht.schliessen")}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={committing || v.uebernehmbar === 0}
-            onClick={onCommit}
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
-                       text-primary-foreground disabled:opacity-50
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {committing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {t("schulungen.bericht.uebernehmen", { count: v.uebernehmbar })}
-          </button>
-          <button
-            type="button"
-            disabled={committing}
-            onClick={onAbbrechen}
-            className="inline-flex h-9 items-center rounded-md border px-4 text-sm
-                       hover:bg-muted disabled:opacity-50
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t("schulungen.bericht.abbrechen")}
-          </button>
-        </div>
-      )}
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1302,25 +1262,47 @@ function SchulungsberichtPanel() {
   const qc = useQueryClient();
   const dateiRef = useRef<HTMLInputElement>(null);
   const [datei, setDatei] = useState<File | null>(null);
-  const [vorschau, setVorschau] = useState<BerichtVorschau | null>(null);
-  const [fertig, setFertig] = useState(false);
+  const [formatLabel, setFormatLabel] = useState("");
+  const [zeilen, setZeilen] = useState<EditZeile[]>([]);
+  const [ergebnis, setErgebnis] = useState<BerichtCommitErgebnis | null>(null);
+
+  const { data: zuweisbare } = useQuery({
+    queryKey: hrKpiKeys.schulungZuweisbar(),
+    queryFn: fetchZuweisbare,
+  });
+  const { data: katalog } = useQuery({
+    queryKey: hrKpiKeys.schulungen(),
+    queryFn: fetchSchulungen,
+  });
+  const katalogNamen = useMemo(
+    () => new Set((katalog ?? []).map((k) => normBerichtName(k.name))),
+    [katalog],
+  );
 
   const preview = useMutation({
     mutationFn: (f: File) => berichtPreview(f),
     onSuccess: (v) => {
-      setVorschau(v);
-      setFertig(false);
+      setFormatLabel(v.format_label);
+      setZeilen(
+        v.zeilen.map((z) => ({
+          bericht_mitarbeiter: z.mitarbeiter_name,
+          employee_id: z.employee_id,
+          schulung_name: z.schulung_name,
+          datum: z.datum ?? "",
+        })),
+      );
+      setErgebnis(null);
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
   const commit = useMutation({
-    mutationFn: (f: File) => berichtCommit(f),
-    onSuccess: (v) => {
-      setVorschau(v);
-      setFertig(true);
-      toast.success(t("schulungen.bericht.uebernommen", { count: v.eingetragen }));
-      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
+    mutationFn: (rows: BerichtCommitZeile[]) => berichtCommit(rows),
+    onSuccess: (res) => {
+      setErgebnis(res);
+      toast.success(t("schulungen.bericht.uebernommen", { count: res.eingetragen }));
       qc.invalidateQueries({ queryKey: hrKpiKeys.schulungen() });
+      qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
       qc.invalidateQueries({ queryKey: hrKpiKeys.schulungOffen() });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1328,17 +1310,31 @@ function SchulungsberichtPanel() {
 
   const waehle = (f: File | null) => {
     setDatei(f);
-    setVorschau(null);
-    setFertig(false);
+    setZeilen([]);
+    setErgebnis(null);
     if (f) preview.mutate(f);
   };
 
   const zuruecksetzen = () => {
     setDatei(null);
-    setVorschau(null);
-    setFertig(false);
+    setZeilen([]);
+    setErgebnis(null);
     if (dateiRef.current) dateiRef.current.value = ""; // gleiche Datei erneut wählbar
   };
+
+  const patch = (i: number, p: Partial<EditZeile>) =>
+    setZeilen((zs) => zs.map((z, idx) => (idx === i ? { ...z, ...p } : z)));
+
+  const uebernehmbar = zeilen.filter((z) => z.employee_id != null && z.datum !== "");
+  const neueAnzahl = new Set(
+    zeilen
+      .filter(
+        (z) =>
+          z.schulung_name.trim() !== "" &&
+          !katalogNamen.has(normBerichtName(z.schulung_name)),
+      )
+      .map((z) => normBerichtName(z.schulung_name)),
+  ).size;
 
   return (
     <section className="mb-6">
@@ -1373,15 +1369,80 @@ function SchulungsberichtPanel() {
             </div>
           )}
 
-          {vorschau && datei && (
-            <BerichtVorschauView
-              v={vorschau}
-              fertig={fertig}
-              committing={commit.isPending}
-              onCommit={() => commit.mutate(datei)}
-              onAbbrechen={zuruecksetzen}
-            />
-          )}
+          {ergebnis ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {t("schulungen.bericht.fertig", { count: ergebnis.eingetragen })}
+              </p>
+              <button
+                type="button"
+                onClick={zuruecksetzen}
+                className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                           hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t("schulungen.bericht.schliessen")}
+              </button>
+            </div>
+          ) : zeilen.length > 0 && datei ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span className="font-medium">{formatLabel}</span>
+                <span className="text-muted-foreground">
+                  {t("schulungen.bericht.summe", {
+                    uebernehmbar: uebernehmbar.length,
+                    gesamt: zeilen.length,
+                  })}
+                </span>
+                {neueAnzahl > 0 && (
+                  <span className="text-muted-foreground">
+                    {t("schulungen.bericht.neueSchulungen", { count: neueAnzahl })}
+                  </span>
+                )}
+              </div>
+
+              <BerichtEditorTabelle
+                zeilen={zeilen}
+                zuweisbare={zuweisbare ?? []}
+                katalogNamen={katalogNamen}
+                onPatch={patch}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={commit.isPending || uebernehmbar.length === 0}
+                  onClick={() =>
+                    commit.mutate(
+                      uebernehmbar.map((z) => ({
+                        employee_id: z.employee_id as number,
+                        schulung_name: z.schulung_name,
+                        datum: z.datum,
+                      })),
+                    )
+                  }
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm
+                             text-primary-foreground disabled:opacity-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {commit.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  )}
+                  {t("schulungen.bericht.uebernehmen", { count: uebernehmbar.length })}
+                </button>
+                <button
+                  type="button"
+                  disabled={commit.isPending}
+                  onClick={zuruecksetzen}
+                  className="inline-flex h-9 items-center rounded-md border px-4 text-sm
+                             hover:bg-muted disabled:opacity-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {t("schulungen.bericht.abbrechen")}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </Klappbar>
     </section>

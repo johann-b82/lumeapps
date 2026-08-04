@@ -205,14 +205,14 @@ class BerichtZeileRead(BaseModel):
     datum: date | None
     #: "ok" | "nicht_gefunden" | "mehrdeutig"
     mitarbeiter_status: str
+    #: aufgelöste Personio-ID (None, wenn nicht/mehrdeutig) — Vorauswahl im Dropdown.
+    employee_id: int | None
     matched_mitarbeiter: str | None
     schulung_im_katalog: bool
-    uebernommen: bool
+    uebernehmbar: bool
 
 
 class BerichtVorschauRead(BaseModel):
-    """Ergebnis von Vorschau und Übernahme — bewusst identische Form."""
-
     format: str
     format_label: str
     gesamt: int
@@ -220,7 +220,6 @@ class BerichtVorschauRead(BaseModel):
     ohne_mitarbeiter: int
     ohne_datum: int
     neue_schulungen: int
-    eingetragen: int
     zeilen: list[BerichtZeileRead]
 
 
@@ -233,7 +232,6 @@ def _bericht_read(erg: bericht_import.BerichtErgebnis) -> BerichtVorschauRead:
         ohne_mitarbeiter=erg.ohne_mitarbeiter,
         ohne_datum=erg.ohne_datum,
         neue_schulungen=erg.neue_schulungen,
-        eingetragen=erg.eingetragen,
         zeilen=[BerichtZeileRead(**vars(z)) for z in erg.zeilen],
     )
 
@@ -251,17 +249,37 @@ async def bericht_preview(
     return _bericht_read(erg)
 
 
-@router.post("/bericht/commit", response_model=BerichtVorschauRead)
+class BerichtCommitZeile(BaseModel):
+    employee_id: int
+    schulung_name: str
+    datum: date
+
+
+class BerichtCommitEingabe(BaseModel):
+    zeilen: list[BerichtCommitZeile]
+
+
+class BerichtCommitErgebnis(BaseModel):
+    eingetragen: int
+    angelegte_schulungen: int
+
+
+@router.post("/bericht/commit", response_model=BerichtCommitErgebnis)
 async def bericht_commit(
-    file: UploadFile = File(...),
+    eingabe: BerichtCommitEingabe,
     db: AsyncSession = Depends(get_async_db_session),
-) -> BerichtVorschauRead:
-    """Schulungsbericht übernehmen: Durchführungsdaten setzen, fehlende Schulungen anlegen."""
-    try:
-        erg = await bericht_import.uebernehmen(db, await file.read())
-    except SchulungsberichtError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-    return _bericht_read(erg)
+) -> BerichtCommitErgebnis:
+    """Bearbeitete Berichtszeilen übernehmen: Durchführung setzen, fehlende Schulungen anlegen."""
+    res = await bericht_import.uebernehmen_zeilen(
+        db,
+        [
+            bericht_import.CommitZeile(
+                employee_id=z.employee_id, schulung_name=z.schulung_name, datum=z.datum
+            )
+            for z in eingabe.zeilen
+        ],
+    )
+    return BerichtCommitErgebnis(**res)
 
 
 class PflichtMatrixRead(BaseModel):

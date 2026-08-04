@@ -1074,6 +1074,7 @@
   "schulungen.bericht.uebernehmen": "Apply ({{count}})",
   "schulungen.bericht.abbrechen": "Cancel",
   "schulungen.bericht.schliessen": "Close",
+  "schulungen.bericht.ausBericht": "from report: {{name}}",
   "schulungen.bericht.uebernommen": "{{count}} completion(s) recorded",
   "schulungen.bericht.fertig": "{{count}} completion(s) recorded — status updated.",
   "schulungen.import.schulungen": "Trainings",
