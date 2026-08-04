@@ -967,6 +967,10 @@ async def schulungs_matrix(
     die Zelle trägt das Durchführungsdatum und den Folgetermin-Status.
     """
     heute = date.today()
+
+    # Absolvierte Teilnahmen nach den drei Schlüsselarten indizieren (wie
+    # liste_mitarbeiter), damit die Matrix DIESELBE Belegschaft trägt — nur
+    # aktive/neu eintretende + Externe, keine Ausgetretenen.
     zeilen = (
         await db.execute(
             select(SchulungTeilnahme, SchulungKatalog)
@@ -974,56 +978,76 @@ async def schulungs_matrix(
             .where(SchulungTeilnahme.aktuell_datum.isnot(None))
         )
     ).all()
-
-    mitarbeiter = {
-        e.id: e for e in (await db.execute(select(PersonioEmployee))).scalars().all()
-    }
-    externe = {
-        x.id: x for x in (await db.execute(select(OnboardingExtern))).scalars().all()
-    }
+    nach_emp: dict[int, list] = {}
+    nach_persnr: dict[str, list] = {}
+    nach_extern: dict[int, list] = {}
+    for t, k in zeilen:
+        if t.employee_id is not None:
+            nach_emp.setdefault(t.employee_id, []).append((t, k))
+        if t.personalnummer:
+            nach_persnr.setdefault(t.personalnummer, []).append((t, k))
+        if t.extern_id is not None:
+            nach_extern.setdefault(t.extern_id, []).append((t, k))
 
     schulungen: dict[int, MatrixSchulung] = {}
-    gruppen: dict[str, MatrixZeile] = {}
-    for teilnahme, katalog in zeilen:
-        schluessel = _schluessel(teilnahme)
-        if schluessel is None:
-            continue
-        emp = mitarbeiter.get(teilnahme.employee_id or -1)
-        ext = externe.get(teilnahme.extern_id) if teilnahme.extern_id else None
-        eintrag = gruppen.get(schluessel)
-        if eintrag is None:
-            name = (
-                teilnahme.mitarbeiter_name
-                or (f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else None)
-                or (ext.name if ext else None)
-                or f"#{teilnahme.personalnummer or teilnahme.employee_id}"
+
+    def _zeile(schluessel, name, abteilung, office, hire_date, treffer):
+        if not treffer:
+            return None
+        zellen: list[MatrixZelle] = []
+        for t, k in treffer:
+            schulungen.setdefault(
+                k.id, MatrixSchulung(id=k.id, name=k.name, bereich=k.bereich)
             )
-            eintrag = MatrixZeile(
-                schluessel=schluessel,
-                name=name,
-                abteilung=emp.department if emp else (ext.abteilung if ext else None),
-                office=_extract_office(emp.raw_json) if emp else None,
-                zellen=[],
+            faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
+            zellen.append(
+                MatrixZelle(
+                    schulung_id=k.id, datum=t.aktuell_datum, status=_status(faellig, heute)
+                )
             )
-            gruppen[schluessel] = eintrag
-        schulungen.setdefault(
-            katalog.id, MatrixSchulung(id=katalog.id, name=katalog.name, bereich=katalog.bereich)
+        return MatrixZeile(
+            schluessel=schluessel, name=name, abteilung=abteilung, office=office, zellen=zellen
         )
-        hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
-        faellig = _effektive_faelligkeit(teilnahme, katalog.frist_tage, hire_date)
-        eintrag.zellen.append(
-            MatrixZelle(
-                schulung_id=katalog.id,
-                datum=teilnahme.aktuell_datum,
-                status=_status(faellig, heute),
+
+    ergebnis: list[MatrixZeile] = []
+
+    personen = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(PersonioEmployee.status.in_(("active", "onboarding")))
+                .order_by(PersonioEmployee.last_name, PersonioEmployee.first_name)
             )
         )
+        .scalars()
+        .all()
+    )
+    for e in personen:
+        persnr = _personalnummer(e.raw_json)
+        if persnr:
+            schluessel, treffer = f"p:{persnr}", nach_persnr.get(persnr, [])
+        else:
+            schluessel, treffer = f"e:{e.id}", nach_emp.get(e.id, [])
+        name = f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}"
+        zeile = _zeile(
+            schluessel, name, e.department, _extract_office(e.raw_json), e.hire_date, treffer
+        )
+        if zeile is not None:
+            ergebnis.append(zeile)
+
+    externe = (await db.execute(select(OnboardingExtern))).scalars().all()
+    for x in externe:
+        zeile = _zeile(
+            f"x:{x.id}", x.name, x.abteilung, None, x.hire_date, nach_extern.get(x.id, [])
+        )
+        if zeile is not None:
+            ergebnis.append(zeile)
 
     return MatrixRead(
         schulungen=sorted(
             schulungen.values(), key=lambda s: (s.bereich.lower(), s.name.lower())
         ),
-        zeilen=sorted(gruppen.values(), key=lambda z: z.name.lower()),
+        zeilen=sorted(ergebnis, key=lambda z: z.name.lower()),
     )
 
 
