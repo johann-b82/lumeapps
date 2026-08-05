@@ -12,6 +12,8 @@ export interface EinarbeitungKatalog {
   id: number;
   inhalt: string;
   ansprechpartner: string | null;
+  /** Bereich der Einarbeitung — erscheint im PDF als „Abteilung". */
+  bereich: string | null;
   reihenfolge: number;
 }
 
@@ -33,6 +35,7 @@ export function fetchEinarbeitungAbteilungen(): Promise<string[]> {
 export function legeKatalogAn(eingabe: {
   inhalt: string;
   ansprechpartner?: string | null;
+  bereich?: string | null;
 }): Promise<EinarbeitungKatalog> {
   return apiClient<EinarbeitungKatalog>("/api/hr/einarbeitung/katalog", {
     method: "POST",
@@ -43,7 +46,7 @@ export function legeKatalogAn(eingabe: {
 
 export function aendereKatalog(
   id: number,
-  eingabe: { inhalt?: string; ansprechpartner?: string | null },
+  eingabe: { inhalt?: string; ansprechpartner?: string | null; bereich?: string | null },
 ): Promise<EinarbeitungKatalog> {
   return apiClient<EinarbeitungKatalog>(`/api/hr/einarbeitung/katalog/${id}`, {
     method: "PUT",

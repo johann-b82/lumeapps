@@ -38,22 +38,30 @@ class KatalogRead(BaseModel):
     id: int
     inhalt: str
     ansprechpartner: str | None
+    #: Bereich der Einarbeitung (v1.103) — erscheint im PDF als „Abteilung".
+    bereich: str | None
     reihenfolge: int
 
 
 class KatalogAnlegen(BaseModel):
     inhalt: str
     ansprechpartner: str | None = None
+    bereich: str | None = None
 
 
 class KatalogAendern(BaseModel):
     inhalt: str | None = None
     ansprechpartner: str | None = None
+    bereich: str | None = None
 
 
 def _katalog_read(k: EinarbeitungKatalog) -> KatalogRead:
     return KatalogRead(
-        id=k.id, inhalt=k.inhalt, ansprechpartner=k.ansprechpartner, reihenfolge=k.reihenfolge
+        id=k.id,
+        inhalt=k.inhalt,
+        ansprechpartner=k.ansprechpartner,
+        bereich=k.bereich,
+        reihenfolge=k.reihenfolge,
     )
 
 
@@ -99,6 +107,7 @@ async def katalog_anlegen(
     k = EinarbeitungKatalog(
         inhalt=inhalt,
         ansprechpartner=person,
+        bereich=(eingabe.bereich or "").strip() or None,
         reihenfolge=(letzte or 0) + 1,
     )
     db.add(k)
@@ -128,6 +137,8 @@ async def katalog_aendern(
         k.ansprechpartner = eingabe.ansprechpartner.strip() or None
         # Person je Name teilen: gleichnamige Schulungen + Einarbeitungen mitziehen.
         await sync_person_nach_name(db, k.inhalt, k.ansprechpartner)
+    if eingabe.bereich is not None:
+        k.bereich = eingabe.bereich.strip() or None
     await db.commit()
     await db.refresh(k)
     return _katalog_read(k)
