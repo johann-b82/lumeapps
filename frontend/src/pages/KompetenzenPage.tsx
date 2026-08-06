@@ -441,9 +441,7 @@ function KategorieUmbenennenFeld({
 function SpalteAnlegen({ matrix }: { matrix: Matrix }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [manuell, setManuell] = useState(false);
   const [auswahl, setAuswahl] = useState("");
-  const [name, setName] = useState("");
 
   const { data: verfuegbar } = useQuery({
     queryKey: hrKpiKeys.kompetenzVerfuegbar(matrix.id),
@@ -451,13 +449,9 @@ function SpalteAnlegen({ matrix }: { matrix: Matrix }) {
   });
 
   const anlegen = useMutation({
-    mutationFn: () =>
-      manuell
-        ? legePersonAn(matrix.id, { name })
-        : legePersonAn(matrix.id, { name: "", employee_id: Number(auswahl) }),
+    mutationFn: () => legePersonAn(matrix.id, { name: "", employee_id: Number(auswahl) }),
     onSuccess: (p) => {
       toast.success(t("kompetenzen.personAngelegt2", { name: p.name }));
-      setName("");
       setAuswahl("");
       qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrix(matrix.id) });
       qc.invalidateQueries({ queryKey: hrKpiKeys.kompetenzMatrizen() });
@@ -466,54 +460,35 @@ function SpalteAnlegen({ matrix }: { matrix: Matrix }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const bereit = manuell ? name.trim() !== "" : auswahl !== "";
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-medium">{t("kompetenzen.neueSpalte")}</span>
 
-      {manuell ? (
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t("kompetenzen.person")}
-          className={`${feldStil} w-44`}
-        />
-      ) : (
-        <select
-          value={auswahl}
-          onChange={(e) => setAuswahl(e.target.value)}
-          aria-label={t("kompetenzen.person")}
-          className={`${feldStil} max-w-[20rem]`}
-        >
-          <option value="">{t("kompetenzen.personWaehlen")}</option>
-          {(verfuegbar ?? []).map((p) => (
-            <option key={p.employee_id} value={String(p.employee_id)}>
-              {p.name}
-              {p.abteilung ? ` · ${p.abteilung}` : ""}
-            </option>
-          ))}
-        </select>
-      )}
+      {/* Personen kommen aus Personio bzw. der Externe-Liste (negative ID). */}
+      <select
+        value={auswahl}
+        onChange={(e) => setAuswahl(e.target.value)}
+        aria-label={t("kompetenzen.person")}
+        className={`${feldStil} max-w-[20rem]`}
+      >
+        <option value="">{t("kompetenzen.personWaehlen")}</option>
+        {(verfuegbar ?? []).map((p) => (
+          <option key={p.employee_id} value={String(p.employee_id)}>
+            {p.name}
+            {p.abteilung ? ` · ${p.abteilung}` : ""}
+            {p.employee_id < 0 ? ` · ${t("kompetenzen.extern")}` : ""}
+          </option>
+        ))}
+      </select>
 
       <button
         type="button"
-        disabled={!bereit || anlegen.isPending}
+        disabled={!auswahl || anlegen.isPending}
         onClick={() => anlegen.mutate()}
         className={knopfStil}
       >
         {anlegen.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
         {t("kompetenzen.hinzufuegen")}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setManuell((v) => !v)}
-        className="text-xs text-muted-foreground underline underline-offset-2
-                   hover:text-foreground focus-visible:outline-none
-                   focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {manuell ? t("kompetenzen.ausPersonio") : t("kompetenzen.nichtInPersonio")}
       </button>
     </div>
   );

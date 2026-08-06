@@ -100,6 +100,11 @@ class KompetenzPerson(Base):
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("personio_employees.id", ondelete="SET NULL"), nullable=True
     )
+    #: Verknüpfung zu einem manuell gepflegten Externen (v1.104) — statt Freitext.
+    #: Genau eines von employee_id / extern_id ist gesetzt (Personio bzw. Extern).
+    extern_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("onboarding_extern.id", ondelete="SET NULL"), nullable=True
+    )
     reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False)
 
     matrix: Mapped["KompetenzMatrix"] = relationship(
