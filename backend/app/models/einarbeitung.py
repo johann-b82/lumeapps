@@ -31,6 +31,9 @@ class EinarbeitungKatalog(Base):
     inhalt: Mapped[str] = mapped_column(Text, nullable=False)
     #: Wer die Einarbeitung durchführt — Freitext (Name), auch Externe.
     ansprechpartner: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Bereich/Abteilung dieser Einarbeitung (v1.103) — Freitext; erscheint im
+    #: PDF als „Abteilung". Leer → Fallback auf die Abteilung aus der Pflicht-Matrix.
+    bereich: Mapped[str | None] = mapped_column(Text, nullable=True)
     reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     erstellt_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

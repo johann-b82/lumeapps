@@ -349,12 +349,63 @@ function KatalogAnsprechpartner({
   );
 }
 
+/** Inline editierbarer Bereich einer Katalog-Einarbeitung (PDF-Spalte „Abteilung"). */
+function KatalogBereich({
+  zeile,
+  abteilungen,
+}: {
+  zeile: EinarbeitungKatalog;
+  abteilungen: string[] | undefined;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [wert, setWert] = useState(zeile.bereich ?? "");
+
+  const speichern = useMutation({
+    mutationFn: (b: string | null) => aendereKatalog(zeile.id, { bereich: b }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungKatalog() }),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(zeile.bereich ?? "");
+    },
+  });
+
+  const listId = `einarb-ber-${zeile.id}`;
+  return (
+    <>
+      <input
+        list={listId}
+        value={wert}
+        disabled={speichern.isPending}
+        onChange={(e) => setWert(e.target.value)}
+        onBlur={() => {
+          const neu = wert.trim() || null;
+          if (neu !== (zeile.bereich ?? null)) speichern.mutate(neu);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setWert(zeile.bereich ?? "");
+        }}
+        placeholder={t("onboarding.einarbeitung.bereichPlaceholder")}
+        aria-label={t("onboarding.einarbeitung.bereich")}
+        className={`${einarbFeldStil} w-40`}
+      />
+      <datalist id={listId}>
+        {(abteilungen ?? []).map((a) => (
+          <option key={a} value={a} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 /** Liste aller Einarbeitungen (Katalog) mit Ansprechpartner — anlegen/ändern/löschen. */
 function EinarbeitungKatalogPanel() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [inhalt, setInhalt] = useState("");
   const [partner, setPartner] = useState("");
+  const [bereich, setBereich] = useState("");
 
   const { data } = useQuery({
     queryKey: hrKpiKeys.einarbeitungKatalog(),
@@ -363,6 +414,10 @@ function EinarbeitungKatalogPanel() {
   const { data: partnerVorschlaege } = useQuery({
     queryKey: hrKpiKeys.einarbeitungAnsprechpartner(),
     queryFn: fetchAnsprechpartner,
+  });
+  const { data: abteilungen } = useQuery({
+    queryKey: hrKpiKeys.einarbeitungAbteilungen(),
+    queryFn: fetchEinarbeitungAbteilungen,
   });
   const { data: schulKatalog } = useQuery({
     queryKey: hrKpiKeys.schulungen(),
@@ -375,11 +430,13 @@ function EinarbeitungKatalogPanel() {
   };
 
   const anlegen = useMutation({
-    mutationFn: () => legeKatalogAn({ inhalt, ansprechpartner: partner || null }),
+    mutationFn: () =>
+      legeKatalogAn({ inhalt, ansprechpartner: partner || null, bereich: bereich || null }),
     onSuccess: () => {
       toast.success(t("onboarding.einarbeitung.inhaltAngelegt"));
       setInhalt("");
       setPartner("");
+      setBereich("");
       auffrischen();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -441,6 +498,18 @@ function EinarbeitungKatalogPanel() {
                 <option key={n} value={n} />
               ))}
             </datalist>
+            <input
+              list="einarb-bereiche"
+              value={bereich}
+              onChange={(e) => setBereich(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.bereich")}
+              className={`${einarbFeldStil} w-40`}
+            />
+            <datalist id="einarb-bereiche">
+              {(abteilungen ?? []).map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
             <button
               type="button"
               onClick={() => anlegen.mutate()}
@@ -466,6 +535,7 @@ function EinarbeitungKatalogPanel() {
                 <tr className="border-b bg-muted/20">
                   <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
                   <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
+                  <Th>{t("onboarding.einarbeitung.bereich")}</Th>
                   <Th rechts>{""}</Th>
                 </tr>
               </thead>
@@ -475,6 +545,9 @@ function EinarbeitungKatalogPanel() {
                     <td className="px-4 py-1.5">{z.inhalt}</td>
                     <td className="px-4 py-1.5">
                       <KatalogAnsprechpartner zeile={z} vorschlaege={partnerVorschlaege} />
+                    </td>
+                    <td className="px-4 py-1.5">
+                      <KatalogBereich zeile={z} abteilungen={abteilungen} />
                     </td>
                     <td className="px-4 py-1.5 text-right">
                       <button

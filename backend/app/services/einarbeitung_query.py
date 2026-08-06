@@ -32,7 +32,8 @@ async def zeilen_fuer_abteilungen(
     ).all()
     return [
         EinarbeitungZeile(
-            abteilung=abt,
+            # v1.103: eigener Bereich der Einarbeitung; leer → Matrix-Abteilung (alt).
+            abteilung=(k.bereich or "").strip() or abt,
             inhalt=k.inhalt,
             ansprechpartner=k.ansprechpartner or "",
         )

@@ -965,6 +965,8 @@
   "onboarding.einarbeitung.abteilung": "Department",
   "onboarding.einarbeitung.ansprechpartner": "Contact person",
   "onboarding.einarbeitung.ansprechpartnerPlaceholder": "Type or pick a name",
+  "onboarding.einarbeitung.bereich": "Area",
+  "onboarding.einarbeitung.bereichPlaceholder": "Type or pick an area",
   "onboarding.einarbeitung.inhalt": "Onboarding item",
   "onboarding.einarbeitung.hinzufuegen": "Add",
   "onboarding.einarbeitung.inhaltAngelegt": "Item added.",
