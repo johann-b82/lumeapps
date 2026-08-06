@@ -1,13 +1,13 @@
 # Projektstatus — LumeApps
 
-_Stand: 2026-08-04 · Prod-DB: `v1_102` (80 Migrationen) · 28 Router-Module_
+_Stand: 2026-08-06 · Prod-DB: `v1_104` (82 Migrationen) · 28 Router-Module_
 
 > Momentaufnahme des Umsetzungsstands. Kernprodukt läuft produktiv; der aktuelle
 > Schwerpunkt ist der HR-Ausbau (Onboarding / Qualifizierung / Schulungen).
 
-**Deploy-Hinweis:** Prod steht wieder sauber auf **`main`** — die gesamte
-Session-Arbeit (PRs #36–#41) ist gemergt, **keine offenen PRs**, Prod-Checkout
-konsolidiert (`git checkout main`, `api` neu gestartet).
+**Deploy-Hinweis:** Prod steht sauber auf **`main`** (`v1_104`) — die gesamte
+Session-Arbeit (PRs #36–#45) ist gemergt, **keine offenen PRs**, Alembic ein
+einziger Head, `local main == origin/main`.
 
 Legende: ✅ live · 🟡 gebaut, aber nicht scharf (Daten/Freigabe fehlt) · 🔴 offen/blockiert · ⚪ Rauschen
 
@@ -26,8 +26,8 @@ Legende: ✅ live · 🟡 gebaut, aber nicht scharf (Daten/Freigabe fehlt) · �
 | **E-Mail-Modul** (Office365/Graph, shared) | 🟡 Gebaut | inert bis Azure-App-Registration |
 | **HR – Organigramm** (aus Personio) | ✅ Live | Standort-Filterchips (Vorlage für Schulungen) |
 | **HR – Onboarding** | ✅ Live | inkl. Externe; „neu"-Markierung an Paket-Download gekoppelt |
-| **HR – Kompetenzen** | ✅ Live | Matrizen synchron; Kategorien pflegbar |
-| **HR – Einarbeitung** (Katalog + Abteilungs-Matrix) | ✅ Live | Ansprechpartner je Name mit Schulungen geteilt |
+| **HR – Kompetenzen** | ✅ Live | Matrizen synchron; Kategorien pflegbar; **Personen nur aus Personio + Externe** (v1_104, kein Freitext) |
+| **HR – Einarbeitung** (Katalog + Abteilungs-Matrix) | ✅ Live | Ansprechpartner je Name mit Schulungen geteilt; **Bereich/Thema eigene Spalte** (v1_103), Inhalt inline bearbeitbar |
 | **HR – Schulungen** (Katalog, Zuweisen, Stand, Bericht-Upload, Gesamtübersicht) | ✅ Live | aktueller Schwerpunkt — siehe unten |
 | **HR – Personio-Rückschreiben** (Nachweis-PDF ins Personio-Profil) | 🟡 Gebaut | **inert** (Default aus); scharf erst mit Personio-Schreib-Scopes + Kategorie |
 
@@ -67,6 +67,20 @@ Drei Tabs: **Bearbeiten / Zuweisen / Stand der Mitarbeiter**.
   bis Freischaltung, inkl. Test-Upload-Button + Checkliste
   (`docs/modules/personio-writeback.md`).
 
+## Jüngster Ausbau (PRs #43–#45, 2026-08-06)
+
+- **#44 · Kompetenzen — Personen nur aus Personio + Externe** (DB `v1_104`):
+  Umsetzung der Regel „Personen immer aus Personio". Das Freitextfeld entfällt;
+  „Person hinzufügen" ist ein Dropdown aus aktiver Personio-Belegschaft +
+  Externen (`kompetenz_person.extern_id`, negative IDs über `onboarding_extern`).
+  Freitext ohne ID → 400. Rest-Ausreißer: der Excel-Massenimport lässt
+  Nicht-Treffer weiter als Freitextspalte (`employee_id=NULL`).
+- **#43 · Einarbeitung — Bereich/Thema eigene Spalte** (DB `v1_103`): der Bereich
+  wird nicht mehr aus der Person abgeleitet, sondern je Katalogeintrag gepflegt
+  (Fallback auf die Abteilungs-Matrix).
+- **#45 · Einarbeitungsliste — UX**: „Inhalt der Einarbeitung" ist inline
+  bearbeitbar; Spalten „Bereich" ↔ „Inhalt" getauscht; „Bereich" → „Bereich/Thema".
+
 ## Offene Punkte / technische Schuld
 
 - 🟡 **Personio-Rückschreiben scharfschalten** — braucht **Schreib-Scopes für
@@ -79,6 +93,9 @@ Drei Tabs: **Bearbeiten / Zuweisen / Stand der Mitarbeiter**.
   sonst bleibt die Automatik inert.
 - 🟡 **HR-Automatisierung Phase 2–4** — extern blockiert (Personio-Schreibzugriff,
   Identity, Azure).
+- 🟡 **Kompetenz-Excel-Massenimport** — matcht Spaltenköpfe gegen Personio; Nicht-
+  Treffer landen weiter als `employee_id=NULL`-Freitextspalte. „Person hinzufügen"
+  ist bereits Personio-only (#44); dieser Bulk-Pfad ist der letzte Freitext-Rest.
 - 🟡 **Audit: Vier-Augen-Prinzip + Klarnamen** — bewusst offen (braucht echte
   Rollen + Ersatz der Platzhalter-E-Mail in der Auth).
 - ⚪ **CI auf `main` dauerrot** — Altlast (Paperless-Container), kein Code-Blocker.
@@ -87,8 +104,9 @@ Drei Tabs: **Bearbeiten / Zuweisen / Stand der Mitarbeiter**.
 
 Das Produkt ist produktiv und wird täglich genutzt; die Kern-Features stehen. Der
 Schwerpunkt HR-Onboarding/-Qualifizierung ist funktional **fertig** — Onboarding,
-Kompetenzen, Einarbeitung und Schulungen (Katalog inkl. Anlegen/Löschen, Zuweisen,
-Stand, Bericht-Upload, korrigierbare Gesamtübersicht) stehen und sind auf `main`
+Kompetenzen (Personen nur aus Personio + Externe), Einarbeitung (Bereich/Thema,
+Inhalt bearbeitbar) und Schulungen (Katalog inkl. Anlegen/Löschen, Zuweisen, Stand,
+Bericht-Upload, korrigierbare Gesamtübersicht) stehen und sind auf `main` (`v1_104`)
 konsolidiert. Was bleibt, ist **kein offener Deploy-Rest**, sondern **externe
 Freigaben** (Personio-Schreibrechte fürs Rückschreiben, Attendances V2, Azure) und
 **Datenpflege** (Matrizen + Logo) — keine große Kernentwicklung.
