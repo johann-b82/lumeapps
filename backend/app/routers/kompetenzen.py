@@ -27,6 +27,7 @@ from app.models import (
     KompetenzMatrix,
     KompetenzPerson,
     KompetenzQualifikation,
+    OnboardingExtern,
     PersonioEmployee,
 )
 from app.models.kompetenz import KOMPETENZ_BEREICHE
@@ -341,9 +342,10 @@ class ZelleSetzen(BaseModel):
 
 
 class PersonAnlegen(BaseModel):
-    name: str
-    #: Optionale Verknüpfung nach Personio.
+    #: Positiv = Personio-Mitarbeiter, negativ = -onboarding_extern.id (Externe-Liste).
     employee_id: int | None = None
+    #: Ungenutzt (Name kommt aus dem Stammsatz) — nur für Abwärtskompatibilität.
+    name: str = ""
 
 
 class QualifikationAnlegen(BaseModel):
@@ -395,18 +397,16 @@ async def verfuegbare_personen(
     """
     await _matrix(db, matrix_id)
 
-    schon_drin = set(
-        (
-            await db.execute(
-                select(KompetenzPerson.employee_id).where(
-                    KompetenzPerson.matrix_id == matrix_id,
-                    KompetenzPerson.employee_id.isnot(None),
-                )
+    spalten = (
+        await db.execute(
+            select(KompetenzPerson.employee_id, KompetenzPerson.extern_id).where(
+                KompetenzPerson.matrix_id == matrix_id
             )
         )
-        .scalars()
-        .all()
-    )
+    ).all()
+    emp_drin = {e for e, _ in spalten if e is not None}
+    ext_drin = {x for _, x in spalten if x is not None}
+
     aktive = (
         (
             await db.execute(
@@ -418,7 +418,7 @@ async def verfuegbare_personen(
         .scalars()
         .all()
     )
-    return [
+    ergebnis = [
         VerfuegbarePersonRead(
             employee_id=e.id,
             name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
@@ -426,8 +426,22 @@ async def verfuegbare_personen(
             position=e.position,
         )
         for e in aktive
-        if e.id not in schon_drin
+        if e.id not in emp_drin
     ]
+    # Manuell gepflegte Externe — negative ID (= -onboarding_extern.id), analog Schulungen.
+    externe = (
+        (await db.execute(select(OnboardingExtern).order_by(OnboardingExtern.name)))
+        .scalars()
+        .all()
+    )
+    ergebnis.extend(
+        VerfuegbarePersonRead(
+            employee_id=-x.id, name=x.name, abteilung=x.abteilung, position=x.position
+        )
+        for x in externe
+        if x.id not in ext_drin
+    )
+    return ergebnis
 
 
 @router.put("/matrix/{matrix_id}/zelle", response_model=ZelleRead)
@@ -482,15 +496,20 @@ async def zelle_setzen(
     zelle.anforderungslevel = eingabe.anforderungslevel
     zelle.erfuellungsgrad = eingabe.erfuellungsgrad
 
-    # Sync über alle Matrizen: dieselbe (Mitarbeiter, Qualifikation) bekommt
-    # denselben Wert. Gematcht wird über die Personio-ID und die normalisierte
-    # Bezeichnung; ohne employee_id (nicht mit Personio verknüpft) bleibt es lokal.
+    # Sync über alle Matrizen: dieselbe Person + Qualifikation bekommt denselben
+    # Wert. Gematcht wird über die Personio-ID bzw. die Externe-ID und die
+    # normalisierte Bezeichnung; ohne beide Verknüpfungen bleibt es lokal.
+    person_link = None
     if person.employee_id is not None:
+        person_link = KompetenzPerson.employee_id == person.employee_id
+    elif person.extern_id is not None:
+        person_link = KompetenzPerson.extern_id == person.extern_id
+    if person_link is not None:
         ziel_bez = qual.bezeichnung.strip().lower()
         andere_personen = (
             await db.execute(
                 select(KompetenzPerson).where(
-                    KompetenzPerson.employee_id == person.employee_id,
+                    person_link,
                     KompetenzPerson.id != person.id,
                 )
             )
@@ -544,42 +563,40 @@ async def person_anlegen(
     """
     await _matrix(db, matrix_id)
 
-    name = eingabe.name.strip()
-    if eingabe.employee_id is not None:
+    # Personen kommen aus Personio (positive ID) oder aus der Externe-Liste
+    # (negative ID = -onboarding_extern.id) — kein Freitext mehr.
+    eid = eingabe.employee_id
+    if eid is None or eid == 0:
+        raise HTTPException(status_code=400, detail="Bitte eine Person aus der Liste wählen.")
+
+    employee_id: int | None = None
+    extern_id: int | None = None
+    if eid > 0:
         emp = (
-            await db.execute(
-                select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
-            )
+            await db.execute(select(PersonioEmployee).where(PersonioEmployee.id == eid))
         ).scalar_one_or_none()
         if emp is None:
             raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
         # Der Stammsatz gewinnt: sonst driften Schreibweisen wieder auseinander.
         name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
+        employee_id = emp.id
+        bedingung = KompetenzPerson.employee_id == emp.id
+    else:
+        ext = await db.get(OnboardingExtern, -eid)
+        if ext is None:
+            raise HTTPException(status_code=404, detail="Externe Person nicht gefunden.")
+        name = ext.name
+        extern_id = ext.id
+        bedingung = KompetenzPerson.extern_id == ext.id
 
-        doppelt = (
-            await db.execute(
-                select(KompetenzPerson).where(
-                    KompetenzPerson.matrix_id == matrix_id,
-                    KompetenzPerson.employee_id == emp.id,
-                )
-            )
-        ).scalars().first()
-        if doppelt is not None:
-            raise HTTPException(
-                status_code=409, detail="Diese Person steht bereits in der Matrix."
-            )
-
-    if not name:
-        raise HTTPException(status_code=400, detail="Name darf nicht leer sein.")
-
-    vorhanden = (
+    doppelt = (
         await db.execute(
             select(KompetenzPerson).where(
-                KompetenzPerson.matrix_id == matrix_id, KompetenzPerson.name == name
+                KompetenzPerson.matrix_id == matrix_id, bedingung
             )
         )
     ).scalars().first()
-    if vorhanden is not None:
+    if doppelt is not None:
         raise HTTPException(
             status_code=409, detail="Diese Person steht bereits in der Matrix."
         )
@@ -595,7 +612,8 @@ async def person_anlegen(
     person = KompetenzPerson(
         matrix_id=matrix_id,
         name=name,
-        employee_id=eingabe.employee_id,
+        employee_id=employee_id,
+        extern_id=extern_id,
         reihenfolge=(letzte or 0) + 1,
     )
     db.add(person)
