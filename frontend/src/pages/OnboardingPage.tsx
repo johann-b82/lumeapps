@@ -399,6 +399,59 @@ function KatalogBereich({
   );
 }
 
+/** Inline editierbarer Inhalt einer Katalog-Einarbeitung (Pflichtfeld). */
+function KatalogInhalt({
+  zeile,
+  vorschlaege,
+}: {
+  zeile: EinarbeitungKatalog;
+  vorschlaege: string[];
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [wert, setWert] = useState(zeile.inhalt);
+
+  const speichern = useMutation({
+    mutationFn: (inhalt: string) => aendereKatalog(zeile.id, { inhalt }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungKatalog() }),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setWert(zeile.inhalt);
+    },
+  });
+
+  const listId = `einarb-inhalt-${zeile.id}`;
+  return (
+    <>
+      <input
+        list={listId}
+        value={wert}
+        disabled={speichern.isPending}
+        onChange={(e) => setWert(e.target.value)}
+        onBlur={() => {
+          const neu = wert.trim();
+          if (!neu) {
+            setWert(zeile.inhalt); // Pflichtfeld: leer → zurücksetzen
+          } else if (neu !== zeile.inhalt) {
+            speichern.mutate(neu);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setWert(zeile.inhalt);
+        }}
+        aria-label={t("onboarding.einarbeitung.inhalt")}
+        className={`${einarbFeldStil} min-w-[16rem] w-full`}
+      />
+      <datalist id={listId}>
+        {vorschlaege.map((i) => (
+          <option key={i} value={i} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 /** Liste aller Einarbeitungen (Katalog) mit Ansprechpartner — anlegen/ändern/löschen. */
 function EinarbeitungKatalogPanel() {
   const { t } = useTranslation();
@@ -475,15 +528,15 @@ function EinarbeitungKatalogPanel() {
 
           <div className="flex flex-wrap items-end gap-2">
             <input
-              list="einarb-inhalte"
-              value={inhalt}
-              onChange={(e) => setInhalt(e.target.value)}
-              placeholder={t("onboarding.einarbeitung.inhalt")}
-              className={`${einarbFeldStil} min-w-[16rem] flex-1`}
+              list="einarb-bereiche"
+              value={bereich}
+              onChange={(e) => setBereich(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.bereich")}
+              className={`${einarbFeldStil} w-40`}
             />
-            <datalist id="einarb-inhalte">
-              {inhaltVorschlaege.map((i) => (
-                <option key={i} value={i} />
+            <datalist id="einarb-bereiche">
+              {(abteilungen ?? []).map((a) => (
+                <option key={a} value={a} />
               ))}
             </datalist>
             <input
@@ -499,15 +552,15 @@ function EinarbeitungKatalogPanel() {
               ))}
             </datalist>
             <input
-              list="einarb-bereiche"
-              value={bereich}
-              onChange={(e) => setBereich(e.target.value)}
-              placeholder={t("onboarding.einarbeitung.bereich")}
-              className={`${einarbFeldStil} w-40`}
+              list="einarb-inhalte"
+              value={inhalt}
+              onChange={(e) => setInhalt(e.target.value)}
+              placeholder={t("onboarding.einarbeitung.inhalt")}
+              className={`${einarbFeldStil} min-w-[16rem] flex-1`}
             />
-            <datalist id="einarb-bereiche">
-              {(abteilungen ?? []).map((a) => (
-                <option key={a} value={a} />
+            <datalist id="einarb-inhalte">
+              {inhaltVorschlaege.map((i) => (
+                <option key={i} value={i} />
               ))}
             </datalist>
             <button
@@ -533,21 +586,23 @@ function EinarbeitungKatalogPanel() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/20">
-                  <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
-                  <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
                   <Th>{t("onboarding.einarbeitung.bereich")}</Th>
+                  <Th>{t("onboarding.einarbeitung.ansprechpartner")}</Th>
+                  <Th>{t("onboarding.einarbeitung.inhalt")}</Th>
                   <Th rechts>{""}</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((z) => (
                   <tr key={z.id} className="border-b border-border/40 last:border-0">
-                    <td className="px-4 py-1.5">{z.inhalt}</td>
+                    <td className="px-4 py-1.5">
+                      <KatalogBereich zeile={z} abteilungen={abteilungen} />
+                    </td>
                     <td className="px-4 py-1.5">
                       <KatalogAnsprechpartner zeile={z} vorschlaege={partnerVorschlaege} />
                     </td>
                     <td className="px-4 py-1.5">
-                      <KatalogBereich zeile={z} abteilungen={abteilungen} />
+                      <KatalogInhalt zeile={z} vorschlaege={inhaltVorschlaege} />
                     </td>
                     <td className="px-4 py-1.5 text-right">
                       <button
