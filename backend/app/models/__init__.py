@@ -99,6 +99,9 @@ from app.models.einarbeitung import (  # noqa: F401
     EinarbeitungPflicht,
 )
 
+# Seiten-Feedback (v1.105 — global feedback/problem-report widget)
+from app.models.feedback import PageFeedback  # noqa: F401
+
 __all__ = [
     "Base",
     # Legacy
@@ -141,4 +144,6 @@ __all__ = [
     "KompetenzMatrix", "KompetenzQualifikation", "KompetenzPerson", "KompetenzBewertung",
     "KompetenzKategorie",
     "EinarbeitungKatalog", "EinarbeitungPflicht",
+    # Seiten-Feedback
+    "PageFeedback",
 ]

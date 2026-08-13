@@ -33,3 +33,8 @@ from app.schemas.signage import (  # noqa: F401
     SignagePlaylistItemRead,
     SignagePlaylistRead,
 )
+from app.schemas.feedback import (  # noqa: F401
+    FeedbackRead,
+    FeedbackStatus,
+    FeedbackStatusUpdate,
+)

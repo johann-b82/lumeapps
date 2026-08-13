@@ -51,6 +51,8 @@ import { QualityHomePage } from "./pages/QualityHomePage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
+import { FeedbackPage } from "./pages/FeedbackPage";
+import { FeedbackWidget } from "./components/feedback/FeedbackWidget";
 import { NavBar } from "./components/NavBar";
 import { AdminOnly } from "./auth/AdminOnly";
 import { RoleGate } from "./auth/RoleGate";
@@ -213,6 +215,10 @@ function AppShell() {
           <Route path="/settings/atr" component={AtrSettingsPage} />
           <Route path="/settings/email" component={EmailSettingsPage} />
           <Route path="/settings" component={SettingsPage} />
+          {/* v1.105 — Seiten-Feedback admin review (submission widget is global). */}
+          <Route path="/feedback">
+            <AdminOnly><FeedbackPage /></AdminOnly>
+          </Route>
           <Route path="/docs/:section/:slug">
             <Suspense fallback={
               <div className="flex h-64 items-center justify-center">
@@ -233,6 +239,8 @@ function AppShell() {
           </Route>
         </Switch>
       </main>
+      {/* v1.105 — global feedback widget on every authenticated page. */}
+      {!isLogin && <FeedbackWidget />}
     </AuthGate>
   );
 }

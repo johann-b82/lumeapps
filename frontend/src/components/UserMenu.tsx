@@ -85,6 +85,18 @@ export function UserMenu() {
         >
           {t("userMenu.settings")}
         </MenuPrimitive.LinkItem>
+        {user.role === "admin" && (
+          <MenuPrimitive.LinkItem
+            href="/feedback"
+            render={<WouterLink href="/feedback" />}
+            className={cn(
+              "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1 text-sm outline-none",
+              "data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
+            )}
+          >
+            {t("feedback.adminLink")}
+          </MenuPrimitive.LinkItem>
+        )}
         <DropdownSeparator className="md:hidden" />
         <DropdownItem
           data-testid="usermenu-theme-item"
