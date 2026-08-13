@@ -830,6 +830,11 @@ async def offene_schulungen(
     for t, k in zeilen:
         emp = mitarbeiter.get(t.employee_id or -1)
         ext = externe.get(t.extern_id) if t.extern_id else None
+        # Roster-Regel wie Stand/Zuweisen: nur aktive/eintretende Personio-
+        # Mitarbeiter oder Externe. Ausgetretene (``inactive``) und nicht mehr
+        # auffindbare Personen erscheinen nicht in der offenen Liste.
+        if ext is None and (emp is None or emp.status not in ("active", "onboarding")):
+            continue
         abteilung = emp.department if emp else (ext.abteilung if ext else None)
         hire_date = emp.hire_date if emp else (ext.hire_date if ext else None)
         faellig = _effektive_faelligkeit(t, k.frist_tage, hire_date)
