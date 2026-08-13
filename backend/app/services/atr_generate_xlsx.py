@@ -9,8 +9,10 @@ items get a red fill so the operator fixes them in Excel.
 from __future__ import annotations
 
 import asyncio
+import re
 import shutil
 import uuid as _uuid
+import zipfile
 from copy import copy
 from datetime import date
 from decimal import Decimal
@@ -60,7 +62,7 @@ def _capture_row_styles(ws, row: int) -> list:
     return [copy(ws.cell(row, c)._style) for c in range(1, _NCOLS + 1)]
 
 
-def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
+def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | None = None) -> bytes:
     wb = load_workbook(BytesIO(template_bytes))
     ws = _visible_sheet(wb)
 
@@ -81,9 +83,14 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
         ws["C12"] = _de_date(delivery.weighing_date)
     if getattr(delivery, "testing_date", None):
         ws["L12"] = _de_date(delivery.testing_date)
-    # Doc-No lives in the print header (not a cell).
-    if delivery.atr_number:
-        ws.oddHeader.right.text = f"Doc-No.: {delivery.atr_number}"
+    # Print header (right section): Doc-No / Date / Page. The PDF path rebuilds
+    # this via UNO (atr_uno_header.py); mirror all three lines here so printing
+    # the raw .xlsx from Excel shows the same header. &P/&N are Excel page fields.
+    ws.oddHeader.right.text = (
+        f"Doc-No.: {atr_doc_no(delivery)}\n"
+        f"Date: {date.today().strftime('%d.%m.%Y')}\n"
+        "Page: &P of &N"
+    )
 
     # --- capture reference styles BEFORE mutating the region ---
     part_style = _capture_row_styles(ws, _FIRST_PART_ROW + 1)  # a part row
@@ -151,9 +158,12 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
             ws.cell(r, 6, it.drawing_number_issue or "")
             ws.cell(r, 7, it.qty)
             if it.weight_kg is not None:
-                wc = ws.cell(r, 8, float(it.weight_kg))
+                # weight_kg is the per-unit weight; the line (and the total) must
+                # account for the quantity.
+                line_weight = it.weight_kg * (it.qty or 1)
+                wc = ws.cell(r, 8, float(line_weight))
                 wc.number_format = _DE_NUM
-                total_weight += it.weight_kg
+                total_weight += line_weight
             for c, mark in zip(range(9, 14), ("P", "P", "P", "P", "P")):
                 ws.cell(r, c, mark)
             ws.cell(r, 14, "OK")
@@ -188,6 +198,13 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
     if sig_row is not None:
         ws.cell(sig_row, 3, delivery.qa_signer or "")
         ws.cell(sig_row, 12, delivery.qa_signer or "")
+        # The template ships =TODAY() in the two certification "Date:" cells,
+        # which LibreOffice renders in its own locale (e.g. 8/5/2026). Overwrite
+        # them with a fixed DD.MM.YYYY string so all four date fields on the
+        # sheet share one format (matches the weighing/testing dates above).
+        cert_date = _de_date(delivery.testing_date or delivery.weighing_date or date.today())
+        ws.cell(sig_row, 2, cert_date)   # left  "Date:" (B)
+        ws.cell(sig_row, 8, cert_date)   # right "Date:" (H, merged H:I)
 
     # Fit to one page WIDE (kills the horizontal overflow that doubled the page
     # count); height flows to as many pages as needed. Constrain print_area to
@@ -207,7 +224,114 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items) -> bytes:
 
     bio = BytesIO()
     wb.save(bio)
-    return bio.getvalue()
+    return _inject_header_logo(bio.getvalue(), template_bytes, logo_bytes)
+
+
+# --- print-header logo restore -------------------------------------------------
+# openpyxl keeps the header '&G' code but drops the backing image parts on save,
+# so a printed .xlsx shows no logo. Copy those parts back from the template
+# (which is wired correctly) and re-add the <legacyDrawingHF> sheet reference.
+_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def _inject_header_logo(xlsx_bytes: bytes, template_bytes: bytes,
+                        logo_bytes: bytes | None = None) -> bytes:
+    try:
+        ztpl = zipfile.ZipFile(BytesIO(template_bytes))
+        media = ztpl.read("xl/media/image1.png")
+        vml = ztpl.read("xl/drawings/vmlDrawing1.vml")
+        vml_rels = ztpl.read("xl/drawings/_rels/vmlDrawing1.vml.rels")
+    except KeyError:
+        return xlsx_bytes  # template has no header logo → nothing to restore
+    # Use the configured logo (same mark as the PDF) instead of the template's
+    # own, so Excel and PDF show the identical logo. The template's VML shape
+    # sizes it (id="LH", ~91x32pt); we only swap the image bytes it points to.
+    if logo_bytes:
+        swapped = _excel_logo_png(logo_bytes)
+        if swapped:
+            media = swapped
+
+    zin = zipfile.ZipFile(BytesIO(xlsx_bytes))
+    names = zin.namelist()
+    target = next((n for n in names
+                   if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")
+                   and b"&amp;G" in zin.read(n)), None)
+    if target is None:
+        return xlsx_bytes  # no header-graphic sheet found
+    rels_name = f"xl/worksheets/_rels/{target.split('/')[-1]}.rels"
+    have_rels = rels_name in names
+
+    out = BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in names:
+            data = zin.read(n)
+            if n == "[Content_Types].xml":
+                data = _ct_with_defaults(data)
+            elif n == target:
+                data = _sheet_with_legacy_hf(data)
+            elif n == rels_name:
+                data = _rels_with_vml(data)
+            zout.writestr(n, data)
+        zout.writestr("xl/media/image1.png", media)
+        zout.writestr("xl/drawings/vmlDrawing1.vml", vml)
+        zout.writestr("xl/drawings/_rels/vmlDrawing1.vml.rels", vml_rels)
+        if not have_rels:
+            zout.writestr(rels_name,
+                          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                          f'<Relationships xmlns="{_REL_NS}">'
+                          f'<Relationship Id="rIdHF1" Type="{_R_NS}/vmlDrawing" '
+                          'Target="../drawings/vmlDrawing1.vml"/></Relationships>')
+    return out.getvalue()
+
+
+def _excel_logo_png(logo_bytes: bytes) -> bytes | None:
+    """Crop transparent borders off the configured logo and cap its width for
+    the Excel header image (the VML shape controls its on-page size). Returns
+    None on any failure so the template's own logo is kept as a fallback."""
+    try:
+        from PIL import Image
+        im = Image.open(BytesIO(logo_bytes)).convert("RGBA")
+        bbox = im.getbbox()
+        if bbox:
+            im = im.crop(bbox)
+        if im.width > 800:
+            im = im.resize((800, max(1, round(im.height * 800 / im.width))))
+        out = BytesIO()
+        im.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _ct_with_defaults(ct: bytes) -> bytes:
+    s = ct.decode("utf-8")
+    add = ""
+    if 'Extension="png"' not in s:
+        add += '<Default Extension="png" ContentType="image/png"/>'
+    if 'Extension="vml"' not in s:
+        add += ('<Default Extension="vml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>')
+    return (re.sub(r"(<Types[^>]*>)", r"\1" + add, s, count=1) if add else s).encode("utf-8")
+
+
+def _sheet_with_legacy_hf(sheet: bytes) -> bytes:
+    s = sheet.decode("utf-8")
+    if "legacyDrawingHF" in s:
+        return sheet
+    if "xmlns:r=" not in s.split(">", 1)[0]:
+        s = s.replace("<worksheet ", f'<worksheet xmlns:r="{_R_NS}" ', 1)
+    return s.replace("</worksheet>",
+                     '<legacyDrawingHF r:id="rIdHF1"/></worksheet>', 1).encode("utf-8")
+
+
+def _rels_with_vml(rels: bytes) -> bytes:
+    s = rels.decode("utf-8")
+    if "vmlDrawing" in s:
+        return rels
+    inject = (f'<Relationship Id="rIdHF1" Type="{_R_NS}/vmlDrawing" '
+              'Target="../drawings/vmlDrawing1.vml"/>')
+    return s.replace("</Relationships>", inject + "</Relationships>", 1).encode("utf-8")
 
 
 # Serialize LibreOffice across the single-worker api container (mirror signage_pptx).
@@ -215,11 +339,45 @@ _LO_SEMAPHORE = asyncio.Semaphore(1)
 _LO_TIMEOUT_S = 60
 
 
-# Constant Doc-No per ACM (always the same for this report family); the header
-# date is the report generation date. Applied via LibreOffice UNO because
-# openpyxl mangles the print header — see atr_uno_header.py.
+# Fallback Doc-No for this report family; the header date is the report
+# generation date. Applied via LibreOffice UNO because openpyxl mangles the
+# print header — see atr_uno_header.py.
 _ATR_DOC_NO = "ACM-A350CRC-ATR-4545-01 / Issue: 01"
 _UNO_SCRIPT = str(Path(__file__).with_name("atr_uno_header.py"))
+
+
+def atr_doc_no(delivery) -> str:
+    """Print-header Doc-No, derived from the delivery's ATR number
+    (``4820`` -> ``ACM-A350CRC-ATR-4820-01 / Issue: 01``). Falls back to the
+    family constant when the ATR number is unset."""
+    n = (getattr(delivery, "atr_number", None) or "").strip()
+    return f"ACM-A350CRC-ATR-{n}-01 / Issue: 01" if n else _ATR_DOC_NO
+
+
+_LOGO_HEIGHT_MM = 8.5  # fits the header band fully (incl. the "AEROSPACE"
+#                        tagline); taller clips at the band bottom.
+_LOGO_DPI = 300        # LibreOffice honours the PNG DPI for the header
+#                        background graphic, so render at print resolution.
+
+
+def _prep_header_logo(logo_bytes: bytes) -> bytes:
+    """Crop transparent borders and scale the logo to a fixed physical height at
+    print DPI, so LibreOffice's header background graphic (placed at native size
+    = pixels / DPI, top-left) shows the whole mark, sharp and unclipped. Falls
+    back to the raw bytes if Pillow is unavailable or the image can't be read."""
+    try:
+        from PIL import Image
+        im = Image.open(BytesIO(logo_bytes)).convert("RGBA")
+        bbox = im.getbbox()
+        if bbox:
+            im = im.crop(bbox)
+        h = max(1, round(_LOGO_HEIGHT_MM / 25.4 * _LOGO_DPI))
+        w = max(1, round(im.width * h / im.height))
+        out = BytesIO()
+        im.resize((w, h)).save(out, format="PNG", dpi=(_LOGO_DPI, _LOGO_DPI))
+        return out.getvalue()
+    except Exception:  # noqa: BLE001 — never fail generation over the logo
+        return logo_bytes
 
 
 async def convert_xlsx_to_pdf(xlsx_bytes: bytes, doc_no: str = _ATR_DOC_NO,
@@ -240,6 +398,9 @@ async def convert_xlsx_to_pdf(xlsx_bytes: bytes, doc_no: str = _ATR_DOC_NO,
             # it as a floating shape in the header band (atr_uno_header.py).
             args = ["/usr/bin/python3", _UNO_SCRIPT, str(src), str(out), doc_no, date_str]
             if logo_bytes:
+                if logo_ext != "svg":
+                    logo_bytes = _prep_header_logo(logo_bytes)
+                    logo_ext = "png"
                 logo = tempdir / f"logo.{logo_ext}"
                 logo.write_bytes(logo_bytes)
                 args.append(str(logo))

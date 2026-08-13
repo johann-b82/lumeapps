@@ -190,7 +190,8 @@ export interface AtrDelivery {
 }
 export interface AtrDeliverySummary {
   id: number; source_filename: string; ba_auftrag: string | null;
-  compartment: string | null; status: string; created_at: string;
+  compartment: string | null; atr_number: string | null; msn: string | null;
+  status: string; created_at: string;
 }
 export interface AtrGenerateManifest {
   delivery_id: number; files: string[]; pdf_available: boolean;
@@ -217,6 +218,10 @@ export async function fetchDeliveries(): Promise<AtrDeliverySummary[]> {
 export async function fetchDelivery(id: number): Promise<AtrDelivery> {
   return apiClient<AtrDelivery>(`/api/atr/deliveries/${id}`);
 }
+export async function fetchNextAtrNumber(): Promise<string | null> {
+  const r = await apiClient<{ next: string | null }>("/api/atr/deliveries/next-atr-number");
+  return r.next;
+}
 export async function updateDelivery(id: number, body: Partial<AtrDelivery>): Promise<AtrDelivery> {
   return apiClient<AtrDelivery>(`/api/atr/deliveries/${id}`, {
     method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -231,6 +236,18 @@ export async function updateDeliveryItem(
 }
 export async function generateDelivery(id: number): Promise<AtrGenerateManifest> {
   return apiClient<AtrGenerateManifest>(`/api/atr/deliveries/${id}/generate`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+}
+export async function deleteDelivery(id: number): Promise<void> {
+  await apiClient<void>(`/api/atr/deliveries/${id}`, { method: "DELETE" });
+}
+export interface AtrSaveResult {
+  saved: { label: string; path: string; filename: string }[];
+  failed: { label: string; error: string }[];
+}
+export async function saveDeliveryToServer(id: number): Promise<AtrSaveResult> {
+  return apiClient<AtrSaveResult>(`/api/atr/deliveries/${id}/save-to-server`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
   });
 }
