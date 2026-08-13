@@ -41,7 +41,8 @@ export interface UploadBatchSummary {
     | "tippspiel"
     | "goods_receipts"
     | "material_movements"
-    | "material_prices";
+    | "material_prices"
+    | "stock_prices";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -1372,6 +1373,22 @@ export interface MaterialPricesUploadResponse {
   rows_inserted: number;
   rows_updated: number;
   errors: ValidationErrorDetail[];
+}
+
+export interface StockPriceUploadResponse {
+  rows_inserted: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadStockPricesFile(
+  file: File,
+): Promise<StockPriceUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<StockPriceUploadResponse>("/api/upload-stock-prices", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export interface MaterialCostRatioValue {

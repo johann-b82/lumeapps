@@ -10,8 +10,10 @@ Business definition (agreed with the user):
   Tagen (Default 28 = 4 Wochen) **gar keine Bewegung** — die jüngste
   Bewegung liegt also vor ``CURRENT_DATE - inactive_days`` — und der Bestand
   ist positiv.
-* **Preis** = jüngster Einkaufs-Stückpreis des Artikels aus dem Wareneingang
-  (``goods_receipt_records.price``), Join über die Artikelnummer.
+* **Preis** = normierter Stückpreis aus der AswLagBew-Preisliste
+  (``stock_article_prices.unit_price`` = ``Wert / Preismenge``), Join über die
+  Artikelnummer. (Der Rohpreis im Wareneingang ist per 100/1000 Stück — daher
+  die eigene Preisliste statt ``goods_receipt_records.price``.)
 * **Wert** = Bestand × Preis; absteigend sortiert, Top-N.
 
 Compute-justified (CLAUDE.md clause 2): cross-table aggregation with a
@@ -32,29 +34,21 @@ _TOP_STOCK_ORDERS_SQL = text(
     """
     WITH bestand AS (
         SELECT artikelnr,
-               MAX(article_name)   AS article_name,
+               MAX(article_name)   AS mm_name,
                SUM(bewegungsmenge) AS stock_qty,
                MAX(buch_datum)     AS last_movement
         FROM material_movements
         WHERE artikelnr LIKE 'L%'
         GROUP BY artikelnr
-    ),
-    preis AS (
-        SELECT DISTINCT ON (article_number) article_number, price
-        FROM goods_receipt_records
-        WHERE article_number LIKE 'L%' AND price IS NOT NULL
-        ORDER BY article_number,
-                 order_date   DESC NULLS LAST,
-                 receipt_date DESC NULLS LAST
     )
-    SELECT b.artikelnr                     AS article_number,
-           b.article_name                  AS article_name,
-           b.stock_qty                     AS stock_qty,
-           p.price                         AS unit_price,
-           (b.stock_qty * p.price)         AS value,
-           b.last_movement                 AS last_movement
+    SELECT b.artikelnr                          AS article_number,
+           COALESCE(p.article_name, b.mm_name)  AS article_name,
+           b.stock_qty                          AS stock_qty,
+           p.unit_price                         AS unit_price,
+           (b.stock_qty * p.unit_price)         AS value,
+           b.last_movement                      AS last_movement
     FROM bestand b
-    JOIN preis p ON p.article_number = b.artikelnr
+    JOIN stock_article_prices p ON p.artnr = b.artikelnr
     WHERE b.last_movement < :cutoff
       AND b.stock_qty > 0
     ORDER BY value DESC

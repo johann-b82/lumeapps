@@ -1003,6 +1003,18 @@ class MaterialMovementsUploadResponse(BaseModel):
     errors: list[ValidationErrorDetail]
 
 
+class StockPriceUploadResponse(BaseModel):
+    """Response from POST /api/upload-stock-prices (v1.106).
+
+    Full-snapshot replace: the whole ``stock_article_prices`` table is
+    cleared, then the uploaded price rows are inserted. ``rows_inserted`` is
+    the number of distinct articles priced.
+    """
+
+    rows_inserted: int
+    errors: list[ValidationErrorDetail]
+
+
 class MaterialPricesUploadResponse(BaseModel):
     """Response from POST /api/upload-material-prices.
 
@@ -1200,6 +1212,7 @@ __all__ = [
     "StockOrderTopRow",
     # v1.70 Finanzperspektive — Materialkostenquote
     "MaterialMovementsUploadResponse",
+    "StockPriceUploadResponse",
     "MaterialPricesUploadResponse",
     "InspectionsUploadResponse",
     "MaterialCostRatioValue",

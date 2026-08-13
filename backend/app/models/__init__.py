@@ -33,6 +33,7 @@ from app.models._base import (  # noqa: F401
     Auftrag,
     MaterialMovement,
     MaterialPrice,
+    StockArticlePrice,
     InspectionRecord,
 )
 
@@ -121,6 +122,7 @@ __all__ = [
     "Auftrag",
     "MaterialMovement",
     "MaterialPrice",
+    "StockArticlePrice",
     "InspectionRecord",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
