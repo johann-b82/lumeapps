@@ -1260,6 +1260,28 @@ export async function fetchOtdList(params?: {
   );
 }
 
+// v1.106 — Bestellung auf Lager: Top-N Ladenhüter (L-Artikel) nach Wert.
+export interface StockOrderTopRow {
+  rank: number;
+  article_number: string;
+  article_name: string | null;
+  stock_qty: number;
+  unit_price: number;
+  value: number;
+  last_movement: string | null;
+}
+
+export async function fetchTopStockOrders(params?: {
+  limit?: number;
+}): Promise<StockOrderTopRow[]> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return apiClient<StockOrderTopRow[]>(
+    `/api/procurement/stock-orders/top${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // --------------------------------------------------------------------------
 // Produktion / Aufträge in Verzug (Seriengeschäft) — v1.76
 // --------------------------------------------------------------------------

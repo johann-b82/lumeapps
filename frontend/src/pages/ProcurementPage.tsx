@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { OtdCardGrid } from "@/components/dashboard/OtdCardGrid";
 import { OtdChart } from "@/components/dashboard/OtdChart";
 import { OtdTable } from "@/components/dashboard/OtdTable";
+import { StockOrderTopTable } from "@/components/dashboard/StockOrderTopTable";
 
 /**
  * Einkauf (procurement) dashboard. First section: Liefertermintreue / OTD.
@@ -21,6 +22,8 @@ export function ProcurementPage() {
       <OtdCardGrid />
       <OtdChart />
       <OtdTable />
+
+      <StockOrderTopTable />
     </div>
   );
 }

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.routers.hr_kpis import _bucket_windows, _validate_range
-from app.schemas import OtdHistoryPoint, OtdRow, OtdValue
+from app.schemas import OtdHistoryPoint, OtdRow, OtdValue, StockOrderTopRow
 from app.security.directus_auth import require_dashboard_read
 from app.services.hr_kpi_aggregation import _month_bounds
 from app.services.otd_aggregation import (
@@ -27,6 +27,7 @@ from app.services.otd_aggregation import (
     compute_otd_history,
     list_otd,
 )
+from app.services.stock_order_aggregation import compute_top_stock_orders
 
 
 router = APIRouter(
@@ -86,3 +87,22 @@ async def get_otd_list(
         date_from, date_to = _month_bounds(today.year, today.month)
     rows = await list_otd(db, date_from, date_to)
     return [OtdRow.model_validate(r) for r in rows]
+
+
+@router.get("/stock-orders/top", response_model=list[StockOrderTopRow])
+async def get_top_stock_orders(
+    limit: int = Query(20, ge=1, le=100),
+    inactive_days: int = Query(28, ge=1, le=365),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[StockOrderTopRow]:
+    """Bestellung auf Lager — Top-N slow-moving L-articles by tied-up capital.
+
+    L-articles (Lagerartikel) with no stock movement in the last
+    ``inactive_days`` days (default 28), valued at current stock × latest
+    purchase price, ranked descending. See stock_order_aggregation for the
+    business definition.
+    """
+    rows = await compute_top_stock_orders(
+        db, limit=limit, inactive_days=inactive_days
+    )
+    return [StockOrderTopRow(**r) for r in rows]

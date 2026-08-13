@@ -50,6 +50,8 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/procurement/otd", frozenset({"GET"})),
     ("/api/procurement/otd/history", frozenset({"GET"})),
     ("/api/procurement/otd/list", frozenset({"GET"})),
+    # Bestellung auf Lager — Top-N Ladenhüter (v1.106), viewer-readable KPI.
+    ("/api/procurement/stock-orders/top", frozenset({"GET"})),
     # Produktion / Aufträge in Verzug dashboard reads — viewer role (v1.76).
     ("/api/production/verzug", frozenset({"GET"})),
     ("/api/production/verzug/history", frozenset({"GET"})),

@@ -972,6 +972,18 @@ class OtdRow(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StockOrderTopRow(BaseModel):
+    """One row of the "Bestellung auf Lager – Top 20" slow-mover ranking."""
+
+    rank: int
+    article_number: str
+    article_name: str | None = None
+    stock_qty: float
+    unit_price: float
+    value: float
+    last_movement: date | None = None
+
+
 # ── v1.70 — Finanzperspektive: Materialkostenquote ──────────────────────
 
 
@@ -1185,6 +1197,7 @@ __all__ = [
     "ProductionOverdueRow",
     "OtdHistoryPoint",
     "OtdRow",
+    "StockOrderTopRow",
     # v1.70 Finanzperspektive — Materialkostenquote
     "MaterialMovementsUploadResponse",
     "MaterialPricesUploadResponse",
