@@ -97,6 +97,12 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     # cookie-mode -> session-mode migration. Public by design (the user
     # might be unauth at that moment); only effect is Set-Cookie expiry.
     ("/api/auth/clear-cookies", frozenset({"GET"})),
+    # KPI-Bewertung & Maßnahmen — viewer-readable reads (dashboards are
+    # viewer-visible); all writes carry require_admin. See routers/kpi_review.py.
+    ("/api/kpi-review/registry", frozenset({"GET"})),
+    ("/api/kpi-review/summary", frozenset({"GET"})),
+    ("/api/kpi-review/comments", frozenset({"GET"})),
+    ("/api/kpi-review/measures", frozenset({"GET"})),
     # Seiten-Feedback — submitting a report is open to every authenticated
     # role (Viewer/QS/Admin); listing/screenshot/patch/delete stay admin-only
     # (require_admin per route). See routers/feedback.py docstring.
