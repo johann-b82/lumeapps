@@ -99,3 +99,100 @@ export async function ladeEinarbeitungsplan(
 export function fetchAnsprechpartner(): Promise<string[]> {
   return apiClient<string[]>("/api/hr/einarbeitung/ansprechpartner");
 }
+
+// ---------------------------------------------------------------------------
+// Vorgang: persistiertes Formular mit QR, Lebenszyklus (4 Zeitstempel) und
+// Scan-Upload mit halbautomatischer Prüfung (v1.107).
+// ---------------------------------------------------------------------------
+
+/** Ein geprüftes Pflichtfeld aus der Scan-Auswertung. */
+export interface PruefFeld {
+  key: string;
+  label: string;
+  erkannt: boolean;
+}
+
+/** Ergebnis der halbautomatischen Scan-Prüfung. */
+export interface PruefErgebnis {
+  qr_ok: boolean;
+  doc_uid?: string | null;
+  felder: PruefFeld[];
+  vollstaendig: boolean;
+  fehlend: string[];
+  /** Bei qr_ok=false: warum (kein_qr / unbekannt). */
+  grund?: string;
+}
+
+export type VorgangStatus = "erstellt" | "uebergeben" | "zurueck" | "geprueft";
+
+/** Ein Einarbeitungs-Vorgang (persistiertes Formular + Lebenszyklus). */
+export interface Vorgang {
+  id: number;
+  doc_uid: string;
+  employee_id: number | null;
+  mitarbeiter_name: string;
+  stelle: string | null;
+  beginn: string | null;
+  abteilungen: string[] | null;
+  status: VorgangStatus;
+  erstellt_am: string;
+  uebergeben_am: string | null;
+  zurueck_am: string | null;
+  geprueft_am: string | null;
+  vollstaendig: boolean | null;
+  kommentar: string | null;
+  hat_scan: boolean;
+  pruef_ergebnis: PruefErgebnis | null;
+}
+
+export function fetchVorgaenge(): Promise<Vorgang[]> {
+  return apiClient<Vorgang[]>("/api/hr/einarbeitung/dokumente");
+}
+
+/** Vorgang anlegen: erzeugt das PDF mit QR/Passermarken und persistiert ihn. */
+export function vorgangAnlegen(employeeId: number, abteilungen: string[]): Promise<Vorgang> {
+  return apiClient<Vorgang>("/api/hr/einarbeitung/dokument", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ employee_id: employeeId, abteilungen }),
+  });
+}
+
+/** Lebenszyklus voranschieben (setzt Status + zugehörigen Zeitstempel). */
+export function setzeVorgangStatus(id: number, status: VorgangStatus): Promise<Vorgang> {
+  return apiClient<Vorgang>(`/api/hr/einarbeitung/dokument/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+/** Kommentar hinterlegen bzw. Vollständigkeit manuell überstimmen. */
+export function aktualisiereVorgang(
+  id: number,
+  eingabe: { kommentar?: string; vollstaendig?: boolean },
+): Promise<Vorgang> {
+  return apiClient<Vorgang>(`/api/hr/einarbeitung/dokument/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(eingabe),
+  });
+}
+
+/** Ausgefüllten/eingescannten Bogen hochladen → QR-Zuordnung + Prüfung. */
+export function scanHochladen(
+  datei: File,
+): Promise<{ dokument: Vorgang; ergebnis: PruefErgebnis }> {
+  const formular = new FormData();
+  formular.append("datei", datei);
+  return apiClient<{ dokument: Vorgang; ergebnis: PruefErgebnis }>(
+    "/api/hr/einarbeitung/scan",
+    { method: "POST", body: formular },
+  );
+}
+
+/** Das hinterlegte Blanko-PDF eines Vorgangs im neuen Tab öffnen. */
+export async function oeffneVorgangPdf(id: number): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/einarbeitung/dokument/${id}/pdf`);
+  openBlob(blob);
+}

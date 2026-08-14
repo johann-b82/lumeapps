@@ -38,12 +38,14 @@ import {
   ladeEinarbeitungsplan,
   legeKatalogAn,
   setzeEinarbeitungPflicht,
+  vorgangAnlegen,
   type EinarbeitungKatalog,
   type EinarbeitungPflicht,
 } from "@/lib/einarbeitungApi";
 import { fetchSchulungen } from "@/lib/schulungApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
+import { EinarbeitungVorgaenge } from "@/components/onboarding/EinarbeitungVorgaenge";
 
 function datum(wert: string | null): string {
   if (!wert) return "—";
@@ -170,6 +172,16 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           eintritt={eintritt}
           label={t("onboarding.einarbeitung.pdf")}
           laden={(a) => ladeEinarbeitungsplan(eintritt.employee_id, eintritt.name, a)}
+        />
+
+        <AbteilungsDownload
+          eintritt={eintritt}
+          label={t("onboarding.vorgang.anlegen")}
+          laden={(a) => vorgangAnlegen(eintritt.employee_id, a).then(() => undefined)}
+          nachDownload={() => {
+            qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungVorgaenge() });
+            toast.success(t("onboarding.vorgang.angelegt"));
+          }}
         />
 
         <AbteilungsDownload
@@ -1023,6 +1035,7 @@ export function OnboardingPage() {
       <EinarbeitungMatrixPanel />
       <DokumentePanel />
       <RollenPanel />
+      <EinarbeitungVorgaenge />
 
       <section>
         <h2 className="mb-1 text-sm font-medium">{t("onboarding.eintritte.title")}</h2>
