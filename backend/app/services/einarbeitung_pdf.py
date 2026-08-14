@@ -98,6 +98,11 @@ _PX_PRO_BREITE, _PX_PAD, _PT_PRO_PX = 7.0, 5.0, 0.75
 #: rechts neben dem Namensblock). Kantenlänge in Pixel (~1,2 cm im Druck).
 _QR_ANKER, _QR_ANKER_COL, _QR_ANKER_ROW, _QR_PX = "G4", 7, 4, 46
 
+#: Passermarken (kleine gefüllte Quadrate) in der leeren Gutter-Spalte A, oben
+#: und unten links. Zusammen mit dem QR oben rechts ergeben sich drei über die
+#: Seite verteilte Referenzpunkte → stabile Ausrichtung eines Scans.
+_MARKE_PX = 16
+
 _REGELN = [
     "Jeder neue Mitarbeiter wird anhand eines Einarbeitungsplans systematisch eingelernt.",
     "Die einzelnen Einarbeitungsschritte werden vom Mitarbeiter dokumentiert.",
@@ -197,14 +202,35 @@ def _qr_einsetzen(ws, doc_uid: str) -> None:
     ws.add_image(img, _QR_ANKER)
 
 
-def _qr_box(ws) -> list[float]:
-    x0, y0 = _x_norm(_QR_ANKER_COL), _y_norm(ws, _QR_ANKER_ROW)
+def _bild_norm_box(ws, col: int, row: int, px: int) -> list[float]:
+    """Seitenrelative Box eines an (col,row) verankerten quadratischen Bilds."""
+    x0, y0 = _x_norm(col), _y_norm(ws, row)
     return [
         round(x0, 5),
         round(y0, 5),
-        round(x0 + (_QR_PX * _PT_PRO_PX) / _A4_W_PT, 5),
-        round(y0 + (_QR_PX * _PT_PRO_PX) / _A4_H_PT, 5),
+        round(x0 + (px * _PT_PRO_PX) / _A4_W_PT, 5),
+        round(y0 + (px * _PT_PRO_PX) / _A4_H_PT, 5),
     ]
+
+
+def _qr_box(ws) -> list[float]:
+    return _bild_norm_box(ws, _QR_ANKER_COL, _QR_ANKER_ROW, _QR_PX)
+
+
+def _marke_png() -> bytes:
+    from PIL import Image as PILImage
+
+    puffer = BytesIO()
+    PILImage.new("RGB", (40, 40), (0, 0, 0)).save(puffer, format="PNG")
+    return puffer.getvalue()
+
+
+def _marke_einsetzen(ws, anker: str) -> None:
+    from openpyxl.drawing.image import Image as XLImage
+
+    img = XLImage(BytesIO(_marke_png()))
+    img.width = img.height = _MARKE_PX
+    ws.add_image(img, anker)
 
 
 def _umbruch_zeilen(text: str, breite: int) -> int:
@@ -568,8 +594,11 @@ def fuelle_blatt(
     r = _fuss_ans_seitenende(ws, r, _freigabe_hoehe(mit_unterschrift=False))
     r = _freigabe_fuss(ws, r, FORM_ROLLEN, mit_unterschrift=False)
 
+    fuss_letzte = r - 1  # letzte Zeile der Freigabe-Fußzeile (für die untere Marke)
     if doc_uid:
         _qr_einsetzen(ws, doc_uid)
+        _marke_einsetzen(ws, "A1")
+        _marke_einsetzen(ws, f"A{fuss_letzte}")
 
     # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
     _seiteneinrichtung(ws, r, wiederhol_kopf=tab_start)
@@ -583,6 +612,10 @@ def fuelle_blatt(
         ]
         if doc_uid:
             layout_out["qr"] = {"doc_uid": doc_uid, "box": _qr_box(ws)}
+            layout_out["marken"] = [
+                _bild_norm_box(ws, 1, 1, _MARKE_PX),
+                _bild_norm_box(ws, 1, fuss_letzte, _MARKE_PX),
+            ]
 
 
 def baue_xlsx(
