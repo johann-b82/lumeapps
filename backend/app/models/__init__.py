@@ -95,6 +95,7 @@ from app.models.kompetenz import (  # noqa: F401
     KompetenzQualifikation,
 )
 from app.models.einarbeitung import (  # noqa: F401
+    EinarbeitungDokument,
     EinarbeitungKatalog,
     EinarbeitungPflicht,
 )
@@ -140,5 +141,5 @@ __all__ = [
     "OnboardingAbteilung", "OnboardingDokument", "OnboardingExtern", "OnboardingPaketDownload",
     "KompetenzMatrix", "KompetenzQualifikation", "KompetenzPerson", "KompetenzBewertung",
     "KompetenzKategorie",
-    "EinarbeitungKatalog", "EinarbeitungPflicht",
+    "EinarbeitungDokument", "EinarbeitungKatalog", "EinarbeitungPflicht",
 ]
