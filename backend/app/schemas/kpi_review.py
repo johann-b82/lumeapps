@@ -23,6 +23,12 @@ class KpiCommentCreate(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
     rating: Rating | None = None
     author_name: str | None = None
+    # Optional bubble region on the chart (normalized 0..1). Provide all four to
+    # place a bubble; omit for a plain comment.
+    region_x: float | None = None
+    region_y: float | None = None
+    region_w: float | None = None
+    region_h: float | None = None
 
 
 class KpiCommentRead(BaseModel):
@@ -35,6 +41,11 @@ class KpiCommentRead(BaseModel):
     author_id: uuid.UUID | None
     author_name: str | None
     created_at: datetime
+    number: int | None
+    region_x: float | None
+    region_y: float | None
+    region_w: float | None
+    region_h: float | None
 
 
 # ── Measures ─────────────────────────────────────────────────────────────

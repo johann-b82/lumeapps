@@ -134,12 +134,31 @@ async def create_comment(
     db: AsyncSession = Depends(get_async_db_session),
 ) -> KpiCommentRead:
     _require_known(payload.kpi_key)
+    has_region = None not in (
+        payload.region_x, payload.region_y, payload.region_w, payload.region_h
+    )
+    number = None
+    if has_region:
+        # Contiguous bubble number per KPI (max + 1).
+        current_max = (
+            await db.execute(
+                select(func.max(KpiComment.number)).where(
+                    KpiComment.kpi_key == payload.kpi_key
+                )
+            )
+        ).scalar()
+        number = (current_max or 0) + 1
     row = KpiComment(
         kpi_key=payload.kpi_key,
         body=payload.body.strip(),
         rating=payload.rating,
         author_id=current_user.id,
         author_name=(payload.author_name or None),
+        number=number,
+        region_x=payload.region_x if has_region else None,
+        region_y=payload.region_y if has_region else None,
+        region_w=payload.region_w if has_region else None,
+        region_h=payload.region_h if has_region else None,
     )
     db.add(row)
     await db.commit()

@@ -2108,6 +2108,12 @@ export interface KpiComment {
   author_id: string | null;
   author_name: string | null;
   created_at: string;
+  // Bubble on the chart: contiguous number + normalized region (0..1). Null = plain comment.
+  number: number | null;
+  region_x: number | null;
+  region_y: number | null;
+  region_w: number | null;
+  region_h: number | null;
 }
 
 export interface KpiMeasure {
@@ -2141,6 +2147,10 @@ export async function createKpiComment(input: {
   body: string;
   rating?: KpiRating | null;
   author_name?: string;
+  region_x?: number;
+  region_y?: number;
+  region_w?: number;
+  region_h?: number;
 }): Promise<KpiComment> {
   return apiClient<KpiComment>("/api/kpi-review/comments", {
     method: "POST",

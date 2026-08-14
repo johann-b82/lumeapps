@@ -6,6 +6,7 @@ import { Loader2, MessageSquare, ListChecks } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KpiDetailPanel } from "@/components/kpireview/KpiDetailPanel";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 import { kpiReviewKeys } from "@/lib/queryKeys";
 import {
   fetchKpiReviewSummary,
@@ -111,8 +112,23 @@ export function KpiReviewPage() {
         </section>
       ))}
 
-      {/* Detail der ausgewählten KPI */}
-      {selected && <KpiDetailPanel kpiKey={selected} label={kpiLabel(selected)} />}
+      {/* Ausgewählte KPI: Chart mit Bubble-Overlay + Detail (Maßnahmen) */}
+      {selected && (
+        <>
+          <Card className="p-6 space-y-2">
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-lg font-semibold">{kpiLabel(selected)}</h3>
+              <span className="text-xs text-muted-foreground">
+                {t("kpireview.bubble.hint")}
+              </span>
+            </div>
+            <KpiBubbleOverlay kpiKey={selected}>
+              <DemoChart />
+            </KpiBubbleOverlay>
+          </Card>
+          <KpiDetailPanel kpiKey={selected} label={kpiLabel(selected)} />
+        </>
+      )}
 
       {/* Zentraler Maßnahmen-Tracker (offene über alle KPIs) */}
       <Card className="p-6">
@@ -164,5 +180,53 @@ export function KpiReviewPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Lightweight placeholder chart (inline SVG) so the bubble mechanic is testable
+ * without wiring every real dashboard chart yet. One bar looks like an anomaly
+ * to bubble. Replaced by the real KPI charts once the mechanic is confirmed.
+ */
+const DEMO_BARS = [
+  { m: "Jan", v: 62 },
+  { m: "Feb", v: 58 },
+  { m: "Mär", v: 65 },
+  { m: "Apr", v: 61 },
+  { m: "Mai", v: 88 },
+  { m: "Jun", v: 60 },
+  { m: "Jul", v: 92 },
+  { m: "Aug", v: 59 },
+];
+function DemoChart() {
+  const W = 800;
+  const H = 240;
+  const pad = 28;
+  const max = 100;
+  const bw = (W - pad * 2) / DEMO_BARS.length;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-56 select-none" preserveAspectRatio="none">
+      <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="var(--color-border)" />
+      {DEMO_BARS.map((b, i) => {
+        const h = ((H - pad * 2) * b.v) / max;
+        const x = pad + i * bw + bw * 0.2;
+        return (
+          <g key={b.m}>
+            <rect
+              x={x}
+              y={H - pad - h}
+              width={bw * 0.6}
+              height={h}
+              rx={3}
+              fill="var(--color-primary)"
+              opacity={0.85}
+            />
+            <text x={x + bw * 0.3} y={H - pad + 16} textAnchor="middle" fontSize="12" fill="var(--color-muted-foreground)">
+              {b.m}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }

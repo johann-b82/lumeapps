@@ -19,6 +19,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    Numeric,
     String,
     Text,
     text,
@@ -49,6 +51,13 @@ class KpiComment(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     # Optional Ampel rating of the KPI at comment time.
     rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Bubble on the KPI chart: contiguous number per kpi_key + normalized region
+    # (0..1 relative to the chart container). NULL = plain comment without bubble.
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    region_x: Mapped[float | None] = mapped_column(Numeric(9, 6, asdecimal=False), nullable=True)
+    region_y: Mapped[float | None] = mapped_column(Numeric(9, 6, asdecimal=False), nullable=True)
+    region_w: Mapped[float | None] = mapped_column(Numeric(9, 6, asdecimal=False), nullable=True)
+    region_h: Mapped[float | None] = mapped_column(Numeric(9, 6, asdecimal=False), nullable=True)
     # Directus user id from the JWT (trusted) + client-supplied display hint.
     author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
