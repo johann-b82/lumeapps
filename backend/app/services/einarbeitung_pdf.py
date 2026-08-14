@@ -412,6 +412,7 @@ def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile], felder: list | None = 
         ws.row_dimensions[r].height = max(22.0, zeilen_anzahl * _ZEILE_PT + _ZEILE_PAD)
         if felder is not None:
             kurz = (z.inhalt or "").strip()[:40]
+            felder.append((f"wann_{idx}", f"Wann?: {kurz}", r, SP_WANN, SP_WANN))
             felder.append(
                 (f"erledigt_{idx}", f"Erledigt/Unterschrift: {kurz}", r, SP_ERLEDIGT, SP_ERLEDIGT)
             )
@@ -419,11 +420,13 @@ def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile], felder: list | None = 
     return r
 
 
-def _schulungsbedarf(ws, r: int) -> int:
+def _schulungsbedarf(ws, r: int, felder: list | None = None) -> int:
     r += 1
     ws.cell(row=r, column=2, value="Weiterer Schulungsbedarf notwendig?").font = Font(bold=True)
     ws.cell(row=r, column=6, value="☐ ja    ☐ nein")
     ws.row_dimensions[r].height = 15
+    if felder is not None:
+        felder.append(("schulungsbedarf", "Weiterer Schulungsbedarf (ja/nein)", r, 6, 8))
     r += 1
     ws.cell(row=r, column=2, value="Falls ja, bitte Schulungsbedarf erläutern:")
     ws.row_dimensions[r].height = 15
@@ -589,7 +592,7 @@ def fuelle_blatt(
     r = _einleitung(ws, r)
     tab_start = r
     r = _tabelle(ws, r, zeilen, felder)
-    r = _schulungsbedarf(ws, r)
+    r = _schulungsbedarf(ws, r, felder)
     r += 1
     r = _fuss_ans_seitenende(ws, r, _freigabe_hoehe(mit_unterschrift=False))
     r = _freigabe_fuss(ws, r, FORM_ROLLEN, mit_unterschrift=False)
