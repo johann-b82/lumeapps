@@ -3,6 +3,7 @@ import { ProductionVerzugCardGrid } from "@/components/dashboard/ProductionVerzu
 import { ProductionVerzugChart } from "@/components/dashboard/ProductionVerzugChart";
 import { ProductionVerzugTable } from "@/components/dashboard/ProductionVerzugTable";
 import { ProductionOverdueTable } from "@/components/dashboard/ProductionOverdueTable";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 
 /**
  * Produktion dashboard. First section: Aufträge in Verzug (Seriengeschäft).
@@ -20,7 +21,9 @@ export function ProductionPage() {
         {t("production.verzug.sectionTitle")}
       </h2>
       <ProductionVerzugCardGrid />
-      <ProductionVerzugChart />
+      <KpiBubbleOverlay kpiKey="production.verzug">
+        <ProductionVerzugChart />
+      </KpiBubbleOverlay>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <ProductionVerzugTable />
         <ProductionOverdueTable />

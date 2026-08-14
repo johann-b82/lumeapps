@@ -3,6 +3,7 @@ import { KpiCardGrid } from "@/components/dashboard/KpiCardGrid";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesActivityCard } from "@/components/dashboard/SalesActivityCard";
 import { SalesTable } from "@/components/dashboard/SalesTable";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { toApiDate } from "@/lib/dateUtils";
 
@@ -35,12 +36,14 @@ export function DashboardPage() {
           source="revenues"
         />
       </div>
-      <RevenueChart
-        startDate={startDate}
-        endDate={endDate}
-        preset={preset}
-        range={range}
-      />
+      <KpiBubbleOverlay kpiKey="sales.revenue">
+        <RevenueChart
+          startDate={startDate}
+          endDate={endDate}
+          preset={preset}
+          range={range}
+        />
+      </KpiBubbleOverlay>
       <SalesActivityCard startDate={startDate} endDate={endDate} />
       <SalesTable startDate={startDate} endDate={endDate} />
     </div>

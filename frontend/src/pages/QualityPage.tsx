@@ -12,6 +12,7 @@ import { CustomerComplaintsTable } from "@/components/dashboard/CustomerComplain
 import { QualityInspectionCardGrid } from "@/components/dashboard/QualityInspectionCardGrid";
 import { QualityInspectionCharts } from "@/components/dashboard/QualityInspectionCharts";
 import { QualityInspectionList } from "@/components/dashboard/QualityInspectionList";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 import {
   AUDIT_TYPE_CODES,
   type AuditTypeCode,
@@ -86,21 +87,27 @@ export function QualityPage() {
       {view === "audits" && (
         <>
           <QualityKpiCardGrid auditTypes={auditTypes} />
-          <QualityKpiCharts auditTypes={auditTypes} />
+          <KpiBubbleOverlay kpiKey="quality.audit_findings">
+            <QualityKpiCharts auditTypes={auditTypes} />
+          </KpiBubbleOverlay>
           <QualityFindingsTable auditTypes={auditTypes} />
         </>
       )}
       {view === "complaints" && (
         <>
           <ComplaintRateCardGrid qtyMode={qtyMode} complaintType={complaintType} />
-          <ComplaintRateChart qtyMode={qtyMode} complaintType={complaintType} />
+          <KpiBubbleOverlay kpiKey={`quality.complaint_${complaintType}`}>
+            <ComplaintRateChart qtyMode={qtyMode} complaintType={complaintType} />
+          </KpiBubbleOverlay>
           <CustomerComplaintsTable complaintType={complaintType} />
         </>
       )}
       {view === "inspections" && (
         <>
           <QualityInspectionCardGrid />
-          <QualityInspectionCharts />
+          <KpiBubbleOverlay kpiKey="quality.inspections">
+            <QualityInspectionCharts />
+          </KpiBubbleOverlay>
           <QualityInspectionList />
         </>
       )}

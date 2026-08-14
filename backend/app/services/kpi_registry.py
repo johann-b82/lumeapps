@@ -11,6 +11,7 @@ from __future__ import annotations
 
 # (domain, key) — domain groups the hub; key is the stable anchor.
 KPI_REGISTRY: list[dict[str, str]] = [
+    {"domain": "sales", "key": "sales.revenue"},
     {"domain": "sales", "key": "sales.erstkontakte"},
     {"domain": "sales", "key": "sales.interessenten"},
     {"domain": "sales", "key": "sales.besuche"},

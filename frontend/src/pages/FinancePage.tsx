@@ -7,6 +7,7 @@ import { MaterialCostRatioTable } from "@/components/dashboard/MaterialCostRatio
 import { PersonnelCostRatioCardGrid } from "@/components/dashboard/PersonnelCostRatioCardGrid";
 import { PersonnelCostRatioChart } from "@/components/dashboard/PersonnelCostRatioChart";
 import { PersonnelCostRatioTable } from "@/components/dashboard/PersonnelCostRatioTable";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 
 type FinanceView = "material" | "personnel";
 
@@ -38,13 +39,17 @@ export function FinancePage() {
       {view === "material" ? (
         <>
           <MaterialCostRatioCardGrid />
-          <MaterialCostRatioChart />
+          <KpiBubbleOverlay kpiKey="finance.material_cost_ratio">
+            <MaterialCostRatioChart />
+          </KpiBubbleOverlay>
           <MaterialCostRatioTable />
         </>
       ) : (
         <>
           <PersonnelCostRatioCardGrid />
-          <PersonnelCostRatioChart />
+          <KpiBubbleOverlay kpiKey="finance.personnel_cost_ratio">
+            <PersonnelCostRatioChart />
+          </KpiBubbleOverlay>
           <PersonnelCostRatioTable />
         </>
       )}
