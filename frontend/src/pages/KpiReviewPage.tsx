@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { KpiDetailPanel } from "@/components/kpireview/KpiDetailPanel";
 import { kpiReviewKeys } from "@/lib/queryKeys";
 import {
-  fetchKpiSummary,
+  fetchKpiReviewSummary,
   fetchKpiMeasures,
   type KpiRating,
   type KpiMeasureStatus,
@@ -29,7 +29,7 @@ export function KpiReviewPage() {
 
   const summary = useQuery({
     queryKey: kpiReviewKeys.summary(),
-    queryFn: fetchKpiSummary,
+    queryFn: fetchKpiReviewSummary,
   });
   const allMeasures = useQuery({
     queryKey: kpiReviewKeys.measures(),

@@ -2126,7 +2126,7 @@ export interface KpiMeasure {
   done_at: string | null;
 }
 
-export async function fetchKpiSummary(): Promise<KpiSummaryItem[]> {
+export async function fetchKpiReviewSummary(): Promise<KpiSummaryItem[]> {
   return apiClient<KpiSummaryItem[]>("/api/kpi-review/summary");
 }
 
