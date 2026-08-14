@@ -7,16 +7,23 @@ Einarbeitungsbogen serverseitig auf und konvertiert ihn über LibreOffice.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import EinarbeitungKatalog, EinarbeitungPflicht, PersonioEmployee
+from app.models import (
+    EinarbeitungDokument,
+    EinarbeitungKatalog,
+    EinarbeitungPflicht,
+    PersonioEmployee,
+)
 from app.security.directus_auth import get_current_user, require_admin
+from app.services.directus_files import datei_laden
+from app.services.einarbeitung_dokument import scan_verarbeiten, vorgang_anlegen
 from app.services.pdf_logo import lade_logo
 from app.services.einarbeitung_pdf import dateiname, erzeuge_einarbeitung_pdf
 from app.services.einarbeitung_query import zeilen_fuer_abteilungen
@@ -316,3 +323,197 @@ async def plan_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{datei}.pdf"'},
     )
+
+
+# --------------------------------------------------------------------------
+# Vorgang: persistiertes Formular mit QR, Lebenszyklus (4 Zeitstempel) und
+# Scan-Upload mit halbautomatischer Prüfung. (v1.107)
+# --------------------------------------------------------------------------
+
+
+class VorgangRead(BaseModel):
+    id: int
+    doc_uid: str
+    employee_id: int | None
+    mitarbeiter_name: str
+    stelle: str | None
+    beginn: date | None
+    abteilungen: list[str] | None
+    status: str
+    erstellt_am: datetime
+    uebergeben_am: datetime | None
+    zurueck_am: datetime | None
+    geprueft_am: datetime | None
+    vollstaendig: bool | None
+    kommentar: str | None
+    hat_scan: bool
+    pruef_ergebnis: dict | None
+
+
+class VorgangAnlegen(BaseModel):
+    employee_id: int
+    abteilungen: list[str] | None = None
+
+
+class StatusSetzen(BaseModel):
+    #: uebergeben | zurueck | geprueft (setzt den jeweiligen Zeitstempel).
+    status: str
+
+
+class VorgangAktualisieren(BaseModel):
+    kommentar: str | None = None
+    #: manuelles Überstimmen der automatischen Vollständigkeitsprüfung.
+    vollstaendig: bool | None = None
+
+
+#: Statuswechsel → Zeitstempel-Spalte (der Laufweg, jetzt im System statt auf Papier).
+_STATUS_FELD = {
+    "uebergeben": "uebergeben_am",
+    "zurueck": "zurueck_am",
+    "geprueft": "geprueft_am",
+}
+
+
+def _vorgang_read(d: EinarbeitungDokument) -> VorgangRead:
+    return VorgangRead(
+        id=d.id,
+        doc_uid=d.doc_uid,
+        employee_id=d.employee_id,
+        mitarbeiter_name=d.mitarbeiter_name,
+        stelle=d.stelle,
+        beginn=d.beginn,
+        abteilungen=d.abteilungen,
+        status=d.status,
+        erstellt_am=d.erstellt_am,
+        uebergeben_am=d.uebergeben_am,
+        zurueck_am=d.zurueck_am,
+        geprueft_am=d.geprueft_am,
+        vollstaendig=d.vollstaendig,
+        kommentar=d.kommentar,
+        hat_scan=d.scan_uuid is not None,
+        pruef_ergebnis=d.pruef_ergebnis,
+    )
+
+
+async def _hole_vorgang(db: AsyncSession, dok_id: int) -> EinarbeitungDokument:
+    d = (
+        await db.execute(
+            select(EinarbeitungDokument).where(EinarbeitungDokument.id == dok_id)
+        )
+    ).scalar_one_or_none()
+    if d is None:
+        raise HTTPException(status_code=404, detail="Vorgang nicht gefunden.")
+    return d
+
+
+@router.post("/dokument")
+async def dokument_anlegen(
+    eingabe: VorgangAnlegen, db: AsyncSession = Depends(get_async_db_session)
+) -> VorgangRead:
+    """Einarbeitungs-Vorgang anlegen: PDF mit QR/Passermarken erzeugen und ablegen."""
+    emp = (
+        await db.execute(
+            select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
+        )
+    ).scalar_one_or_none()
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
+
+    gewaehlt = [a.strip() for a in (eingabe.abteilungen or []) if a and a.strip()]
+    if not gewaehlt and emp.department:
+        gewaehlt = [emp.department]
+    zeilen = await zeilen_fuer_abteilungen(db, gewaehlt)
+    name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() or f"#{emp.id}"
+
+    dok = await vorgang_anlegen(
+        db,
+        employee_id=emp.id,
+        name=name,
+        stelle=emp.position or "",
+        beginn=emp.hire_date,
+        abteilungen=gewaehlt,
+        zeilen=zeilen,
+        logo=await lade_logo(db),
+    )
+    return _vorgang_read(dok)
+
+
+@router.get("/dokumente")
+async def dokumente(db: AsyncSession = Depends(get_async_db_session)) -> list[VorgangRead]:
+    rows = (
+        await db.execute(
+            select(EinarbeitungDokument).order_by(EinarbeitungDokument.erstellt_am.desc())
+        )
+    ).scalars().all()
+    return [_vorgang_read(d) for d in rows]
+
+
+@router.get("/dokument/{dok_id}")
+async def dokument(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> VorgangRead:
+    return _vorgang_read(await _hole_vorgang(db, dok_id))
+
+
+@router.get("/dokument/{dok_id}/pdf")
+async def dokument_pdf(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    d = await _hole_vorgang(db, dok_id)
+    if not d.pdf_uuid:
+        raise HTTPException(status_code=404, detail="Kein PDF hinterlegt.")
+    pdf = await datei_laden(d.pdf_uuid)
+    datei = dateiname(d.mitarbeiter_name, date.today())
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{datei}.pdf"'},
+    )
+
+
+@router.patch("/dokument/{dok_id}/status")
+async def status_setzen(
+    dok_id: int, eingabe: StatusSetzen, db: AsyncSession = Depends(get_async_db_session)
+) -> VorgangRead:
+    """Lebenszyklus voranschieben: setzt Status + zugehörigen Zeitstempel."""
+    if eingabe.status not in _STATUS_FELD:
+        raise HTTPException(status_code=400, detail="Unbekannter Status.")
+    d = await _hole_vorgang(db, dok_id)
+    setattr(d, _STATUS_FELD[eingabe.status], datetime.now(timezone.utc))
+    d.status = eingabe.status
+    await db.commit()
+    await db.refresh(d)
+    return _vorgang_read(d)
+
+
+@router.post("/scan")
+async def scan_hochladen(
+    datei: UploadFile = File(...), db: AsyncSession = Depends(get_async_db_session)
+) -> dict:
+    """Ausgefüllten/eingescannten Bogen hochladen → QR-Zuordnung + Prüfung."""
+    daten = await datei.read()
+    ist_pdf = (datei.content_type == "application/pdf") or (
+        (datei.filename or "").lower().endswith(".pdf")
+    )
+    dok, ergebnis = await scan_verarbeiten(db, daten, ist_pdf)
+    if dok is None:
+        # Kein QR erkannt oder ID gehört zu keinem Vorgang.
+        raise HTTPException(status_code=422, detail=ergebnis)
+    return {"dokument": _vorgang_read(dok), "ergebnis": ergebnis}
+
+
+@router.patch("/dokument/{dok_id}")
+async def dokument_aktualisieren(
+    dok_id: int,
+    eingabe: VorgangAktualisieren,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> VorgangRead:
+    """Kommentar hinterlegen bzw. die Vollständigkeit manuell überstimmen."""
+    d = await _hole_vorgang(db, dok_id)
+    if eingabe.kommentar is not None:
+        d.kommentar = eingabe.kommentar
+    if eingabe.vollstaendig is not None:
+        d.vollstaendig = eingabe.vollstaendig
+    await db.commit()
+    await db.refresh(d)
+    return _vorgang_read(d)
