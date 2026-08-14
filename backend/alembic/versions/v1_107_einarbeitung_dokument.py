@@ -9,7 +9,11 @@ ersetzt. ``feld_layout`` hält die seitenrelativen Rechtecke der Pflichtfelder
 für die halbautomatische Vollständigkeitsprüfung.
 
 Revision ID: v1_107_einarbeitung_dokument
-Revises: v1_106_stock_article_prices
+Revises: v1_104_kompetenz_extern
+
+Hinweis (PR gegen main): chained auf den aktuellen main-Head v1_104. Sind zum
+Merge-Zeitpunkt bereits v1_105/v1_106/v1_107_kpi_review aus parallelen PRs
+gelandet, ``down_revision`` vor dem Merge auf den dann aktuellen Head umhängen.
 """
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "v1_107_einarbeitung_dokument"
-down_revision = "v1_106_stock_article_prices"
+down_revision = "v1_104_kompetenz_extern"
 branch_labels = None
 depends_on = None
 
