@@ -85,6 +85,19 @@ _ZEILE_PT, _ZEILE_PAD = 12.0, 5.0
 _SEITE_KAP_PT = 748.0
 _DEFAULT_ROW_PT = 15.0
 
+# ── Seitengeometrie für das Feld-Layout (QR-Zuordnung + Scan-Prüfung) ─────────
+#: A4 hochkant in Punkten und Ränder wie in _seiteneinrichtung (0,5" links/oben).
+#: Zeilenhöhen sind bereits Punkte; Spaltenbreiten (Zeichen-Einheiten) werden
+#: näherungsweise in Punkte umgerechnet. Die 4 QR-Ecken dienen später als Passer —
+#: ein systematischer Skalierungsfehler wird bei der Scan-Ausrichtung aufgefangen.
+_A4_W_PT, _A4_H_PT = 595.276, 841.890
+_RAND_L_PX, _RAND_T_PT = 48.0, 36.0  # 0,5" links (px@96) / oben (pt)
+_PX_PRO_BREITE, _PX_PAD, _PT_PRO_PX = 7.0, 5.0, 0.75
+
+#: QR-Code: klein und unauffällig oben rechts (Ankerzelle G4, leerer Bereich
+#: rechts neben dem Namensblock). Kantenlänge in Pixel (~1,2 cm im Druck).
+_QR_ANKER, _QR_ANKER_COL, _QR_ANKER_ROW, _QR_PX = "G4", 7, 4, 46
+
 _REGELN = [
     "Jeder neue Mitarbeiter wird anhand eines Einarbeitungsplans systematisch eingelernt.",
     "Die einzelnen Einarbeitungsschritte werden vom Mitarbeiter dokumentiert.",
@@ -128,6 +141,70 @@ def _linie(ws, r: int, c1: int, c2: int) -> None:
 def _spalten_setzen(ws) -> None:
     for spalte, breite in zip("ABCDEFGH", _SPALTENBREITEN):
         ws.column_dimensions[spalte].width = breite
+
+
+def _x_norm(col: int) -> float:
+    """Seitenrelative x-Position der linken Kante von Spalte ``col`` (1-basiert)."""
+    px = _RAND_L_PX
+    for k in range(1, col):
+        px += _SPALTENBREITEN[k - 1] * _PX_PRO_BREITE + _PX_PAD
+    return (px * _PT_PRO_PX) / _A4_W_PT
+
+
+def _y_norm(ws, row: int) -> float:
+    """Seitenrelative y-Position der Oberkante von ``row`` (1-basiert)."""
+    pt = _RAND_T_PT
+    for i in range(1, row):
+        h = ws.row_dimensions[i].height
+        pt += h if h is not None else _DEFAULT_ROW_PT
+    return pt / _A4_H_PT
+
+
+def _norm_box(ws, row: int, c1: int, c2: int) -> list[float]:
+    """Seitenrelatives Rechteck [x0,y0,x1,y1] der Zelle(n) row, c1..c2."""
+    return [
+        round(_x_norm(c1), 5),
+        round(_y_norm(ws, row), 5),
+        round(_x_norm(c2 + 1), 5),
+        round(_y_norm(ws, row + 1), 5),
+    ]
+
+
+def _qr_png(doc_uid: str) -> bytes:
+    """QR-Code (Dokument-ID) als scharfes, hochauflösendes PNG.
+
+    Nicht auf die Anzeigegröße herunterrechnen — das verwäscht die Module und
+    macht ihn unlesbar. Die kleine Darstellung erledigt LibreOffice beim Rendern.
+    """
+    import qrcode  # lazy: hält das Modul auch ohne qrcode importierbar
+
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_Q, box_size=8, border=2
+    )
+    qr.add_data(doc_uid)
+    qr.make(fit=True)
+    bild = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    puffer = BytesIO()
+    bild.save(puffer, format="PNG")
+    return puffer.getvalue()
+
+
+def _qr_einsetzen(ws, doc_uid: str) -> None:
+    from openpyxl.drawing.image import Image as XLImage
+
+    img = XLImage(BytesIO(_qr_png(doc_uid)))
+    img.width = img.height = _QR_PX  # nur Anzeigegröße; Quelle bleibt scharf
+    ws.add_image(img, _QR_ANKER)
+
+
+def _qr_box(ws) -> list[float]:
+    x0, y0 = _x_norm(_QR_ANKER_COL), _y_norm(ws, _QR_ANKER_ROW)
+    return [
+        round(x0, 5),
+        round(y0, 5),
+        round(x0 + (_QR_PX * _PT_PRO_PX) / _A4_W_PT, 5),
+        round(y0 + (_QR_PX * _PT_PRO_PX) / _A4_H_PT, 5),
+    ]
 
 
 def _umbruch_zeilen(text: str, breite: int) -> int:
@@ -197,7 +274,14 @@ def _kopfzeilen_tabelle(ws, logo: LogoBild | None) -> int:
     return 5
 
 
-def _kopf(ws, name: str, stelle: str, beginn: date | None, logo: LogoBild | None = None) -> int:
+def _kopf(
+    ws,
+    name: str,
+    stelle: str,
+    beginn: date | None,
+    logo: LogoBild | None = None,
+    felder: list | None = None,
+) -> int:
     r = _kopfzeilen_tabelle(ws, logo)
 
     zeilen = [
@@ -231,11 +315,15 @@ def _kopf(ws, name: str, stelle: str, beginn: date | None, logo: LogoBild | None
     ws.cell(row=r, column=2, value="Datum:").font = Font(bold=True)
     _linie(ws, r, 3, 5)
     ws.row_dimensions[r].height = 20
+    if felder is not None:
+        felder.append(("feedback_datum", "Feedbackgespräch – Datum", r, 3, 5))
     r += 2
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
     ws.cell(row=r, column=2, value="Unterschrift Vorgesetzter:").font = Font(bold=True)
     _linie(ws, r, 5, 8)
     ws.row_dimensions[r].height = 20
+    if felder is not None:
+        felder.append(("feedback_unterschrift", "Feedbackgespräch – Unterschrift Vorgesetzter", r, 5, 8))
     return r + 1
 
 
@@ -259,7 +347,7 @@ def _einleitung(ws, r: int) -> int:
     return r + 2
 
 
-def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile]) -> int:
+def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile], felder: list | None = None) -> int:
     kopf = {
         SP_ABT: "Abteilung",
         SP_PART: "Ansprechpartner",
@@ -276,7 +364,7 @@ def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile]) -> int:
     ws.row_dimensions[r].height = 26
     r += 1
 
-    for z in zeilen:
+    for idx, z in enumerate(zeilen):
         ws.cell(row=r, column=SP_ABT, value=z.abteilung)
         ws.cell(row=r, column=SP_PART, value=z.ansprechpartner)
         ws.cell(row=r, column=SP_INHALT, value=z.inhalt)
@@ -296,6 +384,11 @@ def _tabelle(ws, r: int, zeilen: list[EinarbeitungZeile]) -> int:
             _umbruch_zeilen(z.inhalt, _CH_INHALT),
         )
         ws.row_dimensions[r].height = max(22.0, zeilen_anzahl * _ZEILE_PT + _ZEILE_PAD)
+        if felder is not None:
+            kurz = (z.inhalt or "").strip()[:40]
+            felder.append(
+                (f"erledigt_{idx}", f"Erledigt/Unterschrift: {kurz}", r, SP_ERLEDIGT, SP_ERLEDIGT)
+            )
         r += 1
     return r
 
@@ -450,26 +543,46 @@ def fuelle_blatt(
     beginn: date | None,
     zeilen: list[EinarbeitungZeile],
     logo: LogoBild | None = None,
+    doc_uid: str | None = None,
+    layout_out: dict | None = None,
 ) -> None:
     """Einarbeitungsplan in ein vorhandenes Arbeitsblatt schreiben.
 
     Herausgezogen aus ``baue_xlsx``, damit das Blatt auch als erste Seite eines
     kombinierten Onboarding-Pakets (mit der Schulungsübersicht) dienen kann.
+
+    Mit ``doc_uid`` wird ein QR-Code (Dokument-ID) oben rechts platziert. Ist
+    ``layout_out`` ein Dict, werden dort die seitenrelativen Rechtecke der
+    Pflichtfelder (+ QR) für die spätere Scan-Prüfung abgelegt.
     """
     ws.title = "Einarbeitungsplan"
     _spalten_setzen(ws)
 
-    r = _kopf(ws, name, stelle, beginn, logo)
+    felder: list | None = [] if layout_out is not None else None
+    r = _kopf(ws, name, stelle, beginn, logo, felder)
     r = _einleitung(ws, r)
     tab_start = r
-    r = _tabelle(ws, r, zeilen)
+    r = _tabelle(ws, r, zeilen, felder)
     r = _schulungsbedarf(ws, r)
     r += 1
     r = _fuss_ans_seitenende(ws, r, _freigabe_hoehe(mit_unterschrift=False))
     r = _freigabe_fuss(ws, r, FORM_ROLLEN, mit_unterschrift=False)
 
+    if doc_uid:
+        _qr_einsetzen(ws, doc_uid)
+
     # Läuft die Liste auf eine zweite Seite, wiederholt sich der Tabellenkopf.
     _seiteneinrichtung(ws, r, wiederhol_kopf=tab_start)
+
+    if layout_out is not None:
+        # Zeilenhöhen stehen jetzt endgültig fest → Boxen sind korrekt.
+        layout_out["seite"] = {"w_pt": _A4_W_PT, "h_pt": _A4_H_PT}
+        layout_out["felder"] = [
+            {"key": key, "label": label, "box": _norm_box(ws, row, c1, c2)}
+            for (key, label, row, c1, c2) in (felder or [])
+        ]
+        if doc_uid:
+            layout_out["qr"] = {"doc_uid": doc_uid, "box": _qr_box(ws)}
 
 
 def baue_xlsx(
@@ -478,9 +591,14 @@ def baue_xlsx(
     beginn: date | None,
     zeilen: list[EinarbeitungZeile],
     logo: LogoBild | None = None,
+    doc_uid: str | None = None,
+    layout_out: dict | None = None,
 ) -> bytes:
     wb = Workbook()
-    fuelle_blatt(wb.active, name, stelle, beginn, zeilen, logo)
+    fuelle_blatt(
+        wb.active, name, stelle, beginn, zeilen, logo,
+        doc_uid=doc_uid, layout_out=layout_out,
+    )
     puffer = BytesIO()
     wb.save(puffer)
     return puffer.getvalue()
@@ -494,6 +612,25 @@ async def erzeuge_einarbeitung_pdf(
     logo: LogoBild | None = None,
 ) -> bytes:
     return await convert_xlsx_to_pdf(baue_xlsx(name, stelle, beginn, zeilen, logo))
+
+
+async def erzeuge_vorgang_pdf(
+    name: str,
+    stelle: str,
+    beginn: date | None,
+    zeilen: list[EinarbeitungZeile],
+    doc_uid: str,
+    logo: LogoBild | None = None,
+) -> tuple[bytes, dict]:
+    """PDF mit QR-Code + seitenrelativem Feld-Layout für den Vorgang.
+
+    Gibt (PDF-Bytes, Layout) zurück; das Layout wird am Vorgang gespeichert und
+    von der späteren Scan-Prüfung verwendet.
+    """
+    layout: dict = {}
+    xlsx = baue_xlsx(name, stelle, beginn, zeilen, logo, doc_uid=doc_uid, layout_out=layout)
+    pdf = await convert_xlsx_to_pdf(xlsx)
+    return pdf, layout
 
 
 def baue_freigabe_xlsx(logo: LogoBild | None = None) -> bytes:
