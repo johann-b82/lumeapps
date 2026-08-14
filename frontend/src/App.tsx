@@ -52,6 +52,7 @@ import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
 import { FeedbackPage } from "./pages/FeedbackPage";
+import { KpiReviewPage } from "./pages/KpiReviewPage";
 import { FeedbackWidget } from "./components/feedback/FeedbackWidget";
 import { NavBar } from "./components/NavBar";
 import { AdminOnly } from "./auth/AdminOnly";
@@ -219,6 +220,8 @@ function AppShell() {
           <Route path="/feedback">
             <AdminOnly><FeedbackPage /></AdminOnly>
           </Route>
+          {/* v1.107 — KPI-Bewertung & Maßnahmen (viewer-lesbar, Formulare admin). */}
+          <Route path="/kpi-review" component={KpiReviewPage} />
           <Route path="/docs/:section/:slug">
             <Suspense fallback={
               <div className="flex h-64 items-center justify-center">

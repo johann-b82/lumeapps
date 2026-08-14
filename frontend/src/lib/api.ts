@@ -2078,3 +2078,125 @@ export async function updateFeedbackStatus(
 export async function deleteFeedback(id: string): Promise<void> {
   await apiClient<void>(`/api/feedback/${id}`, { method: "DELETE" });
 }
+
+// ---------------------------------------------------------------------------
+// KPI-Bewertung & Maßnahmen (v1.107)
+// ---------------------------------------------------------------------------
+
+export type KpiRating = "red" | "yellow" | "green";
+export type KpiMeasurePriority = "low" | "medium" | "high";
+export type KpiMeasureStatus = "open" | "in_progress" | "done" | "dropped";
+
+export interface KpiRegistryItem {
+  key: string;
+  domain: string;
+}
+
+export interface KpiSummaryItem {
+  kpi_key: string;
+  domain: string;
+  comment_count: number;
+  open_measure_count: number;
+  last_rating: KpiRating | null;
+}
+
+export interface KpiComment {
+  id: string;
+  kpi_key: string;
+  body: string;
+  rating: KpiRating | null;
+  author_id: string | null;
+  author_name: string | null;
+  created_at: string;
+}
+
+export interface KpiMeasure {
+  id: string;
+  kpi_key: string;
+  comment_id: string | null;
+  title: string;
+  description: string;
+  assignee_personio_id: string | null;
+  assignee_name: string | null;
+  due_date: string | null;
+  priority: KpiMeasurePriority;
+  status: KpiMeasureStatus;
+  created_by_id: string | null;
+  created_at: string;
+  done_at: string | null;
+}
+
+export async function fetchKpiSummary(): Promise<KpiSummaryItem[]> {
+  return apiClient<KpiSummaryItem[]>("/api/kpi-review/summary");
+}
+
+export async function fetchKpiComments(kpiKey: string): Promise<KpiComment[]> {
+  return apiClient<KpiComment[]>(
+    `/api/kpi-review/comments?kpi_key=${encodeURIComponent(kpiKey)}`,
+  );
+}
+
+export async function createKpiComment(input: {
+  kpi_key: string;
+  body: string;
+  rating?: KpiRating | null;
+  author_name?: string;
+}): Promise<KpiComment> {
+  return apiClient<KpiComment>("/api/kpi-review/comments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteKpiComment(id: string): Promise<void> {
+  await apiClient<void>(`/api/kpi-review/comments/${id}`, { method: "DELETE" });
+}
+
+export async function fetchKpiMeasures(params?: {
+  kpi_key?: string;
+  status?: KpiMeasureStatus;
+}): Promise<KpiMeasure[]> {
+  const q = new URLSearchParams();
+  if (params?.kpi_key) q.set("kpi_key", params.kpi_key);
+  if (params?.status) q.set("status", params.status);
+  const qs = q.toString();
+  return apiClient<KpiMeasure[]>(`/api/kpi-review/measures${qs ? `?${qs}` : ""}`);
+}
+
+export async function createKpiMeasure(input: {
+  kpi_key: string;
+  comment_id?: string | null;
+  title: string;
+  description?: string;
+  assignee_personio_id?: string | null;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  priority?: KpiMeasurePriority;
+}): Promise<KpiMeasure> {
+  return apiClient<KpiMeasure>("/api/kpi-review/measures", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateKpiMeasure(
+  id: string,
+  patch: Partial<{
+    title: string;
+    description: string;
+    assignee_personio_id: string | null;
+    assignee_name: string | null;
+    due_date: string | null;
+    priority: KpiMeasurePriority;
+    status: KpiMeasureStatus;
+  }>,
+): Promise<KpiMeasure> {
+  return apiClient<KpiMeasure>(`/api/kpi-review/measures/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteKpiMeasure(id: string): Promise<void> {
+  await apiClient<void>(`/api/kpi-review/measures/${id}`, { method: "DELETE" });
+}
