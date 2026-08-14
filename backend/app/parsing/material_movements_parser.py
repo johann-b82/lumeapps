@@ -28,6 +28,18 @@ import pandas as pd
 
 REQUIRED_COLUMNS = ("Artikelnr", "BuchDatum", "Bewegungsmenge", "BuchTyp")
 
+# The ERP exports the Lagerbewegung under two different header layouts. The
+# canonical (older) names are the REQUIRED_COLUMNS above; the newer export uses
+# short names. We rename the new → canonical when the canonical is absent, so
+# both files import unchanged. ``Bezeichnung`` → ``Bezeichnung 1`` likewise.
+_COLUMN_ALIASES = {
+    "Artikel": "Artikelnr",
+    "Datum": "BuchDatum",
+    "Menge": "Bewegungsmenge",
+    "Typ": "BuchTyp",
+    "Bezeichnung": "Bezeichnung 1",
+}
+
 
 def _clean(val: Any) -> str:
     if val is None:
@@ -73,7 +85,10 @@ def parse_material_movements_file(
 
     header_idx = 0
     for i, line in enumerate(lines[:5]):
-        if "Artikelnr" in line and "BuchTyp" in line:
+        cols = {c.strip() for c in line.split("\t")}
+        has_article = "Artikelnr" in cols or "Artikel" in cols
+        has_type = "BuchTyp" in cols or "Typ" in cols
+        if has_article and has_type:
             header_idx = i
             break
 
@@ -89,6 +104,14 @@ def parse_material_movements_file(
         return [], [{"row": 0, "column": "", "message": f"unreadable: {exc}"}]
 
     df.columns = [str(c).strip() for c in df.columns]
+    # Normalise the newer short-header layout to the canonical column names.
+    df = df.rename(
+        columns={
+            src: dst
+            for src, dst in _COLUMN_ALIASES.items()
+            if src in df.columns and dst not in df.columns
+        }
+    )
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
