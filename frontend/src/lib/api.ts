@@ -1979,3 +1979,63 @@ export async function disconnectDelegatedLogin(): Promise<{ ok: boolean; error: 
     method: "POST",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Seiten-Feedback (v1.105) — global feedback/problem-report widget.
+// ---------------------------------------------------------------------------
+
+export type FeedbackStatus = "new" | "resolved";
+
+export interface FeedbackItem {
+  id: string;
+  created_at: string;
+  created_by_id: string | null;
+  reporter_email: string | null;
+  page_url: string;
+  description: string;
+  has_screenshot: boolean;
+  screenshot_mime: string | null;
+  user_agent: string | null;
+  viewport: string | null;
+  status: FeedbackStatus;
+}
+
+/** POST /api/feedback — submit a report (open to every authenticated role). */
+export async function submitFeedback(input: {
+  description: string;
+  pageUrl: string;
+  userAgent?: string;
+  viewport?: string;
+  reporterEmail?: string;
+  screenshot?: Blob | null;
+}): Promise<{ id: string }> {
+  const fd = new FormData();
+  fd.append("description", input.description);
+  fd.append("page_url", input.pageUrl);
+  if (input.userAgent) fd.append("user_agent", input.userAgent);
+  if (input.viewport) fd.append("viewport", input.viewport);
+  if (input.reporterEmail) fd.append("reporter_email", input.reporterEmail);
+  if (input.screenshot) fd.append("screenshot", input.screenshot, "screenshot.jpg");
+  return apiClient<{ id: string }>("/api/feedback", { method: "POST", body: fd });
+}
+
+/** GET /api/feedback — admin: list all reports, newest first. */
+export async function getFeedbackList(): Promise<FeedbackItem[]> {
+  return apiClient<FeedbackItem[]>("/api/feedback");
+}
+
+/** PATCH /api/feedback/{id} — admin: set status. */
+export async function updateFeedbackStatus(
+  id: string,
+  status: FeedbackStatus,
+): Promise<FeedbackItem> {
+  return apiClient<FeedbackItem>(`/api/feedback/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+/** DELETE /api/feedback/{id} — admin: delete a report. */
+export async function deleteFeedback(id: string): Promise<void> {
+  await apiClient<void>(`/api/feedback/${id}`, { method: "DELETE" });
+}
