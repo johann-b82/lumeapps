@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck, Target } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { RoleGate } from "@/auth/RoleGate";
@@ -122,29 +122,6 @@ export function LauncherPage() {
             </span>
           </div>
         </AdminOnly>
-
-        {/* v1.107 — KPI-Bewertung & Maßnahmen hub → /kpi-review. Viewer sees
-            (read), admin edits. */}
-        <RoleGate allow={["admin", "viewer"]}>
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLocation("/kpi-review")}
-            aria-label={t("launcher.tile.kpireview")}
-            className="w-[120px] h-[120px] rounded-2xl
-                       bg-gradient-to-br from-amber-400 to-orange-600
-                       shadow-md hover:shadow-xl hover:scale-[1.03]
-                       flex items-center justify-center p-4
-                       cursor-pointer transition-all
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Target className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
-          </button>
-          <span className="text-xs text-muted-foreground text-center">
-            {t("launcher.tile.kpireview")}
-          </span>
-        </div>
-        </RoleGate>
 
         {/* v1.82 — Quality / HR / Procurement / Finance / Production tiles
             removed from the launcher; the KPI-Dashboard tile above is

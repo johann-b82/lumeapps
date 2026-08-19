@@ -2,17 +2,14 @@ import { useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/auth/useAuth";
+import { useBubbleMode } from "@/contexts/BubbleModeContext";
 import { kpiReviewKeys } from "@/lib/queryKeys";
-import {
-  fetchKpiComments,
-  createKpiComment,
-  type KpiRating,
-} from "@/lib/api";
+import { fetchKpiComments, createKpiComment, type KpiRating } from "@/lib/api";
 
 const RATING_DOT: Record<KpiRating, string> = {
   red: "var(--color-destructive)",
@@ -24,11 +21,14 @@ type Norm = { x: number; y: number };
 type Region = { x: number; y: number; w: number; h: number };
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const pct = (v: number) => `${v * 100}%`;
 
 /**
- * Overlay a KPI chart with FAIR-style bubbles: toggle "add", drag a region on
- * the chart, a numbered bubble appears and a comment box opens to describe the
- * problem. Regions are stored normalized (0..1) so they stay put across sizes.
+ * KPI chart with FAIR-style bubbles: chart on the left, bubble/comment list on
+ * the right. The global "Bubble" mode (BubbleModeContext) enables drawing a
+ * region on the chart; a numbered marker appears and a comment box opens in the
+ * right panel. Markers are neutral (no persistent red fill); the region only
+ * outlines on hover/selection.
  */
 export function KpiBubbleOverlay({
   kpiKey,
@@ -40,7 +40,7 @@ export function KpiBubbleOverlay({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { active: bubbleMode } = useBubbleMode();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const comments = useQuery({
@@ -51,17 +51,19 @@ export function KpiBubbleOverlay({
     (c) => c.region_x != null && c.number != null,
   );
 
-  const [adding, setAdding] = useState(false);
   const [start, setStart] = useState<Norm | null>(null);
   const [current, setCurrent] = useState<Norm | null>(null);
   const [pending, setPending] = useState<Region | null>(null);
-  const [openBubble, setOpenBubble] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [rating, setRating] = useState<KpiRating | "">("");
 
   const toNorm = (e: React.MouseEvent): Norm => {
     const r = containerRef.current!.getBoundingClientRect();
-    return { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) };
+    return {
+      x: clamp01((e.clientX - r.left) / r.width),
+      y: clamp01((e.clientY - r.top) / r.height),
+    };
   };
 
   const save = useMutation({
@@ -96,152 +98,171 @@ export function KpiBubbleOverlay({
         }
       : null;
 
-  const pct = (v: number) => `${v * 100}%`;
+  // Neutral region outline shown for the drawing rect, the pending region, or
+  // the selected bubble — never a persistent red fill.
+  const selBubble = bubbles.find((b) => b.id === selected);
+  const outline: Region | null =
+    drawRect ??
+    pending ??
+    (selBubble
+      ? {
+          x: selBubble.region_x!,
+          y: selBubble.region_y!,
+          w: selBubble.region_w!,
+          h: selBubble.region_h!,
+        }
+      : null);
+
+  const showPanel = bubbleMode || bubbles.length > 0 || pending != null;
 
   return (
-    <div className="relative" ref={containerRef}>
-      {children}
-
-      {/* Bubble-Layer */}
-      <div
-        className="absolute inset-0"
-        style={{ pointerEvents: adding ? "auto" : "none", cursor: adding ? "crosshair" : "default" }}
-        onMouseDown={(e) => {
-          if (!adding || pending) return;
-          setStart(toNorm(e));
-          setCurrent(toNorm(e));
-        }}
-        onMouseMove={(e) => {
-          if (!adding || !start || pending) return;
-          setCurrent(toNorm(e));
-        }}
-        onMouseUp={(e) => {
-          if (!adding || !start) return;
-          const end = toNorm(e);
-          const region = {
-            x: Math.min(start.x, end.x),
-            y: Math.min(start.y, end.y),
-            w: Math.abs(end.x - start.x),
-            h: Math.abs(end.y - start.y),
-          };
-          setStart(null);
-          setCurrent(null);
-          if (region.w < 0.01 || region.h < 0.01) return; // ignore stray clicks
-          setPending(region);
-          setAdding(false);
-        }}
-      >
-        {/* vorhandene Bubbles */}
-        {bubbles.map((b) => (
-          <div key={b.id} style={{ pointerEvents: "auto" }}>
+    <div className="flex gap-4">
+      {/* Chart + bubble markers */}
+      <div ref={containerRef} className="relative flex-1 min-w-0">
+        {children}
+        <div
+          className="absolute inset-0"
+          style={{
+            pointerEvents: bubbleMode ? "auto" : "none",
+            cursor: bubbleMode ? "crosshair" : "default",
+          }}
+          onMouseDown={(e) => {
+            if (!bubbleMode || pending) return;
+            setStart(toNorm(e));
+            setCurrent(toNorm(e));
+          }}
+          onMouseMove={(e) => {
+            if (!bubbleMode || !start || pending) return;
+            setCurrent(toNorm(e));
+          }}
+          onMouseUp={(e) => {
+            if (!bubbleMode || !start) return;
+            const end = toNorm(e);
+            const region = {
+              x: Math.min(start.x, end.x),
+              y: Math.min(start.y, end.y),
+              w: Math.abs(end.x - start.x),
+              h: Math.abs(end.y - start.y),
+            };
+            setStart(null);
+            setCurrent(null);
+            if (region.w < 0.01 || region.h < 0.01) return;
+            setPending(region);
+          }}
+        >
+          {/* neutral region outline (draw / pending / selected) */}
+          {outline && (
             <div
-              className="absolute rounded-sm border-2"
+              className="absolute rounded-sm border-2 border-dashed border-primary/70 bg-primary/5"
               style={{
-                left: pct(b.region_x!),
-                top: pct(b.region_y!),
-                width: pct(b.region_w!),
-                height: pct(b.region_h!),
-                borderColor: b.rating ? RATING_DOT[b.rating] : "var(--color-destructive)",
-                background: "color-mix(in srgb, var(--color-destructive) 8%, transparent)",
+                left: pct(outline.x),
+                top: pct(outline.y),
+                width: pct(outline.w),
+                height: pct(outline.h),
               }}
             />
+          )}
+          {/* numbered markers — clickable even when mode is off */}
+          {bubbles.map((b) => (
             <button
+              key={b.id}
               type="button"
-              onClick={() => setOpenBubble(openBubble === b.id ? null : b.id)}
-              className="absolute -translate-x-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow"
               style={{
                 left: pct(b.region_x! + b.region_w! / 2),
                 top: pct(b.region_y!),
-                background: b.rating ? RATING_DOT[b.rating] : "var(--color-destructive)",
+                background: b.rating ? RATING_DOT[b.rating] : "var(--color-primary)",
+                pointerEvents: "auto",
               }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow ring-2 ring-background"
               title={b.body}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setSelected(selected === b.id ? null : b.id)}
             >
               {b.number}
             </button>
-            {openBubble === b.id && (
-              <div
-                className="absolute z-10 w-64 rounded-md border border-border bg-popover p-2.5 text-xs text-popover-foreground shadow-lg"
-                style={{ left: pct(b.region_x!), top: `calc(${pct(b.region_y! + b.region_h!)} + 6px)`, pointerEvents: "auto" }}
-              >
-                <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
-                  <span className="font-semibold text-foreground">#{b.number}</span>
-                  {b.rating && (
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: RATING_DOT[b.rating] }} />
-                  )}
-                  <span className="ml-auto">{b.author_name ?? ""}</span>
-                </div>
-                <p className="whitespace-pre-wrap">{b.body}</p>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Live-Auswahlrechteck */}
-        {drawRect && (
-          <div
-            className="absolute rounded-sm border-2 border-dashed border-primary bg-primary/10"
-            style={{ left: pct(drawRect.x), top: pct(drawRect.y), width: pct(drawRect.w), height: pct(drawRect.h) }}
-          />
-        )}
+          ))}
+        </div>
       </div>
 
-      {/* Add-Button */}
-      {isAdmin && !pending && (
-        <Button
-          size="sm"
-          variant={adding ? "secondary" : "outline"}
-          className="absolute right-2 top-2 z-20 gap-1"
-          onClick={() => {
-            setAdding((v) => !v);
-            setStart(null);
-            setCurrent(null);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          {adding ? t("kpireview.bubble.cancel") : t("kpireview.bubble.add")}
-        </Button>
-      )}
+      {/* Right-side bubble panel */}
+      {showPanel && (
+        <aside className="w-64 shrink-0 rounded-lg border border-border bg-card p-3">
+          <p className="text-sm font-semibold mb-2">
+            {t("kpireview.bubble.panelTitle")}{" "}
+            <span className="text-muted-foreground font-normal">({bubbles.length})</span>
+          </p>
 
-      {/* Kommentar-Popup nach dem Aufziehen */}
-      {pending && (
-        <div
-          className="absolute z-30 w-72 rounded-lg border border-border bg-popover p-3 shadow-xl"
-          style={{ left: pct(pending.x), top: `calc(${pct(pending.y + pending.h)} + 6px)`, maxWidth: "90%" }}
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold">{t("kpireview.bubble.describe")}</span>
-            <button className="text-muted-foreground hover:text-foreground" onClick={() => setPending(null)}>
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <Textarea
-            autoFocus
-            rows={3}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={t("kpireview.bubble.placeholder")}
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <select
-              className="h-8 rounded-lg border border-border bg-background px-2 text-sm"
-              value={rating}
-              onChange={(e) => setRating(e.target.value as KpiRating | "")}
-            >
-              <option value="">{t("kpireview.rating.none")}</option>
-              <option value="green">{t("kpireview.rating.green")}</option>
-              <option value="yellow">{t("kpireview.rating.yellow")}</option>
-              <option value="red">{t("kpireview.rating.red")}</option>
-            </select>
-            <Button
-              size="sm"
-              className="ml-auto"
-              disabled={body.trim() === "" || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              {t("kpireview.bubble.save")}
-            </Button>
-          </div>
-        </div>
+          {/* comment form for a freshly-drawn region */}
+          {pending && (
+            <div className="mb-3 rounded-md border border-primary/40 bg-primary/5 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold">{t("kpireview.bubble.describe")}</span>
+                <button className="text-muted-foreground hover:text-foreground" onClick={() => setPending(null)}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <Textarea
+                autoFocus
+                rows={3}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder={t("kpireview.bubble.placeholder")}
+              />
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                  value={rating}
+                  onChange={(e) => setRating(e.target.value as KpiRating | "")}
+                >
+                  <option value="">{t("kpireview.rating.none")}</option>
+                  <option value="green">{t("kpireview.rating.green")}</option>
+                  <option value="yellow">{t("kpireview.rating.yellow")}</option>
+                  <option value="red">{t("kpireview.rating.red")}</option>
+                </select>
+                <Button
+                  size="sm"
+                  className="ml-auto"
+                  disabled={body.trim() === "" || save.isPending}
+                  onClick={() => save.mutate()}
+                >
+                  {t("kpireview.bubble.save")}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* list of bubbles */}
+          {bubbles.length === 0 && !pending ? (
+            <p className="text-xs text-muted-foreground">
+              {bubbleMode ? t("kpireview.bubble.panelHint") : t("kpireview.bubble.panelEmpty")}
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {bubbles.map((b) => (
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(selected === b.id ? null : b.id)}
+                    className={`w-full rounded-md border p-2 text-left text-xs transition-colors ${
+                      selected === b.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                        style={{ background: b.rating ? RATING_DOT[b.rating] : "var(--color-primary)" }}
+                      >
+                        {b.number}
+                      </span>
+                      <span className="text-muted-foreground">{b.author_name ?? ""}</span>
+                    </span>
+                    <span className="mt-1 block whitespace-pre-wrap">{b.body}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
       )}
     </div>
   );
