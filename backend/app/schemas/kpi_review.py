@@ -41,6 +41,7 @@ class KpiCommentRead(BaseModel):
     author_id: uuid.UUID | None
     author_name: str | None
     created_at: datetime
+    viewed_at: datetime | None
     number: int | None
     region_x: float | None
     region_y: float | None
