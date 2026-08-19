@@ -22,7 +22,9 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "v1_107_einarbeitung_dokument"
-down_revision = "v1_104_kompetenz_extern"
+# Ans Ende der linearen Kette gehängt (nach v1_108_kpi_bubble), damit main nach
+# dem Merge genau einen Alembic-Head hat (statt zweier paralleler Zweige ab v1_104).
+down_revision = "v1_108_kpi_bubble"
 branch_labels = None
 depends_on = None
 
