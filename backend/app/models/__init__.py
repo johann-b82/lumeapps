@@ -33,6 +33,7 @@ from app.models._base import (  # noqa: F401
     Auftrag,
     MaterialMovement,
     MaterialPrice,
+    StockArticlePrice,
     InspectionRecord,
 )
 
@@ -100,6 +101,12 @@ from app.models.einarbeitung import (  # noqa: F401
     EinarbeitungPflicht,
 )
 
+# Seiten-Feedback (v1.105 — global feedback/problem-report widget)
+from app.models.feedback import PageFeedback  # noqa: F401
+
+# KPI-Bewertung & Maßnahmen (v1.107)
+from app.models.kpi_review import KpiComment, KpiMeasure  # noqa: F401
+
 __all__ = [
     "Base",
     # Legacy
@@ -119,6 +126,7 @@ __all__ = [
     "Auftrag",
     "MaterialMovement",
     "MaterialPrice",
+    "StockArticlePrice",
     "InspectionRecord",
     # Signage
     "SignageMedia", "SignagePlaylist", "SignagePlaylistItem",
@@ -142,4 +150,8 @@ __all__ = [
     "KompetenzMatrix", "KompetenzQualifikation", "KompetenzPerson", "KompetenzBewertung",
     "KompetenzKategorie",
     "EinarbeitungDokument", "EinarbeitungKatalog", "EinarbeitungPflicht",
+    # Seiten-Feedback
+    "PageFeedback",
+    # KPI-Bewertung & Maßnahmen
+    "KpiComment", "KpiMeasure",
 ]

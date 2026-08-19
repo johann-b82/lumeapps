@@ -972,6 +972,18 @@ class OtdRow(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StockOrderTopRow(BaseModel):
+    """One row of the "Bestellung auf Lager – Top 20" slow-mover ranking."""
+
+    rank: int
+    article_number: str
+    article_name: str | None = None
+    stock_qty: float
+    unit_price: float
+    value: float
+    last_movement: date | None = None
+
+
 # ── v1.70 — Finanzperspektive: Materialkostenquote ──────────────────────
 
 
@@ -988,6 +1000,18 @@ class MaterialMovementsUploadResponse(BaseModel):
     rows_replaced: int = 0
     date_range_from: date | None = None
     date_range_to: date | None = None
+    errors: list[ValidationErrorDetail]
+
+
+class StockPriceUploadResponse(BaseModel):
+    """Response from POST /api/upload-stock-prices (v1.106).
+
+    Full-snapshot replace: the whole ``stock_article_prices`` table is
+    cleared, then the uploaded price rows are inserted. ``rows_inserted`` is
+    the number of distinct articles priced.
+    """
+
+    rows_inserted: int
     errors: list[ValidationErrorDetail]
 
 
@@ -1185,8 +1209,10 @@ __all__ = [
     "ProductionOverdueRow",
     "OtdHistoryPoint",
     "OtdRow",
+    "StockOrderTopRow",
     # v1.70 Finanzperspektive — Materialkostenquote
     "MaterialMovementsUploadResponse",
+    "StockPriceUploadResponse",
     "MaterialPricesUploadResponse",
     "InspectionsUploadResponse",
     "MaterialCostRatioValue",

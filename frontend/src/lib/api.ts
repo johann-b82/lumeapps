@@ -41,7 +41,8 @@ export interface UploadBatchSummary {
     | "tippspiel"
     | "goods_receipts"
     | "material_movements"
-    | "material_prices";
+    | "material_prices"
+    | "stock_prices";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -1260,6 +1261,28 @@ export async function fetchOtdList(params?: {
   );
 }
 
+// v1.106 — Bestellung auf Lager: Top-N Ladenhüter (L-Artikel) nach Wert.
+export interface StockOrderTopRow {
+  rank: number;
+  article_number: string;
+  article_name: string | null;
+  stock_qty: number;
+  unit_price: number;
+  value: number;
+  last_movement: string | null;
+}
+
+export async function fetchTopStockOrders(params?: {
+  limit?: number;
+}): Promise<StockOrderTopRow[]> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return apiClient<StockOrderTopRow[]>(
+    `/api/procurement/stock-orders/top${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // --------------------------------------------------------------------------
 // Produktion / Aufträge in Verzug (Seriengeschäft) — v1.76
 // --------------------------------------------------------------------------
@@ -1350,6 +1373,22 @@ export interface MaterialPricesUploadResponse {
   rows_inserted: number;
   rows_updated: number;
   errors: ValidationErrorDetail[];
+}
+
+export interface StockPriceUploadResponse {
+  rows_inserted: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadStockPricesFile(
+  file: File,
+): Promise<StockPriceUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<StockPriceUploadResponse>("/api/upload-stock-prices", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export interface MaterialCostRatioValue {
@@ -1978,4 +2017,196 @@ export async function disconnectDelegatedLogin(): Promise<{ ok: boolean; error: 
   return apiClient<{ ok: boolean; error: string | null }>("/api/email/delegated/disconnect", {
     method: "POST",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Seiten-Feedback (v1.105) — global feedback/problem-report widget.
+// ---------------------------------------------------------------------------
+
+export type FeedbackStatus = "new" | "resolved";
+
+export interface FeedbackItem {
+  id: string;
+  created_at: string;
+  created_by_id: string | null;
+  reporter_email: string | null;
+  page_url: string;
+  description: string;
+  has_screenshot: boolean;
+  screenshot_mime: string | null;
+  user_agent: string | null;
+  viewport: string | null;
+  status: FeedbackStatus;
+}
+
+/** POST /api/feedback — submit a report (open to every authenticated role). */
+export async function submitFeedback(input: {
+  description: string;
+  pageUrl: string;
+  userAgent?: string;
+  viewport?: string;
+  reporterEmail?: string;
+  screenshot?: Blob | null;
+}): Promise<{ id: string }> {
+  const fd = new FormData();
+  fd.append("description", input.description);
+  fd.append("page_url", input.pageUrl);
+  if (input.userAgent) fd.append("user_agent", input.userAgent);
+  if (input.viewport) fd.append("viewport", input.viewport);
+  if (input.reporterEmail) fd.append("reporter_email", input.reporterEmail);
+  if (input.screenshot) fd.append("screenshot", input.screenshot, "screenshot.jpg");
+  return apiClient<{ id: string }>("/api/feedback", { method: "POST", body: fd });
+}
+
+/** GET /api/feedback — admin: list all reports, newest first. */
+export async function getFeedbackList(): Promise<FeedbackItem[]> {
+  return apiClient<FeedbackItem[]>("/api/feedback");
+}
+
+/** PATCH /api/feedback/{id} — admin: set status. */
+export async function updateFeedbackStatus(
+  id: string,
+  status: FeedbackStatus,
+): Promise<FeedbackItem> {
+  return apiClient<FeedbackItem>(`/api/feedback/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+/** DELETE /api/feedback/{id} — admin: delete a report. */
+export async function deleteFeedback(id: string): Promise<void> {
+  await apiClient<void>(`/api/feedback/${id}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// KPI-Bewertung & Maßnahmen (v1.107)
+// ---------------------------------------------------------------------------
+
+export type KpiRating = "red" | "yellow" | "green";
+export type KpiMeasurePriority = "low" | "medium" | "high";
+export type KpiMeasureStatus = "open" | "in_progress" | "done" | "dropped";
+
+export interface KpiRegistryItem {
+  key: string;
+  domain: string;
+}
+
+export interface KpiSummaryItem {
+  kpi_key: string;
+  domain: string;
+  comment_count: number;
+  open_measure_count: number;
+  last_rating: KpiRating | null;
+}
+
+export interface KpiComment {
+  id: string;
+  kpi_key: string;
+  body: string;
+  rating: KpiRating | null;
+  author_id: string | null;
+  author_name: string | null;
+  created_at: string;
+  // Bubble on the chart: contiguous number + normalized region (0..1). Null = plain comment.
+  number: number | null;
+  region_x: number | null;
+  region_y: number | null;
+  region_w: number | null;
+  region_h: number | null;
+}
+
+export interface KpiMeasure {
+  id: string;
+  kpi_key: string;
+  comment_id: string | null;
+  title: string;
+  description: string;
+  assignee_personio_id: string | null;
+  assignee_name: string | null;
+  due_date: string | null;
+  priority: KpiMeasurePriority;
+  status: KpiMeasureStatus;
+  created_by_id: string | null;
+  created_at: string;
+  done_at: string | null;
+}
+
+export async function fetchKpiReviewSummary(): Promise<KpiSummaryItem[]> {
+  return apiClient<KpiSummaryItem[]>("/api/kpi-review/summary");
+}
+
+export async function fetchKpiComments(kpiKey: string): Promise<KpiComment[]> {
+  return apiClient<KpiComment[]>(
+    `/api/kpi-review/comments?kpi_key=${encodeURIComponent(kpiKey)}`,
+  );
+}
+
+export async function createKpiComment(input: {
+  kpi_key: string;
+  body: string;
+  rating?: KpiRating | null;
+  author_name?: string;
+  region_x?: number;
+  region_y?: number;
+  region_w?: number;
+  region_h?: number;
+}): Promise<KpiComment> {
+  return apiClient<KpiComment>("/api/kpi-review/comments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteKpiComment(id: string): Promise<void> {
+  await apiClient<void>(`/api/kpi-review/comments/${id}`, { method: "DELETE" });
+}
+
+export async function fetchKpiMeasures(params?: {
+  kpi_key?: string;
+  status?: KpiMeasureStatus;
+}): Promise<KpiMeasure[]> {
+  const q = new URLSearchParams();
+  if (params?.kpi_key) q.set("kpi_key", params.kpi_key);
+  if (params?.status) q.set("status", params.status);
+  const qs = q.toString();
+  return apiClient<KpiMeasure[]>(`/api/kpi-review/measures${qs ? `?${qs}` : ""}`);
+}
+
+export async function createKpiMeasure(input: {
+  kpi_key: string;
+  comment_id?: string | null;
+  title: string;
+  description?: string;
+  assignee_personio_id?: string | null;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  priority?: KpiMeasurePriority;
+}): Promise<KpiMeasure> {
+  return apiClient<KpiMeasure>("/api/kpi-review/measures", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateKpiMeasure(
+  id: string,
+  patch: Partial<{
+    title: string;
+    description: string;
+    assignee_personio_id: string | null;
+    assignee_name: string | null;
+    due_date: string | null;
+    priority: KpiMeasurePriority;
+    status: KpiMeasureStatus;
+  }>,
+): Promise<KpiMeasure> {
+  return apiClient<KpiMeasure>(`/api/kpi-review/measures/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteKpiMeasure(id: string): Promise<void> {
+  await apiClient<void>(`/api/kpi-review/measures/${id}`, { method: "DELETE" });
 }

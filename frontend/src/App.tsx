@@ -51,6 +51,11 @@ import { QualityHomePage } from "./pages/QualityHomePage";
 import { SignagePage } from "./signage/pages/SignagePage";
 import { PairPage } from "./signage/pages/PairPage";
 import { PlaylistEditorPage } from "./signage/pages/PlaylistEditorPage";
+import { FeedbackPage } from "./pages/FeedbackPage";
+import { KpiReviewPage } from "./pages/KpiReviewPage";
+import { FeedbackWidget } from "./components/feedback/FeedbackWidget";
+import { BubbleButton } from "./components/kpireview/BubbleButton";
+import { BubbleModeProvider } from "./contexts/BubbleModeContext";
 import { NavBar } from "./components/NavBar";
 import { AdminOnly } from "./auth/AdminOnly";
 import { RoleGate } from "./auth/RoleGate";
@@ -213,6 +218,12 @@ function AppShell() {
           <Route path="/settings/atr" component={AtrSettingsPage} />
           <Route path="/settings/email" component={EmailSettingsPage} />
           <Route path="/settings" component={SettingsPage} />
+          {/* v1.105 — Seiten-Feedback admin review (submission widget is global). */}
+          <Route path="/feedback">
+            <AdminOnly><FeedbackPage /></AdminOnly>
+          </Route>
+          {/* v1.107 — KPI-Bewertung & Maßnahmen (viewer-lesbar, Formulare admin). */}
+          <Route path="/kpi-review" component={KpiReviewPage} />
           <Route path="/docs/:section/:slug">
             <Suspense fallback={
               <div className="flex h-64 items-center justify-center">
@@ -233,6 +244,9 @@ function AppShell() {
           </Route>
         </Switch>
       </main>
+      {/* v1.105 — global feedback widget on every authenticated page. */}
+      {!isLogin && <FeedbackWidget />}
+      {!isLogin && <BubbleButton />}
     </AuthGate>
   );
 }
@@ -257,7 +271,9 @@ function RootRouter() {
             <SensorDraftProvider>
               <DateRangeProvider>
                 <SensorTimeWindowProvider>
-                  <AppShell />
+                  <BubbleModeProvider>
+                    <AppShell />
+                  </BubbleModeProvider>
                 </SensorTimeWindowProvider>
               </DateRangeProvider>
             </SensorDraftProvider>

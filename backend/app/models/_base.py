@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import BYTEA, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1131,3 +1132,23 @@ class MaterialPrice(Base):
     pos_wert: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
 
     raw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class StockArticlePrice(Base):
+    """One normalised unit price per article from the AswLagBew price list.
+
+    ``unit_price`` = ``Wert / Preismenge`` (the raw ``Wert`` is per 100/1000
+    pieces). Master-data snapshot keyed by ``artnr`` — the upload replaces the
+    whole table. Feeds the "Bestellung auf Lager – Top 20" valuation: stock on
+    hand (from ``material_movements``) × this ``unit_price``.
+    """
+
+    __tablename__ = "stock_article_prices"
+
+    artnr: Mapped[str] = mapped_column(String(50), primary_key=True)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(15, 5), nullable=False)
+    price_unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    article_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )

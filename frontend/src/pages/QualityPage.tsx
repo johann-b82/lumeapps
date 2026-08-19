@@ -12,6 +12,7 @@ import { CustomerComplaintsTable } from "@/components/dashboard/CustomerComplain
 import { QualityInspectionCardGrid } from "@/components/dashboard/QualityInspectionCardGrid";
 import { QualityInspectionCharts } from "@/components/dashboard/QualityInspectionCharts";
 import { QualityInspectionList } from "@/components/dashboard/QualityInspectionList";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 import {
   AUDIT_TYPE_CODES,
   type AuditTypeCode,
@@ -41,7 +42,9 @@ export function QualityPage() {
   const [complaintType, setComplaintType] = useState<ComplaintType>("customer");
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <KpiBubbleOverlay kpiKey="quality">
+        <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <SegmentedControl<QualityView>
           segments={[
@@ -104,6 +107,8 @@ export function QualityPage() {
           <QualityInspectionList />
         </>
       )}
+        </div>
+      </KpiBubbleOverlay>
     </div>
   );
 }

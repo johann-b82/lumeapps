@@ -172,6 +172,8 @@ export const procurementKeys = {
     ["procurement", "otd", "history", { from, to, granularity }] as const,
   otdList: (from?: string, to?: string) =>
     ["procurement", "otd", "list", { from, to }] as const,
+  stockOrdersTop: (limit: number) =>
+    ["procurement", "stock-orders", "top", { limit }] as const,
 };
 
 // v1.76 — Produktion: Aufträge in Verzug (Seriengeschäft).
@@ -185,6 +187,15 @@ export const productionKeys = {
     ["production", "verzug", "list", { from, to }] as const,
   verzugOverdue: (from?: string, to?: string) =>
     ["production", "verzug", "overdue", { from, to }] as const,
+};
+
+// v1.107 — KPI-Bewertung & Maßnahmen.
+export const kpiReviewKeys = {
+  all: ["kpi-review"] as const,
+  summary: () => ["kpi-review", "summary"] as const,
+  comments: (kpiKey: string) => ["kpi-review", "comments", kpiKey] as const,
+  measures: (kpiKey?: string, status?: string) =>
+    ["kpi-review", "measures", { kpiKey, status }] as const,
 };
 
 // v1.70 — Finanzperspektive: Materialkostenquote.

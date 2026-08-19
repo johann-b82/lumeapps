@@ -50,6 +50,8 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/procurement/otd", frozenset({"GET"})),
     ("/api/procurement/otd/history", frozenset({"GET"})),
     ("/api/procurement/otd/list", frozenset({"GET"})),
+    # Bestellung auf Lager — Top-N Ladenhüter (v1.106), viewer-readable KPI.
+    ("/api/procurement/stock-orders/top", frozenset({"GET"})),
     # Produktion / Aufträge in Verzug dashboard reads — viewer role (v1.76).
     ("/api/production/verzug", frozenset({"GET"})),
     ("/api/production/verzug/history", frozenset({"GET"})),
@@ -95,6 +97,16 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     # cookie-mode -> session-mode migration. Public by design (the user
     # might be unauth at that moment); only effect is Set-Cookie expiry.
     ("/api/auth/clear-cookies", frozenset({"GET"})),
+    # KPI-Bewertung & Maßnahmen — viewer-readable reads (dashboards are
+    # viewer-visible); all writes carry require_admin. See routers/kpi_review.py.
+    ("/api/kpi-review/registry", frozenset({"GET"})),
+    ("/api/kpi-review/summary", frozenset({"GET"})),
+    ("/api/kpi-review/comments", frozenset({"GET"})),
+    ("/api/kpi-review/measures", frozenset({"GET"})),
+    # Seiten-Feedback — submitting a report is open to every authenticated
+    # role (Viewer/QS/Admin); listing/screenshot/patch/delete stay admin-only
+    # (require_admin per route). See routers/feedback.py docstring.
+    ("/api/feedback", frozenset({"POST"})),
     # World Cup signage embed — public by design, mirrors the hr_embed
     # rationale (kiosks without a session). See routers/worldcup.py docstring.
     ("/api/worldcup/embed/today", frozenset({"GET"})),
