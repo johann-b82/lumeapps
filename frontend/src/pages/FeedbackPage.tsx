@@ -213,7 +213,9 @@ export function FeedbackPage() {
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title={t("feedback.admin.delete.title")}
         body={t("feedback.admin.delete.body")}
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
         confirmDisabled={deleteMutation.isPending}
       />
     </div>

@@ -1,16 +1,24 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DeleteDialog } from "@/components/ui/delete-dialog";
 import { useAuth } from "@/auth/useAuth";
-import { BubbleMeasures } from "@/components/kpireview/BubbleMeasures";
 import { useBubbleMode } from "@/contexts/BubbleModeContext";
 import { kpiReviewKeys } from "@/lib/queryKeys";
-import { fetchKpiComments, createKpiComment, type KpiRating } from "@/lib/api";
+import {
+  fetchKpiComments,
+  createKpiComment,
+  deleteKpiComment,
+  fetchKpiMeasures,
+  type KpiComment,
+  type KpiRating,
+} from "@/lib/api";
 
 const RATING_DOT: Record<KpiRating, string> = {
   red: "var(--color-destructive)",
@@ -41,6 +49,7 @@ export function KpiBubbleOverlay({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const { active: bubbleMode } = useBubbleMode();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -83,6 +92,25 @@ export function KpiBubbleOverlay({
       setPending(null);
       setBody("");
       setRating("");
+      qc.invalidateQueries({ queryKey: kpiReviewKeys.comments(kpiKey) });
+      qc.invalidateQueries({ queryKey: kpiReviewKeys.summary() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const measures = useQuery({
+    queryKey: kpiReviewKeys.measures(kpiKey),
+    queryFn: () => fetchKpiMeasures({ kpi_key: kpiKey }),
+  });
+  const measureCount = (id: string) =>
+    (measures.data ?? []).filter((m) => m.comment_id === id).length;
+
+  const [deleteTarget, setDeleteTarget] = useState<KpiComment | null>(null);
+  const delBubble = useMutation({
+    mutationFn: (id: string) => deleteKpiComment(id),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      setSelected(null);
       qc.invalidateQueries({ queryKey: kpiReviewKeys.comments(kpiKey) });
       qc.invalidateQueries({ queryKey: kpiReviewKeys.summary() });
     },
@@ -262,13 +290,52 @@ export function KpiBubbleOverlay({
                     </span>
                     <span className="mt-1 block whitespace-pre-wrap">{b.body}</span>
                   </button>
-                  {selected === b.id && <BubbleMeasures kpiKey={kpiKey} commentId={b.id} />}
+                  {selected === b.id && (
+                    <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("kpireview.measures.countLabel", { count: measureCount(b.id) })}
+                      </p>
+                      {isAdmin && (
+                        <div className="flex items-center justify-between gap-2">
+                          <Link
+                            href="/kpi-review"
+                            className="text-[11px] text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {t("kpireview.bubble.manage")}
+                          </Link>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:text-destructive"
+                            title={t("kpireview.bubble.deleteAria")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(b);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </aside>
       )}
+
+      <DeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t("kpireview.bubble.deleteTitle")}
+        body={t("kpireview.bubble.deleteBody")}
+        onConfirm={() => {
+          if (deleteTarget) delBubble.mutate(deleteTarget.id);
+        }}
+        confirmDisabled={delBubble.isPending}
+      />
     </div>
   );
 }
