@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/auth/useAuth";
+import { BubbleMeasures } from "@/components/kpireview/BubbleMeasures";
 import { useBubbleMode } from "@/contexts/BubbleModeContext";
 import { kpiReviewKeys } from "@/lib/queryKeys";
 import { fetchKpiComments, createKpiComment, type KpiRating } from "@/lib/api";
@@ -239,13 +240,16 @@ export function KpiBubbleOverlay({
           ) : (
             <ul className="space-y-1.5">
               {bubbles.map((b) => (
-                <li key={b.id}>
+                <li
+                  key={b.id}
+                  className={`rounded-md border p-2 text-xs transition-colors ${
+                    selected === b.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => setSelected(selected === b.id ? null : b.id)}
-                    className={`w-full rounded-md border p-2 text-left text-xs transition-colors ${
-                      selected === b.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-                    }`}
+                    className="w-full text-left"
                   >
                     <span className="flex items-center gap-1.5">
                       <span
@@ -258,6 +262,7 @@ export function KpiBubbleOverlay({
                     </span>
                     <span className="mt-1 block whitespace-pre-wrap">{b.body}</span>
                   </button>
+                  {selected === b.id && <BubbleMeasures kpiKey={kpiKey} commentId={b.id} />}
                 </li>
               ))}
             </ul>
