@@ -42,7 +42,9 @@ export function QualityPage() {
   const [complaintType, setComplaintType] = useState<ComplaintType>("customer");
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <KpiBubbleOverlay kpiKey="quality">
+        <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <SegmentedControl<QualityView>
           segments={[
@@ -87,30 +89,26 @@ export function QualityPage() {
       {view === "audits" && (
         <>
           <QualityKpiCardGrid auditTypes={auditTypes} />
-          <KpiBubbleOverlay kpiKey="quality.audit_findings">
-            <QualityKpiCharts auditTypes={auditTypes} />
-          </KpiBubbleOverlay>
+          <QualityKpiCharts auditTypes={auditTypes} />
           <QualityFindingsTable auditTypes={auditTypes} />
         </>
       )}
       {view === "complaints" && (
         <>
           <ComplaintRateCardGrid qtyMode={qtyMode} complaintType={complaintType} />
-          <KpiBubbleOverlay kpiKey={`quality.complaint_${complaintType}`}>
-            <ComplaintRateChart qtyMode={qtyMode} complaintType={complaintType} />
-          </KpiBubbleOverlay>
+          <ComplaintRateChart qtyMode={qtyMode} complaintType={complaintType} />
           <CustomerComplaintsTable complaintType={complaintType} />
         </>
       )}
       {view === "inspections" && (
         <>
           <QualityInspectionCardGrid />
-          <KpiBubbleOverlay kpiKey="quality.inspections">
-            <QualityInspectionCharts />
-          </KpiBubbleOverlay>
+          <QualityInspectionCharts />
           <QualityInspectionList />
         </>
       )}
+        </div>
+      </KpiBubbleOverlay>
     </div>
   );
 }

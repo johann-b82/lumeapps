@@ -41,7 +41,7 @@ from app.schemas import (
     KpiSummaryItem,
 )
 from app.security.directus_auth import get_current_user, require_admin
-from app.services.kpi_registry import KPI_REGISTRY, is_known_kpi
+from app.services.kpi_registry import KPI_REGISTRY
 
 router = APIRouter(
     prefix="/api/kpi-review",
@@ -53,8 +53,10 @@ _OPEN_STATES = ("open", "in_progress")
 
 
 def _require_known(kpi_key: str) -> None:
-    if not is_known_kpi(kpi_key):
-        raise HTTPException(status_code=422, detail=f"unknown kpi_key: {kpi_key}")
+    # Bubbles can sit on any dashboard field, so any non-empty key is accepted
+    # (the registry is only used for the hub summary rollup).
+    if not kpi_key or not kpi_key.strip():
+        raise HTTPException(status_code=422, detail="kpi_key must not be empty")
 
 
 # ── Registry + summary ───────────────────────────────────────────────────
