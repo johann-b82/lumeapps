@@ -5,6 +5,7 @@ import { OtdCardGrid } from "@/components/dashboard/OtdCardGrid";
 import { OtdChart } from "@/components/dashboard/OtdChart";
 import { OtdTable } from "@/components/dashboard/OtdTable";
 import { StockOrderTopTable } from "@/components/dashboard/StockOrderTopTable";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 
 type ProcurementView = "otd" | "stock";
 
@@ -19,25 +20,29 @@ export function ProcurementPage() {
   const [view, setView] = useState<ProcurementView>("otd");
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
-      <SegmentedControl<ProcurementView>
-        segments={[
-          { value: "otd", label: t("procurement.view.otd") },
-          { value: "stock", label: t("procurement.view.stock") },
-        ]}
-        value={view}
-        onChange={setView}
-        aria-label={t("procurement.view.toggleLabel")}
-      />
+    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <KpiBubbleOverlay kpiKey="procurement">
+        <div className="space-y-8">
+          <SegmentedControl<ProcurementView>
+            segments={[
+              { value: "otd", label: t("procurement.view.otd") },
+              { value: "stock", label: t("procurement.view.stock") },
+            ]}
+            value={view}
+            onChange={setView}
+            aria-label={t("procurement.view.toggleLabel")}
+          />
 
-      {view === "otd" && (
-        <>
-          <OtdCardGrid />
-          <OtdChart />
-          <OtdTable />
-        </>
-      )}
-      {view === "stock" && <StockOrderTopTable />}
+          {view === "otd" && (
+            <>
+              <OtdCardGrid />
+              <OtdChart />
+              <OtdTable />
+            </>
+          )}
+          {view === "stock" && <StockOrderTopTable />}
+        </div>
+      </KpiBubbleOverlay>
     </div>
   );
 }

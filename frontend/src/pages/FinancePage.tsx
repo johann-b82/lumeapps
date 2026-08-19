@@ -7,6 +7,7 @@ import { MaterialCostRatioTable } from "@/components/dashboard/MaterialCostRatio
 import { PersonnelCostRatioCardGrid } from "@/components/dashboard/PersonnelCostRatioCardGrid";
 import { PersonnelCostRatioChart } from "@/components/dashboard/PersonnelCostRatioChart";
 import { PersonnelCostRatioTable } from "@/components/dashboard/PersonnelCostRatioTable";
+import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
 
 type FinanceView = "material" | "personnel";
 
@@ -21,33 +22,37 @@ export function FinancePage() {
   const [view, setView] = useState<FinanceView>("material");
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8 space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Toggle<FinanceView>
-          segments={[
-            { value: "material", label: t("finance.view.material") },
-            { value: "personnel", label: t("finance.view.personnel") },
-          ] as const}
-          value={view}
-          onChange={setView}
-          aria-label={t("finance.view.toggleLabel")}
-          variant="muted"
-        />
-      </div>
+    <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
+      <KpiBubbleOverlay kpiKey="finance">
+        <div className="space-y-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Toggle<FinanceView>
+              segments={[
+                { value: "material", label: t("finance.view.material") },
+                { value: "personnel", label: t("finance.view.personnel") },
+              ] as const}
+              value={view}
+              onChange={setView}
+              aria-label={t("finance.view.toggleLabel")}
+              variant="muted"
+            />
+          </div>
 
-      {view === "material" ? (
-        <>
-          <MaterialCostRatioCardGrid />
-          <MaterialCostRatioChart />
-          <MaterialCostRatioTable />
-        </>
-      ) : (
-        <>
-          <PersonnelCostRatioCardGrid />
-          <PersonnelCostRatioChart />
-          <PersonnelCostRatioTable />
-        </>
-      )}
+          {view === "material" ? (
+            <>
+              <MaterialCostRatioCardGrid />
+              <MaterialCostRatioChart />
+              <MaterialCostRatioTable />
+            </>
+          ) : (
+            <>
+              <PersonnelCostRatioCardGrid />
+              <PersonnelCostRatioChart />
+              <PersonnelCostRatioTable />
+            </>
+          )}
+        </div>
+      </KpiBubbleOverlay>
     </div>
   );
 }
