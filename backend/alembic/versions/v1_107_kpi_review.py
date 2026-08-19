@@ -6,7 +6,7 @@ Zwei Tabellen für den KVP-Kreislauf auf KPIs:
                      Fälligkeit, Priorität, Status-Lebenszyklus).
 
 Revision ID: v1_107_kpi_review
-Revises: v1_106_stock_article_prices
+Revises: v1_107_feedback_viewed
 """
 from __future__ import annotations
 
@@ -15,7 +15,10 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "v1_107_kpi_review"
-down_revision = "v1_106_stock_article_prices"
+# Hinter feedback_viewed verankert (statt direkt hinter v1_106), damit die Live-
+# Linie — die bereits auf v1_107_feedback_viewed steht — vorwärts auf den main-
+# Head migrieren kann, ohne einen Downgrade zu benötigen. Prod↔main-Versöhnung.
+down_revision = "v1_107_feedback_viewed"
 branch_labels = None
 depends_on = None
 
