@@ -41,7 +41,8 @@ export interface UploadBatchSummary {
     | "tippspiel"
     | "goods_receipts"
     | "material_movements"
-    | "material_prices";
+    | "material_prices"
+    | "stock_prices";
 }
 
 export async function uploadFile(file: File): Promise<UploadResponse> {
@@ -1260,6 +1261,28 @@ export async function fetchOtdList(params?: {
   );
 }
 
+// v1.106 — Bestellung auf Lager: Top-N Ladenhüter (L-Artikel) nach Wert.
+export interface StockOrderTopRow {
+  rank: number;
+  article_number: string;
+  article_name: string | null;
+  stock_qty: number;
+  unit_price: number;
+  value: number;
+  last_movement: string | null;
+}
+
+export async function fetchTopStockOrders(params?: {
+  limit?: number;
+}): Promise<StockOrderTopRow[]> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return apiClient<StockOrderTopRow[]>(
+    `/api/procurement/stock-orders/top${qs ? `?${qs}` : ""}`,
+  );
+}
+
 // --------------------------------------------------------------------------
 // Produktion / Aufträge in Verzug (Seriengeschäft) — v1.76
 // --------------------------------------------------------------------------
@@ -1350,6 +1373,22 @@ export interface MaterialPricesUploadResponse {
   rows_inserted: number;
   rows_updated: number;
   errors: ValidationErrorDetail[];
+}
+
+export interface StockPriceUploadResponse {
+  rows_inserted: number;
+  errors: ValidationErrorDetail[];
+}
+
+export async function uploadStockPricesFile(
+  file: File,
+): Promise<StockPriceUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiClient<StockPriceUploadResponse>("/api/upload-stock-prices", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export interface MaterialCostRatioValue {

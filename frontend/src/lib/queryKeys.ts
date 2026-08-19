@@ -171,6 +171,8 @@ export const procurementKeys = {
     ["procurement", "otd", "history", { from, to, granularity }] as const,
   otdList: (from?: string, to?: string) =>
     ["procurement", "otd", "list", { from, to }] as const,
+  stockOrdersTop: (limit: number) =>
+    ["procurement", "stock-orders", "top", { limit }] as const,
 };
 
 // v1.76 — Produktion: Aufträge in Verzug (Seriengeschäft).

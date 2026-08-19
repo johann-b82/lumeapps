@@ -28,6 +28,7 @@ from app.models import (
     Interessent,
     MaterialMovement,
     MaterialPrice,
+    StockArticlePrice,
     Offer,
     QualityRecord,
     Revenue,
@@ -48,6 +49,7 @@ from app.parsing.goods_receipt_parser import parse_goods_receipt_file
 from app.parsing.inspection_parser import parse_inspection_file
 from app.parsing.material_prices_parser import parse_material_prices_file
 from app.parsing.material_movements_parser import parse_material_movements_file
+from app.parsing.stock_price_parser import parse_stock_price_file
 from app.parsing.interessenten_parser import parse_interessenten_file
 from app.parsing.kontakte_parser import parse_kontakte_file
 from app.parsing.quality_parser import parse_quality_file
@@ -64,6 +66,7 @@ from app.schemas import (
     InspectionsUploadResponse,
     InteressentenUploadResponse,
     MaterialMovementsUploadResponse,
+    StockPriceUploadResponse,
     MaterialPricesUploadResponse,
     QualityUploadResponse,
     RevenueUploadResponse,
@@ -1394,6 +1397,74 @@ async def upload_material_movements(
         rows_replaced=rows_replaced,
         date_range_from=date_from,
         date_range_to=date_to,
+        errors=[ValidationErrorDetail(**e) for e in errors],
+    )
+
+
+@admin_router.post(
+    "/upload-stock-prices",
+    response_model=StockPriceUploadResponse,
+)
+async def upload_stock_prices(
+    file: UploadFile,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> StockPriceUploadResponse:
+    """Full-snapshot replace of the AswLagBew article price list.
+
+    One normalised unit price per article (``Wert / Preismenge``). The list is
+    master data without a movement date, so the whole ``stock_article_prices``
+    table is cleared and re-inserted on every upload. Feeds the Lager-Bewertung
+    (Bestellung auf Lager – Top 20).
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only .txt files are accepted for stock-price uploads.",
+        )
+    contents = await file.read()
+    rows, errors = parse_stock_price_file(contents, filename)
+    now = datetime.now(timezone.utc)
+
+    if not rows:
+        db.add(
+            UploadBatch(
+                filename=filename,
+                uploaded_at=now,
+                row_count=0,
+                error_count=len(errors),
+                status="failed" if errors else "success",
+                kind="stock_prices",
+            )
+        )
+        await db.commit()
+        return StockPriceUploadResponse(
+            rows_inserted=0,
+            errors=[ValidationErrorDetail(**e) for e in errors],
+        )
+
+    # Full snapshot: clear then bulk-insert.
+    await db.execute(sa.delete(StockArticlePrice))
+    inserted_total = 0
+    for i in range(0, len(rows), 1000):
+        chunk = rows[i : i + 1000]
+        result = await db.execute(pg_insert(StockArticlePrice).values(chunk))
+        inserted_total += result.rowcount or 0
+
+    db.add(
+        UploadBatch(
+            filename=filename,
+            uploaded_at=now,
+            row_count=inserted_total,
+            error_count=len(errors),
+            status="partial" if errors else "success",
+            kind="stock_prices",
+        )
+    )
+    await db.commit()
+
+    return StockPriceUploadResponse(
+        rows_inserted=inserted_total,
         errors=[ValidationErrorDetail(**e) for e in errors],
     )
 

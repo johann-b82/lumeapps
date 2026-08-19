@@ -14,6 +14,7 @@ import { AngeboteDropZone } from "@/components/AngeboteDropZone";
 import { UmsatzDropZone } from "@/components/UmsatzDropZone";
 import { MaterialMovementsDropZone } from "@/components/MaterialMovementsDropZone";
 import { MaterialPricesDropZone } from "@/components/MaterialPricesDropZone";
+import { StockPriceDropZone } from "@/components/StockPriceDropZone";
 import { ErrorList } from "@/components/ErrorList";
 import { UploadHistory } from "@/components/UploadHistory";
 import type { ValidationErrorDetail } from "@/lib/api";
@@ -151,6 +152,15 @@ export function UploadPage() {
             {t("upload.material_prices_title")}
           </p>
           <MaterialPricesDropZone
+            onUploadSuccess={() => setErrors([])}
+            onUploadError={(errs) => setErrors(errs)}
+          />
+        </Card>
+        <Card className="p-6 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("upload.stock_prices_title")}
+          </p>
+          <StockPriceDropZone
             onUploadSuccess={() => setErrors([])}
             onUploadError={(errs) => setErrors(errs)}
           />
