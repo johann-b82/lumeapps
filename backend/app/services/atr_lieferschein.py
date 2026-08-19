@@ -86,10 +86,6 @@ def parse_lieferschein_text(text: str) -> ParsedLieferschein:
     def _flush(p: ParsedPosition | None) -> None:
         if p is None:
             return
-        for fname, label in (("ba_auftrag", "Auftrag"), ("part_number", "Ihre Nr"),
-                             ("po_base", "Bestelldaten")):
-            if getattr(p, fname) is None:
-                pl.warnings.append(f"position {p.pos}: missing {label}")
         pl.positions.append(p)
 
     for line in lines:
@@ -129,6 +125,32 @@ def parse_lieferschein_text(text: str) -> ParsedLieferschein:
         if s and cur.bezeichnung is None and not s.lower().startswith("teppich"):
             cur.bezeichnung = re.split(r"\s{3,}", s, maxsplit=1)[0].strip()
     _flush(cur)
+
+    # Ein Lieferschein taucht manchmal doppelt in einer PDF auf (z. B. zwei
+    # Kopien direkt hintereinander) — der Fließtext liefert dann jede Position
+    # zweimal. Anhand der Positions-Identität deduplizieren, damit jede echte
+    # Position nur einmal in den ATR übernommen wird.
+    seen: set[tuple] = set()
+    unique: list[ParsedPosition] = []
+    for p in pl.positions:
+        key = (p.pos, p.part_number_norm, p.ba_auftrag, p.po_pos)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(p)
+    dropped = len(pl.positions) - len(unique)
+    if dropped:
+        pl.warnings.append(
+            f"doppelter Lieferschein erkannt: {dropped} Position(en) dedupliziert"
+        )
+    pl.positions = unique
+
+    # Fehlende-Felder-Warnungen auf den finalen (deduplizierten) Positionen.
+    for p in pl.positions:
+        for fname, label in (("ba_auftrag", "Auftrag"), ("part_number", "Ihre Nr"),
+                             ("po_base", "Bestelldaten")):
+            if getattr(p, fname) is None:
+                pl.warnings.append(f"position {p.pos}: missing {label}")
 
     if not pl.positions:
         pl.warnings.append("no positions parsed")
