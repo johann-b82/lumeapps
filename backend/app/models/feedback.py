@@ -49,3 +49,7 @@ class PageFeedback(Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default="new"
     )
+    # NULL = noch nicht von einem Admin angesehen (Feedback-Zähler).
+    viewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

@@ -18,6 +18,7 @@ The ``POST /api/feedback`` viewer exception is registered in
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import (
     APIRouter,
@@ -29,12 +30,17 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import PageFeedback
-from app.schemas import CurrentUser, FeedbackRead, FeedbackStatusUpdate
+from app.schemas import (
+    CurrentUser,
+    FeedbackRead,
+    FeedbackStatusUpdate,
+    FeedbackUnreadCount,
+)
 from app.security.directus_auth import get_current_user, require_admin
 
 router = APIRouter(
@@ -62,6 +68,7 @@ def _to_read(row: PageFeedback) -> FeedbackRead:
         user_agent=row.user_agent,
         viewport=row.viewport,
         status=row.status,
+        viewed_at=row.viewed_at,
     )
 
 
@@ -154,6 +161,45 @@ async def get_feedback_screenshot(
         media_type=row.screenshot_mime or "application/octet-stream",
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+@router.get(
+    "/unread-count",
+    response_model=FeedbackUnreadCount,
+    dependencies=[Depends(require_admin)],
+)
+async def get_unread_count(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> FeedbackUnreadCount:
+    """Number of feedback reports an admin has not viewed yet (viewed_at NULL)."""
+    n = (
+        await db.execute(
+            select(func.count())
+            .select_from(PageFeedback)
+            .where(PageFeedback.viewed_at.is_(None))
+        )
+    ).scalar_one()
+    return FeedbackUnreadCount(count=int(n))
+
+
+@router.post(
+    "/{feedback_id}/view",
+    response_model=FeedbackRead,
+    dependencies=[Depends(require_admin)],
+)
+async def mark_feedback_viewed(
+    feedback_id: uuid.UUID,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> FeedbackRead:
+    """Mark one feedback as viewed (idempotent) — decrements the unread badge."""
+    row = await db.get(PageFeedback, feedback_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="feedback not found")
+    if row.viewed_at is None:
+        row.viewed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(row)
+    return _to_read(row)
 
 
 @router.patch(

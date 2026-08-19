@@ -2037,6 +2037,7 @@ export interface FeedbackItem {
   user_agent: string | null;
   viewport: string | null;
   status: FeedbackStatus;
+  viewed_at: string | null;
 }
 
 /** POST /api/feedback — submit a report (open to every authenticated role). */
@@ -2077,6 +2078,17 @@ export async function updateFeedbackStatus(
 /** DELETE /api/feedback/{id} — admin: delete a report. */
 export async function deleteFeedback(id: string): Promise<void> {
   await apiClient<void>(`/api/feedback/${id}`, { method: "DELETE" });
+}
+
+/** GET /api/feedback/unread-count — admin: number of not-yet-viewed reports. */
+export async function getFeedbackUnreadCount(): Promise<number> {
+  const r = await apiClient<{ count: number }>("/api/feedback/unread-count");
+  return r.count;
+}
+
+/** POST /api/feedback/{id}/view — admin: mark one report as viewed. */
+export async function markFeedbackViewed(id: string): Promise<FeedbackItem> {
+  return apiClient<FeedbackItem>(`/api/feedback/${id}/view`, { method: "POST" });
 }
 
 // ---------------------------------------------------------------------------

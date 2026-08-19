@@ -135,6 +135,8 @@
   "feedback.toast.success": "Thanks! Your feedback was sent.",
   "feedback.toast.error": "Feedback could not be sent.",
   "feedback.adminLink": "Feedback inbox",
+  "feedback.bell.aria": "Feedback inbox – {{count}} unviewed",
+  "feedback.admin.unviewed": "unviewed",
   "feedback.admin.title": "Feedback inbox",
   "feedback.admin.empty": "No feedback yet.",
   "feedback.admin.loadError": "Feedback could not be loaded.",

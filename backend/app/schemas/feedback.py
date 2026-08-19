@@ -30,7 +30,12 @@ class FeedbackRead(BaseModel):
     user_agent: str | None
     viewport: str | None
     status: FeedbackStatus
+    viewed_at: datetime | None
 
 
 class FeedbackStatusUpdate(BaseModel):
     status: FeedbackStatus
+
+
+class FeedbackUnreadCount(BaseModel):
+    count: int

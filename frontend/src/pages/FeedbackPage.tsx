@@ -20,6 +20,7 @@ import {
   getFeedbackList,
   updateFeedbackStatus,
   deleteFeedback,
+  markFeedbackViewed,
   type FeedbackItem,
 } from "@/lib/api";
 
@@ -55,9 +56,19 @@ export function FeedbackPage() {
     mutationFn: (id: string) => deleteFeedback(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["feedback"] });
+      qc.invalidateQueries({ queryKey: ["feedback", "unread"] });
       setDeleteTarget(null);
     },
     onError: (err) => toast.error((err as Error).message),
+  });
+
+  // Mark one report as viewed (on row click) → decrements the top-right badge.
+  const viewMutation = useMutation({
+    mutationFn: (id: string) => markFeedbackViewed(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["feedback"] });
+      qc.invalidateQueries({ queryKey: ["feedback", "unread"] });
+    },
   });
 
   return (
@@ -100,9 +111,23 @@ export function FeedbackPage() {
                 </TableHeader>
                 <TableBody>
                   {data.map((f) => (
-                    <TableRow key={f.id}>
+                    <TableRow
+                      key={f.id}
+                      className={`cursor-pointer ${!f.viewed_at ? "bg-primary/5" : ""}`}
+                      onClick={() => {
+                        if (!f.viewed_at) viewMutation.mutate(f.id);
+                      }}
+                    >
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDate(f.created_at)}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                              !f.viewed_at ? "bg-primary" : "bg-transparent"
+                            }`}
+                            aria-label={!f.viewed_at ? t("feedback.admin.unviewed") : undefined}
+                          />
+                          {formatDate(f.created_at)}
+                        </span>
                       </TableCell>
                       <TableCell className="text-xs">
                         {f.reporter_email ?? t("feedback.admin.anonymous")}
