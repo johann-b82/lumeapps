@@ -43,6 +43,20 @@ def smb_config_from_settings(row) -> SmbConfig | None:
     )
 
 
+def smb_credentials_from_settings(row) -> SmbConfig | None:
+    """Like smb_config_from_settings but only requires the connection credentials
+    (host/share/domain/user/password) — the scan Input/Output/Archiv paths are
+    left empty. Used by the "save to server" targets, which carry their own paths."""
+    if not (row.atr_smb_host and row.atr_smb_share and row.atr_smb_user
+            and row.atr_smb_password_enc):
+        return None
+    return SmbConfig(
+        host=row.atr_smb_host, share=row.atr_smb_share, domain=row.atr_smb_domain,
+        user=row.atr_smb_user, password=decrypt_credential(row.atr_smb_password_enc),
+        input_path="", output_path="", archive_path="",
+    )
+
+
 def _unc(host: str, share: str, *parts: str) -> str:
     segs: list[str] = []
     for p in parts:
@@ -84,6 +98,34 @@ def write_output(cfg: SmbConfig, filename: str, data: bytes) -> None:
             fh.write(data)
     except Exception as exc:  # noqa: BLE001
         raise AtrFileserverError(f"write_output failed for {filename}: {exc}") from exc
+
+
+def _dedupe_name(cfg: SmbConfig, rel_path: str, filename: str) -> str:
+    """Return `filename`, or `name (n).ext` if it already exists in `rel_path`."""
+    existing = set(smbclient.listdir(_unc(cfg.host, cfg.share, rel_path)))
+    if filename not in existing:
+        return filename
+    stem, dot, ext = filename.rpartition(".")
+    base, suffix = (stem, f".{ext}") if dot else (filename, "")
+    n = 1
+    while f"{base} ({n}){suffix}" in existing:
+        n += 1
+    return f"{base} ({n}){suffix}"
+
+
+def write_file(cfg: SmbConfig, rel_path: str, filename: str, data: bytes) -> str:
+    """Write `data` to `\\host\share\rel_path\filename`, creating the folder tree
+    (e.g. year / calendar-week) as needed. If the file already exists, append a
+    running ` (n)` instead of overwriting. Returns the actual filename written."""
+    try:
+        _register(cfg)
+        smbclient.makedirs(_unc(cfg.host, cfg.share, rel_path), exist_ok=True)
+        target = _dedupe_name(cfg, rel_path, filename)
+        with smbclient.open_file(_unc(cfg.host, cfg.share, rel_path, target), mode="wb") as fh:
+            fh.write(data)
+        return target
+    except Exception as exc:  # noqa: BLE001
+        raise AtrFileserverError(f"write_file failed for {filename}: {exc}") from exc
 
 
 def archive_input(cfg: SmbConfig, name: str) -> None:

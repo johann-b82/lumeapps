@@ -6,7 +6,8 @@ import { useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDelivery, updateDelivery, updateDeliveryItem, generateDelivery,
-  atrFileUrl, formatPoPos, type AtrDelivery, type AtrDeliveryItem,
+  fetchNextAtrNumber, saveDeliveryToServer, atrFileUrl, formatPoPos,
+  type AtrDelivery, type AtrDeliveryItem,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
@@ -25,7 +26,16 @@ export function AtrDeliveryReviewPage() {
   const { data } = useQuery({ queryKey: ["atr", "delivery", id], queryFn: () => fetchDelivery(id), enabled: !!id });
   const [draft, setDraft] = useState<Partial<AtrDelivery>>({});
   const [manifest, setManifest] = useState<string[] | null>(null);
+  const [nextAtr, setNextAtr] = useState<string | null>(null);
+  const [savingServer, setSavingServer] = useState(false);
   useEffect(() => { if (data) setDraft(data); }, [data]);
+  // Suggest the next running ATR number when none is set (empty field = auto,
+  // typed value = manual override; the backend assigns on generate if blank).
+  useEffect(() => {
+    if (data && !(data.atr_number ?? "").trim()) {
+      fetchNextAtrNumber().then(setNextAtr).catch(() => {});
+    }
+  }, [data]);
 
   async function saveHeader() {
     try {
@@ -44,11 +54,30 @@ export function AtrDeliveryReviewPage() {
   }
   async function onGenerate() {
     try {
+      // Persist the current header draft first so values typed in the mask
+      // (ATR number, QA signer, dates, …) drive the generated documents.
+      const body: Record<string, unknown> = {};
+      HEADER_FIELDS.forEach((f) => { body[f] = (draft as Record<string, unknown>)[f] ?? null; });
+      await updateDelivery(id, body as Partial<AtrDelivery>);
       const m = await generateDelivery(id);
       setManifest(m.files);
+      qc.invalidateQueries({ queryKey: ["atr", "delivery", id] });
       m.warnings.forEach((w) => toast.warning(w));
       if (!m.warnings.length) toast.success(t("atr.deliveries.generate"));
     } catch (e) { toast.error(String(e)); }
+  }
+  async function onSaveToServer() {
+    setSavingServer(true);
+    try {
+      const r = await saveDeliveryToServer(id);
+      if (r.failed.length) {
+        toast.error(t("atr.deliveries.save_server_error", { targets: r.failed.map((f) => f.label).join(", ") }));
+      } else {
+        toast.success(t("atr.deliveries.save_server_ok"));
+      }
+    } catch (e) {
+      toast.error(t("atr.deliveries.save_server_error", { targets: String(e) }));
+    } finally { setSavingServer(false); }
   }
 
   const itemColumns: DataTableColumn<ItemRow>[] = [
@@ -82,6 +111,7 @@ export function AtrDeliveryReviewPage() {
           <label key={f} className="flex flex-col text-sm">
             <span className="text-muted-foreground">{t(`atr.deliveries.field.${f === "max_guaranteed_weight_kg" ? "max_weight" : f}`)}</span>
             <input className="border rounded px-2 py-1"
+              placeholder={f === "atr_number" && nextAtr ? t("atr.deliveries.auto_number", { n: nextAtr }) : undefined}
               value={(draft[f] as string) ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))} />
           </label>
@@ -103,6 +133,12 @@ export function AtrDeliveryReviewPage() {
       <button className="px-4 py-2 bg-blue-600 text-white rounded mr-4" onClick={onGenerate}>
         {t("atr.deliveries.generate")}
       </button>
+      {manifest && (
+        <button className="px-4 py-2 bg-green-600 text-white rounded mr-4 disabled:opacity-50"
+          onClick={onSaveToServer} disabled={savingServer}>
+          {t("atr.deliveries.save_server")}
+        </button>
+      )}
       {manifest && (
         <span className="inline-flex gap-3">
           {manifest.includes("atr_xlsx") && <a className="text-blue-600" href={atrFileUrl(id, "atr_xlsx")}>{t("atr.deliveries.download_xlsx")}</a>}

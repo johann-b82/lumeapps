@@ -159,6 +159,14 @@ async def list_deliveries(db: AsyncSession = Depends(get_async_db_session)) -> l
     )).scalars().all())
 
 
+@router.get("/next-atr-number")
+async def next_atr_number(db: AsyncSession = Depends(get_async_db_session)) -> dict:
+    """Suggested next running ATR number for the review mask (null to seed
+    manually). Declared before /{delivery_id} so it isn't parsed as an id."""
+    from app.services.atr_deliver import compute_next_atr_number
+    return {"next": await compute_next_atr_number(db)}
+
+
 @router.get("/{delivery_id}", response_model=AtrDeliveryRead)
 async def get_delivery(delivery_id: int,
                        db: AsyncSession = Depends(get_async_db_session)) -> AtrDelivery:
@@ -174,6 +182,17 @@ async def patch_delivery(delivery_id: int, payload: AtrDeliveryUpdate,
     row.updated_at = datetime.now(timezone.utc)
     await db.commit()
     return await _get(db, delivery_id)
+
+
+@router.delete("/{delivery_id}", status_code=204)
+async def delete_delivery(delivery_id: int,
+                          db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    """Delete a delivery and its items (failed attempts / old tests). Items
+    cascade via the ORM relationship + FK ON DELETE CASCADE."""
+    row = await _get(db, delivery_id)
+    await db.delete(row)
+    await db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/{delivery_id}/items/{item_id}", response_model=AtrDeliveryItemRead)
@@ -192,11 +211,13 @@ async def patch_item(delivery_id: int, item_id: int, payload: AtrDeliveryItemUpd
     return row
 
 
+# kind -> (media_type, base-name suffix, extension). The base name is built
+# per-delivery (delivery_filename_base); the suffix distinguishes the docx.
 _MEDIA = {
-    "atr_xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "atr.xlsx"),
-    "atr_pdf": ("application/pdf", "atr.pdf"),
+    "atr_xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "", ".xlsx"),
+    "atr_pdf": ("application/pdf", "", ".pdf"),
     "label_docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                   "containerbeschriftung.docx"),
+                   "_Container", ".docx"),
 }
 
 
@@ -213,15 +234,81 @@ async def generate(delivery_id: int,
         raise HTTPException(400, str(exc)) from exc
 
 
+# Server destinations for "save to server", all under \\<host>\<share> (= Z:\).
+# {year}/{kw} are filled per save; folders (incl. year/calendar-week) are created
+# on demand. `kind` selects which generated artifact goes where. Add the next
+# destination by appending one tuple.
+_SERVER_TARGETS: list[tuple[str, str, str]] = [
+    ("atr_xlsx",
+     r"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL\A350"
+     r"\ATR_Acceptance Test Report\ACM_ATR_A350_.....{year}",
+     "QS – Acceptance Test Report"),
+    ("atr_pdf",
+     r"1200 - Logistik\Versand\ATR`S_Weight Reports_Firma Diehl_Portal",
+     "Logistik – Versand"),
+    ("atr_pdf",
+     r"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL"
+     r"\Weight Report für Firma Diehl ( verschicken )\{year}\KW {kw:02d}",
+     "QS – Weight Report (verschicken)"),
+]
+
+
+@router.post("/{delivery_id}/save-to-server")
+async def save_to_server(delivery_id: int,
+                         db: AsyncSession = Depends(get_async_db_session)) -> dict:
+    """Write the generated ATR to the fixed Diehl server folders (Excel + PDF).
+    Year/calendar-week folders are created automatically; duplicates get a
+    running ` (n)` suffix. Returns per-destination success/failure."""
+    import asyncio
+    from datetime import date
+
+    from app.models import AppSettings
+    from app.services import atr_fileserver as fs
+    from app.services.atr_deliver import delivery_filename_base
+
+    row = await _get(db, delivery_id)
+    if not row.atr_xlsx or not row.atr_pdf:
+        raise HTTPException(400, "ATR not generated yet")
+    settings_row = (await db.execute(select(AppSettings).where(AppSettings.id == 1))).scalar_one()
+    cfg = fs.smb_credentials_from_settings(settings_row)
+    if cfg is None:
+        raise HTTPException(400, "SMB-Zugangsdaten sind nicht konfiguriert")
+
+    base = delivery_filename_base(row, list(row.items))
+    today = date.today()
+    fmt = {"year": today.year, "kw": today.isocalendar()[1]}
+    payload = {"atr_xlsx": (bytes(row.atr_xlsx), ".xlsx"),
+               "atr_pdf": (bytes(row.atr_pdf), ".pdf")}
+
+    saved: list[dict] = []
+    failed: list[dict] = []
+    for kind, tmpl, label in _SERVER_TARGETS:
+        data, ext = payload[kind]
+        rel_path = tmpl.format(**fmt)
+        try:
+            written = await asyncio.to_thread(fs.write_file, cfg, rel_path, f"{base}{ext}", data)
+            saved.append({"label": label, "path": rel_path, "filename": written})
+        except fs.AtrFileserverError as exc:
+            log.warning("atr save-to-server failed [%s] for delivery %s: %s", label, delivery_id, exc)
+            failed.append({"label": label, "error": str(exc)})
+    return {"saved": saved, "failed": failed}
+
+
 @router.get("/{delivery_id}/files/{kind}")
 async def download(delivery_id: int, kind: str,
                    db: AsyncSession = Depends(get_async_db_session)) -> Response:
     if kind not in _MEDIA:
         raise HTTPException(404, "unknown file kind")
+    from urllib.parse import quote
+
+    from app.services.atr_deliver import delivery_filename_base
+
     row = await _get(db, delivery_id)
     data = {"atr_xlsx": row.atr_xlsx, "atr_pdf": row.atr_pdf, "label_docx": row.label_docx}[kind]
     if not data:
         raise HTTPException(404, "file not generated")
-    media_type, fname = _MEDIA[kind]
+    media_type, suffix, ext = _MEDIA[kind]
+    fname = f"{delivery_filename_base(row, list(row.items))}{suffix}{ext}"
+    disp = f"attachment; filename=\"{fname}\"; filename*=UTF-8''{quote(fname)}"
     return Response(content=bytes(data), media_type=media_type,
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+                    headers={"Content-Disposition": disp})

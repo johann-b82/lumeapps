@@ -74,6 +74,8 @@ class AtrDeliverySummary(BaseModel):
     source_filename: str
     ba_auftrag: str | None
     compartment: str | None
+    atr_number: str | None
+    msn: str | None
     status: str
     created_at: datetime
     model_config = {"from_attributes": True}

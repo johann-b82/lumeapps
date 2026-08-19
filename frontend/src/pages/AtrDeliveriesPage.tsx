@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDeliveries, uploadLieferschein, fetchInputFiles, processInputFile,
-  type AtrDeliverySummary,
+  deleteDelivery, type AtrDeliverySummary,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
@@ -40,6 +40,16 @@ export function AtrDeliveriesPage() {
       setLocation(`/atr/deliveries/${d.id}`);
     } catch (e) { toast.error(String(e)); } finally { setBusy(false); }
   }
+  async function onDelete(d: DeliveryRow) {
+    // Double confirmation before deleting a row.
+    if (!window.confirm(t("atr.deliveries.delete_confirm1", { name: d.source_filename }))) return;
+    if (!window.confirm(t("atr.deliveries.delete_confirm2"))) return;
+    try {
+      await deleteDelivery(d.id);
+      toast.success(t("atr.deliveries.delete_ok"));
+      qc.invalidateQueries({ queryKey: ["atr", "deliveries"] });
+    } catch (e) { toast.error(String(e)); }
+  }
 
   const q = search.trim().toLowerCase();
   const rows = (deliveries ?? []).filter(
@@ -52,6 +62,8 @@ export function AtrDeliveriesPage() {
   const columns: DataTableColumn<DeliveryRow>[] = [
     { key: "source_filename", header: t("atr.deliveries.col.source"), className: "font-medium" },
     { key: "ba_auftrag", header: t("atr.deliveries.col.ba") },
+    { key: "atr_number", header: t("atr.deliveries.col.atr_number") },
+    { key: "msn", header: t("atr.deliveries.col.msn") },
     { key: "status", header: t("atr.deliveries.col.status") },
     {
       key: "created_at", header: t("atr.deliveries.col.created"), className: "text-muted-foreground",
@@ -62,6 +74,15 @@ export function AtrDeliveriesPage() {
       cell: (d) => (
         <button className="text-blue-600" onClick={() => setLocation(`/atr/deliveries/${d.id}`)}>
           {t("atr.deliveries.open")}
+        </button>
+      ),
+    },
+    {
+      key: "delete", header: "", align: "right", sortable: false,
+      cell: (d) => (
+        <button className="text-red-600" onClick={() => onDelete(d)}
+          aria-label={t("atr.deliveries.delete")}>
+          {t("atr.deliveries.delete")}
         </button>
       ),
     },
