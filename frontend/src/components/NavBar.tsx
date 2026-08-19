@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpenText } from "lucide-react";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { UserMenu } from "@/components/UserMenu";
+import { FeedbackBell } from "@/components/FeedbackBell";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSettings } from "@/hooks/useSettings";
@@ -51,6 +52,7 @@ export function NavBar() {
           >
             <BookOpenText className="h-5 w-5" aria-hidden="true" />
           </Link>
+          <FeedbackBell />
           <UserMenu />
         </div>
       </div>

@@ -37,6 +37,7 @@ from app.schemas.feedback import (  # noqa: F401
     FeedbackRead,
     FeedbackStatus,
     FeedbackStatusUpdate,
+    FeedbackUnreadCount,
 )
 from app.schemas.kpi_review import (  # noqa: F401
     KpiCommentCreate,
