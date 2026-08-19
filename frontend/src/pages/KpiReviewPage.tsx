@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Link } from "wouter";
+import { ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,11 +28,21 @@ import {
   createKpiMeasure,
   updateKpiMeasure,
   deleteKpiMeasure,
+  getBubbles,
+  markBubbleViewed,
+  deleteKpiComment,
+  type KpiComment,
+  type KpiRating,
   type KpiMeasure,
   type KpiMeasurePriority,
   type KpiMeasureStatus,
 } from "@/lib/api";
 
+const RATING_DOT: Record<KpiRating, string> = {
+  red: "var(--color-destructive)",
+  yellow: "#eab308",
+  green: "#22c55e",
+};
 const STATUS_VARIANT: Record<KpiMeasureStatus, "default" | "secondary" | "outline" | "destructive"> = {
   open: "default",
   in_progress: "secondary",
@@ -142,12 +153,122 @@ export function KpiReviewPage() {
 
   const measures = measuresQ.data ?? [];
 
+  // ── Bubbles (KPI-Bewertung) — every bubble across all KPIs, newest first ──
+  const bubblesAllQ = useQuery({
+    queryKey: ["kpi-review", "bubbles-all"],
+    queryFn: getBubbles,
+    enabled: isAdmin,
+  });
+  const bubblesAll = bubblesAllQ.data ?? [];
+  const viewBubble = useMutation({
+    mutationFn: (id: string) => markBubbleViewed(id),
+    onSuccess: invalidate,
+  });
+  const [deleteBubble, setDeleteBubble] = useState<KpiComment | null>(null);
+  const delBubble = useMutation({
+    mutationFn: (id: string) => deleteKpiComment(id),
+    onSuccess: () => {
+      setDeleteBubble(null);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-16 space-y-6">
       <div>
         <h2 className="text-xl font-semibold">{t("kpireview.title")}</h2>
         <p className="text-sm text-muted-foreground">{t("kpireview.subtitle")}</p>
       </div>
+
+      {/* Bubbles (KPI-Bewertung) — auto-listed across all KPIs */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {t("kpireview.bubbles.title")}{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({bubblesAll.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {bubblesAllQ.isLoading && (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {bubblesAllQ.data && bubblesAll.length === 0 && (
+              <p className="py-8 text-center text-muted-foreground">
+                {t("kpireview.bubbles.empty")}
+              </p>
+            )}
+            {bubblesAll.length > 0 && (
+              <ul className="divide-y divide-border">
+                {bubblesAll.map((b) => (
+                  <li
+                    key={b.id}
+                    className={`flex items-start gap-3 rounded-md px-1 py-2.5 ${
+                      b.viewed_at ? "" : "bg-primary/5"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!b.viewed_at) viewBubble.mutate(b.id);
+                      }}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      title={b.viewed_at ? undefined : t("kpireview.bubbles.markViewed")}
+                    >
+                      <span
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                        style={{
+                          background: b.rating ? RATING_DOT[b.rating] : "var(--color-primary)",
+                        }}
+                        aria-hidden
+                      >
+                        {b.number ?? "•"}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-x-2">
+                          {!b.viewed_at && (
+                            <span
+                              className="inline-block h-2 w-2 rounded-full bg-primary"
+                              aria-label={t("kpireview.bubbles.new")}
+                            />
+                          )}
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {t(`kpireview.domain.${b.kpi_key}`)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {b.author_name ? `· ${b.author_name} ` : ""}· {fmtDate(b.created_at)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block whitespace-pre-wrap text-sm">{b.body}</span>
+                      </span>
+                    </button>
+                    <Link
+                      href={`/${b.kpi_key}`}
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary"
+                      title={t("kpireview.bubbles.goto")}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Link>
+                    <button
+                      type="button"
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteBubble(b)}
+                      title={t("kpireview.delete")}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* New measure */}
       {isAdmin && (
@@ -381,6 +502,17 @@ export function KpiReviewPage() {
           if (deleteTarget) del.mutate(deleteTarget.id);
         }}
         confirmDisabled={del.isPending}
+      />
+
+      <DeleteDialog
+        open={deleteBubble !== null}
+        onOpenChange={(o) => !o && setDeleteBubble(null)}
+        title={t("kpireview.bubble.deleteTitle")}
+        body={t("kpireview.bubble.deleteBody")}
+        onConfirm={() => {
+          if (deleteBubble) delBubble.mutate(deleteBubble.id);
+        }}
+        confirmDisabled={delBubble.isPending}
       />
     </div>
   );

@@ -14,6 +14,7 @@ tests/test_admin_gate_audit.py.
     GET    /api/kpi-review/comments?kpi_key=       comments for a KPI
     POST   /api/kpi-review/comments                add a comment           (admin)
     DELETE /api/kpi-review/comments/{id}           delete a comment        (admin)
+    GET    /api/kpi-review/bubbles                 all bubbles             (admin)
     GET    /api/kpi-review/bubbles/unread          unviewed bubbles        (admin)
     POST   /api/kpi-review/comments/{id}/view      mark bubble viewed      (admin)
     GET    /api/kpi-review/measures?kpi_key=&status= measures (filterable)
@@ -184,6 +185,23 @@ async def delete_comment(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="comment not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/bubbles",
+    response_model=list[KpiCommentRead],
+    dependencies=[Depends(require_admin)],
+)
+async def list_bubbles(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[KpiCommentRead]:
+    """All bubbles (region comments) across KPIs — the KPI-Bewertung list."""
+    rows = await db.execute(
+        select(KpiComment)
+        .where(KpiComment.region_x.is_not(None))
+        .order_by(KpiComment.created_at.desc())
+    )
+    return [KpiCommentRead.model_validate(r) for r in rows.scalars().all()]
 
 
 @router.get(

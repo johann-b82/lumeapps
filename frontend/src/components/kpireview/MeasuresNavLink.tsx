@@ -4,13 +4,15 @@ import { useLocation } from "wouter";
 import { ListChecks } from "lucide-react";
 
 import { useRole } from "@/auth/useAuth";
-import { fetchKpiMeasures } from "@/lib/api";
+import { getUnreadBubbles } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
- * Top-right nav entry (admin only) to the dedicated measures page, with a badge
- * counting still-open measures (open + in_progress) across all KPIs — the
- * management counterpart to the feedback bell.
+ * Top-right nav entry (admin only) to the KPI-Bewertung & Maßnahmen page. The
+ * badge counts still-unviewed bubbles across all KPIs — new bubbles surface
+ * here (the standalone bubble bell was folded into this entry). A bubble is
+ * marked viewed when opened on a chart or in the page's bubble list, which
+ * invalidates ["kpi-review","bubbles-unread"] so the badge updates.
  */
 export function MeasuresNavLink() {
   const { t } = useTranslation();
@@ -18,13 +20,12 @@ export function MeasuresNavLink() {
   const [, navigate] = useLocation();
 
   const { data: count = 0 } = useQuery({
-    queryKey: ["kpi-review", "measures-nav"],
-    queryFn: () => fetchKpiMeasures({}),
+    queryKey: ["kpi-review", "bubbles-unread"],
+    queryFn: getUnreadBubbles,
     enabled: role === "admin",
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
-    select: (rows) =>
-      rows.filter((m) => m.status === "open" || m.status === "in_progress").length,
+    select: (rows) => rows.length,
   });
 
   if (role !== "admin") return null;
@@ -42,7 +43,7 @@ export function MeasuresNavLink() {
     >
       <ListChecks className="h-5 w-5" aria-hidden="true" />
       {count > 0 && (
-        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-white">
+        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-white">
           {count > 99 ? "99+" : count}
         </span>
       )}
