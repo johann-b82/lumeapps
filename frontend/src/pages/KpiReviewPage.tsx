@@ -1,57 +1,146 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, MessageSquare, ListChecks } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { KpiDetailPanel } from "@/components/kpireview/KpiDetailPanel";
-import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { DeleteDialog } from "@/components/ui/delete-dialog";
+import { AssigneeSelect } from "@/components/kpireview/AssigneeSelect";
+import { useAuth } from "@/auth/useAuth";
 import { kpiReviewKeys } from "@/lib/queryKeys";
 import {
   fetchKpiReviewSummary,
+  fetchKpiComments,
   fetchKpiMeasures,
-  type KpiRating,
+  createKpiMeasure,
+  updateKpiMeasure,
+  deleteKpiMeasure,
+  type KpiMeasure,
+  type KpiMeasurePriority,
   type KpiMeasureStatus,
 } from "@/lib/api";
 
-const RATING_DOT: Record<KpiRating, string> = {
-  red: "var(--color-destructive)",
-  yellow: "#eab308",
-  green: "#22c55e",
+const STATUS_VARIANT: Record<KpiMeasureStatus, "default" | "secondary" | "outline" | "destructive"> = {
+  open: "default",
+  in_progress: "secondary",
+  done: "outline",
+  dropped: "destructive",
 };
 const DOMAIN_ORDER = ["sales", "hr", "quality", "finance", "procurement", "production"];
-const OPEN_STATES: KpiMeasureStatus[] = ["open", "in_progress"];
+const selectCls =
+  "h-8 rounded-lg border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+type StatusFilter = KpiMeasureStatus | "all";
+
+/**
+ * Dedicated measures management page ("Maßnahmen") — the single place to create,
+ * assign, plan and track every KPI measure across all dashboards (mirrors the
+ * feedback inbox). Bubbles/comments are still created on the real charts; here
+ * a measure is linked to its KPI and optionally to one of that KPI's bubbles.
+ */
 export function KpiReviewPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "de" ? "de-DE" : "en-US";
-  const [selected, setSelected] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
   const summary = useQuery({
     queryKey: kpiReviewKeys.summary(),
     queryFn: fetchKpiReviewSummary,
   });
-  const allMeasures = useQuery({
-    queryKey: kpiReviewKeys.measures(),
-    queryFn: () => fetchKpiMeasures(),
+  const measuresQ = useQuery({
+    queryKey: kpiReviewKeys.measures(undefined, filter),
+    queryFn: () => fetchKpiMeasures(filter === "all" ? {} : { status: filter }),
   });
 
-  const byDomain = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof summary.data>>();
+  // KPIs grouped by domain for the create-form dropdown.
+  const kpisByDomain = useMemo(() => {
+    const map = new Map<string, { kpi_key: string }[]>();
     for (const it of summary.data ?? []) {
       if (!map.has(it.domain)) map.set(it.domain, []);
-      map.get(it.domain)!.push(it);
+      map.get(it.domain)!.push({ kpi_key: it.kpi_key });
     }
     return map;
   }, [summary.data]);
 
-  const openMeasures = (allMeasures.data ?? []).filter((m) =>
-    OPEN_STATES.includes(m.status),
-  );
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: kpiReviewKeys.all });
+  };
+
   const kpiLabel = (key: string) => t(`kpireview.kpi.${key}`);
   const fmtDate = (d: string | null) =>
     d ? new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(d)) : "—";
+
+  // ── Create form ──
+  const [kpiKey, setKpiKey] = useState("");
+  const [commentId, setCommentId] = useState("");
+  const [title, setTitle] = useState("");
+  const [assignee, setAssignee] = useState<{ id: string; name: string } | null>(null);
+  const [due, setDue] = useState("");
+  const [prio, setPrio] = useState<KpiMeasurePriority>("medium");
+
+  // Bubbles of the picked KPI, to optionally link the measure to one.
+  const bubblesQ = useQuery({
+    queryKey: kpiReviewKeys.comments(kpiKey),
+    queryFn: () => fetchKpiComments(kpiKey),
+    enabled: kpiKey !== "",
+  });
+  const bubbles = (bubblesQ.data ?? []).filter((c) => c.number != null);
+
+  const add = useMutation({
+    mutationFn: () =>
+      createKpiMeasure({
+        kpi_key: kpiKey,
+        comment_id: commentId || null,
+        title: title.trim(),
+        assignee_personio_id: assignee?.id ?? null,
+        assignee_name: assignee?.name ?? null,
+        due_date: due || null,
+        priority: prio,
+      }),
+    onSuccess: () => {
+      setCommentId("");
+      setTitle("");
+      setAssignee(null);
+      setDue("");
+      setPrio("medium");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const patch = useMutation({
+    mutationFn: (v: { id: string; body: Parameters<typeof updateKpiMeasure>[1] }) =>
+      updateKpiMeasure(v.id, v.body),
+    onSuccess: invalidate,
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const [deleteTarget, setDeleteTarget] = useState<KpiMeasure | null>(null);
+  const del = useMutation({
+    mutationFn: (id: string) => deleteKpiMeasure(id),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const measures = measuresQ.data ?? [];
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-16 space-y-6">
@@ -60,173 +149,239 @@ export function KpiReviewPage() {
         <p className="text-sm text-muted-foreground">{t("kpireview.subtitle")}</p>
       </div>
 
-      {summary.isLoading && (
-        <div className="flex justify-center py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {/* KPI-Kacheln je Domäne */}
-      {DOMAIN_ORDER.filter((d) => byDomain.has(d)).map((domain) => (
-        <section key={domain} className="space-y-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            {t(`kpireview.domain.${domain}`)}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {byDomain.get(domain)!.map((it) => {
-              const active = selected === it.kpi_key;
-              return (
-                <button
-                  key={it.kpi_key}
-                  onClick={() => setSelected(active ? null : it.kpi_key)}
-                  className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  <span
-                    className="inline-block h-3 w-3 shrink-0 rounded-full"
-                    style={{
-                      background: it.last_rating ? RATING_DOT[it.last_rating] : "var(--color-muted)",
-                    }}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1 text-sm font-medium truncate">
-                    {kpiLabel(it.kpi_key)}
-                  </span>
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      {it.comment_count}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <ListChecks className="h-3.5 w-3.5" />
-                      {it.open_measure_count}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ))}
-
-      {/* Ausgewählte KPI: Chart mit Bubble-Overlay + Detail (Maßnahmen) */}
-      {selected && (
-        <>
-          <Card className="p-6 space-y-2">
-            <div className="flex items-baseline justify-between">
-              <h3 className="text-lg font-semibold">{kpiLabel(selected)}</h3>
-              <span className="text-xs text-muted-foreground">
-                {t("kpireview.bubble.hint")}
-              </span>
+      {/* New measure */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("kpireview.measures.new")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                className={selectCls + " h-9 text-sm"}
+                value={kpiKey}
+                onChange={(e) => {
+                  setKpiKey(e.target.value);
+                  setCommentId("");
+                }}
+              >
+                <option value="">{t("kpireview.measures.selectKpi")}</option>
+                {DOMAIN_ORDER.filter((d) => kpisByDomain.has(d)).map((domain) => (
+                  <optgroup key={domain} label={t(`kpireview.domain.${domain}`)}>
+                    {kpisByDomain.get(domain)!.map((k) => (
+                      <option key={k.kpi_key} value={k.kpi_key}>
+                        {kpiLabel(k.kpi_key)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <select
+                className={selectCls + " h-9 text-sm"}
+                value={commentId}
+                onChange={(e) => setCommentId(e.target.value)}
+                disabled={kpiKey === "" || bubbles.length === 0}
+              >
+                <option value="">{t("kpireview.measures.bubbleNone")}</option>
+                {bubbles.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    #{b.number} — {b.body.slice(0, 40)}
+                  </option>
+                ))}
+              </select>
             </div>
-            <KpiBubbleOverlay kpiKey={selected}>
-              <DemoChart />
-            </KpiBubbleOverlay>
-          </Card>
-          <KpiDetailPanel kpiKey={selected} label={kpiLabel(selected)} />
-        </>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("kpireview.measures.titlePlaceholder")}
+            />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+              <AssigneeSelect
+                value={assignee?.id ?? null}
+                onChange={setAssignee}
+                placeholder={t("kpireview.measures.assignee")}
+              />
+              <Input
+                type="date"
+                className="w-40"
+                value={due}
+                onChange={(e) => setDue(e.target.value)}
+              />
+              <select
+                className={selectCls + " h-9 text-sm"}
+                value={prio}
+                onChange={(e) => setPrio(e.target.value as KpiMeasurePriority)}
+              >
+                <option value="low">{t("kpireview.priority.low")}</option>
+                <option value="medium">{t("kpireview.priority.medium")}</option>
+                <option value="high">{t("kpireview.priority.high")}</option>
+              </select>
+              <Button
+                disabled={kpiKey === "" || title.trim() === "" || add.isPending}
+                onClick={() => add.mutate()}
+              >
+                <Plus className="h-4 w-4" /> {t("kpireview.measures.add")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Zentraler Maßnahmen-Tracker (offene über alle KPIs) */}
-      <Card className="p-6">
-        <p className="text-lg font-semibold mb-3">
-          {t("kpireview.tracker.title")}{" "}
-          <span className="text-sm font-normal text-muted-foreground">
-            ({openMeasures.length})
-          </span>
-        </p>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50 text-left">
-                <th className="px-3 py-2 font-medium">{t("kpireview.tracker.kpi")}</th>
-                <th className="px-3 py-2 font-medium">{t("kpireview.tracker.measure")}</th>
-                <th className="px-3 py-2 font-medium">{t("kpireview.tracker.assignee")}</th>
-                <th className="px-3 py-2 font-medium">{t("kpireview.tracker.due")}</th>
-                <th className="px-3 py-2 font-medium">{t("kpireview.tracker.status")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {openMeasures.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
-                    {t("kpireview.tracker.empty")}
-                  </td>
-                </tr>
-              ) : (
-                openMeasures.map((m) => (
-                  <tr
-                    key={m.id}
-                    className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
-                    onClick={() => setSelected(m.kpi_key)}
-                  >
-                    <td className="px-3 py-2 text-muted-foreground">{kpiLabel(m.kpi_key)}</td>
-                    <td className="px-3 py-2 font-medium">{m.title}</td>
-                    <td className="px-3 py-2">{m.assignee_name ?? "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{fmtDate(m.due_date)}</td>
-                    <td className="px-3 py-2">
-                      <Badge variant={m.status === "open" ? "default" : "secondary"}>
-                        {t(`kpireview.status.${m.status}`)}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Measures table */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">
+            {t("kpireview.measures.title")}{" "}
+            <span className="text-sm font-normal text-muted-foreground">({measures.length})</span>
+          </CardTitle>
+          <select
+            className={selectCls}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as StatusFilter)}
+          >
+            <option value="all">{t("kpireview.measures.filterAll")}</option>
+            <option value="open">{t("kpireview.status.open")}</option>
+            <option value="in_progress">{t("kpireview.status.in_progress")}</option>
+            <option value="done">{t("kpireview.status.done")}</option>
+            <option value="dropped">{t("kpireview.status.dropped")}</option>
+          </select>
+        </CardHeader>
+        <CardContent>
+          {measuresQ.isLoading && (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {measuresQ.data && measures.length === 0 && (
+            <p className="py-10 text-center text-muted-foreground">{t("kpireview.measures.empty")}</p>
+          )}
+          {measures.length > 0 && (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("kpireview.tracker.kpi")}</TableHead>
+                    <TableHead>{t("kpireview.tracker.measure")}</TableHead>
+                    <TableHead>{t("kpireview.tracker.assignee")}</TableHead>
+                    <TableHead>{t("kpireview.tracker.due")}</TableHead>
+                    <TableHead>{t("kpireview.measures.priorityLabel")}</TableHead>
+                    <TableHead>{t("kpireview.tracker.status")}</TableHead>
+                    {isAdmin && <TableHead />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {measures.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {kpiLabel(m.kpi_key)}
+                      </TableCell>
+                      <TableCell className="font-medium">{m.title}</TableCell>
+                      <TableCell className="min-w-44">
+                        {isAdmin ? (
+                          <AssigneeSelect
+                            value={m.assignee_personio_id}
+                            onChange={(a) =>
+                              patch.mutate({
+                                id: m.id,
+                                body: {
+                                  assignee_personio_id: a?.id ?? null,
+                                  assignee_name: a?.name ?? null,
+                                },
+                              })
+                            }
+                            placeholder={t("kpireview.measures.assignee")}
+                          />
+                        ) : (
+                          <span className="text-sm">{m.assignee_name ?? t("kpireview.measures.unassigned")}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isAdmin ? (
+                          <Input
+                            type="date"
+                            className="h-8 w-36 text-xs"
+                            value={m.due_date ?? ""}
+                            onChange={(e) =>
+                              patch.mutate({ id: m.id, body: { due_date: e.target.value || null } })
+                            }
+                          />
+                        ) : (
+                          <span className="whitespace-nowrap text-sm">{fmtDate(m.due_date)}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isAdmin ? (
+                          <select
+                            className={selectCls}
+                            value={m.priority}
+                            onChange={(e) =>
+                              patch.mutate({
+                                id: m.id,
+                                body: { priority: e.target.value as KpiMeasurePriority },
+                              })
+                            }
+                          >
+                            <option value="low">{t("kpireview.priority.low")}</option>
+                            <option value="medium">{t("kpireview.priority.medium")}</option>
+                            <option value="high">{t("kpireview.priority.high")}</option>
+                          </select>
+                        ) : (
+                          <span className="text-sm">{t(`kpireview.priority.${m.priority}`)}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isAdmin ? (
+                          <select
+                            className={selectCls}
+                            value={m.status}
+                            onChange={(e) =>
+                              patch.mutate({
+                                id: m.id,
+                                body: { status: e.target.value as KpiMeasureStatus },
+                              })
+                            }
+                          >
+                            <option value="open">{t("kpireview.status.open")}</option>
+                            <option value="in_progress">{t("kpireview.status.in_progress")}</option>
+                            <option value="done">{t("kpireview.status.done")}</option>
+                            <option value="dropped">{t("kpireview.status.dropped")}</option>
+                          </select>
+                        ) : (
+                          <Badge variant={STATUS_VARIANT[m.status]}>
+                            {t(`kpireview.status.${m.status}`)}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <button
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteTarget(m)}
+                            title={t("kpireview.delete")}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
       </Card>
-    </div>
-  );
-}
 
-/**
- * Lightweight placeholder chart (inline SVG) so the bubble mechanic is testable
- * without wiring every real dashboard chart yet. One bar looks like an anomaly
- * to bubble. Replaced by the real KPI charts once the mechanic is confirmed.
- */
-const DEMO_BARS = [
-  { m: "Jan", v: 62 },
-  { m: "Feb", v: 58 },
-  { m: "Mär", v: 65 },
-  { m: "Apr", v: 61 },
-  { m: "Mai", v: 88 },
-  { m: "Jun", v: 60 },
-  { m: "Jul", v: 92 },
-  { m: "Aug", v: 59 },
-];
-function DemoChart() {
-  const W = 800;
-  const H = 240;
-  const pad = 28;
-  const max = 100;
-  const bw = (W - pad * 2) / DEMO_BARS.length;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-56 select-none" preserveAspectRatio="none">
-      <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="var(--color-border)" />
-      {DEMO_BARS.map((b, i) => {
-        const h = ((H - pad * 2) * b.v) / max;
-        const x = pad + i * bw + bw * 0.2;
-        return (
-          <g key={b.m}>
-            <rect
-              x={x}
-              y={H - pad - h}
-              width={bw * 0.6}
-              height={h}
-              rx={3}
-              fill="var(--color-primary)"
-              opacity={0.85}
-            />
-            <text x={x + bw * 0.3} y={H - pad + 16} textAnchor="middle" fontSize="12" fill="var(--color-muted-foreground)">
-              {b.m}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+      <DeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t("kpireview.measures.deleteTitle")}
+        body={deleteTarget?.title ?? ""}
+        onConfirm={() => {
+          if (deleteTarget) del.mutate(deleteTarget.id);
+        }}
+        confirmDisabled={del.isPending}
+      />
+    </div>
   );
 }
