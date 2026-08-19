@@ -1,19 +1,34 @@
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { MessageSquareDashed } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/auth/useAuth";
 import { useBubbleMode } from "@/contexts/BubbleModeContext";
 
+// Only the KPI dashboards carry a KpiBubbleOverlay, so the toggle only makes
+// sense there — not on the launcher, hubs, ATR, settings, etc.
+const KPI_ROUTES = new Set([
+  "/sales",
+  "/hr",
+  "/quality",
+  "/procurement",
+  "/production",
+  "/finance",
+]);
+
 /**
- * Global floating "Bubble" toggle — sits above the feedback button. When on,
- * every KPI chart accepts a region draw to place a bubble. Admin only.
+ * Floating "Bubble" toggle — sits above the feedback button. When on, every KPI
+ * chart accepts a region draw to place a bubble. Admin only, and only shown on
+ * the KPI dashboard pages (where a chart overlay actually exists).
  */
 export function BubbleButton() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { active, toggle } = useBubbleMode();
+  const [location] = useLocation();
   if (user?.role !== "admin") return null;
+  if (!KPI_ROUTES.has(location)) return null;
 
   return (
     <Button
