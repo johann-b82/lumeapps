@@ -114,6 +114,8 @@ export function KpiBubbleOverlay({
       setSelected(null);
       qc.invalidateQueries({ queryKey: kpiReviewKeys.comments(kpiKey) });
       qc.invalidateQueries({ queryKey: kpiReviewKeys.summary() });
+      qc.invalidateQueries({ queryKey: ["kpi-review", "bubbles-all"] });
+      qc.invalidateQueries({ queryKey: ["kpi-review", "bubbles-unread"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -123,6 +125,7 @@ export function KpiBubbleOverlay({
     mutationFn: (id: string) => markBubbleViewed(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["kpi-review", "bubbles-unread"] });
+      qc.invalidateQueries({ queryKey: ["kpi-review", "bubbles-all"] });
       qc.invalidateQueries({ queryKey: kpiReviewKeys.comments(kpiKey) });
     },
   });

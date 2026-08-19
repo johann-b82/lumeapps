@@ -2176,6 +2176,11 @@ export async function deleteKpiComment(id: string): Promise<void> {
   await apiClient<void>(`/api/kpi-review/comments/${id}`, { method: "DELETE" });
 }
 
+/** GET /api/kpi-review/bubbles — admin: all bubbles across KPIs. */
+export async function getBubbles(): Promise<KpiComment[]> {
+  return apiClient<KpiComment[]>("/api/kpi-review/bubbles");
+}
+
 /** GET /api/kpi-review/bubbles/unread — admin: bubbles not yet viewed. */
 export async function getUnreadBubbles(): Promise<KpiComment[]> {
   return apiClient<KpiComment[]>("/api/kpi-review/bubbles/unread");
