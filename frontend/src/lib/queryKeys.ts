@@ -66,6 +66,7 @@ export const hrKpiKeys = {
   einarbeitungPflicht: () => ["hr", "einarbeitung", "pflicht"] as const,
   einarbeitungAbteilungen: () => ["hr", "einarbeitung", "abteilungen"] as const,
   einarbeitungAnsprechpartner: () => ["hr", "einarbeitung", "ansprechpartner"] as const,
+  einarbeitungVorgaenge: () => ["hr", "einarbeitung", "vorgaenge"] as const,
   schulungMitarbeiter: () => ["hr", "schulungen", "mitarbeiter"] as const,
   schulungMitarbeiterDetail: (persnr: string) =>
     ["hr", "schulungen", "mitarbeiter", persnr] as const,
