@@ -64,6 +64,10 @@ class KpiComment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # NULL = Bubble von einem Admin noch nicht angesehen (Bubble-Zähler).
+    viewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class KpiMeasure(Base):

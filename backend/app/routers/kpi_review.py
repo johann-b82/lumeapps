@@ -14,6 +14,8 @@ tests/test_admin_gate_audit.py.
     GET    /api/kpi-review/comments?kpi_key=       comments for a KPI
     POST   /api/kpi-review/comments                add a comment           (admin)
     DELETE /api/kpi-review/comments/{id}           delete a comment        (admin)
+    GET    /api/kpi-review/bubbles/unread          unviewed bubbles        (admin)
+    POST   /api/kpi-review/comments/{id}/view      mark bubble viewed      (admin)
     GET    /api/kpi-review/measures?kpi_key=&status= measures (filterable)
     POST   /api/kpi-review/measures                add a measure           (admin)
     PATCH  /api/kpi-review/measures/{id}           edit / set status       (admin)
@@ -182,6 +184,43 @@ async def delete_comment(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="comment not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/bubbles/unread",
+    response_model=list[KpiCommentRead],
+    dependencies=[Depends(require_admin)],
+)
+async def list_unread_bubbles(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[KpiCommentRead]:
+    """Bubbles (region comments) not yet viewed by an admin — feeds the badge."""
+    rows = await db.execute(
+        select(KpiComment)
+        .where(KpiComment.region_x.is_not(None), KpiComment.viewed_at.is_(None))
+        .order_by(KpiComment.created_at.desc())
+    )
+    return [KpiCommentRead.model_validate(r) for r in rows.scalars().all()]
+
+
+@router.post(
+    "/comments/{comment_id}/view",
+    response_model=KpiCommentRead,
+    dependencies=[Depends(require_admin)],
+)
+async def mark_comment_viewed(
+    comment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> KpiCommentRead:
+    """Mark one bubble/comment as viewed (idempotent) — decrements the badge."""
+    row = await db.get(KpiComment, comment_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="comment not found")
+    if row.viewed_at is None:
+        row.viewed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(row)
+    return KpiCommentRead.model_validate(row)
 
 
 # ── Measures ─────────────────────────────────────────────────────────────

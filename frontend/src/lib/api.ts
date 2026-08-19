@@ -2120,6 +2120,8 @@ export interface KpiComment {
   author_id: string | null;
   author_name: string | null;
   created_at: string;
+  // NULL = bubble not yet viewed by an admin (feeds the top-right counter).
+  viewed_at: string | null;
   // Bubble on the chart: contiguous number + normalized region (0..1). Null = plain comment.
   number: number | null;
   region_x: number | null;
@@ -2172,6 +2174,18 @@ export async function createKpiComment(input: {
 
 export async function deleteKpiComment(id: string): Promise<void> {
   await apiClient<void>(`/api/kpi-review/comments/${id}`, { method: "DELETE" });
+}
+
+/** GET /api/kpi-review/bubbles/unread — admin: bubbles not yet viewed. */
+export async function getUnreadBubbles(): Promise<KpiComment[]> {
+  return apiClient<KpiComment[]>("/api/kpi-review/bubbles/unread");
+}
+
+/** POST /api/kpi-review/comments/{id}/view — admin: mark a bubble viewed. */
+export async function markBubbleViewed(id: string): Promise<KpiComment> {
+  return apiClient<KpiComment>(`/api/kpi-review/comments/${id}/view`, {
+    method: "POST",
+  });
 }
 
 export async function fetchKpiMeasures(params?: {

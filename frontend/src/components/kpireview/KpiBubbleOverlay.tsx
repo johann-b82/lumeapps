@@ -15,6 +15,7 @@ import {
   fetchKpiComments,
   createKpiComment,
   deleteKpiComment,
+  markBubbleViewed,
   fetchKpiMeasures,
   type KpiComment,
   type KpiRating,
@@ -117,6 +118,20 @@ export function KpiBubbleOverlay({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Mark a bubble viewed the first time it is opened → decrements the badge.
+  const viewBubble = useMutation({
+    mutationFn: (id: string) => markBubbleViewed(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kpi-review", "bubbles-unread"] });
+      qc.invalidateQueries({ queryKey: kpiReviewKeys.comments(kpiKey) });
+    },
+  });
+  const selectBubble = (b: KpiComment) => {
+    const next = selected === b.id ? null : b.id;
+    setSelected(next);
+    if (next && !b.viewed_at) viewBubble.mutate(b.id);
+  };
+
   const drawRect =
     start && current
       ? {
@@ -205,7 +220,7 @@ export function KpiBubbleOverlay({
               className="absolute -translate-x-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow ring-2 ring-background"
               title={b.body}
               onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => setSelected(selected === b.id ? null : b.id)}
+              onClick={() => selectBubble(b)}
             >
               {b.number}
             </button>
@@ -276,7 +291,7 @@ export function KpiBubbleOverlay({
                 >
                   <button
                     type="button"
-                    onClick={() => setSelected(selected === b.id ? null : b.id)}
+                    onClick={() => selectBubble(b)}
                     className="w-full text-left"
                   >
                     <span className="flex items-center gap-1.5">
