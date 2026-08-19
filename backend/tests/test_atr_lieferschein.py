@@ -53,3 +53,12 @@ def test_zero_positions_warns():
     pl = parse_lieferschein_text("LIEFERSCHEIN\nNr. 1\n")
     assert pl.positions == []
     assert pl.warnings
+
+
+def test_duplicate_lieferschein_deduped():
+    # Derselbe Lieferschein zweimal in einer PDF → Positionen nur einmal.
+    text = FIX.read_text(encoding="utf-8")
+    doubled = text + "\n\n" + text
+    pl = parse_lieferschein_text(doubled)
+    assert len(pl.positions) == 2  # nicht 4
+    assert any("doppelter lieferschein" in w.lower() for w in pl.warnings)
