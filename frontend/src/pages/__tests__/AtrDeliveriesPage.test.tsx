@@ -28,7 +28,8 @@ describe("AtrDeliveriesPage", () => {
     vi.mocked(atrApi.fetchInputFiles).mockResolvedValue({ configured: false, files: [] });
     vi.mocked(atrApi.fetchDeliveries).mockResolvedValue([{
       id: 7, source_filename: "LS.pdf", ba_auftrag: "1024738",
-      compartment: "CCRC", status: "draft", created_at: "2026-06-25T10:00:00Z",
+      compartment: "CCRC", atr_number: null, msn: null,
+      status: "draft", created_at: "2026-06-25T10:00:00Z",
     }]);
     render(wrap(<AtrDeliveriesPage />));
     await waitFor(() => expect(screen.getByTestId("atr-delivery-7")).toBeInTheDocument());
