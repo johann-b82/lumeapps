@@ -49,7 +49,9 @@ jobs:
           cat > .env <<'EOF'
           POSTGRES_USER=kpi
           POSTGRES_PASSWORD=kpi_test_pw
-          POSTGRES_DB=kpi
+          # Muss "test" enthalten — backend/tests/conftest.py bricht sonst ab
+          # (Schutz gegen Testlauf auf einer echten DB).
+          POSTGRES_DB=kpi_test
           DIRECTUS_KEY=${{ secrets.DIRECTUS_KEY || 'ci-fake-key-00000000-0000-0000-0000-000000000000' }}
           DIRECTUS_SECRET=${{ secrets.DIRECTUS_SECRET || 'ci-fake-secret-00000000-0000-0000-0000-000000000000' }}
           DIRECTUS_ADMIN_EMAIL=admin@example.com
@@ -435,7 +437,7 @@ jobs:
       - name: "Guard A — DDL hash (SCHEMA-03)"
         run: |
           export POSTGRES_USER=kpi
-          export POSTGRES_DB=kpi
+          export POSTGRES_DB=kpi_test
           bash scripts/ci/check_schema_hash.sh
 
       # -----------------------------------------------------------------------
