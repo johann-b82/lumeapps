@@ -14,6 +14,10 @@ Admin-only endpoints (all except the first):
 
 The ``POST /api/feedback`` viewer exception is registered in
 ``tests/test_admin_gate_audit.py`` ADMIN_GATE_ALLOWLIST.
+
+Compute-justified: clause 1 (binary I/O) — POST accepts and stores the
+screenshot bytes and /screenshot streams them back out; not a Directus
+collection read.
 """
 from __future__ import annotations
 

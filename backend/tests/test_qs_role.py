@@ -50,7 +50,6 @@ async def test_qs_blocked_on_dashboards(client, path):
 # --- QS is blocked on admin-only modules (require_admin) ---
 QS_BLOCKED_ADMIN = [
     "/api/sensors",
-    "/api/uploads",
 ]
 
 
@@ -58,6 +57,17 @@ QS_BLOCKED_ADMIN = [
 async def test_qs_blocked_on_admin_modules(client, path):
     r = await client.get(path, headers=_auth(QS_UUID))
     assert r.status_code == 403, f"QS should be 403 on {path}, got {r.status_code}: {r.text}"
+
+
+async def test_qs_blocked_on_uploads(client):
+    """Uploads has no GET — its list read lives in Directus (see DISALLOWED_PATHS
+    in test_openapi_paths_snapshot.py). Probe a method that actually exists, so
+    this asserts the admin gate rather than a 404 for a missing route.
+    """
+    r = await client.delete(
+        "/api/uploads/00000000-0000-0000-0000-000000000000", headers=_auth(QS_UUID)
+    )
+    assert r.status_code == 403, f"QS should be 403 on uploads delete, got {r.status_code}: {r.text}"
 
 
 # --- Regression: Viewer/Admin behaviour unchanged ---

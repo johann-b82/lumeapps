@@ -9,6 +9,11 @@ GET reads are viewer-visible (the dashboards are), all writes add
 Viewer-readable GETs (registry, summary, comments, measures) are allowlisted in
 tests/test_admin_gate_audit.py.
 
+Compute-justified: clause 3 (aggregation) — /summary rolls comments and
+measures up per KPI, /registry derives the KPI key/domain set from the
+registered dashboards, and /bubbles/unread diffs comments against per-user
+view state; none are stored columns a Directus read could return.
+
     GET    /api/kpi-review/registry                KPI keys + domains
     GET    /api/kpi-review/summary                 per-KPI comment/measure roll-up
     GET    /api/kpi-review/comments?kpi_key=       comments for a KPI
