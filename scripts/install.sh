@@ -4,12 +4,15 @@
 # Idempotent: safe to re-run. Skips any step whose output already exists.
 #   1. Generates .env with random secrets if missing.
 #   2. Creates bind-mount directories used by docker-compose.yml.
-#   3. Brings the stack up.
+#   3. Brings up db + directus only.
 #   4. After Directus seeds the Administrator role on its first boot, queries
 #      the role UUID from the DB and writes it back to .env (this is the bug
 #      that caused 401s after a fresh DB reset — the API's role map was keyed
-#      on a stale UUID from a previous DB).
-#   5. Restarts the api container so it picks up the corrected UUID.
+#      on a stale UUID from a previous DB). This must happen before api starts:
+#      api types the value as a UUID and refuses to boot on the PENDING
+#      placeholder, and caddy in turn waits on api being healthy.
+#   5. Brings the full stack up.
+#   6. Smoke-checks /health.
 #
 # Run from the repo root:
 #   ./scripts/install.sh
@@ -91,10 +94,14 @@ mkdir -p \
   backups
 
 # ---------------------------------------------------------------------------
-# 3. Bring stack up
+# 3. Bring up Directus only
 # ---------------------------------------------------------------------------
-log "starting stack (docker compose up -d)"
-docker compose up -d --build
+# The full stack cannot start yet: api rejects DIRECTUS_ADMINISTRATOR_ROLE_UUID=PENDING
+# (it is typed as a UUID), and caddy waits on api being healthy. Directus seeds the
+# Administrator role on its first boot, so start it alone, resolve the UUID in step 4,
+# and only then bring everything up.
+log "starting db + directus (docker compose up -d directus)"
+docker compose up -d --build directus
 
 # ---------------------------------------------------------------------------
 # 4. Resolve Administrator role UUID
@@ -127,12 +134,16 @@ else
   sed "s|^DIRECTUS_ADMINISTRATOR_ROLE_UUID=.*|DIRECTUS_ADMINISTRATOR_ROLE_UUID=${RESOLVED_UUID}|" \
     "$ENV_FILE" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  log "restarting api to pick up new UUID"
-  docker compose up -d api
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Smoke check
+# 5. Bring the rest of the stack up
+# ---------------------------------------------------------------------------
+log "starting full stack (docker compose up -d)"
+docker compose up -d --build
+
+# ---------------------------------------------------------------------------
+# 6. Smoke check
 # ---------------------------------------------------------------------------
 log "waiting for api healthy"
 for _ in $(seq 1 30); do
