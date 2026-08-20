@@ -6,8 +6,8 @@ from docx import Document
 from app.services.atr_generate_docx import build_containerbeschriftung
 
 
-def _it(po_pos):
-    return SimpleNamespace(po_pos=po_pos)
+def _it(po_pos, category="Teppiche"):
+    return SimpleNamespace(po_pos=po_pos, category=category)
 
 
 def test_label_lines():

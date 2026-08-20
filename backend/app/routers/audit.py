@@ -7,6 +7,12 @@ Auditor / Lead-Auditor / Auditierter / QM-Leitung split the regulations expect.
 Until that lands, the four-eyes principle on audit closure and the auditor
 independence check are NOT implemented — see docs/modules/audit.md.
 
+Compute-justified: clause 3 (aggregation + cascade) — the list and detail
+routes derive per-audit progress across phases rather than returning stored
+columns, creating an audit instantiates its phase rows from a template, and
+deleting one cascades phases/norm links; none expressible as a Directus
+collection read.
+
 Routes:
 
     GET    /api/audit/audits                    list audits + derived progress

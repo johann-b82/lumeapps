@@ -10,6 +10,10 @@ Endpoints:
 Both return a uniform ``{ok, error}`` body: a failed send is a 200 with
 ``ok=false`` and a human-readable German error, not a 5xx — the admin UI shows
 the message inline (same shape as the ATR fileserver /test endpoint).
+
+Compute-justified: clause 1 (side effect outside Postgres) — these routes
+talk to Office 365 over Graph/SMTP and hold the delegated-auth flow; nothing
+here maps onto a Directus collection read or write.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession

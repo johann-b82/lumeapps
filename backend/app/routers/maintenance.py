@@ -15,6 +15,11 @@ Phase 1). Routes:
     GET    /api/maintenance/files/{fid}                  proxy the stored bytes
     DELETE /api/maintenance/files/{fid}                  delete a file
     GET    /api/maintenance/machines/{id}/sheet.pdf      printable KW/day sheet
+
+Compute-justified: clause 2 (document generation + binary I/O + cascade) —
+/sheet.pdf renders the printable KW/day plan server-side, the file routes
+store and proxy uploaded plan bytes, and deleting a machine cascades its
+tasks and files.
 """
 from __future__ import annotations
 
