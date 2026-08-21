@@ -107,6 +107,13 @@ from app.models.feedback import PageFeedback  # noqa: F401
 # KPI-Bewertung & Maßnahmen (v1.107)
 from app.models.kpi_review import KpiComment, KpiMeasure  # noqa: F401
 
+# Arbeitszeugnis (v1.110)
+from app.models.zeugnis import (  # noqa: F401
+    Zeugnis,
+    ZeugnisAussteller,
+    ZeugnisBewertung,
+)
+
 __all__ = [
     "Base",
     # Legacy
@@ -154,4 +161,6 @@ __all__ = [
     "PageFeedback",
     # KPI-Bewertung & Maßnahmen
     "KpiComment", "KpiMeasure",
+    # Arbeitszeugnis
+    "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung",
 ]

@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt && \
         curl \
         libreoffice-impress \
         libreoffice-calc \
+        libreoffice-writer \
         libreoffice-core \
         python3-uno \
         poppler-utils \
