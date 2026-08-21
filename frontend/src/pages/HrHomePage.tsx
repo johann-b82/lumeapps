@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { UserPlus, Network, GraduationCap, Award } from "lucide-react";
+import { UserPlus, Network, GraduationCap, Award, FileText } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 
 /**
@@ -80,6 +80,28 @@ export function HrHomePage() {
             </button>
             <span className="text-xs text-muted-foreground text-center">
               {t("kompetenzen.title")}
+            </span>
+          </div>
+        </AdminOnly>
+
+        {/* Arbeitszeugnisse tile → /hr/zeugnisse (admin-only wie der Backend-Router) */}
+        <AdminOnly>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocation("/hr/zeugnisse")}
+              aria-label={t("zeugnisse.title")}
+              className="w-[120px] h-[120px] rounded-2xl
+                         bg-gradient-to-br from-rose-500 to-red-700
+                         shadow-md hover:shadow-xl hover:scale-[1.03]
+                         flex items-center justify-center p-4
+                         cursor-pointer transition-all
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FileText className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground text-center">
+              {t("zeugnisse.title")}
             </span>
           </div>
         </AdminOnly>

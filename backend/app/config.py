@@ -32,5 +32,16 @@ class Settings(BaseSettings):
         ..., description="HS256 signing key for signage device JWTs (scope=device)"
     )
 
+    # Arbeitszeugnis-KI (v1.110) — die Textgenerierung ruft die Anthropic-API.
+    # Ohne Key bleibt das Feature inert: /generate liefert 503, der Rest läuft.
+    # Datensparsam: es werden nur Noten, Rolle/Abteilung, Beschäftigungsdauer und
+    # HR-Freitexte gesendet — Name/Geburtsdatum/Personalnummer bleiben lokal.
+    ANTHROPIC_API_KEY: str = Field(
+        default="", description="Anthropic API key for the Arbeitszeugnis text generation"
+    )
+    ZEUGNIS_MODEL: str = Field(
+        default="claude-opus-5", description="Claude model id for Zeugnis generation"
+    )
+
 
 settings = Settings()
