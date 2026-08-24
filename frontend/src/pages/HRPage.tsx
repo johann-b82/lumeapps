@@ -4,6 +4,8 @@ import { EmployeeTable } from "@/components/dashboard/EmployeeTable";
 import { BirthdaysCard } from "@/components/dashboard/BirthdaysCard";
 import { JoinersCard } from "@/components/dashboard/JoinersCard";
 import { KpiBubbleOverlay } from "@/components/kpireview/KpiBubbleOverlay";
+import { WeeklyReportSection } from "@/components/dashboard/WeeklyReportSection";
+import { AdminOnly } from "@/auth/AdminOnly";
 
 export function HRPage() {
   return (
@@ -14,6 +16,10 @@ export function HRPage() {
           <JoinersCard />
           <HrKpiCardGrid />
           <HrKpiCharts />
+          {/* Weekly Report: personenbezogene Leistungs-/Gesundheitsdaten → admin-only. */}
+          <AdminOnly>
+            <WeeklyReportSection />
+          </AdminOnly>
           <EmployeeTable />
         </div>
       </KpiBubbleOverlay>
