@@ -53,7 +53,7 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
         maxShadowOpacity={0.35}
         drawShadow
         flippingTime={700}
-        usePortrait
+        usePortrait={false}
         mobileScrollSupport
         className="nl-book shadow-xl"
         ref={book}
