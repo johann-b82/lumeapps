@@ -96,7 +96,27 @@ export function BelegschaftKpiSection() {
       <div className="grid gap-4 md:grid-cols-2">
         <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" />
         <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" />
-        <PieKachel titel={t("belegschaft.eintritt")} daten={data.eintritt} farben={EINTRITT_FARBEN} i18nPrefix="belegschaft.e" />
+
+        {/* Neu vs. Bestand: absolute Zahlen (Balken), kein Prozent. */}
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-medium">{t("belegschaft.eintritt")}</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart
+              data={data.eintritt.map((d) => ({ name: t(`belegschaft.e.${d.key}`, d.key), wert: d.wert, key: d.key }))}
+              margin={{ top: 24, right: 8, left: 8, bottom: 4 }}
+            >
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="name" {...axisProps} />
+              <YAxis {...axisProps} allowDecimals={false} />
+              <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
+              <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }}>
+                {data.eintritt.map((d) => (
+                  <Cell key={d.key} fill={EINTRITT_FARBEN[d.key] ?? "#94a3b8"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
 
         <Card className="p-4">
           <div className="mb-2 text-sm font-medium">{t("belegschaft.abteilungen")}</div>
