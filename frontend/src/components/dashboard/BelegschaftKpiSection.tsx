@@ -34,6 +34,21 @@ const EINTRITT_FARBEN: Record<string, string> = {
   bestand: "#2563eb",
 };
 
+/** Ganzzahlige Prozente, die sich exakt zu 100 summieren (Größter-Rest-Methode). */
+function prozente(werte: number[]): number[] {
+  const summe = werte.reduce((a, b) => a + b, 0);
+  if (summe <= 0) return werte.map(() => 0);
+  const roh = werte.map((w) => (w / summe) * 100);
+  const unten = roh.map((r) => Math.floor(r));
+  let rest = 100 - unten.reduce((a, b) => a + b, 0);
+  const nachRest = roh
+    .map((r, i) => ({ i, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac);
+  const out = [...unten];
+  for (let k = 0; rest > 0 && nachRest.length; k++, rest--) out[nachRest[k % nachRest.length].i] += 1;
+  return out;
+}
+
 function PieKachel({
   titel,
   daten,
@@ -48,8 +63,13 @@ function PieKachel({
   prozent?: boolean;
 }) {
   const { t } = useTranslation();
-  const gesamt = daten.reduce((s, d) => s + d.wert, 0) || 1;
-  const chart = daten.map((d) => ({ name: t(`${i18nPrefix}.${d.key}`, d.key), value: d.wert, key: d.key }));
+  const pcts = prozente(daten.map((d) => d.wert));
+  const chart = daten.map((d, i) => ({
+    name: t(`${i18nPrefix}.${d.key}`, d.key),
+    value: d.wert,
+    key: d.key,
+    pct: pcts[i],
+  }));
   return (
     <Card className="p-4">
       <div className="mb-2 text-sm font-medium">{titel}</div>
@@ -61,10 +81,8 @@ function PieKachel({
             nameKey="name"
             innerRadius={40}
             outerRadius={75}
-            label={(e: { value?: number }) =>
-              prozent
-                ? `${e.value} · ${Math.round(((e.value ?? 0) / gesamt) * 100)}%`
-                : `${e.value}`
+            label={(e: { value?: number; pct?: number }) =>
+              prozent ? `${e.value} · ${e.pct ?? 0}%` : `${e.value}`
             }
             labelLine={false}
           >
@@ -128,7 +146,7 @@ export function BelegschaftKpiSection() {
             <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
               <CartesianGrid {...gridProps} horizontal={false} />
               <XAxis type="number" {...axisProps} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" width={130} {...axisProps} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={150} interval={0} />
               <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
               <Bar dataKey="wert" radius={[0, 4, 4, 0]} fill="#2563eb" label={{ position: "right", fontSize: 11 }} />
             </BarChart>
