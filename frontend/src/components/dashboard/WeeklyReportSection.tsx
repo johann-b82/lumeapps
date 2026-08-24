@@ -197,21 +197,16 @@ function VergleichKachel({
     { kw: prevLabel, wert: werte.vorwoche ?? 0 },
     { kw: curLabel, wert: werte.aktuell ?? 0 },
   ];
-  // Kopffreiheit für das Wert-Label über dem Balken (sonst am Achsenrand
-  // abgeschnitten); bei negativen Werten auch nach unten Platz.
-  const vals = data.map((d) => d.wert);
-  const maxV = Math.max(0, ...vals);
-  const minV = Math.min(0, ...vals);
-  const pad = Math.max(1, (maxV - minV) * 0.18);
-  const domain: [number, number] = [minV < 0 ? minV - pad : 0, maxV + pad];
   return (
     <Card className="p-4">
       <div className="mb-2 text-sm font-medium">{titel}</div>
+      {/* Oberer Rand gibt dem Wert-Label über dem Balken Platz — die Y-Achse
+          behält ihre runden Standard-Zahlen (keine krumme Domain). */}
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 24, right: 8, left: 8, bottom: 4 }}>
           <CartesianGrid {...gridProps} />
           <XAxis dataKey="kw" {...axisProps} />
-          <YAxis {...axisProps} domain={domain} />
+          <YAxis {...axisProps} allowDecimals={false} />
           <ReferenceLine y={0} stroke="var(--border)" />
           <Tooltip
             cursor={tooltipCursorProps}
@@ -258,11 +253,7 @@ function PersonenKachel({
           margin={{ top: 4, right: 44, left: 8, bottom: 4 }}
         >
           <CartesianGrid {...gridProps} horizontal={false} />
-          <XAxis
-            type="number"
-            {...axisProps}
-            domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.18)]}
-          />
+          <XAxis type="number" {...axisProps} allowDecimals={false} />
           <YAxis type="category" dataKey="name" width={130} {...axisProps} />
           <Tooltip
             cursor={tooltipCursorProps}
