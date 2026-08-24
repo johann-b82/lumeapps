@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
-from app.models import PersonioAbsence, PersonioAttendance, PersonioEmployee
+from app.models import AppSettings, PersonioAbsence, PersonioAttendance, PersonioEmployee
 from app.security.directus_auth import get_current_user, require_admin
 
 router = APIRouter(
@@ -33,10 +33,20 @@ router = APIRouter(
     dependencies=[Depends(get_current_user), Depends(require_admin)],
 )
 
-#: Personio-Abwesenheitstypen der Kategorie ``sick_leave`` in diesem Account
-#: (aus /company/time-off-types): Krankheit + Krankheit ohne Lohnfortzahlung.
-#: Kinderkrank (child_care) zählt bewusst nicht als „Krankheit" des Mitarbeiters.
-SICK_ABSENCE_TYPE_IDS = {568234, 3270500}
+#: Fallback-Krank-Typen (Personio-``sick_leave`` in diesem Account: Krankheit +
+#: Krankheit ohne Lohnfortzahlung), falls in den Einstellungen nichts gepflegt
+#: ist. Regulär kommen die IDs aus ``app_settings.personio_sick_leave_type_id``.
+_DEFAULT_SICK_TYPE_IDS = {568234, 3270500}
+
+
+async def _sick_type_ids(db: AsyncSession) -> set[int]:
+    """Krank-Abwesenheitstypen aus den Einstellungen (Fallback: Default-Set)."""
+    st = (
+        await db.execute(select(AppSettings).where(AppSettings.id == 1))
+    ).scalar_one_or_none()
+    ids = getattr(st, "personio_sick_leave_type_id", None) if st else None
+    gesammelt = {int(x) for x in ids if x is not None} if ids else set()
+    return gesammelt or _DEFAULT_SICK_TYPE_IDS
 
 #: Länge der Top-Personen-Listen.
 TOP_N = 5
@@ -139,14 +149,16 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     return ist, ueber, netto, name
 
 
-async def _krankheit_woche(db: AsyncSession, montag: date, sonntag: date):
+async def _krankheit_woche(
+    db: AsyncSession, montag: date, sonntag: date, sick_ids: set[int]
+):
     """Krank-Stunden je Mitarbeiter für eine Woche (anteilig nach Überlapp-Tagen)."""
     rows = (
         await db.execute(
             select(PersonioAbsence, PersonioEmployee)
             .join(PersonioEmployee, PersonioAbsence.employee_id == PersonioEmployee.id)
             .where(
-                PersonioAbsence.absence_type_id.in_(SICK_ABSENCE_TYPE_IDS),
+                PersonioAbsence.absence_type_id.in_(sick_ids),
                 PersonioAbsence.start_date <= sonntag,
                 PersonioAbsence.end_date >= montag,
             )
@@ -173,10 +185,11 @@ async def meta(db: AsyncSession = Depends(get_async_db_session)) -> WeeklyMeta:
         await db.execute(select(PersonioAttendance.date))
     ).scalars().all()
     kws = sorted({f"{d.isocalendar()[0]}-{d.isocalendar()[1]:02d}" for d in wochen}, reverse=True)
+    sick_ids = await _sick_type_ids(db)
     hat_krank = (
         await db.execute(
             select(PersonioAbsence.id).where(
-                PersonioAbsence.absence_type_id.in_(SICK_ABSENCE_TYPE_IDS)
+                PersonioAbsence.absence_type_id.in_(sick_ids)
             ).limit(1)
         )
     ).first() is not None
@@ -202,10 +215,11 @@ async def weekly_report(
     p_montag = montag - timedelta(days=7)
     p_sonntag = sonntag - timedelta(days=7)
 
+    sick_ids = await _sick_type_ids(db)
     ist, ueber, netto, name = await _anwesenheit_woche(db, montag, sonntag)
     _, _, netto_v, _ = await _anwesenheit_woche(db, p_montag, p_sonntag)
-    krank, kname = await _krankheit_woche(db, montag, sonntag)
-    krank_v, _ = await _krankheit_woche(db, p_montag, p_sonntag)
+    krank, kname = await _krankheit_woche(db, montag, sonntag, sick_ids)
+    krank_v, _ = await _krankheit_woche(db, p_montag, p_sonntag, sick_ids)
 
     def _saldo(netto_map):
         if not netto_map:
