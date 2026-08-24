@@ -91,14 +91,39 @@ async def run_sync(session: AsyncSession) -> SyncResult:
             teil_fehler = f"Anwesenheiten: {exc}"
             log.warning("Anwesenheits-Sync fehlgeschlagen (nicht fatal): %s", exc)
 
-        # 3) Abwesenheiten — ebenfalls optional.
+        # 3) Abwesenheiten — optional. Zwei Quellen mit disjunkten Typen:
+        #    /company/absence-periods liefert für unsere Zugangsdaten nur
+        #    „Freizeitausgleich" (stundenbasiert); /company/time-offs liefert
+        #    Urlaub, Krankheit, Kinderkrank … (tagesbasiert). Zusammengeführt.
+        daily_hours = {
+            e["id"]: (float(e["weekly_working_hours"]) / 5.0 if e.get("weekly_working_hours") else 8.0)
+            for e in employees
+            if e.get("id")
+        }
+        absences: list[dict] = []
+        beide_ok = True
         try:
-            raw_absences = await client.fetch_absences()
-            absences = [_normalize_absence(r) for r in raw_absences]
-            abs_count = await _upsert(session, PersonioAbsence, absences)
+            absences += [_normalize_absence(r) for r in await client.fetch_absences()]
         except PersonioAPIError as exc:
-            teil_fehler = teil_fehler or f"Abwesenheiten: {exc}"
-            log.warning("Abwesenheits-Sync fehlgeschlagen (nicht fatal): %s", exc)
+            beide_ok = False
+            teil_fehler = teil_fehler or f"Abwesenheiten (absence-periods): {exc}"
+            log.warning("absence-periods-Sync fehlgeschlagen (nicht fatal): %s", exc)
+        try:
+            absences += [
+                _normalize_timeoff(r, daily_hours) for r in await client.fetch_time_offs()
+            ]
+        except PersonioAPIError as exc:
+            beide_ok = False
+            teil_fehler = teil_fehler or f"Abwesenheiten (time-offs): {exc}"
+            log.warning("time-offs-Sync fehlgeschlagen (nicht fatal): %s", exc)
+        if absences:
+            abs_count = await _upsert(session, PersonioAbsence, absences)
+        # Verwaiste (in Personio gelöschte) Abwesenheiten entfernen — nur wenn
+        # beide Endpoints erfolgreich waren (sonst volle ID-Menge unbekannt).
+        if beide_ok:
+            entfernt = await _prune_absences(session, {a["id"] for a in absences})
+            if entfernt:
+                log.info("Verwaiste Abwesenheiten entfernt: %s", entfernt)
 
         await _update_sync_meta(
             session,
@@ -313,6 +338,59 @@ def _normalize_absence(raw: dict) -> dict:
         "synced_at": datetime.now(timezone.utc),
         "raw_json": raw,
     }
+
+
+def _normalize_timeoff(raw: dict, daily_hours: dict[int, float]) -> dict:
+    """Flache Felder aus einem ``/company/time-offs``-Eintrag (tagesbasiert).
+
+    Struktur weicht von ``/absence-periods`` ab: ``id`` ist ein Integer, die
+    Dauer steht als ``days_count`` (Personio zählt bereits Arbeitstage, inkl.
+    halber Tage als 0.5). Für die Std.-Auswertung: ``days_count × Tagesarbeitszeit``
+    der Person (``daily_hours``). Employee-/Typ-ID stecken verschachtelt.
+    """
+    attrs = raw.get("attributes", raw)
+    to_id = str(attrs.get("id") or raw.get("id"))
+
+    emp = attrs.get("employee") or {}
+    emp_attrs = emp.get("attributes", {}) if isinstance(emp, dict) else {}
+    emp_id_field = emp_attrs.get("id")
+    employee_id = emp_id_field.get("value") if isinstance(emp_id_field, dict) else emp_id_field
+
+    tt = attrs.get("time_off_type") or {}
+    tt_attrs = tt.get("attributes", {}) if isinstance(tt, dict) else {}
+    type_id = tt_attrs.get("id")
+    if not isinstance(type_id, int):
+        type_id = None
+
+    tage = float(attrs.get("days_count") or 0)
+    stunden = round(tage * daily_hours.get(employee_id, 8.0), 2)
+    return {
+        "id": to_id,
+        "employee_id": employee_id,
+        "absence_type_id": type_id,
+        "start_date": _parse_date(attrs.get("start_date")),
+        "end_date": _parse_date(attrs.get("end_date")),
+        "time_unit": "day",
+        "hours": stunden,
+        "synced_at": datetime.now(timezone.utc),
+        "raw_json": raw,
+    }
+
+
+async def _prune_absences(session: AsyncSession, keep_ids: set[str]) -> int:
+    """Abwesenheiten löschen, die Personio nicht mehr liefert (in P. gelöscht).
+
+    Nur aufrufen, wenn ALLE Abwesenheits-Endpoints erfolgreich waren — sonst
+    würde ein Teilausfall gültige Zeilen des anderen Endpoints entfernen.
+    """
+    from sqlalchemy import delete, select
+
+    vorhanden = (await session.execute(select(PersonioAbsence.id))).scalars().all()
+    weg = [i for i in vorhanden if i not in keep_ids]
+    if weg:
+        await session.execute(delete(PersonioAbsence).where(PersonioAbsence.id.in_(weg)))
+        await session.commit()
+    return len(weg)
 
 
 # ---------------------------------------------------------------------------
