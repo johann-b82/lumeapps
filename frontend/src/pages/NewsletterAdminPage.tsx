@@ -7,7 +7,7 @@ import { BarChart3, ChevronLeft, FileDown, FileText, GripVertical, Loader2, Plus
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AuthImage, NewsletterView } from "@/components/newsletter/NewsletterView";
+import { AuthImage, NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
   NEWSLETTER_RUBRIKEN,
@@ -284,8 +284,8 @@ function Editor({ id }: { id: number }) {
               {t("newsletter.pdf")}
             </button>
           </div>
-          <div ref={previewRef} className="rounded-lg border bg-background">
-            <NewsletterView ausgabe={ausgabe} />
+          <div ref={previewRef} className="overflow-x-auto rounded-lg border bg-muted/40 p-4">
+            <NewsletterPdfPages ausgabe={ausgabe} />
           </div>
         </div>
       )}

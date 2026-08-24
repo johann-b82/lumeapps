@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Newspaper, FileDown, ChevronLeft, Loader2, PencilLine } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
-import { NewsletterView } from "@/components/newsletter/NewsletterView";
+import { NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
 import { NewsletterBook } from "@/components/newsletter/NewsletterBook";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import { fetchAusgabe, fetchAusgaben } from "@/lib/newsletterApi";
@@ -135,13 +135,13 @@ function Reader({ id }: { id: number }) {
         <>
           {/* Online = Blätter-Buch */}
           <NewsletterBook ausgabe={ausgabe} />
-          {/* Verstecktes Fließ-Layout — nur als Vorlage für den PDF-Export. */}
+          {/* Versteckte Seiten-Ansicht — Vorlage für den seitenweisen PDF-Export. */}
           <div
             aria-hidden
-            style={{ position: "absolute", left: "-99999px", top: 0, width: "800px" }}
+            style={{ position: "absolute", left: "-99999px", top: 0, width: "820px" }}
           >
             <div ref={ref}>
-              <NewsletterView ausgabe={ausgabe} />
+              <NewsletterPdfPages ausgabe={ausgabe} />
             </div>
           </div>
         </>
