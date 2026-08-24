@@ -88,10 +88,8 @@ def _quartal_start(heute: date) -> date:
     return date(heute.year, ((heute.month - 1) // 3) * 3 + 1, 1)
 
 
-@router.get("/belegschaft-kpi", response_model=BelegschaftKpi)
-async def belegschaft_kpi(
-    db: AsyncSession = Depends(get_async_db_session),
-) -> BelegschaftKpi:
+async def aggregiere_belegschaft(db: AsyncSession) -> BelegschaftKpi:
+    """Belegschafts-KPIs berechnen — von der Route UND vom Newsletter-Snapshot genutzt."""
     aktive = (
         (await db.execute(select(PersonioEmployee).where(PersonioEmployee.status == "active")))
         .scalars()
@@ -131,3 +129,10 @@ async def belegschaft_kpi(
             for n, w in sorted(abt.items(), key=lambda x: x[1], reverse=True)
         ],
     )
+
+
+@router.get("/belegschaft-kpi", response_model=BelegschaftKpi)
+async def belegschaft_kpi(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BelegschaftKpi:
+    return await aggregiere_belegschaft(db)

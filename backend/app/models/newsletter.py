@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -50,6 +51,10 @@ class Newsletter(Base):
     quartal: Mapped[int] = mapped_column(Integer, nullable=False)
     titel: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="entwurf")
+    #: Eingefrorener Stand der Belegschafts-KPIs (v1.113) — beim Einfügen aus dem
+    #: HR-Aggregat kopiert, damit eine Archiv-Ausgabe stabil bleibt. NULL = ohne
+    #: KPI-Block.
+    kpi_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

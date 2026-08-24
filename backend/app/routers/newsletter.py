@@ -29,6 +29,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_async_db_session
 from app.models import Newsletter, NewsletterEintrag
 from app.models.newsletter import NEWSLETTER_RUBRIKEN, NEWSLETTER_STATUS
+from app.routers.hr_belegschaft import aggregiere_belegschaft
 from app.security.directus_auth import get_current_user, require_admin, require_dashboard_read
 
 router = APIRouter(
@@ -74,6 +75,8 @@ class AusgabeDetail(BaseModel):
     titel: str | None
     status: str
     eintraege: list[EintragRead]
+    #: Eingefrorener KPI-Stand (Belegschaft) für den „ACM KPIs"-Block; None = ohne.
+    kpi_snapshot: dict | None = None
 
 
 class AusgabeAnlegen(BaseModel):
@@ -128,6 +131,7 @@ def _detail(n: Newsletter) -> AusgabeDetail:
         titel=n.titel,
         status=n.status,
         eintraege=[_eintrag_read(e) for e in n.eintraege],
+        kpi_snapshot=n.kpi_snapshot,
     )
 
 
@@ -372,6 +376,34 @@ async def bild_entfernen(
     e.bild_mime = None
     await db.commit()
     return Response(status_code=204)
+
+
+@router.post(
+    "/{ausgabe_id}/kpi", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def kpi_einfuegen(
+    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    """Aktuelle Belegschafts-KPIs als Snapshot in die Ausgabe einfrieren."""
+    n = await _hole_ausgabe(db, ausgabe_id)
+    kpi = await aggregiere_belegschaft(db)
+    n.kpi_snapshot = kpi.model_dump()
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, n.id))
+
+
+@router.delete(
+    "/{ausgabe_id}/kpi", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def kpi_entfernen(
+    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    n = await _hole_ausgabe(db, ausgabe_id)
+    n.kpi_snapshot = None
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, n.id))
 
 
 # Ganz zuletzt registriert: die 1-Segment-Parameter-Route darf die literalen

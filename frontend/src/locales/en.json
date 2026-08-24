@@ -1,4 +1,11 @@
 {
+  "newsletter.kpiTitel": "ACM KPIs",
+  "newsletter.kpiEnthalten": "included (snapshot)",
+  "newsletter.kpiOhne": "not included",
+  "newsletter.kpiEinfuegen": "Add KPIs",
+  "newsletter.kpiAktualisieren": "Refresh KPIs",
+  "newsletter.kpiEntfernen": "Remove KPIs",
+  "newsletter.kpiEingefuegt": "KPIs added",
   "belegschaft.title": "Workforce",
   "belegschaft.gesamt": "{{n}} active employees",
   "belegschaft.geschlecht": "Gender",
