@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck } from "lucide-react";
+import { LayoutDashboard, Users, Box, Thermometer, MonitorPlay, FileSpreadsheet, Ruler, Factory, ClipboardCheck, Newspaper } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { RoleGate } from "@/auth/RoleGate";
@@ -43,6 +43,28 @@ export function LauncherPage() {
           </button>
           <span className="text-xs text-muted-foreground text-center">
             {t("launcher.tile.kpi")}
+          </span>
+        </div>
+        </RoleGate>
+
+        {/* Newsletter tile → /newsletter (Lesen viewer-frei; Redaktion admin-only). */}
+        <RoleGate allow={["admin", "viewer"]}>
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocation("/newsletter")}
+            aria-label={t("newsletter.title")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-orange-500 to-amber-600
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Newspaper className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("newsletter.title")}
           </span>
         </div>
         </RoleGate>
