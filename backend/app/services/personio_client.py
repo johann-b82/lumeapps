@@ -333,6 +333,59 @@ class PersonioClient:
             offset += limit
         return results
 
+    async def fetch_attendance_periods_v2(self, since=None) -> list[dict]:
+        """Paginated GET /v2/attendance-periods (Personio API V2, Cursor-basiert).
+
+        V2 löst den V1-422 bei mehrtägigen Perioden und nutzt **denselben**
+        Bearer-Token. Segmente tragen ``type`` (WORK/BREAK) — der Aufrufer
+        filtert auf ``WORK``. Paginierung folgt ``_meta.links.next.href``.
+
+        ``since`` (date) begrenzt über ``attribution_date.gte`` das Fenster
+        (weniger Requests). ``limit`` max. 50 (höher → 422). Bei 429 wird mit
+        ``Retry-After`` zurückgehalten; zwischen den Seiten leichte Drosselung.
+        """
+        import asyncio
+
+        token = await self._get_valid_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        url: str | None = "https://api.personio.de/v2/attendance-periods"
+        params: dict | None = {"limit": 50}  # V2-Maximum; höhere Werte → 422
+        if since is not None:
+            params["attribution_date.gte"] = since.isoformat()
+        results: list[dict] = []
+        drosseln = False
+        versuche = 0
+        while url:
+            if drosseln:
+                await asyncio.sleep(0.3)  # unter dem Rate-Limit bleiben
+            try:
+                resp = await self._http.get(url, headers=headers, params=params)
+            except httpx.TimeoutException as exc:
+                raise PersonioNetworkError(f"Personio unreachable (timeout): {exc}") from exc
+            except httpx.RequestError as exc:
+                raise PersonioNetworkError(f"Personio unreachable: {exc}") from exc
+            if resp.status_code == 401:
+                raise PersonioAuthError("Invalid credentials", status_code=401)
+            if resp.status_code == 429:
+                versuche += 1
+                if versuche > 8:
+                    retry_after = int(resp.headers.get("Retry-After", "60"))
+                    raise PersonioRateLimitError(
+                        f"Rate limited, retry in {retry_after}s", retry_after=retry_after
+                    )
+                await asyncio.sleep(min(int(resp.headers.get("Retry-After", "30")), 65))
+                drosseln = True
+                continue  # dieselbe Seite erneut (Cursor nicht weiterschalten)
+            if resp.is_error:
+                raise PersonioAPIError(f"Personio API error {resp.status_code}", status_code=resp.status_code)
+            versuche = 0
+            j = resp.json()
+            results.extend(j.get("_data", []))
+            nxt = ((j.get("_meta") or {}).get("links") or {}).get("next")
+            url = nxt.get("href") if nxt else None
+            params = None  # der next-Link trägt Cursor + Filter bereits
+        return results
+
     async def fetch_profile_picture(
         self,
         employee_id: int,
