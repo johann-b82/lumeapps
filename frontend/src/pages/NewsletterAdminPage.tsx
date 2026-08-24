@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeft, FileDown, FileText, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { BarChart3, ChevronLeft, FileDown, FileText, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
 import { AuthImage, NewsletterView } from "@/components/newsletter/NewsletterView";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
@@ -15,6 +15,8 @@ import {
   deleteEintrag,
   fetchAdminAusgabe,
   fetchAdminAusgaben,
+  insertKpi,
+  removeKpi,
   updateAusgabe,
   updateEintrag,
   uploadBild,
@@ -162,6 +164,19 @@ function Editor({ id }: { id: number }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const kpiEin = useMutation({
+    mutationFn: () => insertKpi(id),
+    onSuccess: () => {
+      toast.success(t("newsletter.kpiEingefuegt"));
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const kpiWeg = useMutation({
+    mutationFn: () => removeKpi(id),
+    onSuccess: () => invalidate(),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const previewRef = useRef<HTMLDivElement>(null);
   const [vorschau, setVorschau] = useState(false);
@@ -234,6 +249,26 @@ function Editor({ id }: { id: number }) {
         >
           {t(`newsletter.status.${ausgabe.status}`)}
         </span>
+      </div>
+
+      {/* ACM-KPI-Block: eingefrorener Snapshot der Belegschafts-KPIs. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border p-3">
+        <BarChart3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm">{t("newsletter.kpiTitel")}</span>
+        <span className="text-xs text-muted-foreground">
+          {ausgabe.kpi_snapshot ? t("newsletter.kpiEnthalten") : t("newsletter.kpiOhne")}
+        </span>
+        <div className="ml-auto flex gap-2">
+          <button type="button" className={btn} disabled={kpiEin.isPending} onClick={() => kpiEin.mutate()}>
+            {kpiEin.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {ausgabe.kpi_snapshot ? t("newsletter.kpiAktualisieren") : t("newsletter.kpiEinfuegen")}
+          </button>
+          {ausgabe.kpi_snapshot && (
+            <button type="button" className={btn} disabled={kpiWeg.isPending} onClick={() => kpiWeg.mutate()}>
+              {t("newsletter.kpiEntfernen")}
+            </button>
+          )}
+        </div>
       </div>
 
       {vorschau && (

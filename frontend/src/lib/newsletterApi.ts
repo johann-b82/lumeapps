@@ -6,6 +6,7 @@
  * (react-markdown), plus optional ein Bild.
  */
 import { apiClient } from "./apiClient";
+import type { BelegschaftKpi } from "./belegschaftApi";
 
 export const NEWSLETTER_RUBRIKEN = [
   "arash",
@@ -36,6 +37,8 @@ export interface Eintrag {
 
 export interface AusgabeDetail extends AusgabeListItem {
   eintraege: Eintrag[];
+  /** Eingefrorener KPI-Stand für den „ACM KPIs"-Block; null = ohne. */
+  kpi_snapshot: BelegschaftKpi | null;
 }
 
 const BASE = "/api/newsletter";
@@ -115,4 +118,12 @@ export function uploadBild(eintragId: number, datei: File): Promise<Eintrag> {
 }
 export function deleteBild(eintragId: number): Promise<void> {
   return apiClient<void>(`${BASE}/eintrag/${eintragId}/bild`, { method: "DELETE" });
+}
+
+/** Aktuelle Belegschafts-KPIs als Snapshot in die Ausgabe einfrieren. */
+export function insertKpi(ausgabeId: number): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/kpi`, { method: "POST" });
+}
+export function removeKpi(ausgabeId: number): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/kpi`, { method: "DELETE" });
 }

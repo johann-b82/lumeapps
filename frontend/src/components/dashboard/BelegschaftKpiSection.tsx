@@ -16,7 +16,7 @@ import {
 import { Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { axisProps, gridProps, tooltipCursorProps, tooltipItemStyle, tooltipLabelStyle, tooltipStyle } from "@/lib/chartDefaults";
-import { fetchBelegschaftKpi, type LabelWert } from "@/lib/belegschaftApi";
+import { fetchBelegschaftKpi, type BelegschaftKpi, type LabelWert } from "@/lib/belegschaftApi";
 
 const GESCHLECHT_FARBEN: Record<string, string> = {
   maennlich: "#3b82f6",
@@ -98,23 +98,11 @@ function PieKachel({
   );
 }
 
-export function BelegschaftKpiSection() {
+/** Die vier KPI-Kacheln aus gegebenen Daten — genutzt vom Dashboard UND vom Newsletter. */
+export function BelegschaftKpiCharts({ data }: { data: BelegschaftKpi }) {
   const { t } = useTranslation();
-  const { data } = useQuery({ queryKey: ["hr", "belegschaft-kpi"], queryFn: fetchBelegschaftKpi });
-  if (!data) return null;
-
   const abteilungen = data.abteilungen.map((a) => ({ name: a.name, wert: a.wert }));
-
   return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <Users className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-        <h2 className="text-base font-semibold">{t("belegschaft.title")}</h2>
-        <span className="text-xs text-muted-foreground">
-          {t("belegschaft.gesamt", { n: data.gesamt })}
-        </span>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-2">
         <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" />
         <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} />
@@ -153,6 +141,23 @@ export function BelegschaftKpiSection() {
           </ResponsiveContainer>
         </Card>
       </div>
+  );
+}
+
+export function BelegschaftKpiSection() {
+  const { t } = useTranslation();
+  const { data } = useQuery({ queryKey: ["hr", "belegschaft-kpi"], queryFn: fetchBelegschaftKpi });
+  if (!data) return null;
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2">
+        <Users className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <h2 className="text-base font-semibold">{t("belegschaft.title")}</h2>
+        <span className="text-xs text-muted-foreground">
+          {t("belegschaft.gesamt", { n: data.gesamt })}
+        </span>
+      </div>
+      <BelegschaftKpiCharts data={data} />
     </section>
   );
 }

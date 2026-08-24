@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchBlob } from "@/lib/download";
+import { BelegschaftKpiCharts } from "@/components/dashboard/BelegschaftKpiSection";
 import {
   NEWSLETTER_RUBRIKEN,
   bildUrl,
@@ -64,6 +65,15 @@ export function NewsletterView({ ausgabe }: { ausgabe: AusgabeDetail }) {
         </div>
         <h1 className="text-2xl font-bold">{titel}</h1>
       </header>
+
+      {ausgabe.kpi_snapshot && (
+        <section className="mb-6 break-inside-avoid">
+          <h2 className="mb-3 border-l-4 border-primary pl-2 text-lg font-bold">
+            {t("newsletter.kpiTitel")}
+          </h2>
+          <BelegschaftKpiCharts data={ausgabe.kpi_snapshot} />
+        </section>
+      )}
 
       {NEWSLETTER_RUBRIKEN.map((rubrik) => {
         const eintraege = ausgabe.eintraege
