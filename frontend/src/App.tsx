@@ -13,6 +13,8 @@ import { SchulungenPage } from "./pages/SchulungenPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { KompetenzenPage } from "./pages/KompetenzenPage";
 import { ZeugnissePage } from "./pages/ZeugnissePage";
+import { NewsletterPage } from "./pages/NewsletterPage";
+import { NewsletterAdminPage } from "./pages/NewsletterAdminPage";
 import { EmbedBirthdaysPage } from "./pages/EmbedBirthdaysPage";
 import { EmbedJoinersPage } from "./pages/EmbedJoinersPage";
 import { EmbedWorldCupPage } from "./pages/EmbedWorldCupPage";
@@ -117,6 +119,22 @@ function AppShell() {
           <Route path="/sales" component={DashboardPage} />
           <Route path="/" component={LauncherPage} />
           <Route path="/upload" component={UploadPage} />
+          {/* Newsletter: Lesen viewer-frei, Redaktion admin-only. Spezifische
+              Routen vor /newsletter/:id (wouter first-match). */}
+          <Route path="/newsletter/admin/:id">
+            {(p) => (
+              <AdminOnly>
+                <NewsletterAdminPage id={Number(p.id)} />
+              </AdminOnly>
+            )}
+          </Route>
+          <Route path="/newsletter/admin">
+            <AdminOnly>
+              <NewsletterAdminPage />
+            </AdminOnly>
+          </Route>
+          <Route path="/newsletter/:id">{(p) => <NewsletterPage id={Number(p.id)} />}</Route>
+          <Route path="/newsletter" component={NewsletterPage} />
           <Route path="/hr" component={HRPage} />
           <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />

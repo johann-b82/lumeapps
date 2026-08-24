@@ -114,6 +114,9 @@ from app.models.zeugnis import (  # noqa: F401
     ZeugnisBewertung,
 )
 
+# Newsletter (v1.112)
+from app.models.newsletter import Newsletter, NewsletterEintrag  # noqa: F401
+
 __all__ = [
     "Base",
     # Legacy
@@ -163,4 +166,6 @@ __all__ = [
     "KpiComment", "KpiMeasure",
     # Arbeitszeugnis
     "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung",
+    # Newsletter
+    "Newsletter", "NewsletterEintrag",
 ]

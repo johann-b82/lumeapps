@@ -38,6 +38,7 @@ from app.routers.feedback import router as feedback_router
 from app.routers.kpi_review import router as kpi_review_router
 from app.routers.zeugnisse import router as zeugnisse_router
 from app.routers.hr_weekly import router as hr_weekly_router
+from app.routers.newsletter import router as newsletter_router
 from app.scheduler import lifespan
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
@@ -76,6 +77,7 @@ app.include_router(feedback_router)
 app.include_router(kpi_review_router)
 app.include_router(zeugnisse_router)
 app.include_router(hr_weekly_router)
+app.include_router(newsletter_router)
 
 
 # ---------------------------------------------------------------------------
