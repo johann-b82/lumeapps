@@ -239,6 +239,29 @@ def _normalize_attendance(raw: dict) -> dict:
     }
 
 
+def _absence_stunden(attrs: dict) -> float | None:
+    """Dauer einer Abwesenheit in **Stunden**.
+
+    Personio liefert ``effective_duration`` bei stundenbasierten Abwesenheiten
+    in **Minuten** (300 = 5 h), nicht in Stunden — daher ``/ 60``. Ohne diese
+    Umrechnung landeten Minuten als Stunden in der DB (Faktor 60 zu groß).
+
+    Tagesbasierte Abwesenheiten (``measurement_unit == "day"``) behalten vorerst
+    ihren Rohwert; ihre saubere Umrechnung in Stunden braucht die Tages-
+    arbeitszeit der Person und folgt, sobald tagesbasierte Daten (z. B.
+    Krankheit) überhaupt synchronisiert werden.
+    """
+    dur = attrs.get("effective_duration")
+    if dur is None:
+        dur = _attr_val(attrs, "hours")
+    if dur is None:
+        return None
+    unit = (attrs.get("measurement_unit") or _attr_val(attrs, "time_unit") or "").lower()
+    if unit == "hour":
+        return round(dur / 60.0, 2)
+    return dur
+
+
 def _normalize_absence(raw: dict) -> dict:
     """Extract flat fields from nested Personio absence response.
 
@@ -286,7 +309,7 @@ def _normalize_absence(raw: dict) -> dict:
         "start_date": _parse_date(start_raw),
         "end_date": _parse_date(end_raw),
         "time_unit": attrs.get("measurement_unit") or _attr_val(attrs, "time_unit") or "days",
-        "hours": attrs.get("effective_duration") or _attr_val(attrs, "hours"),
+        "hours": _absence_stunden(attrs),
         "synced_at": datetime.now(timezone.utc),
         "raw_json": raw,
     }
