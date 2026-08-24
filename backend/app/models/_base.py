@@ -324,7 +324,9 @@ class PersonioAttendance(Base):
         Index("ix_personio_attendance_employee_date", "employee_id", "date"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    #: Attendance-Period-ID. V2 (/v2/attendance-periods) liefert UUID-Strings
+    #: (v1.111); früher Integer aus V1 /company/attendances.
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     employee_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("personio_employees.id"), nullable=False
     )

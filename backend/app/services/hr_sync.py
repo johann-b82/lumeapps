@@ -8,7 +8,7 @@ Decisions:
 import logging
 from datetime import date as date_type, datetime, time as time_type, timedelta, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,12 +24,6 @@ from app.security.fernet import decrypt_credential
 from app.services.personio_client import PersonioAPIError, PersonioClient
 
 log = logging.getLogger(__name__)
-
-
-# Incremental syncs re-fetch the trailing window so late-entered / edited
-# attendance records are captured. 14 days matches typical payroll
-# correction windows.
-_INCREMENTAL_OVERLAP_DAYS = 14
 
 
 # ---------------------------------------------------------------------------
@@ -70,22 +64,23 @@ async def run_sync(session: AsyncSession) -> SyncResult:
         employees = [_normalize_employee(r) for r in raw_employees]
         emp_count = await _upsert(session, PersonioEmployee, employees)
 
-        # 2) Anwesenheiten — optional. Personios V1-Endpoint antwortet mit 422,
-        # sobald eine mehrtägige Anwesenheitsperiode im Bestand liegt (V1 dafür
-        # abgekündigt → V2). Ein solcher Ausfall darf den Sync nicht kippen.
-        #
-        # Attendance window (D-??, Phase 60 follow-up): first run fetches from
-        # earliest employee hire_date (full backfill); subsequent runs fetch
-        # max(stored_date) - 14d → today for an incremental update that
-        # re-captures late-entered corrections.
+        # 2) Anwesenheiten — optional, über **Personio API V2**
+        # (/v2/attendance-periods, v1.111). V1 (/company/attendances) war für
+        # mehrtägige Perioden abgekündigt und lieferte 422 → der Sync blieb seit
+        # 2026-07-08 stehen. V2 nutzt denselben Token, liefert die volle Historie
+        # und je Segment einen Datensatz (WORK/BREAK); nur WORK zählt als
+        # Arbeitszeit (Pausen sind eigene Segmente).
         try:
-            today = date_type.today()
-            att_start = await _compute_attendance_window_start(session, raw_employees)
-            raw_attendances = await client.fetch_attendances(
-                start_date=att_start.isoformat(),
-                end_date=today.isoformat(),
-            )
-            attendances = [_normalize_attendance(r) for r in raw_attendances]
+            # Fenster begrenzen (weniger Requests/Rate-Limit); deckt alle
+            # report-relevanten Wochen ab. Volle Historie ist über V2 möglich,
+            # aber unnötig teuer.
+            att_since = date_type.today() - timedelta(days=400)
+            raw_attendances = await client.fetch_attendance_periods_v2(since=att_since)
+            attendances = [
+                _normalize_attendance_v2(r)
+                for r in raw_attendances
+                if r.get("type") == "WORK"
+            ]
             att_count = await _upsert(session, PersonioAttendance, attendances)
         except PersonioAPIError as exc:
             teil_fehler = f"Anwesenheiten: {exc}"
@@ -264,6 +259,34 @@ def _normalize_attendance(raw: dict) -> dict:
     }
 
 
+def _v2_zeit(dt: str | None):
+    """Zeitanteil aus einem V2-Zeitstempel (``2026-01-26T08:50:00``)."""
+    if not dt or "T" not in dt:
+        return _parse_time(dt)
+    return _parse_time(dt.split("T", 1)[1])
+
+
+def _normalize_attendance_v2(raw: dict) -> dict:
+    """Flache Felder aus einem V2-``/v2/attendance-periods``-Segment.
+
+    Struktur: ``{id: <uuid>, person: {id}, type: "WORK", start: {date_time},
+    end: {date_time}, attribution_date}``. Pausen sind eigene ``BREAK``-Segmente
+    (vom Aufrufer herausgefiltert) → ``break_minutes`` bleibt 0.
+    """
+    person = (raw.get("person") or {}).get("id")
+    return {
+        "id": str(raw.get("id")),
+        "employee_id": int(person) if person else None,
+        "date": _parse_date(raw.get("attribution_date")),
+        "start_time": _v2_zeit((raw.get("start") or {}).get("date_time")),
+        "end_time": _v2_zeit((raw.get("end") or {}).get("date_time")),
+        "break_minutes": 0,
+        "is_holiday": False,
+        "synced_at": datetime.now(timezone.utc),
+        "raw_json": raw,
+    }
+
+
 def _absence_stunden(attrs: dict) -> float | None:
     """Dauer einer Abwesenheit in **Stunden**.
 
@@ -369,7 +392,9 @@ def _normalize_timeoff(raw: dict, daily_hours: dict[int, float]) -> dict:
         "employee_id": employee_id,
         "absence_type_id": type_id,
         "start_date": _parse_date(attrs.get("start_date")),
-        "end_date": _parse_date(attrs.get("end_date")),
+        # Offene (laufende) Abwesenheiten haben kein end_date → auf start_date
+        # setzen (Spalte ist NOT NULL; days_count/Stunden bleiben Personios Wert).
+        "end_date": _parse_date(attrs.get("end_date")) or _parse_date(attrs.get("start_date")),
         "time_unit": "day",
         "hours": stunden,
         "synced_at": datetime.now(timezone.utc),
@@ -449,39 +474,6 @@ async def _update_sync_meta(
     )
     await session.execute(stmt)
     await session.commit()
-
-
-async def _compute_attendance_window_start(
-    session: AsyncSession,
-    raw_employees: list[dict],
-) -> date_type:
-    """Determine attendance fetch start date.
-
-    If PersonioAttendance has any rows → incremental mode: start at
-    max(date) - _INCREMENTAL_OVERLAP_DAYS (capture late edits).
-
-    Otherwise → full-backfill mode: start at the earliest employee hire_date
-    (no attendance can exist before anyone was hired). Falls back to
-    today-395d if no hire dates are parseable (preserves prior behaviour for
-    misconfigured tenants).
-    """
-    max_stored = await session.scalar(
-        select(func.max(PersonioAttendance.date))
-    )
-    if max_stored is not None:
-        return max_stored - timedelta(days=_INCREMENTAL_OVERLAP_DAYS)
-
-    hire_dates: list[date_type] = []
-    for raw in raw_employees:
-        attrs = raw.get("attributes", {})
-        hd = _parse_date(_attr_val(attrs, "hire_date"))
-        if hd is not None:
-            hire_dates.append(hd)
-    if hire_dates:
-        return min(hire_dates)
-
-    today = date_type.today()
-    return today.replace(day=1) - timedelta(days=395)
 
 
 async def _get_settings(session: AsyncSession) -> AppSettings:
