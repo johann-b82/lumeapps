@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Newspaper, FileDown, ChevronLeft, Loader2, PencilLine } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { NewsletterView } from "@/components/newsletter/NewsletterView";
+import { NewsletterBook } from "@/components/newsletter/NewsletterBook";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import { fetchAusgabe, fetchAusgaben } from "@/lib/newsletterApi";
 
@@ -131,9 +132,19 @@ function Reader({ id }: { id: number }) {
           {t("newsletter.nichtGefunden")}
         </div>
       ) : ausgabe ? (
-        <div ref={ref} className="rounded-lg border">
-          <NewsletterView ausgabe={ausgabe} />
-        </div>
+        <>
+          {/* Online = Blätter-Buch */}
+          <NewsletterBook ausgabe={ausgabe} />
+          {/* Verstecktes Fließ-Layout — nur als Vorlage für den PDF-Export. */}
+          <div
+            aria-hidden
+            style={{ position: "absolute", left: "-99999px", top: 0, width: "800px" }}
+          >
+            <div ref={ref}>
+              <NewsletterView ausgabe={ausgabe} />
+            </div>
+          </div>
+        </>
       ) : (
         <div className="p-6 text-sm text-muted-foreground">…</div>
       )}

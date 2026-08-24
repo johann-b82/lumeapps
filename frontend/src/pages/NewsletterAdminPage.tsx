@@ -3,7 +3,10 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, ChevronLeft, FileDown, FileText, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { BarChart3, ChevronLeft, FileDown, FileText, GripVertical, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { AuthImage, NewsletterView } from "@/components/newsletter/NewsletterView";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
@@ -271,6 +274,8 @@ function Editor({ id }: { id: number }) {
         </div>
       </div>
 
+      <BlockReihenfolge ausgabe={ausgabe} onSaved={invalidate} />
+
       {vorschau && (
         <div className="mb-4">
           <div className="mb-2 flex items-center justify-end">
@@ -426,6 +431,68 @@ function EintragEditor({ eintrag, onChange }: { eintrag: Eintrag; onChange: () =
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+function SortItem({ id, label }: { id: string; label: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex cursor-grab items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+    >
+      <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      {label}
+    </div>
+  );
+}
+
+/** Drag&Drop-Reihenfolge der Blöcke (Rubriken + KPI). */
+function BlockReihenfolge({ ausgabe, onSaved }: { ausgabe: AusgabeDetail; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const standard = [...NEWSLETTER_RUBRIKEN, "kpi"] as string[];
+  const merge = (gespeichert: string[] | null | undefined) => {
+    const g = (gespeichert ?? []).filter((k) => standard.includes(k));
+    return [...g, ...standard.filter((k) => !g.includes(k))];
+  };
+  const [items, setItems] = useState<string[]>(merge(ausgabe.block_reihenfolge));
+  useEffect(() => {
+    setItems(merge(ausgabe.block_reihenfolge));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ausgabe.id]);
+
+  const save = useMutation({
+    mutationFn: (order: string[]) => updateAusgabe(ausgabe.id, { block_reihenfolge: order }),
+    onSuccess: () => onSaved(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const label = (k: string) => (k === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${k}`));
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      const neu = arrayMove(items, items.indexOf(String(active.id)), items.indexOf(String(over.id)));
+      setItems(neu);
+      save.mutate(neu);
+    }
+  };
+
+  return (
+    <div className="mb-4 rounded-lg border p-3">
+      <div className="mb-2 text-sm font-medium">{t("newsletter.reihenfolge")}</div>
+      <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={items} strategy={verticalListSortingStrategy}>
+          <div className="space-y-1">
+            {items.map((k) => (
+              <SortItem key={k} id={k} label={label(k)} />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

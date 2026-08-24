@@ -1,4 +1,8 @@
 {
+  "newsletter.reihenfolge": "Reihenfolge (ziehen zum Sortieren)",
+  "newsletter.buchEnde": "Ende",
+  "newsletter.zurueckblaettern": "Zurück",
+  "newsletter.weiterblaettern": "Weiter",
   "newsletter.kpiTitel": "ACM KPIs",
   "newsletter.kpiEnthalten": "enthalten (Snapshot)",
   "newsletter.kpiOhne": "nicht enthalten",

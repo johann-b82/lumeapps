@@ -77,6 +77,8 @@ class AusgabeDetail(BaseModel):
     eintraege: list[EintragRead]
     #: Eingefrorener KPI-Stand (Belegschaft) für den „ACM KPIs"-Block; None = ohne.
     kpi_snapshot: dict | None = None
+    #: Block-Reihenfolge (Rubrik-Schlüssel + "kpi"); None = Standard.
+    block_reihenfolge: list[str] | None = None
 
 
 class AusgabeAnlegen(BaseModel):
@@ -88,6 +90,7 @@ class AusgabeAnlegen(BaseModel):
 class AusgabeAendern(BaseModel):
     titel: str | None = None
     status: str | None = None
+    block_reihenfolge: list[str] | None = None
 
 
 class EintragAnlegen(BaseModel):
@@ -132,6 +135,7 @@ def _detail(n: Newsletter) -> AusgabeDetail:
         status=n.status,
         eintraege=[_eintrag_read(e) for e in n.eintraege],
         kpi_snapshot=n.kpi_snapshot,
+        block_reihenfolge=n.block_reihenfolge,
     )
 
 
@@ -262,6 +266,11 @@ async def aendern(
         if eingabe.status not in NEWSLETTER_STATUS:
             raise HTTPException(status_code=400, detail="Unbekannter Status.")
         n.status = eingabe.status
+    if eingabe.block_reihenfolge is not None:
+        erlaubt = set(NEWSLETTER_RUBRIKEN) | {"kpi"}
+        if any(b not in erlaubt for b in eingabe.block_reihenfolge):
+            raise HTTPException(status_code=400, detail="Unbekannter Block in der Reihenfolge.")
+        n.block_reihenfolge = list(eingabe.block_reihenfolge)
     n.aktualisiert_am = _jetzt()
     await db.commit()
     return _detail(await _hole_ausgabe(db, n.id))
