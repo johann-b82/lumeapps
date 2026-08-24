@@ -76,7 +76,11 @@ export function createAusgabe(eingabe: {
 }
 export function updateAusgabe(
   id: number,
-  patch: { titel?: string | null; status?: "entwurf" | "veroeffentlicht" },
+  patch: {
+    titel?: string | null;
+    status?: "entwurf" | "veroeffentlicht";
+    block_reihenfolge?: string[];
+  },
 ): Promise<AusgabeDetail> {
   return apiClient<AusgabeDetail>(`${BASE}/${id}`, {
     method: "PUT",

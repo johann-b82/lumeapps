@@ -55,6 +55,9 @@ class Newsletter(Base):
     #: HR-Aggregat kopiert, damit eine Archiv-Ausgabe stabil bleibt. NULL = ohne
     #: KPI-Block.
     kpi_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: Reihenfolge der Blöcke im Newsletter (v1.114) — Liste aus Rubrik-Schlüsseln
+    #: + "kpi", per Drag&Drop sortierbar. NULL = Standardreihenfolge.
+    block_reihenfolge: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
