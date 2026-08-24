@@ -296,6 +296,43 @@ class PersonioClient:
             offset += limit
         return results
 
+    async def fetch_time_offs(self) -> list[dict]:
+        """Paginated GET /company/time-offs. Returns list of raw time-off dicts.
+
+        Anders als ``/company/absence-periods`` (liefert für unsere Zugangsdaten
+        nur „Freizeitausgleich") gibt dieser Endpoint alle übrigen Abwesenheiten
+        her — Urlaub, Krankheit, Kinderkrank usw. — tagesbasiert (``days_count``).
+        """
+        token = await self._get_valid_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        results: list[dict] = []
+        offset = 0
+        limit = 200
+        while True:
+            try:
+                resp = await self._http.get(
+                    "/company/time-offs",
+                    headers=headers,
+                    params={"limit": limit, "offset": offset},
+                )
+            except httpx.TimeoutException as exc:
+                raise PersonioNetworkError(f"Personio unreachable (timeout): {exc}") from exc
+            except httpx.RequestError as exc:
+                raise PersonioNetworkError(f"Personio unreachable: {exc}") from exc
+            if resp.status_code == 401:
+                raise PersonioAuthError("Invalid credentials", status_code=401)
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", "60"))
+                raise PersonioRateLimitError(f"Rate limited, retry in {retry_after}s", retry_after=retry_after)
+            if resp.is_error:
+                raise PersonioAPIError(f"Personio API error {resp.status_code}", status_code=resp.status_code)
+            data = resp.json()["data"]
+            results.extend(data)
+            if len(data) < limit:
+                break
+            offset += limit
+        return results
+
     async def fetch_profile_picture(
         self,
         employee_id: int,
