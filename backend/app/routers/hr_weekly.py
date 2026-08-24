@@ -180,11 +180,26 @@ async def _krankheit_woche(
 
 @router.get("/meta", response_model=WeeklyMeta)
 async def meta(db: AsyncSession = Depends(get_async_db_session)) -> WeeklyMeta:
+    def _kw(d: date) -> str:
+        iso = d.isocalendar()
+        return f"{iso[0]}-{iso[1]:02d}"
+
+    heute_kw = _kw(date.today())
     max_att = (await db.execute(select(PersonioAttendance.date).order_by(PersonioAttendance.date.desc()).limit(1))).scalar_one_or_none()
-    wochen = (
-        await db.execute(select(PersonioAttendance.date))
-    ).scalars().all()
-    kws = sorted({f"{d.isocalendar()[0]}-{d.isocalendar()[1]:02d}" for d in wochen}, reverse=True)
+    att_dates = (await db.execute(select(PersonioAttendance.date))).scalars().all()
+    kw_set = {_kw(d) for d in att_dates}
+    # Abwesenheits-Wochen ergänzen: Krankheit/Urlaub liegen aktueller als die
+    # (am V1-Bruch endenden) Anwesenheiten — so bleiben aktuelle Wochen wählbar.
+    abs_dates = (
+        await db.execute(select(PersonioAbsence.start_date, PersonioAbsence.end_date))
+    ).all()
+    for s, e in abs_dates:
+        if s:
+            kw_set.add(_kw(s))
+        if e:
+            kw_set.add(_kw(e))
+    # Keine Zukunftswochen anbieten (geplanter Urlaub kann in der Zukunft liegen).
+    kws = sorted({k for k in kw_set if k <= heute_kw}, reverse=True)
     sick_ids = await _sick_type_ids(db)
     hat_krank = (
         await db.execute(
@@ -194,7 +209,7 @@ async def meta(db: AsyncSession = Depends(get_async_db_session)) -> WeeklyMeta:
         )
     ).first() is not None
     return WeeklyMeta(
-        hat_anwesenheit=bool(kws),
+        hat_anwesenheit=bool(att_dates),
         hat_krankheitsdaten=hat_krank,
         anwesenheit_bis=max_att,
         wochen_verfuegbar=kws,
