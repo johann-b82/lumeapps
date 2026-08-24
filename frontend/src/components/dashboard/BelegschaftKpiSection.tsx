@@ -82,7 +82,7 @@ function PieKachel({
             innerRadius={40}
             outerRadius={75}
             label={(e: { value?: number; pct?: number }) =>
-              prozent ? `${e.pct ?? 0}% · ${e.value}` : `${e.value}`
+              prozent ? `${e.pct ?? 0}%` : `${e.value}`
             }
             labelLine={false}
           >
