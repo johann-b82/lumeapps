@@ -2,34 +2,11 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { toPng } from "html-to-image";
-import { jsPDF } from "jspdf";
 import { Newspaper, FileDown, ChevronLeft, Loader2, PencilLine } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { NewsletterView } from "@/components/newsletter/NewsletterView";
+import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import { fetchAusgabe, fetchAusgaben } from "@/lib/newsletterApi";
-
-async function exportPdf(node: HTMLElement, filename: string) {
-  const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
-  const img = new Image();
-  img.src = dataUrl;
-  await img.decode();
-  const pdf = new jsPDF({ unit: "pt", format: "a4" });
-  const pw = pdf.internal.pageSize.getWidth();
-  const ph = pdf.internal.pageSize.getHeight();
-  const imgH = img.height * (pw / img.width);
-  let heightLeft = imgH;
-  let position = 0;
-  pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH);
-  heightLeft -= ph;
-  while (heightLeft > 0) {
-    position -= ph;
-    pdf.addPage();
-    pdf.addImage(dataUrl, "PNG", 0, position, pw, imgH);
-    heightLeft -= ph;
-  }
-  pdf.save(filename);
-}
 
 export function NewsletterPage({ id }: { id?: number }) {
   return id ? <Reader id={id} /> : <Liste />;
@@ -102,7 +79,7 @@ function Reader({ id }: { id: number }) {
     if (!ref.current || !ausgabe) return;
     setPdfLaeuft(true);
     try {
-      await exportPdf(
+      await exportNewsletterPdf(
         ref.current,
         `Newsletter_Q${ausgabe.quartal}_${ausgabe.jahr}.pdf`,
       );

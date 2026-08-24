@@ -1,4 +1,6 @@
 {
+  "newsletter.vorschau": "Preview",
+  "newsletter.vorschauAus": "Close preview",
   "newsletter.title": "Newsletter",
   "newsletter.kopf": "Q{{quartal}}/{{jahr}}",
   "newsletter.redaktion": "Editing",

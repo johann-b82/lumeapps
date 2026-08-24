@@ -1,4 +1,6 @@
 {
+  "newsletter.vorschau": "Vorschau",
+  "newsletter.vorschauAus": "Vorschau schließen",
   "newsletter.title": "Newsletter",
   "newsletter.kopf": "Q{{quartal}}/{{jahr}}",
   "newsletter.redaktion": "Redaktion",

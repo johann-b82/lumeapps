@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeft, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
-import { AuthImage } from "@/components/newsletter/NewsletterView";
+import { ChevronLeft, FileDown, FileText, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { AuthImage, NewsletterView } from "@/components/newsletter/NewsletterView";
+import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
   NEWSLETTER_RUBRIKEN,
   addEintrag,
@@ -162,6 +163,22 @@ function Editor({ id }: { id: number }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [vorschau, setVorschau] = useState(false);
+  const [pdfLaeuft, setPdfLaeuft] = useState(false);
+  const alsPdf = async () => {
+    if (!previewRef.current || !ausgabe) return;
+    setPdfLaeuft(true);
+    try {
+      await exportNewsletterPdf(
+        previewRef.current,
+        `Newsletter_Q${ausgabe.quartal}_${ausgabe.jahr}.pdf`,
+      );
+    } finally {
+      setPdfLaeuft(false);
+    }
+  };
+
   if (!ausgabe) return <div className="p-6 text-sm text-muted-foreground">…</div>;
   const veroeffentlicht = ausgabe.status === "veroeffentlicht";
 
@@ -175,6 +192,10 @@ function Editor({ id }: { id: number }) {
           {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <button type="button" className={btn} onClick={() => setVorschau((v) => !v)}>
+            <FileText className="h-3.5 w-3.5" />
+            {vorschau ? t("newsletter.vorschauAus") : t("newsletter.vorschau")}
+          </button>
           <button
             type="button"
             className={btn}
@@ -214,6 +235,20 @@ function Editor({ id }: { id: number }) {
           {t(`newsletter.status.${ausgabe.status}`)}
         </span>
       </div>
+
+      {vorschau && (
+        <div className="mb-4">
+          <div className="mb-2 flex items-center justify-end">
+            <button type="button" className={primary} disabled={pdfLaeuft} onClick={alsPdf}>
+              {pdfLaeuft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+              {t("newsletter.pdf")}
+            </button>
+          </div>
+          <div ref={previewRef} className="rounded-lg border bg-background">
+            <NewsletterView ausgabe={ausgabe} />
+          </div>
+        </div>
+      )}
 
       {NEWSLETTER_RUBRIKEN.map((rubrik) => (
         <RubrikSektion
