@@ -39,11 +39,13 @@ function PieKachel({
   daten,
   farben,
   i18nPrefix,
+  prozent = true,
 }: {
   titel: string;
   daten: LabelWert[];
   farben: Record<string, string>;
   i18nPrefix: string;
+  prozent?: boolean;
 }) {
   const { t } = useTranslation();
   const gesamt = daten.reduce((s, d) => s + d.wert, 0) || 1;
@@ -60,7 +62,9 @@ function PieKachel({
             innerRadius={40}
             outerRadius={75}
             label={(e: { value?: number }) =>
-              `${e.value} · ${Math.round(((e.value ?? 0) / gesamt) * 100)}%`
+              prozent
+                ? `${e.value} · ${Math.round(((e.value ?? 0) / gesamt) * 100)}%`
+                : `${e.value}`
             }
             labelLine={false}
           >
@@ -95,7 +99,7 @@ export function BelegschaftKpiSection() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" />
-        <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" />
+        <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} />
 
         {/* Neu vs. Bestand: absolute Zahlen (Balken), kein Prozent. */}
         <Card className="p-4">
