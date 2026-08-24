@@ -98,24 +98,45 @@ export function BlockInhalt({ block }: { block: NewsletterBlock }) {
   );
 }
 
-/** Fließende Gesamt-Ansicht (für den PDF-Export) — Blöcke in Reihenfolge. */
-export function NewsletterView({ ausgabe }: { ausgabe: AusgabeDetail }) {
+/** Seitenweise Ansicht — je Block genau eine A4-Seite (Cover, KPI, jede Rubrik,
+ *  Rückseite), deckungsgleich zum Buch-Reader. Jede Seite trägt `data-pdf-page`;
+ *  der PDF-Export ({@link exportNewsletterPdf}) erfasst sie einzeln. Feste
+ *  A4-Maße bei 96 dpi (794 × 1123 px); `minHeight` füllt kurze Seiten voll aus,
+ *  längere Blöcke laufen auf eine Folgeseite über. */
+export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
   const titel = ausgabe.titel || `Q${ausgabe.quartal} ${ausgabe.jahr}`;
   const bloecke = ordereBloecke(ausgabe);
+  const seite = { width: 794, minHeight: 1123 };
   return (
-    <article className="mx-auto max-w-3xl bg-background p-6">
-      <header className="mb-6 border-b pb-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+    <div className="flex flex-col items-center gap-4">
+      <div
+        data-pdf-page
+        style={seite}
+        className="flex flex-col items-center justify-center bg-gradient-to-br from-sky-600
+                   to-blue-800 p-16 text-center text-white"
+      >
+        <div className="mb-3 text-base uppercase tracking-widest opacity-90">
           {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
         </div>
-        <h1 className="text-2xl font-bold">{titel}</h1>
-      </header>
+        <div className="text-5xl font-bold leading-tight">{titel}</div>
+        <div className="mt-8 text-sm opacity-80">{t("newsletter.title")}</div>
+      </div>
+
       {bloecke.map((b, i) => (
-        <div key={i} className="mb-6">
+        <div key={i} data-pdf-page style={seite} className="bg-white p-12 text-neutral-900">
           <BlockInhalt block={b} />
         </div>
       ))}
-    </article>
+
+      <div
+        data-pdf-page
+        style={seite}
+        className="flex items-center justify-center bg-neutral-100 p-16 text-center text-sm
+                   text-neutral-500"
+      >
+        {t("newsletter.buchEnde")}
+      </div>
+    </div>
   );
 }
