@@ -179,17 +179,6 @@ async def rubriken() -> list[str]:
     return list(NEWSLETTER_RUBRIKEN)
 
 
-@router.get("/{ausgabe_id}", response_model=AusgabeDetail)
-async def ausgabe(
-    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
-) -> AusgabeDetail:
-    """Eine veröffentlichte Ausgabe mit allen Einträgen."""
-    n = await _hole_ausgabe(db, ausgabe_id)
-    if n.status != "veroeffentlicht":
-        raise HTTPException(status_code=404, detail="Ausgabe nicht gefunden.")
-    return _detail(n)
-
-
 @router.get("/eintrag/{eintrag_id}/bild")
 async def bild(eintrag_id: int, db: AsyncSession = Depends(get_async_db_session)) -> Response:
     e = await _hole_eintrag(db, eintrag_id)
@@ -383,3 +372,17 @@ async def bild_entfernen(
     e.bild_mime = None
     await db.commit()
     return Response(status_code=204)
+
+
+# Ganz zuletzt registriert: die 1-Segment-Parameter-Route darf die literalen
+# Routen (/admin, /rubriken) NICHT abfangen (FastAPI matcht in Deklarations-
+# reihenfolge).
+@router.get("/{ausgabe_id}", response_model=AusgabeDetail)
+async def ausgabe(
+    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    """Eine veröffentlichte Ausgabe mit allen Einträgen."""
+    n = await _hole_ausgabe(db, ausgabe_id)
+    if n.status != "veroeffentlicht":
+        raise HTTPException(status_code=404, detail="Ausgabe nicht gefunden.")
+    return _detail(n)
