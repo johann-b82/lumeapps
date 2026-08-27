@@ -126,6 +126,19 @@ class Zeugnis(Base):
     )
 
 
+class ZeugnisVorlage(Base):
+    """Benanntes Bewertungs-Profil (Noten je Dimension) zum Wiederverwenden."""
+
+    __tablename__ = "zeugnis_vorlage"
+    __table_args__ = (UniqueConstraint("name", name="uq_zeugnis_vorlage_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    #: {dimension: note} — Noten 1–4 je Dimension.
+    noten: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ZeugnisBewertung(Base):
     """Eine Note (1–4, Schulnotenprinzip) je Bewertungsdimension."""
 

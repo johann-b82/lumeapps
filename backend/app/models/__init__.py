@@ -112,6 +112,7 @@ from app.models.zeugnis import (  # noqa: F401
     Zeugnis,
     ZeugnisAussteller,
     ZeugnisBewertung,
+    ZeugnisVorlage,
 )
 
 # Newsletter (v1.112)
@@ -169,7 +170,7 @@ __all__ = [
     # KPI-Bewertung & Maßnahmen
     "KpiComment", "KpiMeasure",
     # Arbeitszeugnis
-    "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung",
+    "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung", "ZeugnisVorlage",
     # Newsletter
     "Newsletter", "NewsletterEintrag", "NewsletterEintragBild",
 ]

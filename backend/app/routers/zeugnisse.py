@@ -19,7 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_async_db_session
-from app.models import OnboardingExtern, PersonioEmployee, Zeugnis, ZeugnisAussteller, ZeugnisBewertung
+from app.models import (
+    OnboardingExtern,
+    PersonioEmployee,
+    Zeugnis,
+    ZeugnisAussteller,
+    ZeugnisBewertung,
+    ZeugnisVorlage,
+)
 from app.models.zeugnis import ZEUGNIS_ABSCHNITTE, ZEUGNIS_ARTEN, ZEUGNIS_DIMENSIONEN
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
@@ -131,6 +138,18 @@ class AusstellerUpdate(BaseModel):
     unterzeichner1_titel: str | None = None
     unterzeichner2_name: str | None = None
     unterzeichner2_titel: str | None = None
+
+
+class VorlageRead(BaseModel):
+    id: int
+    name: str
+    noten: dict[str, int]
+
+
+class VorlageCreate(BaseModel):
+    name: str
+    #: {dimension: note} — Noten 1–4.
+    noten: dict[str, int]
 
 
 # --------------------------------------------------------------------------
@@ -300,6 +319,69 @@ async def aussteller_speichern(
         unterzeichner2_name=a.unterzeichner2_name,
         unterzeichner2_titel=a.unterzeichner2_titel,
     )
+
+
+# --------------------------------------------------------------------------
+# Bewertungs-Vorlagen (Profile)
+# --------------------------------------------------------------------------
+
+
+def _valide_noten(noten: dict[str, int]) -> dict[str, int]:
+    rein: dict[str, int] = {}
+    for dim, note in noten.items():
+        if dim not in ZEUGNIS_DIMENSIONEN:
+            raise HTTPException(status_code=400, detail=f"Unbekannte Dimension: {dim}")
+        if note not in (1, 2, 3, 4):
+            raise HTTPException(status_code=400, detail="Note muss 1–4 sein.")
+        rein[dim] = note
+    return rein
+
+
+@router.get("/vorlagen", response_model=list[VorlageRead])
+async def vorlagen(db: AsyncSession = Depends(get_async_db_session)) -> list[VorlageRead]:
+    rows = (
+        (await db.execute(select(ZeugnisVorlage).order_by(ZeugnisVorlage.name)))
+        .scalars()
+        .all()
+    )
+    return [VorlageRead(id=v.id, name=v.name, noten=v.noten) for v in rows]
+
+
+@router.post("/vorlagen", response_model=VorlageRead, status_code=201)
+async def vorlage_anlegen(
+    eingabe: VorlageCreate, db: AsyncSession = Depends(get_async_db_session)
+) -> VorlageRead:
+    name = eingabe.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name ist Pflicht.")
+    noten = _valide_noten(eingabe.noten)
+    if not noten:
+        raise HTTPException(status_code=400, detail="Mindestens eine Note nötig.")
+    vorhanden = (
+        await db.execute(select(ZeugnisVorlage).where(ZeugnisVorlage.name == name))
+    ).scalar_one_or_none()
+    if vorhanden is not None:
+        vorhanden.noten = noten
+        vorhanden.aktualisiert_am = _jetzt()
+        v = vorhanden
+    else:
+        v = ZeugnisVorlage(name=name, noten=noten, aktualisiert_am=_jetzt())
+        db.add(v)
+    await db.commit()
+    await db.refresh(v)
+    return VorlageRead(id=v.id, name=v.name, noten=v.noten)
+
+
+@router.delete("/vorlagen/{vorlage_id}", status_code=204)
+async def vorlage_entfernen(
+    vorlage_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    v = await db.get(ZeugnisVorlage, vorlage_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Vorlage nicht gefunden.")
+    await db.delete(v)
+    await db.commit()
+    return Response(status_code=204)
 
 
 # --------------------------------------------------------------------------
