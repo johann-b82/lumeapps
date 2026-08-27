@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Sparkles, Loader2, Trash2, Download, Building2 } from "lucide-react";
+import { FileText, Sparkles, Loader2, Trash2, Download, Building2, RefreshCw } from "lucide-react";
 
 import {
   ZEUGNIS_ABSCHNITTE,
@@ -18,6 +18,7 @@ import {
   fetchVorlagen,
   fetchZeugnis,
   fetchZeugnisse,
+  generateAbschnitt,
   generateZeugnis,
   saveAussteller,
   updateZeugnis,
@@ -377,6 +378,16 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const neuAbschnitt = useMutation({
+    mutationFn: (key: string) => generateAbschnitt(id, key),
+    onSuccess: (d) => {
+      setForm(d);
+      invalidate();
+      toast.success(t("zeugnisse.abschnittNeu"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const entfernen = useMutation({
     mutationFn: () => deleteZeugnis(id),
     onSuccess: () => {
@@ -565,17 +576,37 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
         <section className="rounded-lg border p-3">
           <div className="mb-2 text-xs font-medium">{t("zeugnisse.text")}</div>
           <div className="space-y-2">
-            {ZEUGNIS_ABSCHNITTE.map((key) => (
-              <AreaFeld
-                key={key}
-                label={t(`zeugnisse.abschnitt.${key}`)}
-                value={form.abschnitte?.[key] ?? ""}
-                rows={4}
-                onChange={(v) =>
-                  setForm({ ...form, abschnitte: { ...(form.abschnitte ?? {}), [key]: v } })
-                }
-              />
-            ))}
+            {ZEUGNIS_ABSCHNITTE.map((key) => {
+              const laeuft = neuAbschnitt.isPending && neuAbschnitt.variables === key;
+              return (
+                <AreaFeld
+                  key={key}
+                  label={t(`zeugnisse.abschnitt.${key}`)}
+                  value={form.abschnitte?.[key] ?? ""}
+                  rows={4}
+                  onChange={(v) =>
+                    setForm({ ...form, abschnitte: { ...(form.abschnitte ?? {}), [key]: v } })
+                  }
+                  action={
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5
+                                 text-[0.7rem] hover:bg-muted disabled:opacity-50"
+                      disabled={neuAbschnitt.isPending}
+                      title={t("zeugnisse.abschnittNeuTitel")}
+                      onClick={() => neuAbschnitt.mutate(key)}
+                    >
+                      {laeuft ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      {t("zeugnisse.abschnittNeuKurz")}
+                    </button>
+                  }
+                />
+              );
+            })}
           </div>
           <div className="mt-2">
             <button
@@ -587,6 +618,27 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
               {t("zeugnisse.textSpeichern")}
             </button>
           </div>
+        </section>
+      )}
+
+      {/* Vorschau: zusammengesetztes Zeugnis (schreibgeschützt) */}
+      {form.abschnitte && (
+        <section className="rounded-lg border bg-muted/30 p-4">
+          <div className="mb-3 text-xs font-medium">{t("zeugnisse.vorschau")}</div>
+          <article className="mx-auto max-w-[52rem] space-y-3 rounded-md bg-background p-6 text-sm leading-relaxed shadow-sm">
+            {ZEUGNIS_ABSCHNITTE.map((key) => {
+              const text = (form.abschnitte?.[key] ?? "").trim();
+              if (!text) return null;
+              return (
+                <p key={key} className="whitespace-pre-wrap">
+                  {text}
+                </p>
+              );
+            })}
+            {ZEUGNIS_ABSCHNITTE.every((k) => !(form.abschnitte?.[k] ?? "").trim()) && (
+              <p className="text-muted-foreground">{t("zeugnisse.vorschauLeer")}</p>
+            )}
+          </article>
         </section>
       )}
     </div>
@@ -641,15 +693,20 @@ function AreaFeld({
   value,
   onChange,
   rows = 2,
+  action,
 }: {
   label: string;
   value: string | null;
   onChange: (v: string) => void;
   rows?: number;
+  action?: ReactNode;
 }) {
   return (
     <label className="block text-xs">
-      {label}
+      <span className="flex items-center justify-between gap-2">
+        <span>{label}</span>
+        {action}
+      </span>
       <textarea
         rows={rows}
         className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm

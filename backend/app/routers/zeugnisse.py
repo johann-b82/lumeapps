@@ -549,6 +549,49 @@ async def generieren(
     return _read(z)
 
 
+@router.post("/{zeugnis_id}/generate/{abschnitt}", response_model=ZeugnisRead)
+async def generieren_abschnitt(
+    zeugnis_id: int,
+    abschnitt: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ZeugnisRead:
+    """Nur einen einzelnen Abschnitt gezielt neu erzeugen (Ton auf die übrigen abgestimmt)."""
+    if abschnitt not in ZEUGNIS_ABSCHNITTE:
+        raise HTTPException(status_code=404, detail="Unbekannter Abschnitt.")
+    z = await _hole(db, zeugnis_id)
+    noten = _noten(z)
+    if not noten:
+        raise HTTPException(
+            status_code=400, detail="Bitte zuerst mindestens eine Note vergeben."
+        )
+    try:
+        neu = await generiere_abschnitte(
+            geschlecht=z.geschlecht,
+            taetigkeit=z.taetigkeit,
+            abteilung=z.abteilung,
+            eintritt=z.eintritt,
+            austritt=z.austritt,
+            art=z.art,
+            fuehrungskraft=z.fuehrungskraft,
+            noten=noten,
+            stichpunkte=z.taetigkeit_stichpunkte,
+            kompetenzen=z.besondere_kompetenzen,
+            erfolge=z.besondere_erfolge,
+            nur_abschnitt=abschnitt,
+            bestehende=dict(z.abschnitte_json or {}),
+        )
+    except ZeugnisKIError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    zusammen = dict(z.abschnitte_json or {})
+    zusammen.update(_name_ersetzen(neu, z))
+    z.abschnitte_json = zusammen
+    z.aktualisiert_am = _jetzt()
+    await db.commit()
+    z = await _hole(db, z.id)
+    return _read(z)
+
+
 # --------------------------------------------------------------------------
 # Dokumente
 # --------------------------------------------------------------------------
