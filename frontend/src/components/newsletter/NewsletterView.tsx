@@ -9,11 +9,14 @@ import {
   NEWSLETTER_RUBRIKEN,
   bildUrl,
   coverUrl,
+  eintragBildUrl,
   rueckUrl,
   type AusgabeDetail,
   type Eintrag,
+  type EintragBild,
   type Rubrik,
 } from "@/lib/newsletterApi";
+import { packePuzzle } from "@/lib/puzzle";
 
 /** Ein Block des Newsletters: eine Rubrik (mit Einträgen) oder der KPI-Block. */
 export type NewsletterBlock =
@@ -84,11 +87,41 @@ export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }
   );
 }
 
+/** Mehrere Bilder eines Eintrags als Raster-Puzzle (quadratische Zellen). */
+export function PuzzleBilder({ bilder }: { bilder: EintragBild[] }) {
+  if (!bilder.length) return null;
+  const { platz, rows } = packePuzzle(bilder.map((b) => ({ spalten: b.spalten, zeilen: b.zeilen })));
+  return (
+    <div
+      className="my-2 grid gap-1"
+      style={{
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateRows: `repeat(${rows}, 1fr)`,
+        aspectRatio: `4 / ${rows}`,
+      }}
+    >
+      {bilder.map((b, i) => (
+        <div
+          key={b.id}
+          className="relative overflow-hidden rounded"
+          style={{
+            gridColumn: `${platz[i].colStart} / span ${platz[i].spalten}`,
+            gridRow: `${platz[i].rowStart} / span ${platz[i].zeilen}`,
+          }}
+        >
+          <AuthImageUrl url={eintragBildUrl(b.id)} alt="" className="absolute inset-0 block h-full w-full object-cover" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EintragBlock({ eintrag }: { eintrag: Eintrag }) {
   return (
     <div className="mb-4 break-inside-avoid">
       <h3 className="mb-1 text-base font-semibold">{eintrag.untertitel}</h3>
       {eintrag.hat_bild && <AuthImage eintragId={eintrag.id} alt={eintrag.untertitel} />}
+      <PuzzleBilder bilder={eintrag.bilder} />
       {eintrag.inhalt_md.trim() && (
         <div className="prose prose-sm max-w-none dark:prose-invert">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{eintrag.inhalt_md}</ReactMarkdown>

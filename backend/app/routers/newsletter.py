@@ -18,6 +18,10 @@ die Entwurfs-Ansicht:
   - DELETE /{ausgabe_id}/cover
   - PUT  /{ausgabe_id}/rueckseite   (Rückseitenbild hochladen)
   - DELETE /{ausgabe_id}/rueckseite
+  - POST /eintrag/{eintrag_id}/bilder        (Puzzle-Bild hinzufügen)
+  - PUT  /eintrag/{eintrag_id}/bilder/anordnung (Reihenfolge setzen)
+  - PUT  /eintrag-bild/{bild_id}             (Zellen-Spanne ändern)
+  - DELETE /eintrag-bild/{bild_id}
 Die übrigen GET-Routen (veröffentlichte Ausgaben + Bilder) sind viewer-lesbar.
 """
 from __future__ import annotations
@@ -31,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_async_db_session
-from app.models import Newsletter, NewsletterEintrag
+from app.models import Newsletter, NewsletterEintrag, NewsletterEintragBild
 from app.models.newsletter import NEWSLETTER_RUBRIKEN, NEWSLETTER_STATUS
 from app.routers.hr_belegschaft import aggregiere_belegschaft
 from app.security.directus_auth import get_current_user, require_admin, require_dashboard_read
@@ -63,6 +67,13 @@ class AusgabeListItem(BaseModel):
     status: str
 
 
+class BildRead(BaseModel):
+    id: int
+    reihenfolge: int
+    spalten: int
+    zeilen: int
+
+
 class EintragRead(BaseModel):
     id: int
     rubrik: str
@@ -70,6 +81,8 @@ class EintragRead(BaseModel):
     inhalt_md: str
     reihenfolge: int
     hat_bild: bool
+    #: Puzzle-Bilder in Reihenfolge (mit Zellen-Spanne).
+    bilder: list[BildRead] = []
 
 
 class AusgabeDetail(BaseModel):
@@ -117,6 +130,17 @@ class EintragAendern(BaseModel):
     reihenfolge: int | None = None
 
 
+class BildLayout(BaseModel):
+    #: Zellen-Spanne im 4-Spalten-Raster (Spalten 1–4, Zeilen 1–2).
+    spalten: int | None = None
+    zeilen: int | None = None
+
+
+class BilderAnordnung(BaseModel):
+    #: Bild-IDs in gewünschter Reihenfolge.
+    ids: list[int]
+
+
 # --------------------------------------------------------------------------
 # Hilfen
 # --------------------------------------------------------------------------
@@ -124,6 +148,10 @@ class EintragAendern(BaseModel):
 
 def _list_item(n: Newsletter) -> AusgabeListItem:
     return AusgabeListItem(id=n.id, jahr=n.jahr, quartal=n.quartal, titel=n.titel, status=n.status)
+
+
+def _bild_read(b: NewsletterEintragBild) -> BildRead:
+    return BildRead(id=b.id, reihenfolge=b.reihenfolge, spalten=b.spalten, zeilen=b.zeilen)
 
 
 def _eintrag_read(e: NewsletterEintrag) -> EintragRead:
@@ -134,6 +162,7 @@ def _eintrag_read(e: NewsletterEintrag) -> EintragRead:
         inhalt_md=e.inhalt_md,
         reihenfolge=e.reihenfolge,
         hat_bild=e.bild_data is not None,
+        bilder=[_bild_read(b) for b in e.bilder],
     )
 
 
@@ -158,7 +187,7 @@ async def _hole_ausgabe(db: AsyncSession, ausgabe_id: int) -> Newsletter:
         await db.execute(
             select(Newsletter)
             .where(Newsletter.id == ausgabe_id)
-            .options(selectinload(Newsletter.eintraege))
+            .options(selectinload(Newsletter.eintraege).selectinload(NewsletterEintrag.bilder))
         )
     ).scalar_one_or_none()
     if n is None:
@@ -171,6 +200,27 @@ async def _hole_eintrag(db: AsyncSession, eintrag_id: int) -> NewsletterEintrag:
     if e is None:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden.")
     return e
+
+
+async def _eintrag_voll(db: AsyncSession, eintrag_id: int) -> NewsletterEintrag:
+    """Eintrag inkl. eager-geladener Puzzle-Bilder — für EintragRead-Antworten."""
+    e = (
+        await db.execute(
+            select(NewsletterEintrag)
+            .where(NewsletterEintrag.id == eintrag_id)
+            .options(selectinload(NewsletterEintrag.bilder))
+        )
+    ).scalar_one_or_none()
+    if e is None:
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden.")
+    return e
+
+
+async def _hole_eintrag_bild(db: AsyncSession, bild_id: int) -> NewsletterEintragBild:
+    b = await db.get(NewsletterEintragBild, bild_id)
+    if b is None:
+        raise HTTPException(status_code=404, detail="Bild nicht gefunden.")
+    return b
 
 
 async def _hole_newsletter(db: AsyncSession, ausgabe_id: int) -> Newsletter:
@@ -225,6 +275,13 @@ async def bild(eintrag_id: int, db: AsyncSession = Depends(get_async_db_session)
     if e.bild_data is None:
         raise HTTPException(status_code=404, detail="Kein Bild.")
     return Response(content=e.bild_data, media_type=e.bild_mime or "image/png")
+
+
+@router.get("/eintrag-bild/{bild_id}")
+async def eintrag_bild(bild_id: int, db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    """Ein Puzzle-Bild eines Eintrags (inline)."""
+    b = await _hole_eintrag_bild(db, bild_id)
+    return Response(content=b.bild_data, media_type=b.bild_mime or "image/png")
 
 
 @router.get("/{ausgabe_id}/cover")
@@ -371,8 +428,7 @@ async def eintrag_anlegen(
     )
     db.add(e)
     await db.commit()
-    await db.refresh(e)
-    return _eintrag_read(e)
+    return _eintrag_read(await _eintrag_voll(db, e.id))
 
 
 @router.put("/eintrag/{eintrag_id}", response_model=EintragRead, dependencies=[Depends(require_admin)])
@@ -393,8 +449,7 @@ async def eintrag_aendern(
     if eingabe.reihenfolge is not None:
         e.reihenfolge = eingabe.reihenfolge
     await db.commit()
-    await db.refresh(e)
-    return _eintrag_read(e)
+    return _eintrag_read(await _eintrag_voll(db, e.id))
 
 
 @router.delete("/eintrag/{eintrag_id}", status_code=204, dependencies=[Depends(require_admin)])
@@ -425,8 +480,7 @@ async def bild_hochladen(
     e.bild_data = daten
     e.bild_mime = mime
     await db.commit()
-    await db.refresh(e)
-    return _eintrag_read(e)
+    return _eintrag_read(await _eintrag_voll(db, e.id))
 
 
 @router.delete(
@@ -438,6 +492,72 @@ async def bild_entfernen(
     e = await _hole_eintrag(db, eintrag_id)
     e.bild_data = None
     e.bild_mime = None
+    await db.commit()
+    return Response(status_code=204)
+
+
+# -------- Puzzle-Bilder (mehrere Bilder je Eintrag, im Raster) --------
+
+
+@router.post(
+    "/eintrag/{eintrag_id}/bilder", response_model=EintragRead, status_code=201,
+    dependencies=[Depends(require_admin)],
+)
+async def eintrag_bild_hinzufuegen(
+    eintrag_id: int,
+    datei: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> EintragRead:
+    e = await _eintrag_voll(db, eintrag_id)
+    daten, mime = await _lies_bild(datei)
+    letzte = max((b.reihenfolge for b in e.bilder), default=-1)
+    db.add(
+        NewsletterEintragBild(
+            eintrag_id=eintrag_id, bild_data=daten, bild_mime=mime, reihenfolge=letzte + 1
+        )
+    )
+    await db.commit()
+    return _eintrag_read(await _eintrag_voll(db, eintrag_id))
+
+
+@router.put(
+    "/eintrag/{eintrag_id}/bilder/anordnung", response_model=EintragRead,
+    dependencies=[Depends(require_admin)],
+)
+async def eintrag_bilder_anordnen(
+    eintrag_id: int, eingabe: BilderAnordnung, db: AsyncSession = Depends(get_async_db_session)
+) -> EintragRead:
+    e = await _eintrag_voll(db, eintrag_id)
+    pos = {bid: i for i, bid in enumerate(eingabe.ids)}
+    for b in e.bilder:
+        if b.id in pos:
+            b.reihenfolge = pos[b.id]
+    await db.commit()
+    return _eintrag_read(await _eintrag_voll(db, eintrag_id))
+
+
+@router.put(
+    "/eintrag-bild/{bild_id}", response_model=BildRead, dependencies=[Depends(require_admin)]
+)
+async def eintrag_bild_layout(
+    bild_id: int, eingabe: BildLayout, db: AsyncSession = Depends(get_async_db_session)
+) -> BildRead:
+    b = await _hole_eintrag_bild(db, bild_id)
+    if eingabe.spalten is not None:
+        b.spalten = max(1, min(4, eingabe.spalten))
+    if eingabe.zeilen is not None:
+        b.zeilen = max(1, min(2, eingabe.zeilen))
+    await db.commit()
+    await db.refresh(b)
+    return _bild_read(b)
+
+
+@router.delete("/eintrag-bild/{bild_id}", status_code=204, dependencies=[Depends(require_admin)])
+async def eintrag_bild_entfernen(
+    bild_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    b = await _hole_eintrag_bild(db, bild_id)
+    await db.delete(b)
     await db.commit()
     return Response(status_code=204)
 
