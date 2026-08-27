@@ -87,6 +87,9 @@ function PieKachel({
               prozent ? `${e.pct ?? 0}%` : `${e.value}`
             }
             labelLine={false}
+            // Bei kleiner (compact) Pie rendert Recharts die Zahlen-Labels mit
+            // aktiver Animation nicht zuverlässig → im Newsletter Animation aus.
+            isAnimationActive={!compact}
           >
             {chart.map((d) => (
               <Cell key={d.key} fill={farben[d.key] ?? "#94a3b8"} />
@@ -135,7 +138,7 @@ export function BelegschaftKpiCharts({
               <XAxis dataKey="name" {...axisProps} />
               <YAxis {...axisProps} allowDecimals={false} />
               <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-              <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }}>
+              <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }} isAnimationActive={!compact}>
                 {data.eintritt.map((d) => (
                   <Cell key={d.key} fill={EINTRITT_FARBEN[d.key] ?? "#94a3b8"} />
                 ))}
@@ -150,9 +153,22 @@ export function BelegschaftKpiCharts({
             <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
               <CartesianGrid {...gridProps} horizontal={false} />
               <XAxis type="number" {...axisProps} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" {...axisProps} width={compact ? 120 : 150} interval={0} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                {...axisProps}
+                tick={compact ? { fill: "var(--color-muted-foreground)", fontSize: 9 } : axisProps.tick}
+                width={compact ? 116 : 150}
+                interval={0}
+              />
               <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-              <Bar dataKey="wert" radius={[0, 4, 4, 0]} fill="#2563eb" label={{ position: "right", fontSize: compact ? 10 : 11 }} />
+              <Bar
+                dataKey="wert"
+                radius={[0, 4, 4, 0]}
+                fill="#2563eb"
+                label={{ position: "right", fontSize: compact ? 10 : 11 }}
+                isAnimationActive={!compact}
+              />
             </BarChart>
           </ResponsiveContainer>
         </Card>
