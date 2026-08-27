@@ -3,14 +3,15 @@
  *
  * Der übergebene Knoten enthält je Block eine Seite (`[data-pdf-page]`, siehe
  * `NewsletterPdfPages`). Jede solche Seite wird einzeln zu einem JPEG gerendert
- * (html-to-image) und als eigene A4-Seite gesetzt (jsPDF) — so beginnt jeder
- * Block auf einer neuen Seite statt mitten durchgeschnitten zu werden. Ein Block,
- * der höher als A4 ist, läuft auf Folgeseiten über. Fehlen `data-pdf-page`-Knoten,
- * wird der Knoten als Ganzes seitenweise verteilt (Rückfall). Genutzt von der
- * Reader-Seite UND der Entwurfs-Vorschau im Redaktions-Editor.
+ * (html-to-image) und als eigene quadratische Seite gesetzt (jsPDF, 250×250 mm
+ * wie die physische Ausgabe) — so beginnt jeder Block auf einer neuen Seite statt
+ * mitten durchgeschnitten zu werden. Ein Block, der höher als eine Seite ist,
+ * läuft auf Folgeseiten über. Fehlen `data-pdf-page`-Knoten, wird der Knoten als
+ * Ganzes seitenweise verteilt (Rückfall). Genutzt von der Reader-Seite UND der
+ * Entwurfs-Vorschau im Redaktions-Editor.
  *
  * JPEG statt PNG ist hier bewusst: jsPDF legt PNGs praktisch unkomprimiert ab,
- * wodurch ein Newsletter mit ~9 A4-Seiten @2× ein PDF von >200 MB erzeugte —
+ * wodurch ein Newsletter mit ~9 Seiten @2× ein PDF von >200 MB erzeugte —
  * groß genug, um den Tab-Speicher zu sprengen und den Download stumm scheitern
  * zu lassen. Jede Seite hat einen deckenden Hintergrund, daher ist JPEG (q0.92)
  * verlustarm genug und ~85× kleiner.
@@ -22,7 +23,8 @@ export async function exportNewsletterPdf(node: HTMLElement, filename: string): 
   const seiten = Array.from(node.querySelectorAll<HTMLElement>("[data-pdf-page]"));
   const knoten = seiten.length ? seiten : [node];
 
-  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  // Quadratisches Format wie die physische Ausgabe: 250 × 250 mm.
+  const pdf = new jsPDF({ unit: "mm", format: [250, 250] });
   const pw = pdf.internal.pageSize.getWidth();
   const ph = pdf.internal.pageSize.getHeight();
 

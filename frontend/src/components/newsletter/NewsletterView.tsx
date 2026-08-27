@@ -18,23 +18,24 @@ export type NewsletterBlock =
   | { art: "kpi"; data: BelegschaftKpi }
   | { art: "rubrik"; rubrik: Rubrik; eintraege: Eintrag[] };
 
-/** Die Blöcke einer Ausgabe in gespeicherter Reihenfolge; leere Rubriken/KPI
- *  ohne Snapshot fallen raus. */
+/** Die Blöcke einer Ausgabe in gespeicherter Reihenfolge; leere Rubriken fallen
+ *  raus. Der KPI-Block ist kein eigenständiger Block mehr: die KPIs gehören ins
+ *  Kapitel „Intern" und werden als eigene Seite VOR den Intern-Einträgen
+ *  eingefügt (ein evtl. altes "kpi" in block_reihenfolge wird ignoriert). */
 export function ordereBloecke(a: AusgabeDetail): NewsletterBlock[] {
-  const valide = new Set<string>([...NEWSLETTER_RUBRIKEN, "kpi"]);
-  const reihenfolge = (a.block_reihenfolge ?? []).filter((k) => valide.has(k));
-  for (const k of [...NEWSLETTER_RUBRIKEN, "kpi"]) if (!reihenfolge.includes(k)) reihenfolge.push(k);
+  const istRubrik = (k: string): k is Rubrik => (NEWSLETTER_RUBRIKEN as readonly string[]).includes(k);
+  const reihenfolge = (a.block_reihenfolge ?? []).filter(istRubrik);
+  for (const k of NEWSLETTER_RUBRIKEN) if (!reihenfolge.includes(k)) reihenfolge.push(k);
 
   const bloecke: NewsletterBlock[] = [];
   for (const k of reihenfolge) {
-    if (k === "kpi") {
-      if (a.kpi_snapshot) bloecke.push({ art: "kpi", data: a.kpi_snapshot });
-    } else {
-      const eintraege = a.eintraege
-        .filter((e) => e.rubrik === k)
-        .sort((x, y) => x.reihenfolge - y.reihenfolge);
-      if (eintraege.length) bloecke.push({ art: "rubrik", rubrik: k as Rubrik, eintraege });
-    }
+    // KPIs kommen als eigene Seite an den Anfang von „Intern".
+    if (k === "intern" && a.kpi_snapshot) bloecke.push({ art: "kpi", data: a.kpi_snapshot });
+
+    const eintraege = a.eintraege
+      .filter((e) => e.rubrik === k)
+      .sort((x, y) => x.reihenfolge - y.reihenfolge);
+    if (eintraege.length) bloecke.push({ art: "rubrik", rubrik: k, eintraege });
   }
   return bloecke;
 }
@@ -98,16 +99,16 @@ export function BlockInhalt({ block }: { block: NewsletterBlock }) {
   );
 }
 
-/** Seitenweise Ansicht — je Block genau eine A4-Seite (Cover, KPI, jede Rubrik,
- *  Rückseite), deckungsgleich zum Buch-Reader. Jede Seite trägt `data-pdf-page`;
- *  der PDF-Export ({@link exportNewsletterPdf}) erfasst sie einzeln. Feste
- *  A4-Maße bei 96 dpi (794 × 1123 px); `minHeight` füllt kurze Seiten voll aus,
- *  längere Blöcke laufen auf eine Folgeseite über. */
+/** Seitenweise Ansicht — je Block genau eine quadratische Seite (Cover, KPI,
+ *  jede Rubrik, Rückseite), deckungsgleich zum Buch-Reader. Jede Seite trägt
+ *  `data-pdf-page`; der PDF-Export ({@link exportNewsletterPdf}) erfasst sie
+ *  einzeln. Feste Print-Maße 250 × 250 mm bei 96 dpi (945 × 945 px); `minHeight`
+ *  füllt kurze Seiten voll aus, längere Blöcke laufen auf eine Folgeseite über. */
 export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
   const titel = ausgabe.titel || `Q${ausgabe.quartal} ${ausgabe.jahr}`;
   const bloecke = ordereBloecke(ausgabe);
-  const seite = { width: 794, minHeight: 1123 };
+  const seite = { width: 945, minHeight: 945 };
   return (
     <div className="flex flex-col items-center gap-4">
       <div
