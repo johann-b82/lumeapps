@@ -50,7 +50,8 @@ async def _persist_draft(db: AsyncSession, md: MatchedDelivery) -> AtrDelivery:
     row = AtrDelivery(
         source_filename=md.source_filename, lieferschein_nr=md.lieferschein_nr,
         datum=_parse_datum(md.datum), ba_auftrag=md.ba_auftrag, po_number=md.po_number,
-        ac_programme=md.ac_programme, compartment=md.compartment, msn=md.msn,
+        ac_programme=md.ac_programme, programme_reason=md.programme_reason,
+        compartment=md.compartment, msn=md.msn,
         bed_config=md.bed_config, set_title=md.set_title,
         atr_number=None, container_number=None,
         weighing_date=today, testing_date=today, qa_signer=None,
@@ -69,6 +70,7 @@ async def _persist_draft(db: AsyncSession, md: MatchedDelivery) -> AtrDelivery:
             drawing_number_issue=it.drawing_number_issue, category=it.category,
             qty=it.qty, weight_kg=it.weight_kg, po_pos=it.po_pos,
             match_status=it.match_status, row_order=it.row_order,
+            serial_numbers=", ".join(it.serials) if it.serials else None,
         ))
     db.add(row)
     await db.commit()

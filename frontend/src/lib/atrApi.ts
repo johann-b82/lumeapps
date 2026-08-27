@@ -178,10 +178,12 @@ export interface AtrDeliveryItem {
   matched_part_id: number | null; part_name: string | null;
   drawing_number_issue: string | null; category: string | null; qty: number;
   weight_kg: string | null; po_pos: string | null; match_status: string; row_order: number;
+  serial_numbers: string | null;
 }
 export interface AtrDelivery {
   id: number; source_filename: string; lieferschein_nr: string | null; datum: string | null;
   ba_auftrag: string | null; po_number: string | null; ac_programme: string | null;
+  programme_reason: string | null;
   compartment: string | null; msn: string | null; bed_config: string | null;
   set_title: string | null; atr_number: string | null; container_number: string | null;
   weighing_date: string | null; testing_date: string | null; qa_signer: string | null;

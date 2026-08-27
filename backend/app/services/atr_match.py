@@ -27,6 +27,7 @@ class MatchedItem:
     po_pos: str | None
     match_status: str
     row_order: int
+    serials: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -41,6 +42,7 @@ class MatchedDelivery:
     msn: str | None
     bed_config: str | None
     set_title: str | None
+    programme_reason: str | None = None
     items: list[MatchedItem] = field(default_factory=list)
 
 
@@ -58,7 +60,16 @@ async def match_positions(
     head = parsed.positions[0] if parsed.positions else None
     compartment = head.compartment if head else None
     bed = head.bed_config if head else None
+    prog = head.ac_programme if head else None
     set_title = f"SET {bed} BED {compartment}" if bed and compartment else None
+    # Programme auto-detection + traceability (A380 has its own set-title default).
+    if prog == "A380":
+        set_title = set_title or "SET MSN UAE"
+        reason = "A380 automatisch erkannt (Bestelldaten enthalten „A380“)"
+    elif prog == "A350":
+        reason = "A350 automatisch erkannt (Bestelldaten enthalten „A350“)"
+    else:
+        reason = "Kein A350/A380-Merkmal im Lieferschein — bitte Programm manuell prüfen"
 
     items: list[MatchedItem] = []
     for order, p in enumerate(parsed.positions, start=1):
@@ -70,7 +81,7 @@ async def match_positions(
                 matched_part_id=part.id, part_name=part.part_name,
                 drawing_number_issue=part.drawing_number_issue, category=part.category,
                 qty=p.qty, weight_kg=part.default_weight_kg, po_pos=p.po_pos,
-                match_status="matched", row_order=order,
+                match_status="matched", row_order=order, serials=p.serials,
             ))
         else:
             items.append(MatchedItem(
@@ -79,6 +90,7 @@ async def match_positions(
                 matched_part_id=None, part_name=p.bezeichnung,
                 drawing_number_issue=None, category=None, qty=p.qty,
                 weight_kg=None, po_pos=p.po_pos, match_status="unmatched", row_order=order,
+                serials=p.serials,
             ))
 
     return MatchedDelivery(
@@ -87,5 +99,5 @@ async def match_positions(
         po_number=head.po_base if head else None,
         ac_programme=head.ac_programme if head else None,
         compartment=compartment, msn=head.msn if head else None,
-        bed_config=bed, set_title=set_title, items=items,
+        bed_config=bed, set_title=set_title, programme_reason=reason, items=items,
     )

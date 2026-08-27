@@ -79,6 +79,12 @@ export function AtrDeliveryReviewPage() {
       toast.error(t("atr.deliveries.save_server_error", { targets: String(e) }));
     } finally { setSavingServer(false); }
   }
+  async function saveSerials(iid: number, serials: string) {
+    try {
+      await updateDeliveryItem(id, iid, { serial_numbers: serials || null });
+      qc.invalidateQueries({ queryKey: ["atr", "delivery", id] });
+    } catch (e) { toast.error(String(e)); }
+  }
 
   const itemColumns: DataTableColumn<ItemRow>[] = [
     { key: "part_number", header: t("atr.deliveries.item.part_number"), className: "font-mono" },
@@ -98,6 +104,19 @@ export function AtrDeliveryReviewPage() {
           onBlur={(e) => saveItem(it.id, it.weight_kg ?? "", e.target.value)} />
       ),
     },
+    {
+      key: "serial_numbers", header: t("atr.deliveries.item.serial"),
+      cell: (it) => {
+        const n = (it.serial_numbers ?? "").split(",").map((s) => s.trim()).filter(Boolean).length;
+        const bad = n !== it.qty;
+        return (
+          <input className={`border rounded px-1 w-48 ${bad ? "border-red-500 bg-red-50" : ""}`}
+            defaultValue={it.serial_numbers ?? ""}
+            title={bad ? t("atr.deliveries.item.serial_mismatch", { n, qty: it.qty }) : ""}
+            onBlur={(e) => saveSerials(it.id, e.target.value)} />
+        );
+      },
+    },
   ];
 
   if (!data) return <div className="p-6">…</div>;
@@ -106,6 +125,12 @@ export function AtrDeliveryReviewPage() {
       <h1 className="text-xl font-semibold mb-4">
         {t("atr.deliveries.review.heading")} — {data.source_filename}
       </h1>
+      {data.ac_programme && (
+        <div className={`mb-4 text-sm px-3 py-2 rounded border ${data.ac_programme.includes("380") ? "bg-amber-50 border-amber-300" : "bg-muted"}`}>
+          <span className="font-medium">{t("atr.deliveries.programme")}: {data.ac_programme}</span>
+          {data.programme_reason && <span className="text-muted-foreground"> — {data.programme_reason}</span>}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {HEADER_FIELDS.map((f) => (
           <label key={f} className="flex flex-col text-sm">

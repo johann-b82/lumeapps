@@ -26,8 +26,6 @@ from openpyxl.worksheet.properties import PageSetupProperties
 from app.services.atr_format import normalize_po_pos
 
 _RED = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
-_TABLE_HEADER_ROW = 13
-_FIRST_PART_ROW = 14
 _NCOLS = 14  # A..N
 _DE_NUM = "[$-407]0.00"  # force German decimal comma regardless of LibreOffice locale
 _ACM_ADDRESS = "ACM GmbH - Brandstücken 16 - 22549 Hamburg"
@@ -50,12 +48,24 @@ def _visible_sheet(wb):
     return vis[0]
 
 
-def _find_totals_row(ws) -> int:
-    for r in range(_FIRST_PART_ROW, ws.max_row + 1):
+def _find_totals_row(ws, first_part_row: int) -> int:
+    for r in range(first_part_row, ws.max_row + 1):
         f = ws.cell(r, 6).value
         if f and "total" in str(f).lower():
             return r
     raise ValueError("ATR template has no 'Total weight' row in column F")
+
+
+def _find_label_row(ws, col: int, text: str, upto: int = 20) -> int | None:
+    """Row where cell(row, col) starts with `text` (case-insensitive). Lets the
+    generator locate header fields by label so it works for both the A350 and
+    the more compact A380 layout instead of relying on fixed cell addresses."""
+    t = text.lower()
+    for r in range(1, upto + 1):
+        v = ws.cell(r, col).value
+        if v and str(v).strip().lower().startswith(t):
+            return r
+    return None
 
 
 def _capture_row_styles(ws, row: int) -> list:
@@ -66,23 +76,40 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
     wb = load_workbook(BytesIO(template_bytes))
     ws = _visible_sheet(wb)
 
-    # --- header block (template defaults stay; per-delivery values overwrite) ---
-    ws["D8"] = _ACM_ADDRESS  # supplier address (static — overrides the template)
-    if delivery.set_title is not None:
-        ws["A11"] = delivery.set_title
-    if delivery.po_number is not None:
-        ws["G1"] = delivery.po_number
-    if delivery.msn is not None:
-        ws["G2"] = delivery.msn
-        # PO line middle segment "79 - <MSN> - 94": MSN left-padded to 4 digits
-        # (830 -> "0830"). Template ships a literal "0…" placeholder in J1.
-        ws["J1"] = str(delivery.msn).zfill(4)
-    if delivery.ba_auftrag is not None:
-        ws["D9"] = delivery.ba_auftrag
-    if getattr(delivery, "weighing_date", None):
-        ws["C12"] = _de_date(delivery.weighing_date)
-    if getattr(delivery, "testing_date", None):
-        ws["L12"] = _de_date(delivery.testing_date)
+    is_a380 = "380" in (delivery.ac_programme or "")
+    # Table header row ("PO Pos") located by label so A350 (row 13) and the more
+    # compact A380 (row 10) both work; the part region starts one row below.
+    header_row = _find_label_row(ws, 1, "PO Pos")
+    if header_row is None:
+        raise ValueError("ATR template: 'PO Pos' table header row not found")
+    first_part_row = header_row + 1
+
+    # --- header block, located by label (template defaults stay otherwise) ---
+    sr = _find_label_row(ws, 1, "Supplier:")
+    if sr:
+        ws.cell(sr, 4, _ACM_ADDRESS)  # supplier address (static)
+    br = _find_label_row(ws, 1, "Manufacturing Process Reference")
+    if br and delivery.ba_auftrag is not None:
+        ws.cell(br, 4, delivery.ba_auftrag)
+    pr = _find_label_row(ws, 6, "Purchase Order No")
+    if pr and delivery.po_number is not None:
+        ws.cell(pr, 7, delivery.po_number)
+    mr = _find_label_row(ws, 6, "MSN:")
+    if mr:
+        if is_a380:
+            ws.cell(mr, 7, delivery.msn or "N/A Spare Part")  # A380 spares: no MSN
+        elif delivery.msn is not None:
+            ws.cell(mr, 7, delivery.msn)
+            # A350 PO line middle segment "79 - <MSN> - 94": MSN zero-padded in J1.
+            ws.cell(1, 10, str(delivery.msn).zfill(4))
+    wr = _find_label_row(ws, 1, "Weighing date")
+    if wr:
+        if getattr(delivery, "weighing_date", None):
+            ws.cell(wr, 3, _de_date(delivery.weighing_date))
+        if getattr(delivery, "testing_date", None):
+            ws.cell(wr, 12, _de_date(delivery.testing_date))
+        if delivery.set_title is not None:  # banner row sits directly above
+            ws.cell(wr - 1, 1, delivery.set_title)
     # Print header (right section): Doc-No / Date / Page. The PDF path rebuilds
     # this via UNO (atr_uno_header.py); mirror all three lines here so printing
     # the raw .xlsx from Excel shows the same header. &P/&N are Excel page fields.
@@ -93,11 +120,11 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
     )
 
     # --- capture reference styles BEFORE mutating the region ---
-    part_style = _capture_row_styles(ws, _FIRST_PART_ROW + 1)  # a part row
-    section_style = _capture_row_styles(ws, _FIRST_PART_ROW)   # a section header row
+    part_style = _capture_row_styles(ws, first_part_row + 1)  # a part row
+    section_style = _capture_row_styles(ws, first_part_row)   # a section header row
 
-    totals_row = _find_totals_row(ws)
-    region_count = max(0, totals_row - _FIRST_PART_ROW)
+    totals_row = _find_totals_row(ws, first_part_row)
+    region_count = max(0, totals_row - first_part_row)
 
     # openpyxl delete_rows/insert_rows move cell CONTENT but leave merged-cell
     # ranges (and their wide legend/certification blocks) where they were.
@@ -120,9 +147,9 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
 
     # clear the example region and resize it to out_rows
     if region_count:
-        ws.delete_rows(_FIRST_PART_ROW, region_count)
+        ws.delete_rows(first_part_row, region_count)
     if out_rows:
-        ws.insert_rows(_FIRST_PART_ROW, out_rows)
+        ws.insert_rows(first_part_row, out_rows)
 
     # Realign merged cells to the shifted content: header block (above the part
     # region) stays; merges that were inside the rewritten region are dropped;
@@ -130,13 +157,13 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
     delta = out_rows - region_count
     ws.merged_cells.ranges = []  # drop all stale ranges; re-add correctly below
     for (r1, c1, r2, c2) in _orig_merges:
-        if r1 < _FIRST_PART_ROW:
+        if r1 < first_part_row:
             ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
         elif r1 >= totals_row:
             ws.merge_cells(start_row=r1 + delta, start_column=c1,
                            end_row=r2 + delta, end_column=c2)
 
-    r = _FIRST_PART_ROW
+    r = first_part_row
     total_weight = Decimal("0")
     for cat, lst in grouped:
         # section header row: category label centered across A..H (through
@@ -154,7 +181,7 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
             ws.cell(r, 2, it.supplier_article_code or "")
             ws.cell(r, 3, it.part_number or "")
             ws.cell(r, 4, it.part_name or "")
-            ws.cell(r, 5, "N/A")
+            ws.cell(r, 5, it.serial_numbers or "N/A")
             ws.cell(r, 6, it.drawing_number_issue or "")
             ws.cell(r, 7, it.qty)
             if it.weight_kg is not None:
@@ -173,7 +200,7 @@ def build_atr_xlsx(template_bytes: bytes, delivery, items, logo_bytes: bytes | N
             r += 1
 
     # totals block shifted down by (out_rows - region_count + region_count) — re-find it
-    new_totals_row = _find_totals_row(ws)
+    new_totals_row = _find_totals_row(ws, first_part_row)
     tw = ws.cell(new_totals_row, 8, float(total_weight))
     tw.number_format = _DE_NUM
     # Max. Guaranteed weight on the next totals label row, if present
@@ -351,7 +378,11 @@ def atr_doc_no(delivery) -> str:
     (``4820`` -> ``ACM-A350CRC-ATR-4820-01 / Issue: 01``). Falls back to the
     family constant when the ATR number is unset."""
     n = (getattr(delivery, "atr_number", None) or "").strip()
-    return f"ACM-A350CRC-ATR-{n}-01 / Issue: 01" if n else _ATR_DOC_NO
+    if not n:
+        return _ATR_DOC_NO
+    if "380" in (getattr(delivery, "ac_programme", None) or ""):
+        return f"ACM-A380-ATR-{n}-01 / Issue: 01"
+    return f"ACM-A350CRC-ATR-{n}-01 / Issue: 01"
 
 
 _LOGO_HEIGHT_MM = 8.5  # fits the header band fully (incl. the "AEROSPACE"

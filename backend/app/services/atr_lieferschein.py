@@ -21,6 +21,7 @@ _INDEX_RE = re.compile(r"Bauteil[- ]?[Ii]ndex:\s*([A-Za-z0-9]+)")
 _IHRE_RE = re.compile(r"Ihre Nr\.\s*(\S+)")
 _AUFTRAG_RE = re.compile(r"Auftrag Nr\.\s*(\d+)\s*/\s*(\d+)")
 _BESTELL_RE = re.compile(r"Bestelldaten\s*(\S+)")
+_SERIAL_RE = re.compile(r"Seriennr\.\s*(.+)", re.IGNORECASE)
 
 
 @dataclass
@@ -39,6 +40,7 @@ class ParsedPosition:
     compartment: str | None = None
     msn: str | None = None
     bed_config: str | None = None
+    serials: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -112,6 +114,11 @@ def parse_lieferschein_text(text: str) -> ParsedLieferschein:
         mb = _BESTELL_RE.search(line)
         if mb:
             _parse_bestelldaten(mb.group(1), cur)
+            continue
+        ms = _SERIAL_RE.search(line)
+        if ms:
+            # "Seriennr. A08UAEL3376, A08UAEL3377" — one serial per delivered unit.
+            cur.serials = [s.strip() for s in ms.group(1).split(",") if s.strip()]
             continue
         mx = _INDEX_RE.search(line)
         if mx:
