@@ -36,7 +36,13 @@ const ghost =
   "hover:bg-muted disabled:opacity-50 focus-visible:outline-none " +
   "focus-visible:ring-2 focus-visible:ring-ring";
 
-const ARTEN: ZeugnisArt[] = ["qualifiziert", "einfach", "zwischenzeugnis"];
+const ARTEN: ZeugnisArt[] = [
+  "qualifiziert",
+  "einfach",
+  "zwischenzeugnis",
+  "ausbildungszeugnis",
+  "praktikumszeugnis",
+];
 const zKeys = {
   liste: () => ["hr", "zeugnisse"] as const,
   personen: () => ["hr", "zeugnisse", "personen"] as const,

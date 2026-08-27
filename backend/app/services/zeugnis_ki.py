@@ -39,9 +39,39 @@ _DIM_LABEL = {
     "fuehrung": "Führungsleistung",
 }
 
+#: Art-spezifische Anweisung (ergänzt den Prompt je Zeugnisart).
+_ART_HINWEIS = {
+    "qualifiziert": (
+        "Erstelle ein VOLLES qualifiziertes Arbeitszeugnis mit Tätigkeits-, "
+        "Leistungs- und Verhaltensbeurteilung sowie Dank-/Bedauern-Schlussformel."
+    ),
+    "einfach": (
+        "Erstelle ein EINFACHES Zeugnis: nur Tätigkeitsbeschreibung, "
+        "Beschäftigungsdauer und eine knappe, neutrale Schlussformel. KEINE "
+        "Leistungs- oder Verhaltensbewertung — lass 'leistungsbeurteilung' und "
+        "'sozialverhalten' leer."
+    ),
+    "zwischenzeugnis": (
+        "Erstelle ein ZWISCHENZEUGNIS im PRÄSENS (das Arbeitsverhältnis besteht "
+        "fort). Die Schlussformel nennt den Anlass der Ausstellung und enthält "
+        "KEINE Abschieds-/Bedauern-Formel."
+    ),
+    "ausbildungszeugnis": (
+        "Erstelle ein AUSBILDUNGSZEUGNIS: Bezeichne die Person als "
+        "Auszubildende:n, nenne Ausbildungsberuf/-bereich und Ausbildungsdauer, "
+        "beschreibe die vermittelten Ausbildungsinhalte/Kenntnisse und die "
+        "Bewährung während der Ausbildung."
+    ),
+    "praktikumszeugnis": (
+        "Erstelle ein PRAKTIKUMSZEUGNIS: Bezeichne die Person als Praktikant:in, "
+        "nenne Praktikumsdauer und Einsatzbereich; halte es kürzer und bewerte "
+        "Einsatz und Verhalten passend zum Praktikumskontext."
+    ),
+}
+
 _SYSTEM = (
     "Du bist erfahrene:r Personalreferent:in in Deutschland und formulierst "
-    "qualifizierte Arbeitszeugnisse. Beachte strikt:\n"
+    "Arbeits-, Ausbildungs- und Praktikumszeugnisse. Beachte strikt:\n"
     "- Wohlwollende, verkehrsübliche Zeugnissprache; die Gesamtaussage muss der "
     "genannten Note entsprechen (Zufriedenheitsskala: Note 1 = 'stets zu unserer "
     "vollsten Zufriedenheit', 2 = 'stets zu unserer vollen Zufriedenheit', "
@@ -187,8 +217,9 @@ async def generiere_abschnitte(
                 {
                     "role": "user",
                     "content": (
-                        "Erstelle den Zeugnistext aus diesen Angaben "
-                        "(JSON):\n\n"
+                        "Zeugnisart-Hinweis: "
+                        + _ART_HINWEIS.get(art, _ART_HINWEIS["qualifiziert"])
+                        + "\n\nErstelle den Zeugnistext aus diesen Angaben (JSON):\n\n"
                         + json.dumps(eingaben, ensure_ascii=False, indent=2)
                     ),
                 }
