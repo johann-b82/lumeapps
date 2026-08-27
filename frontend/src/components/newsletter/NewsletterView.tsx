@@ -174,11 +174,13 @@ export function SeiteRahmen({
   ausgabe,
   titel,
   seiteNr,
+  edgeLabel,
   children,
 }: {
   ausgabe: AusgabeDetail;
   titel: string;
   seiteNr: number;
+  edgeLabel?: string;
   children: ReactNode;
 }) {
   return (
@@ -207,14 +209,21 @@ export function SeiteRahmen({
       </div>
       <div className="text-center" style={{ paddingTop: "5cqw" }}>
         <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
-        <h2 className="font-bold" style={{ fontSize: "6.2cqw", lineHeight: 1.05, margin: "2.4cqw 0", padding: "0 5cqw" }}>
+        <h2 className="font-bold" style={{ fontSize: "6.2cqw", lineHeight: 1.05, margin: "2.4cqw 0", padding: "0 8cqw" }}>
           {titel}
         </h2>
         <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto" style={{ padding: "4cqw 6cqw 7cqw" }}>
+      <div className="min-h-0 flex-1 overflow-auto" style={{ padding: "4cqw 8.5cqw 7cqw 6cqw" }}>
         {children}
       </div>
+      {edgeLabel && (
+        <div style={{ position: "absolute", right: "1cqw", top: "15cqw", bottom: "6cqw", display: "flex", alignItems: "center" }}>
+          <span style={{ writingMode: "vertical-rl", fontSize: "2.3cqw", letterSpacing: "0.34em", textTransform: "uppercase", fontWeight: 600, color: NL_BLUE }}>
+            {edgeLabel}
+          </span>
+        </div>
+      )}
       <div
         className="absolute flex items-center justify-between"
         style={{ left: "6cqw", right: "6cqw", bottom: "2.6cqw", fontSize: "1.9cqw", color: "#9aa3ad" }}
@@ -222,6 +231,29 @@ export function SeiteRahmen({
         <span style={{ letterSpacing: "0.12em" }}>ACM · acm-aerospace.com</span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>{seiteNr}</span>
       </div>
+    </div>
+  );
+}
+
+/** Voll-Bleed Abschnitts-Trenner (Oliv) mit großem Titel + vertikalem Rand-Label. */
+export function DividerSeite({ titel, edgeLabel }: { titel: string; edgeLabel?: string }) {
+  return (
+    <div
+      className="relative flex h-full w-full items-center justify-center text-center text-white"
+      style={{ containerType: "inline-size", background: `linear-gradient(150deg, ${NL_OLIVE}, ${NL_OLIVE_DK})` }}
+    >
+      <div style={{ padding: "0 10cqw" }}>
+        <div className="mx-auto" style={{ height: "0.9cqw", width: "16cqw", background: NL_BLUE }} />
+        <h2 style={{ fontSize: "9cqw", fontWeight: 800, lineHeight: 1.05, margin: "4cqw 0" }}>{titel}</h2>
+        <div className="mx-auto" style={{ height: "0.9cqw", width: "16cqw", background: NL_BLUE }} />
+      </div>
+      {edgeLabel && (
+        <div style={{ position: "absolute", right: "3cqw", top: "10cqw", bottom: "10cqw", display: "flex", alignItems: "center" }}>
+          <span style={{ writingMode: "vertical-rl", fontSize: "2.4cqw", letterSpacing: "0.4em", textTransform: "uppercase", fontWeight: 600, color: "rgba(255,255,255,.8)" }}>
+            {edgeLabel}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,49 +318,78 @@ export function InhaltSeite({
   );
 }
 
-/** Seitenweise Ansicht — je Block genau eine quadratische Seite (945 px = 250 mm),
- *  im Referenz-Design (Oliv-Kopfband, zentrierter Titel, Fußzeile). Seiten:
- *  1 = Cover, 2 = INHALT, 3.. = Blöcke, letzte = Rückseite. Jede trägt
- *  `data-pdf-page` für den seitenweisen Export ({@link exportNewsletterPdf}). */
+/** Ein Seiten-Deskriptor der Ausgabe (Cover, INHALT, Divider, Inhaltsseite, Back). */
+export type SeiteDesc =
+  | { art: "cover" }
+  | { art: "inhalt"; toc: { titel: string; seite: number }[] }
+  | { art: "divider"; titel: string; edgeLabel: string }
+  | { art: "content"; block: NewsletterBlock; titel: string; edgeLabel: string; seiteNr: number }
+  | { art: "back" };
+
+/** Baut die flache Seitenfolge: Cover → INHALT → (Divider je Rubrik →) Inhalt je
+ *  Block → Rückseite, inkl. Seitenzahlen. Vertikales Label = Rubrik-Kategorie. */
+export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
+  const bloecke = ordereBloecke(ausgabe);
+  const seiten: SeiteDesc[] = [{ art: "cover" }, { art: "inhalt", toc: [] }];
+  const toc: { titel: string; seite: number }[] = [];
+  for (const b of bloecke) {
+    const titel = blockTitelText(b, ausgabe.rubrik_titel, t);
+    const kategorie = b.art === "kpi" ? t("newsletter.rubrik.intern") : t(`newsletter.rubrik.${b.rubrik}`);
+    const edge = kategorie.toUpperCase();
+    if (b.art === "rubrik") seiten.push({ art: "divider", titel, edgeLabel: edge });
+    const nr = seiten.length + 1; // 1-basierte Seite der gleich gepushten Inhaltsseite
+    seiten.push({ art: "content", block: b, titel, edgeLabel: edge, seiteNr: nr });
+    toc.push({ titel, seite: b.art === "rubrik" ? nr - 1 : nr }); // Divider-Seite bzw. Inhalt
+  }
+  seiten.push({ art: "back" });
+  (seiten[1] as { art: "inhalt"; toc: { titel: string; seite: number }[] }).toc = toc;
+  return seiten;
+}
+
+/** Rendert den Inhalt eines Seiten-Deskriptors (ohne den Seiten-Wrapper). */
+export function SeiteInhalt({ desc, ausgabe }: { desc: SeiteDesc; ausgabe: AusgabeDetail }) {
+  const { t } = useTranslation();
+  if (desc.art === "cover" || desc.art === "back") {
+    const hat = desc.art === "cover" ? ausgabe.hat_cover : ausgabe.hat_rueck;
+    const url = desc.art === "cover" ? coverUrl(ausgabe.id) : rueckUrl(ausgabe.id);
+    return hat ? (
+      <AuthImageUrl
+        url={url}
+        alt={t(desc.art === "cover" ? "newsletter.titelbild" : "newsletter.rueckseitenbild")}
+        className="absolute inset-0 block h-full w-full object-cover"
+      />
+    ) : (
+      <OliveMast ausgabe={ausgabe} />
+    );
+  }
+  if (desc.art === "inhalt") return <InhaltSeite ausgabe={ausgabe} eintraege={desc.toc} />;
+  if (desc.art === "divider") return <DividerSeite titel={desc.titel} edgeLabel={desc.edgeLabel} />;
+  return (
+    <SeiteRahmen ausgabe={ausgabe} titel={desc.titel} seiteNr={desc.seiteNr} edgeLabel={desc.edgeLabel}>
+      <BlockInhalt block={desc.block} />
+    </SeiteRahmen>
+  );
+}
+
+/** Seitenweise Ansicht — je Deskriptor eine quadratische Seite (945 px = 250 mm)
+ *  im Referenz-Design (Oliv-Kopfband, Divider je Rubrik, vertikale Rand-Labels,
+ *  INHALT, Seitenzahlen). Jede trägt `data-pdf-page` für den seitenweisen Export
+ *  ({@link exportNewsletterPdf}). */
 export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
-  const bloecke = ordereBloecke(ausgabe);
-  const seite = { width: 945, height: 945 } as const;
-  const bildSeite = { ...seite, position: "relative" as const, overflow: "hidden" as const };
-  const inhalt = bloecke.map((b, i) => ({ titel: blockTitelText(b, ausgabe.rubrik_titel, t), seite: 3 + i }));
+  const seiten = baueSeiten(ausgabe, t);
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Cover */}
-      <div data-pdf-page style={bildSeite} className="bg-neutral-200">
-        {ausgabe.hat_cover ? (
-          <AuthImageUrl url={coverUrl(ausgabe.id)} alt={t("newsletter.titelbild")} className="absolute inset-0 block h-full w-full object-cover" />
-        ) : (
-          <OliveMast ausgabe={ausgabe} />
-        )}
-      </div>
-
-      {/* INHALT */}
-      <div data-pdf-page style={seite} className="overflow-hidden">
-        <InhaltSeite ausgabe={ausgabe} eintraege={inhalt} />
-      </div>
-
-      {/* Blöcke */}
-      {bloecke.map((b, i) => (
-        <div key={i} data-pdf-page style={seite} className="overflow-hidden">
-          <SeiteRahmen ausgabe={ausgabe} titel={blockTitelText(b, ausgabe.rubrik_titel, t)} seiteNr={3 + i}>
-            <BlockInhalt block={b} />
-          </SeiteRahmen>
+      {seiten.map((desc, i) => (
+        <div
+          key={i}
+          data-pdf-page
+          style={{ width: 945, height: 945 }}
+          className="relative overflow-hidden bg-neutral-200"
+        >
+          <SeiteInhalt desc={desc} ausgabe={ausgabe} />
         </div>
       ))}
-
-      {/* Rückseite */}
-      <div data-pdf-page style={bildSeite} className="bg-neutral-200">
-        {ausgabe.hat_rueck ? (
-          <AuthImageUrl url={rueckUrl(ausgabe.id)} alt={t("newsletter.rueckseitenbild")} className="absolute inset-0 block h-full w-full object-cover" />
-        ) : (
-          <OliveMast ausgabe={ausgabe} />
-        )}
-      </div>
     </div>
   );
 }
