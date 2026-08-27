@@ -91,6 +91,8 @@
   "zeugnisse.art.qualifiziert": "Qualifiziert",
   "zeugnisse.art.einfach": "Einfach",
   "zeugnisse.art.zwischenzeugnis": "Zwischenzeugnis",
+  "zeugnisse.art.ausbildungszeugnis": "Ausbildungszeugnis",
+  "zeugnisse.art.praktikumszeugnis": "Praktikumszeugnis",
   "zeugnisse.anlegen": "Anlegen",
   "zeugnisse.leer": "Noch keine Zeugnisse.",
   "zeugnisse.keinsGewaehlt": "Links ein Zeugnis wählen oder neu anlegen.",

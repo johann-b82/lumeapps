@@ -41,7 +41,13 @@ ZEUGNIS_DIMENSIONEN = (
 )
 
 #: Zeugnisarten.
-ZEUGNIS_ARTEN = ("qualifiziert", "einfach", "zwischenzeugnis")
+ZEUGNIS_ARTEN = (
+    "qualifiziert",
+    "einfach",
+    "zwischenzeugnis",
+    "ausbildungszeugnis",
+    "praktikumszeugnis",
+)
 
 #: Die generierten Abschnitte (Schlüssel des ``abschnitte_json``-Dicts).
 ZEUGNIS_ABSCHNITTE = (

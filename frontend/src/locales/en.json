@@ -91,6 +91,8 @@
   "zeugnisse.art.qualifiziert": "Detailed",
   "zeugnisse.art.einfach": "Simple",
   "zeugnisse.art.zwischenzeugnis": "Interim",
+  "zeugnisse.art.ausbildungszeugnis": "Apprenticeship",
+  "zeugnisse.art.praktikumszeugnis": "Internship",
   "zeugnisse.anlegen": "Create",
   "zeugnisse.leer": "No references yet.",
   "zeugnisse.keinsGewaehlt": "Select a reference on the left or create a new one.",

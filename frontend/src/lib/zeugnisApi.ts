@@ -9,7 +9,12 @@
 import { apiClient } from "./apiClient";
 import { fetchBlob, openBlob } from "./download";
 
-export type ZeugnisArt = "qualifiziert" | "einfach" | "zwischenzeugnis";
+export type ZeugnisArt =
+  | "qualifiziert"
+  | "einfach"
+  | "zwischenzeugnis"
+  | "ausbildungszeugnis"
+  | "praktikumszeugnis";
 
 /** Bewertungsdimensionen (Schlüssel = Backend, Label über i18n zeugnisse.dim.*). */
 export const ZEUGNIS_DIMENSIONEN = [
