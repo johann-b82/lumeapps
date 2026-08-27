@@ -3,7 +3,15 @@ import { useTranslation } from "react-i18next";
 // @ts-expect-error - react-pageflip liefert keine vollständigen Typen
 import HTMLFlipBook from "react-pageflip";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { AuthImageUrl, BlockInhalt, ordereBloecke } from "./NewsletterView";
+import {
+  AuthImageUrl,
+  BlockInhalt,
+  InhaltSeite,
+  OliveMast,
+  SeiteRahmen,
+  blockTitelText,
+  ordereBloecke,
+} from "./NewsletterView";
 import { coverUrl, rueckUrl, type AusgabeDetail } from "@/lib/newsletterApi";
 
 /** Online-Newsletter als Blätter-Buch (react-pageflip) mit Umblätter-Animation. */
@@ -11,52 +19,33 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
   const book = useRef<{ pageFlip: () => { flipNext: () => void; flipPrev: () => void } } | null>(null);
   const bloecke = ordereBloecke(ausgabe);
-  const titel = ausgabe.titel || `Q${ausgabe.quartal} ${ausgabe.jahr}`;
+  const inhalt = bloecke.map((b, i) => ({ titel: blockTitelText(b, ausgabe.rubrik_titel, t), seite: 3 + i }));
 
   const seiten = [
-    ausgabe.hat_cover ? (
-      <div key="cover" className="relative h-full overflow-hidden bg-neutral-200">
-        <AuthImageUrl
-          url={coverUrl(ausgabe.id)}
-          alt={t("newsletter.titelbild")}
-          className="absolute inset-0 block h-full w-full object-cover"
-        />
-      </div>
-    ) : (
-      <div
-        key="cover"
-        className="flex h-full flex-col items-center justify-center bg-gradient-to-br from-sky-600 to-blue-800 p-8 text-center text-white"
-      >
-        <div className="mb-2 text-sm uppercase tracking-widest opacity-90">
-          {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
-        </div>
-        <div className="text-3xl font-bold leading-tight">{titel}</div>
-        <div className="mt-6 text-xs opacity-80">{t("newsletter.title")}</div>
-      </div>
-    ),
+    <div key="cover" className="relative h-full overflow-hidden bg-neutral-200">
+      {ausgabe.hat_cover ? (
+        <AuthImageUrl url={coverUrl(ausgabe.id)} alt={t("newsletter.titelbild")} className="absolute inset-0 block h-full w-full object-cover" />
+      ) : (
+        <OliveMast ausgabe={ausgabe} />
+      )}
+    </div>,
+    <div key="inhalt" className="h-full overflow-hidden">
+      <InhaltSeite ausgabe={ausgabe} eintraege={inhalt} />
+    </div>,
     ...bloecke.map((b, i) => (
-      <div key={i} className="h-full bg-white text-neutral-900">
-        <div className="h-full overflow-y-auto p-6">
-          <BlockInhalt block={b} rubrikTitel={ausgabe.rubrik_titel} />
-        </div>
+      <div key={i} className="h-full overflow-hidden">
+        <SeiteRahmen ausgabe={ausgabe} titel={blockTitelText(b, ausgabe.rubrik_titel, t)} seiteNr={3 + i}>
+          <BlockInhalt block={b} />
+        </SeiteRahmen>
       </div>
     )),
-    ausgabe.hat_rueck ? (
-      <div key="back" className="relative h-full overflow-hidden bg-neutral-200">
-        <AuthImageUrl
-          url={rueckUrl(ausgabe.id)}
-          alt={t("newsletter.rueckseitenbild")}
-          className="absolute inset-0 block h-full w-full object-cover"
-        />
-      </div>
-    ) : (
-      <div
-        key="back"
-        className="flex h-full items-center justify-center bg-neutral-100 p-8 text-center text-sm text-neutral-500"
-      >
-        {t("newsletter.buchEnde")}
-      </div>
-    ),
+    <div key="back" className="relative h-full overflow-hidden bg-neutral-200">
+      {ausgabe.hat_rueck ? (
+        <AuthImageUrl url={rueckUrl(ausgabe.id)} alt={t("newsletter.rueckseitenbild")} className="absolute inset-0 block h-full w-full object-cover" />
+      ) : (
+        <OliveMast ausgabe={ausgabe} />
+      )}
+    </div>,
   ];
 
   return (
