@@ -203,12 +203,18 @@ async def _hole_eintrag(db: AsyncSession, eintrag_id: int) -> NewsletterEintrag:
 
 
 async def _eintrag_voll(db: AsyncSession, eintrag_id: int) -> NewsletterEintrag:
-    """Eintrag inkl. eager-geladener Puzzle-Bilder — für EintragRead-Antworten."""
+    """Eintrag inkl. eager-geladener Puzzle-Bilder — für EintragRead-Antworten.
+
+    ``populate_existing`` erzwingt frische Daten auch dann, wenn der Eintrag
+    schon in der Session liegt (committet ohne expire_on_commit) — sonst käme
+    nach Upload/Umsortieren die veraltete bilder-Liste zurück.
+    """
     e = (
         await db.execute(
             select(NewsletterEintrag)
             .where(NewsletterEintrag.id == eintrag_id)
             .options(selectinload(NewsletterEintrag.bilder))
+            .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if e is None:
