@@ -356,7 +356,7 @@ export function SeiteInhalt({ desc, ausgabe }: { desc: SeiteDesc; ausgabe: Ausga
       <AuthImageUrl
         url={url}
         alt={t(desc.art === "cover" ? "newsletter.titelbild" : "newsletter.rueckseitenbild")}
-        className="absolute inset-0 block h-full w-full object-cover"
+        className="absolute inset-0 block h-full w-full object-contain"
       />
     ) : (
       <OliveMast ausgabe={ausgabe} />
@@ -385,7 +385,7 @@ export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
           key={i}
           data-pdf-page
           style={{ width: 945, height: 945 }}
-          className="relative overflow-hidden bg-neutral-200"
+          className="relative overflow-hidden bg-[#3e3a1d]"
         >
           <SeiteInhalt desc={desc} ausgabe={ausgabe} />
         </div>

@@ -12,7 +12,7 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const book = useRef<{ pageFlip: () => { flipNext: () => void; flipPrev: () => void } } | null>(null);
 
   const seiten = baueSeiten(ausgabe, t).map((desc, i) => (
-    <div key={i} className="relative h-full overflow-hidden bg-neutral-200">
+    <div key={i} className="relative h-full overflow-hidden bg-[#3e3a1d]">
       <SeiteInhalt desc={desc} ausgabe={ausgabe} />
     </div>
   ));
@@ -20,13 +20,13 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
   return (
     <div className="flex flex-col items-center gap-3">
       <HTMLFlipBook
-        width={520}
-        height={520}
+        width={430}
+        height={608}
         size="stretch"
         minWidth={300}
-        maxWidth={620}
-        minHeight={300}
-        maxHeight={620}
+        maxWidth={470}
+        minHeight={424}
+        maxHeight={664}
         showCover
         maxShadowOpacity={0.35}
         drawShadow
