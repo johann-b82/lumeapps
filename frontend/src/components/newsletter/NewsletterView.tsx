@@ -107,7 +107,7 @@ export function BlockInhalt({ block }: { block: NewsletterBlock }) {
     <section className="break-inside-avoid">
       <h2 className="mb-3 border-l-4 border-primary pl-2 text-lg font-bold">{titel}</h2>
       {block.art === "kpi" ? (
-        <BelegschaftKpiCharts data={block.data} />
+        <BelegschaftKpiCharts data={block.data} compact />
       ) : (
         block.eintraege.map((e) => <EintragBlock key={e.id} eintrag={e} />)
       )}
