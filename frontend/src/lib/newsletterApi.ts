@@ -39,6 +39,11 @@ export interface AusgabeDetail extends AusgabeListItem {
   eintraege: Eintrag[];
   /** Eingefrorener KPI-Stand für den „ACM KPIs"-Block; null = ohne. */
   kpi_snapshot: BelegschaftKpi | null;
+  /** Block-Reihenfolge (Rubrik-Schlüssel); null = Standard. */
+  block_reihenfolge: string[] | null;
+  /** Vollflächiges Titel- bzw. Rückseitenbild hinterlegt? */
+  hat_cover: boolean;
+  hat_rueck: boolean;
 }
 
 const BASE = "/api/newsletter";
@@ -46,6 +51,16 @@ const BASE = "/api/newsletter";
 /** Bild-URL eines Eintrags (mit `t`, um Cache nach Neu-Upload zu umgehen). */
 export function bildUrl(eintragId: number, bust?: number): string {
   return `${BASE}/eintrag/${eintragId}/bild${bust ? `?t=${bust}` : ""}`;
+}
+
+/** URL des vollflächigen Titelbilds einer Ausgabe. */
+export function coverUrl(ausgabeId: number, bust?: number): string {
+  return `${BASE}/${ausgabeId}/cover${bust ? `?t=${bust}` : ""}`;
+}
+
+/** URL des vollflächigen Rückseitenbilds einer Ausgabe. */
+export function rueckUrl(ausgabeId: number, bust?: number): string {
+  return `${BASE}/${ausgabeId}/rueckseite${bust ? `?t=${bust}` : ""}`;
 }
 
 // --- Viewer: veröffentlichte Ausgaben ---
@@ -130,4 +145,24 @@ export function insertKpi(ausgabeId: number): Promise<AusgabeDetail> {
 }
 export function removeKpi(ausgabeId: number): Promise<AusgabeDetail> {
   return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/kpi`, { method: "DELETE" });
+}
+
+// --- Admin: Titel-/Rückseitenbild (vollflächig) ---
+function uploadAusgabeBild(pfad: string, datei: File): Promise<AusgabeDetail> {
+  const fd = new FormData();
+  fd.append("datei", datei);
+  // Kein Content-Type setzen → Browser schreibt die multipart-boundary.
+  return apiClient<AusgabeDetail>(pfad, { method: "PUT", body: fd });
+}
+export function uploadCover(ausgabeId: number, datei: File): Promise<AusgabeDetail> {
+  return uploadAusgabeBild(`${BASE}/${ausgabeId}/cover`, datei);
+}
+export function deleteCover(ausgabeId: number): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/cover`, { method: "DELETE" });
+}
+export function uploadRueck(ausgabeId: number, datei: File): Promise<AusgabeDetail> {
+  return uploadAusgabeBild(`${BASE}/${ausgabeId}/rueckseite`, datei);
+}
+export function deleteRueck(ausgabeId: number): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/rueckseite`, { method: "DELETE" });
 }

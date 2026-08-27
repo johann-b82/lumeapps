@@ -3,26 +3,32 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, ChevronLeft, FileDown, FileText, GripVertical, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
+import { BarChart3, ChevronLeft, FileDown, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AuthImage, NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
+import { AuthImage, AuthImageUrl, NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
   NEWSLETTER_RUBRIKEN,
   addEintrag,
+  coverUrl,
   createAusgabe,
   deleteAusgabe,
   deleteBild,
+  deleteCover,
   deleteEintrag,
+  deleteRueck,
   fetchAdminAusgabe,
   fetchAdminAusgaben,
   insertKpi,
   removeKpi,
+  rueckUrl,
   updateAusgabe,
   updateEintrag,
   uploadBild,
+  uploadCover,
+  uploadRueck,
   type AusgabeDetail,
   type Eintrag,
   type Rubrik,
@@ -277,6 +283,8 @@ function Editor({ id }: { id: number }) {
         </div>
       </div>
 
+      <CoverBilder ausgabe={ausgabe} onChange={invalidate} />
+
       <BlockReihenfolge ausgabe={ausgabe} onSaved={invalidate} />
 
       {vorschau && (
@@ -451,6 +459,110 @@ function SortItem({ id, label }: { id: string; label: string }) {
     >
       <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       {label}
+    </div>
+  );
+}
+
+/** Titel- & Rückseitenbild (vollflächig) hochladen/entfernen. */
+function CoverBilder({ ausgabe, onChange }: { ausgabe: AusgabeDetail; onChange: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="mb-4 rounded-lg border p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm font-medium">{t("newsletter.coverBereich")}</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <BildSlot
+          label={t("newsletter.titelbild")}
+          hat={ausgabe.hat_cover}
+          urlFn={coverUrl}
+          ausgabeId={ausgabe.id}
+          upload={(f) => uploadCover(ausgabe.id, f)}
+          remove={() => deleteCover(ausgabe.id)}
+          onChange={onChange}
+        />
+        <BildSlot
+          label={t("newsletter.rueckseitenbild")}
+          hat={ausgabe.hat_rueck}
+          urlFn={rueckUrl}
+          ausgabeId={ausgabe.id}
+          upload={(f) => uploadRueck(ausgabe.id, f)}
+          remove={() => deleteRueck(ausgabe.id)}
+          onChange={onChange}
+        />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{t("newsletter.coverHinweis")}</p>
+    </div>
+  );
+}
+
+function BildSlot({
+  label,
+  hat,
+  urlFn,
+  ausgabeId,
+  upload,
+  remove,
+  onChange,
+}: {
+  label: string;
+  hat: boolean;
+  urlFn: (id: number, bust?: number) => string;
+  ausgabeId: number;
+  upload: (f: File) => Promise<AusgabeDetail>;
+  remove: () => Promise<AusgabeDetail>;
+  onChange: () => void;
+}) {
+  const { t } = useTranslation();
+  const [bust, setBust] = useState(0);
+  const hochladen = useMutation({
+    mutationFn: (f: File) => upload(f),
+    onSuccess: () => {
+      setBust(Date.now());
+      onChange();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const entfernen = useMutation({
+    mutationFn: () => remove(),
+    onSuccess: () => onChange(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="rounded-md border border-border/70 p-2">
+      <div className="mb-1 text-xs font-medium">{label}</div>
+      <div className="mb-2 flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
+        {hat ? (
+          <AuthImageUrl
+            url={urlFn(ausgabeId, bust || undefined)}
+            alt={label}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-xs text-muted-foreground">{t("newsletter.ohneBild")}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <label className={`${btn} cursor-pointer`}>
+          <Upload className="h-3.5 w-3.5" /> {hat ? t("newsletter.bildErsetzen") : t("newsletter.bild")}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) hochladen.mutate(f);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+        {hat && (
+          <button type="button" className={btn} disabled={entfernen.isPending} onClick={() => entfernen.mutate()}>
+            {t("newsletter.bildEntfernen")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

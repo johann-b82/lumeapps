@@ -58,6 +58,12 @@ class Newsletter(Base):
     #: Reihenfolge der Blöcke im Newsletter (v1.114) — Liste aus Rubrik-Schlüsseln
     #: + "kpi", per Drag&Drop sortierbar. NULL = Standardreihenfolge.
     block_reihenfolge: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    #: Vollflächiges Titel-/Rückseitenbild (v1.117) — je Ausgabe eins, inline
+    #: serviert; NULL = Text-/Verlaufs-Platzhalter.
+    cover_bild: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    cover_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rueck_bild: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    rueck_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
