@@ -94,7 +94,7 @@ function Reader({ id }: { id: number }) {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pt-4 pb-10">
+    <div className="mx-auto max-w-6xl px-6 pt-4 pb-10">
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
