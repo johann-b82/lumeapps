@@ -13,7 +13,7 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
 
   const seiten = baueSeiten(ausgabe, t).map((desc, i) => (
     <div key={i} className="relative h-full overflow-hidden bg-[#3e3a1d]">
-      <SeiteInhalt desc={desc} ausgabe={ausgabe} />
+      <SeiteInhalt desc={desc} ausgabe={ausgabe} schmal />
     </div>
   ));
 

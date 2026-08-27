@@ -148,10 +148,10 @@ export function blockTitelText(
 }
 
 /** Reiner Block-Inhalt (KPI-Charts bzw. Einträge) — den Titel liefert der
- *  Seiten-Rahmen ({@link SeiteRahmen}). */
-export function BlockInhalt({ block }: { block: NewsletterBlock }) {
+ *  Seiten-Rahmen ({@link SeiteRahmen}). `schmal` = Online-Hochformat. */
+export function BlockInhalt({ block, schmal }: { block: NewsletterBlock; schmal?: boolean }) {
   return block.art === "kpi" ? (
-    <BelegschaftKpiCharts data={block.data} compact />
+    <BelegschaftKpiCharts data={block.data} compact schmal={schmal} />
   ) : (
     <>
       {block.eintraege.map((e) => (
@@ -346,8 +346,17 @@ export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
   return seiten;
 }
 
-/** Rendert den Inhalt eines Seiten-Deskriptors (ohne den Seiten-Wrapper). */
-export function SeiteInhalt({ desc, ausgabe }: { desc: SeiteDesc; ausgabe: AusgabeDetail }) {
+/** Rendert den Inhalt eines Seiten-Deskriptors (ohne den Seiten-Wrapper).
+ *  `schmal` (Online-Hochformat) reicht bis zur KPI-Kachel durch. */
+export function SeiteInhalt({
+  desc,
+  ausgabe,
+  schmal,
+}: {
+  desc: SeiteDesc;
+  ausgabe: AusgabeDetail;
+  schmal?: boolean;
+}) {
   const { t } = useTranslation();
   if (desc.art === "cover" || desc.art === "back") {
     const hat = desc.art === "cover" ? ausgabe.hat_cover : ausgabe.hat_rueck;
@@ -366,7 +375,7 @@ export function SeiteInhalt({ desc, ausgabe }: { desc: SeiteDesc; ausgabe: Ausga
   if (desc.art === "divider") return <DividerSeite titel={desc.titel} edgeLabel={desc.edgeLabel} />;
   return (
     <SeiteRahmen ausgabe={ausgabe} titel={desc.titel} seiteNr={desc.seiteNr} edgeLabel={desc.edgeLabel}>
-      <BlockInhalt block={desc.block} />
+      <BlockInhalt block={desc.block} schmal={schmal} />
     </SeiteRahmen>
   );
 }
