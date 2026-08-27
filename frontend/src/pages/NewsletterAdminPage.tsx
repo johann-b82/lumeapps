@@ -5,9 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BarChart3, ChevronLeft, FileDown, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, Trash2, Upload, Eye, EyeOff } from "lucide-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AuthImage, AuthImageUrl, NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
+import { AuthImage, AuthImageUrl, NewsletterPdfPages, PuzzleBilder } from "@/components/newsletter/NewsletterView";
 import { exportNewsletterPdf } from "@/lib/newsletterPdf";
 import {
   NEWSLETTER_RUBRIKEN,
@@ -18,19 +18,25 @@ import {
   deleteBild,
   deleteCover,
   deleteEintrag,
+  deleteEintragBild,
   deleteRueck,
+  eintragBildUrl,
   fetchAdminAusgabe,
   fetchAdminAusgaben,
   insertKpi,
   removeKpi,
+  reorderEintragBilder,
   rueckUrl,
   updateAusgabe,
   updateEintrag,
+  updateEintragBildLayout,
   uploadBild,
   uploadCover,
+  uploadEintragBild,
   uploadRueck,
   type AusgabeDetail,
   type Eintrag,
+  type EintragBild,
   type Rubrik,
 } from "@/lib/newsletterApi";
 
@@ -449,6 +455,135 @@ function EintragEditor({ eintrag, onChange }: { eintrag: Eintrag; onChange: () =
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      <PuzzleEditor eintrag={eintrag} onChange={onChange} />
+    </div>
+  );
+}
+
+/** Ein Puzzle-Bild im Editor: sortierbare Kachel mit Größen-Steuerung + Löschen. */
+function PuzzleThumb({ bild, onChange }: { bild: EintragBild; onChange: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: bild.id,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const layout = useMutation({
+    mutationFn: (patch: { spalten?: number; zeilen?: number }) => updateEintragBildLayout(bild.id, patch),
+    onSuccess: () => onChange(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const entfernen = useMutation({
+    mutationFn: () => deleteEintragBild(bild.id),
+    onSuccess: () => onChange(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const stepBtn = "rounded border px-1 leading-none disabled:opacity-30";
+  return (
+    <div ref={setNodeRef} style={style} className="w-24 shrink-0 rounded-md border p-1">
+      <div className="relative mb-1 aspect-square overflow-hidden rounded bg-muted">
+        <AuthImageUrl url={eintragBildUrl(bild.id)} alt="" className="absolute inset-0 block h-full w-full object-cover" />
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="absolute left-0.5 top-0.5 cursor-grab rounded bg-black/40 p-0.5 text-white"
+          aria-label="Ziehen"
+        >
+          <GripVertical className="h-3 w-3" />
+        </button>
+      </div>
+      <div className="flex items-center justify-between text-[0.62rem]">
+        <span aria-hidden>↔</span>
+        <div className="flex items-center gap-0.5">
+          <button type="button" className={stepBtn} disabled={bild.spalten <= 1} onClick={() => layout.mutate({ spalten: bild.spalten - 1 })}>−</button>
+          <span className="w-3 text-center">{bild.spalten}</span>
+          <button type="button" className={stepBtn} disabled={bild.spalten >= 4} onClick={() => layout.mutate({ spalten: bild.spalten + 1 })}>+</button>
+        </div>
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[0.62rem]">
+        <span aria-hidden>↕</span>
+        <div className="flex items-center gap-0.5">
+          <button type="button" className={stepBtn} disabled={bild.zeilen <= 1} onClick={() => layout.mutate({ zeilen: bild.zeilen - 1 })}>−</button>
+          <span className="w-3 text-center">{bild.zeilen}</span>
+          <button type="button" className={stepBtn} disabled={bild.zeilen >= 2} onClick={() => layout.mutate({ zeilen: bild.zeilen + 1 })}>+</button>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="mt-1 w-full rounded border py-0.5 text-[0.62rem] text-destructive"
+        onClick={() => entfernen.mutate()}
+      >
+        <Trash2 className="mx-auto h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+/** Mehrere Bilder je Eintrag hochladen, per Drag&Drop anordnen, Zellen spannen. */
+function PuzzleEditor({ eintrag, onChange }: { eintrag: Eintrag; onChange: () => void }) {
+  const { t } = useTranslation();
+  const bilder = eintrag.bilder;
+  const hochladen = useMutation({
+    mutationFn: async (dateien: File[]) => {
+      for (const f of dateien) await uploadEintragBild(eintrag.id, f);
+    },
+    onSuccess: () => onChange(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const anordnen = useMutation({
+    mutationFn: (ids: number[]) => reorderEintragBilder(eintrag.id, ids),
+    onSuccess: () => onChange(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      const ids = bilder.map((b) => b.id);
+      anordnen.mutate(arrayMove(ids, ids.indexOf(Number(active.id)), ids.indexOf(Number(over.id))));
+    }
+  };
+  return (
+    <div className="mt-2 rounded-md border border-border/60 p-2">
+      <div className="mb-2 flex items-center gap-2">
+        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <span className="text-xs font-medium">{t("newsletter.puzzleBilder")}</span>
+        <label className={`${btn} ml-auto cursor-pointer`}>
+          <Upload className="h-3.5 w-3.5" /> {t("newsletter.bildHinzufuegen")}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const fs = Array.from(e.target.files ?? []);
+              if (fs.length) hochladen.mutate(fs);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {bilder.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{t("newsletter.puzzleLeer")}</p>
+      ) : (
+        <>
+          <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={bilder.map((b) => b.id)} strategy={rectSortingStrategy}>
+              <div className="flex flex-wrap gap-2">
+                {bilder.map((b) => (
+                  <PuzzleThumb key={b.id} bild={b} onChange={onChange} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          <div className="mt-2">
+            <div className="mb-1 text-[0.62rem] uppercase tracking-wide text-muted-foreground">
+              {t("newsletter.vorschau")}
+            </div>
+            <div className="max-w-[240px]">
+              <PuzzleBilder bilder={bilder} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

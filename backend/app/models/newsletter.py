@@ -98,3 +98,29 @@ class NewsletterEintrag(Base):
     reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     newsletter: Mapped["Newsletter"] = relationship("Newsletter", back_populates="eintraege")
+    #: Mehrere Bilder (Puzzle-Raster), nach Reihenfolge sortiert.
+    bilder: Mapped[list["NewsletterEintragBild"]] = relationship(
+        "NewsletterEintragBild",
+        back_populates="eintrag",
+        cascade="all, delete-orphan",
+        order_by="NewsletterEintragBild.reihenfolge",
+    )
+
+
+class NewsletterEintragBild(Base):
+    """Ein Bild eines Eintrags im Puzzle-Raster (bytea + Zellen-Spanne)."""
+
+    __tablename__ = "newsletter_eintrag_bild"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    eintrag_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("newsletter_eintrag.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    bild_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    bild_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: Zellen-Spanne im 4-Spalten-Raster (1–4 Spalten, 1–2 Zeilen).
+    spalten: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    zeilen: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    eintrag: Mapped["NewsletterEintrag"] = relationship("NewsletterEintrag", back_populates="bilder")

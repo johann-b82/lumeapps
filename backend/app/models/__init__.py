@@ -115,7 +115,11 @@ from app.models.zeugnis import (  # noqa: F401
 )
 
 # Newsletter (v1.112)
-from app.models.newsletter import Newsletter, NewsletterEintrag  # noqa: F401
+from app.models.newsletter import (  # noqa: F401
+    Newsletter,
+    NewsletterEintrag,
+    NewsletterEintragBild,
+)
 
 __all__ = [
     "Base",
@@ -167,5 +171,5 @@ __all__ = [
     # Arbeitszeugnis
     "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung",
     # Newsletter
-    "Newsletter", "NewsletterEintrag",
+    "Newsletter", "NewsletterEintrag", "NewsletterEintragBild",
 ]

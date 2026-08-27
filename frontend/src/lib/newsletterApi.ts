@@ -26,6 +26,14 @@ export interface AusgabeListItem {
   status: "entwurf" | "veroeffentlicht";
 }
 
+export interface EintragBild {
+  id: number;
+  reihenfolge: number;
+  /** Zellen-Spanne im 4-Spalten-Raster. */
+  spalten: number;
+  zeilen: number;
+}
+
 export interface Eintrag {
   id: number;
   rubrik: Rubrik;
@@ -33,6 +41,8 @@ export interface Eintrag {
   inhalt_md: string;
   reihenfolge: number;
   hat_bild: boolean;
+  /** Puzzle-Bilder in Reihenfolge. */
+  bilder: EintragBild[];
 }
 
 export interface AusgabeDetail extends AusgabeListItem {
@@ -53,6 +63,11 @@ const BASE = "/api/newsletter";
 /** Bild-URL eines Eintrags (mit `t`, um Cache nach Neu-Upload zu umgehen). */
 export function bildUrl(eintragId: number, bust?: number): string {
   return `${BASE}/eintrag/${eintragId}/bild${bust ? `?t=${bust}` : ""}`;
+}
+
+/** URL eines Puzzle-Bildes. */
+export function eintragBildUrl(bildId: number): string {
+  return `${BASE}/eintrag-bild/${bildId}`;
 }
 
 /** URL des vollflächigen Titelbilds einer Ausgabe. */
@@ -140,6 +155,33 @@ export function uploadBild(eintragId: number, datei: File): Promise<Eintrag> {
 }
 export function deleteBild(eintragId: number): Promise<void> {
   return apiClient<void>(`${BASE}/eintrag/${eintragId}/bild`, { method: "DELETE" });
+}
+
+// --- Puzzle-Bilder (mehrere je Eintrag) ---
+export function uploadEintragBild(eintragId: number, datei: File): Promise<Eintrag> {
+  const fd = new FormData();
+  fd.append("datei", datei);
+  return apiClient<Eintrag>(`${BASE}/eintrag/${eintragId}/bilder`, { method: "POST", body: fd });
+}
+export function deleteEintragBild(bildId: number): Promise<void> {
+  return apiClient<void>(`${BASE}/eintrag-bild/${bildId}`, { method: "DELETE" });
+}
+export function updateEintragBildLayout(
+  bildId: number,
+  patch: { spalten?: number; zeilen?: number },
+): Promise<EintragBild> {
+  return apiClient<EintragBild>(`${BASE}/eintrag-bild/${bildId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+export function reorderEintragBilder(eintragId: number, ids: number[]): Promise<Eintrag> {
+  return apiClient<Eintrag>(`${BASE}/eintrag/${eintragId}/bilder/anordnung`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
 }
 
 /** Aktuelle Belegschafts-KPIs als Snapshot in die Ausgabe einfrieren. */
