@@ -42,13 +42,13 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
   return (
     <div className="flex flex-col items-center gap-3">
       <HTMLFlipBook
-        width={430}
-        height={608}
+        width={440}
+        height={440}
         size="stretch"
-        minWidth={300}
-        maxWidth={560}
-        minHeight={420}
-        maxHeight={780}
+        minWidth={260}
+        maxWidth={480}
+        minHeight={260}
+        maxHeight={480}
         showCover
         maxShadowOpacity={0.35}
         drawShadow

@@ -455,10 +455,11 @@ function SortItem({ id, label }: { id: string; label: string }) {
   );
 }
 
-/** Drag&Drop-Reihenfolge der Blöcke (Rubriken + KPI). */
+/** Drag&Drop-Reihenfolge der Rubriken. Die KPIs sind kein eigener Block mehr,
+ *  sondern erscheinen fest als eigene Seite am Anfang von „Intern". */
 function BlockReihenfolge({ ausgabe, onSaved }: { ausgabe: AusgabeDetail; onSaved: () => void }) {
   const { t } = useTranslation();
-  const standard = [...NEWSLETTER_RUBRIKEN, "kpi"] as string[];
+  const standard = [...NEWSLETTER_RUBRIKEN] as string[];
   const merge = (gespeichert: string[] | null | undefined) => {
     const g = (gespeichert ?? []).filter((k) => standard.includes(k));
     return [...g, ...standard.filter((k) => !g.includes(k))];
