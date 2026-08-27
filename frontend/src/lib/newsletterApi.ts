@@ -41,6 +41,8 @@ export interface AusgabeDetail extends AusgabeListItem {
   kpi_snapshot: BelegschaftKpi | null;
   /** Block-Reihenfolge (Rubrik-Schlüssel); null = Standard. */
   block_reihenfolge: string[] | null;
+  /** Überschriebene Abschnitts-Titel {block_key: titel}; null/fehlend = Standard. */
+  rubrik_titel: Record<string, string> | null;
   /** Vollflächiges Titel- bzw. Rückseitenbild hinterlegt? */
   hat_cover: boolean;
   hat_rueck: boolean;
@@ -95,6 +97,7 @@ export function updateAusgabe(
     titel?: string | null;
     status?: "entwurf" | "veroeffentlicht";
     block_reihenfolge?: string[];
+    rubrik_titel?: Record<string, string>;
   },
 ): Promise<AusgabeDetail> {
   return apiClient<AusgabeDetail>(`${BASE}/${id}`, {

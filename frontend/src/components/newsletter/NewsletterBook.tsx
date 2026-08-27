@@ -37,7 +37,7 @@ export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {
     ...bloecke.map((b, i) => (
       <div key={i} className="h-full bg-white text-neutral-900">
         <div className="h-full overflow-y-auto p-6">
-          <BlockInhalt block={b} />
+          <BlockInhalt block={b} rubrikTitel={ausgabe.rubrik_titel} />
         </div>
       </div>
     )),

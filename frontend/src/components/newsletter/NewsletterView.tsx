@@ -98,11 +98,25 @@ function EintragBlock({ eintrag }: { eintrag: Eintrag }) {
   );
 }
 
+/** Standardtitel eines Blocks (i18n), falls kein Override gesetzt ist. */
+export function blockKey(block: NewsletterBlock): string {
+  return block.art === "kpi" ? "kpi" : block.rubrik;
+}
+
 /** Inhalt eines Blocks (Überschrift + Einträge bzw. KPI-Charts) — geteilt von
- *  Buchseite UND Fließ-Ansicht/PDF. */
-export function BlockInhalt({ block }: { block: NewsletterBlock }) {
+ *  Buchseite UND Fließ-Ansicht/PDF. `rubrikTitel` überschreibt den Standardtitel
+ *  je Block-Schlüssel. */
+export function BlockInhalt({
+  block,
+  rubrikTitel,
+}: {
+  block: NewsletterBlock;
+  rubrikTitel?: Record<string, string> | null;
+}) {
   const { t } = useTranslation();
-  const titel = block.art === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${block.rubrik}`);
+  const eigen = rubrikTitel?.[blockKey(block)]?.trim();
+  const titel =
+    eigen || (block.art === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${block.rubrik}`));
   return (
     <section className="break-inside-avoid">
       <h2 className="mb-3 border-l-4 border-primary pl-2 text-lg font-bold">{titel}</h2>
@@ -153,7 +167,7 @@ export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
 
       {bloecke.map((b, i) => (
         <div key={i} data-pdf-page style={seite} className="bg-white p-12 text-neutral-900">
-          <BlockInhalt block={b} />
+          <BlockInhalt block={b} rubrikTitel={ausgabe.rubrik_titel} />
         </div>
       ))}
 
