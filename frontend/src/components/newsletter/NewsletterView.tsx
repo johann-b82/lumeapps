@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchBlob } from "@/lib/download";
@@ -131,97 +132,203 @@ function EintragBlock({ eintrag }: { eintrag: Eintrag }) {
   );
 }
 
-/** Standardtitel eines Blocks (i18n), falls kein Override gesetzt ist. */
+/** Block-Schlüssel (Rubrik oder "kpi"). */
 export function blockKey(block: NewsletterBlock): string {
   return block.art === "kpi" ? "kpi" : block.rubrik;
 }
 
-/** Inhalt eines Blocks (Überschrift + Einträge bzw. KPI-Charts) — geteilt von
- *  Buchseite UND Fließ-Ansicht/PDF. `rubrikTitel` überschreibt den Standardtitel
- *  je Block-Schlüssel. */
-export function BlockInhalt({
-  block,
-  rubrikTitel,
-}: {
-  block: NewsletterBlock;
-  rubrikTitel?: Record<string, string> | null;
-}) {
-  const { t } = useTranslation();
+/** Titel eines Blocks: Override (rubrik_titel) sonst i18n-Standard. */
+export function blockTitelText(
+  block: NewsletterBlock,
+  rubrikTitel: Record<string, string> | null | undefined,
+  t: TFunction,
+): string {
   const eigen = rubrikTitel?.[blockKey(block)]?.trim();
-  const titel =
-    eigen || (block.art === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${block.rubrik}`));
-  return (
-    <section className="break-inside-avoid">
-      <h2 className="mb-3 border-l-4 border-primary pl-2 text-lg font-bold">{titel}</h2>
-      {block.art === "kpi" ? (
-        <BelegschaftKpiCharts data={block.data} compact />
-      ) : (
-        block.eintraege.map((e) => <EintragBlock key={e.id} eintrag={e} />)
-      )}
-    </section>
+  return eigen || (block.art === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${block.rubrik}`));
+}
+
+/** Reiner Block-Inhalt (KPI-Charts bzw. Einträge) — den Titel liefert der
+ *  Seiten-Rahmen ({@link SeiteRahmen}). */
+export function BlockInhalt({ block }: { block: NewsletterBlock }) {
+  return block.art === "kpi" ? (
+    <BelegschaftKpiCharts data={block.data} compact />
+  ) : (
+    <>
+      {block.eintraege.map((e) => (
+        <EintragBlock key={e.id} eintrag={e} />
+      ))}
+    </>
   );
 }
 
-/** Seitenweise Ansicht — je Block genau eine quadratische Seite (Cover, KPI,
- *  jede Rubrik, Rückseite), deckungsgleich zum Buch-Reader. Jede Seite trägt
- *  `data-pdf-page`; der PDF-Export ({@link exportNewsletterPdf}) erfasst sie
- *  einzeln. Feste Print-Maße 250 × 250 mm bei 96 dpi (945 × 945 px); `minHeight`
- *  füllt kurze Seiten voll aus, längere Blöcke laufen auf eine Folgeseite über. */
-export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
+// --- Design-Skin (Referenz: Oliv/Gold + Blau-Akzent) ------------------------
+export const NL_OLIVE = "#3e3a1d";
+export const NL_OLIVE_DK = "#2a2711";
+export const NL_BLUE = "#2f9fd9";
+
+/** Skin einer Inhaltsseite: Oliv-Kopfband + zentrierter Titel mit blauen
+ *  Akzent-Strichen + Fußzeile mit Seitenzahl. Größen in `cqw` (Container-Query-
+ *  Einheiten) → skaliert proportional in PDF (945 px) und Buch (440 px). Füllt
+ *  die quadratische Elternseite. */
+export function SeiteRahmen({
+  ausgabe,
+  titel,
+  seiteNr,
+  children,
+}: {
+  ausgabe: AusgabeDetail;
+  titel: string;
+  seiteNr: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="relative flex h-full w-full flex-col bg-white text-neutral-900"
+      style={{ containerType: "inline-size" }}
+    >
+      <div
+        className="flex items-center justify-between"
+        style={{ background: NL_OLIVE, color: "#fff", padding: "3cqw 5cqw" }}
+      >
+        <span
+          style={{
+            border: "1px solid rgba(255,255,255,.55)",
+            fontSize: "2.1cqw",
+            letterSpacing: "0.22em",
+            padding: "0.7cqw 1.8cqw",
+            textTransform: "uppercase",
+          }}
+        >
+          ACM Newsletter
+        </span>
+        <span style={{ fontSize: "2.1cqw", letterSpacing: "0.14em", opacity: 0.85 }}>
+          {`Q${ausgabe.quartal} · ${ausgabe.jahr}`}
+        </span>
+      </div>
+      <div className="text-center" style={{ paddingTop: "5cqw" }}>
+        <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
+        <h2 className="font-bold" style={{ fontSize: "6.2cqw", lineHeight: 1.05, margin: "2.4cqw 0", padding: "0 5cqw" }}>
+          {titel}
+        </h2>
+        <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto" style={{ padding: "4cqw 6cqw 7cqw" }}>
+        {children}
+      </div>
+      <div
+        className="absolute flex items-center justify-between"
+        style={{ left: "6cqw", right: "6cqw", bottom: "2.6cqw", fontSize: "1.9cqw", color: "#9aa3ad" }}
+      >
+        <span style={{ letterSpacing: "0.12em" }}>ACM · acm-aerospace.com</span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{seiteNr}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Cover-/Rückseite ohne Bild: Oliv-Verlauf + Masthead (Fallback). */
+export function OliveMast({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
   const titel = ausgabe.titel || `Q${ausgabe.quartal} ${ausgabe.jahr}`;
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center text-center text-white"
+      style={{ containerType: "inline-size", background: `linear-gradient(150deg, ${NL_OLIVE}, ${NL_OLIVE_DK})` }}
+    >
+      <div style={{ fontSize: "2.6cqw", letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.85 }}>
+        {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
+      </div>
+      <div style={{ fontSize: "13cqw", fontWeight: 800, lineHeight: 1, margin: "3cqw 0 2.5cqw" }}>Newsletter</div>
+      <div style={{ height: "0.9cqw", width: "16cqw", background: NL_BLUE }} />
+      <div style={{ fontSize: "5cqw", fontWeight: 600, marginTop: "3cqw" }}>{titel}</div>
+      <div style={{ fontSize: "2.4cqw", opacity: 0.8, marginTop: "6cqw", letterSpacing: "0.2em" }}>ACM</div>
+    </div>
+  );
+}
+
+/** Inhaltsverzeichnis-Seite (nach dem Cover). */
+export function InhaltSeite({
+  ausgabe,
+  eintraege,
+}: {
+  ausgabe: AusgabeDetail;
+  eintraege: { titel: string; seite: number }[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="flex h-full w-full flex-col text-white"
+      style={{ containerType: "inline-size", background: `linear-gradient(150deg, ${NL_OLIVE}, ${NL_OLIVE_DK})` }}
+    >
+      <div style={{ padding: "9cqw 8cqw 0" }}>
+        <div style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
+        <h2 style={{ fontSize: "8cqw", fontWeight: 800, letterSpacing: "0.04em", margin: "2.4cqw 0 1cqw" }}>
+          {t("newsletter.inhalt")}
+        </h2>
+        <div style={{ fontSize: "2.2cqw", opacity: 0.8, letterSpacing: "0.15em" }}>{`Q${ausgabe.quartal} · ${ausgabe.jahr}`}</div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto" style={{ padding: "5cqw 8cqw" }}>
+        {eintraege.map((e, i) => (
+          <div
+            key={i}
+            className="flex items-baseline justify-between"
+            style={{ padding: "2.1cqw 0", borderBottom: "1px solid rgba(255,255,255,.16)", fontSize: "3cqw" }}
+          >
+            <span>{e.titel}</span>
+            <span style={{ color: NL_BLUE, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{e.seite}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: "0 8cqw 6cqw", fontSize: "2cqw", opacity: 0.7, letterSpacing: "0.12em" }}>
+        ACM · acm-aerospace.com
+      </div>
+    </div>
+  );
+}
+
+/** Seitenweise Ansicht — je Block genau eine quadratische Seite (945 px = 250 mm),
+ *  im Referenz-Design (Oliv-Kopfband, zentrierter Titel, Fußzeile). Seiten:
+ *  1 = Cover, 2 = INHALT, 3.. = Blöcke, letzte = Rückseite. Jede trägt
+ *  `data-pdf-page` für den seitenweisen Export ({@link exportNewsletterPdf}). */
+export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
+  const { t } = useTranslation();
   const bloecke = ordereBloecke(ausgabe);
-  const seite = { width: 945, minHeight: 945 };
+  const seite = { width: 945, height: 945 } as const;
   const bildSeite = { ...seite, position: "relative" as const, overflow: "hidden" as const };
+  const inhalt = bloecke.map((b, i) => ({ titel: blockTitelText(b, ausgabe.rubrik_titel, t), seite: 3 + i }));
   return (
     <div className="flex flex-col items-center gap-4">
-      {ausgabe.hat_cover ? (
-        <div data-pdf-page style={bildSeite} className="bg-neutral-200">
-          <AuthImageUrl
-            url={coverUrl(ausgabe.id)}
-            alt={t("newsletter.titelbild")}
-            className="absolute inset-0 block h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <div
-          data-pdf-page
-          style={seite}
-          className="flex flex-col items-center justify-center bg-gradient-to-br from-sky-600
-                     to-blue-800 p-16 text-center text-white"
-        >
-          <div className="mb-3 text-base uppercase tracking-widest opacity-90">
-            {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
-          </div>
-          <div className="text-5xl font-bold leading-tight">{titel}</div>
-          <div className="mt-8 text-sm opacity-80">{t("newsletter.title")}</div>
-        </div>
-      )}
+      {/* Cover */}
+      <div data-pdf-page style={bildSeite} className="bg-neutral-200">
+        {ausgabe.hat_cover ? (
+          <AuthImageUrl url={coverUrl(ausgabe.id)} alt={t("newsletter.titelbild")} className="absolute inset-0 block h-full w-full object-cover" />
+        ) : (
+          <OliveMast ausgabe={ausgabe} />
+        )}
+      </div>
 
+      {/* INHALT */}
+      <div data-pdf-page style={seite} className="overflow-hidden">
+        <InhaltSeite ausgabe={ausgabe} eintraege={inhalt} />
+      </div>
+
+      {/* Blöcke */}
       {bloecke.map((b, i) => (
-        <div key={i} data-pdf-page style={seite} className="bg-white p-12 text-neutral-900">
-          <BlockInhalt block={b} rubrikTitel={ausgabe.rubrik_titel} />
+        <div key={i} data-pdf-page style={seite} className="overflow-hidden">
+          <SeiteRahmen ausgabe={ausgabe} titel={blockTitelText(b, ausgabe.rubrik_titel, t)} seiteNr={3 + i}>
+            <BlockInhalt block={b} />
+          </SeiteRahmen>
         </div>
       ))}
 
-      {ausgabe.hat_rueck ? (
-        <div data-pdf-page style={bildSeite} className="bg-neutral-200">
-          <AuthImageUrl
-            url={rueckUrl(ausgabe.id)}
-            alt={t("newsletter.rueckseitenbild")}
-            className="absolute inset-0 block h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <div
-          data-pdf-page
-          style={seite}
-          className="flex items-center justify-center bg-neutral-100 p-16 text-center text-sm
-                     text-neutral-500"
-        >
-          {t("newsletter.buchEnde")}
-        </div>
-      )}
+      {/* Rückseite */}
+      <div data-pdf-page style={bildSeite} className="bg-neutral-200">
+        {ausgabe.hat_rueck ? (
+          <AuthImageUrl url={rueckUrl(ausgabe.id)} alt={t("newsletter.rueckseitenbild")} className="absolute inset-0 block h-full w-full object-cover" />
+        ) : (
+          <OliveMast ausgabe={ausgabe} />
+        )}
+      </div>
     </div>
   );
 }
