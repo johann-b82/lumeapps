@@ -144,6 +144,26 @@ export function saveAussteller(a: Aussteller): Promise<Aussteller> {
   });
 }
 
+// --- Bewertungs-Vorlagen (Profile) ---
+export interface Vorlage {
+  id: number;
+  name: string;
+  noten: Record<string, number>;
+}
+export function fetchVorlagen(): Promise<Vorlage[]> {
+  return apiClient<Vorlage[]>(`${BASE}/vorlagen`);
+}
+export function createVorlage(name: string, noten: Record<string, number>): Promise<Vorlage> {
+  return apiClient<Vorlage>(`${BASE}/vorlagen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, noten }),
+  });
+}
+export function deleteVorlage(id: number): Promise<void> {
+  return apiClient<void>(`${BASE}/vorlagen/${id}`, { method: "DELETE" });
+}
+
 export async function downloadDocx(id: number, name: string): Promise<void> {
   const blob = await fetchBlob(`${BASE}/${id}/docx`);
   openBlob(blob, `Arbeitszeugnis_${name.replace(/\s+/g, "_")}.docx`);

@@ -5,24 +5,24 @@ import { toast } from "sonner";
 import { FileText, Sparkles, Loader2, Trash2, Download, Building2 } from "lucide-react";
 
 import {
-  Aussteller,
-  Person,
-  ZeugnisArt,
-  ZeugnisDetail,
   ZEUGNIS_ABSCHNITTE,
   ZEUGNIS_DIMENSIONEN,
+  createVorlage,
   createZeugnis,
+  deleteVorlage,
   deleteZeugnis,
   downloadDocx,
   downloadPdf,
   fetchAussteller,
   fetchPersonen,
+  fetchVorlagen,
   fetchZeugnis,
   fetchZeugnisse,
   generateZeugnis,
   saveAussteller,
   updateZeugnis,
 } from "@/lib/zeugnisApi";
+import type { Aussteller, Person, Vorlage, ZeugnisArt, ZeugnisDetail } from "@/lib/zeugnisApi";
 
 const feld =
   "h-8 rounded-md border border-input bg-background px-2 text-sm " +
@@ -259,6 +259,65 @@ function AusstellerCard() {
   );
 }
 
+/** Bewertungs-Vorlagen: gespeicherte Noten-Profile anwenden / aktuelles sichern. */
+function VorlagenLeiste({
+  noten,
+  onApply,
+}: {
+  noten: Record<string, number>;
+  onApply: (noten: Record<string, number>) => void;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const vKey = ["hr", "zeugnisse", "vorlagen"] as const;
+  const { data: vorlagen } = useQuery({ queryKey: vKey, queryFn: fetchVorlagen });
+  const speichern = useMutation({
+    mutationFn: (name: string) => createVorlage(name, noten),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: vKey });
+      toast.success(t("zeugnisse.vorlageGespeichert"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const loeschen = useMutation({
+    mutationFn: (vid: number) => deleteVorlage(vid),
+    onSuccess: () => qc.invalidateQueries({ queryKey: vKey }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {(vorlagen ?? []).map((v: Vorlage) => (
+        <span key={v.id} className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs">
+          <button type="button" className="hover:underline" title={t("zeugnisse.vorlageAnwenden")} onClick={() => onApply(v.noten)}>
+            {v.name}
+          </button>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-destructive"
+            title={t("zeugnisse.vorlageEntfernen")}
+            onClick={() => {
+              if (confirm(t("zeugnisse.vorlageLoeschenBestaetigen", { name: v.name }))) loeschen.mutate(v.id);
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        className={`${ghost} h-7`}
+        disabled={Object.keys(noten).length === 0 || speichern.isPending}
+        onClick={() => {
+          const name = window.prompt(t("zeugnisse.vorlageName"));
+          if (name && name.trim()) speichern.mutate(name.trim());
+        }}
+      >
+        {t("zeugnisse.vorlageSpeichern")}
+      </button>
+    </div>
+  );
+}
+
 function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -418,6 +477,12 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
             {t("zeugnisse.schlussnote")}:{" "}
             <span className="font-semibold">{form.schlussnote != null ? form.schlussnote.toFixed(1) : "—"}</span>
           </div>
+        </div>
+        <div className="mb-2 flex flex-wrap items-center gap-2 border-b pb-2">
+          <span className="text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("zeugnisse.vorlagen")}
+          </span>
+          <VorlagenLeiste noten={form.bewertungen} onApply={(n) => setForm({ ...form, bewertungen: n })} />
         </div>
         <div className="space-y-1">
           {dims.map((dim) => (
