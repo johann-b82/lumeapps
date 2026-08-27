@@ -192,6 +192,9 @@ function Editor({ id }: { id: number }) {
         previewRef.current,
         `Newsletter_Q${ausgabe.quartal}_${ausgabe.jahr}.pdf`,
       );
+    } catch (e) {
+      console.error("PDF-Export fehlgeschlagen:", e);
+      toast.error(t("newsletter.pdfFehler"));
     } finally {
       setPdfLaeuft(false);
     }

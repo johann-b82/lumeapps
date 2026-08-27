@@ -34,6 +34,7 @@
   "newsletter.zurueck": "Zurück",
   "newsletter.bearbeiten": "Bearbeiten",
   "newsletter.pdf": "Als PDF exportieren",
+  "newsletter.pdfFehler": "PDF-Export fehlgeschlagen. Bitte erneut versuchen.",
   "newsletter.nichtGefunden": "Ausgabe nicht gefunden.",
   "newsletter.rubrik.arash": "Post von Arash",
   "newsletter.rubrik.aschkan": "Post von Aschkan",

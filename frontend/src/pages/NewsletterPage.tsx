@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Newspaper, FileDown, ChevronLeft, Loader2, PencilLine } from "lucide-react";
 import { AdminOnly } from "@/auth/AdminOnly";
 import { NewsletterPdfPages } from "@/components/newsletter/NewsletterView";
@@ -84,6 +85,9 @@ function Reader({ id }: { id: number }) {
         ref.current,
         `Newsletter_Q${ausgabe.quartal}_${ausgabe.jahr}.pdf`,
       );
+    } catch (e) {
+      console.error("PDF-Export fehlgeschlagen:", e);
+      toast.error(t("newsletter.pdfFehler"));
     } finally {
       setPdfLaeuft(false);
     }
