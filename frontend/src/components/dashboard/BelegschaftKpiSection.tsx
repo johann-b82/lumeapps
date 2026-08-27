@@ -89,6 +89,7 @@ function PieKachel({
   i18nPrefix,
   prozent = true,
   compact = false,
+  schmal = false,
 }: {
   titel: string;
   daten: LabelWert[];
@@ -96,6 +97,7 @@ function PieKachel({
   i18nPrefix: string;
   prozent?: boolean;
   compact?: boolean;
+  schmal?: boolean;
 }) {
   const { t } = useTranslation();
   const pcts = prozente(daten.map((d) => d.wert));
@@ -108,14 +110,14 @@ function PieKachel({
   return (
     <Card className={compact ? "p-2" : "p-4"}>
       <div className={compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium"}>{titel}</div>
-      <ResponsiveContainer width="100%" height={compact ? 150 : 220}>
+      <ResponsiveContainer width="100%" height={schmal ? 128 : compact ? 150 : 220}>
         <PieChart>
           <Pie
             data={chart}
             dataKey="value"
             nameKey="name"
-            innerRadius={compact ? 28 : 40}
-            outerRadius={compact ? 52 : 75}
+            innerRadius={schmal ? 24 : compact ? 28 : 40}
+            outerRadius={schmal ? 46 : compact ? 52 : 75}
             label={
               compact
                 ? insideLabel(prozent)
@@ -144,9 +146,13 @@ function PieKachel({
 export function BelegschaftKpiCharts({
   data,
   compact = false,
+  schmal = false,
 }: {
   data: BelegschaftKpi;
   compact?: boolean;
+  /** Schmales Hochformat (Online-Buch): Donuts nebeneinander, Balken voll breit
+   *  statt 2×2 — sonst wären die Spalten zu schmal fürs Abteilungs-Diagramm. */
+  schmal?: boolean;
 }) {
   const { t } = useTranslation();
   const abteilungenAlle = data.abteilungen.map((a) => ({ name: a.name, wert: a.wert }));
@@ -165,64 +171,70 @@ export function BelegschaftKpiCharts({
       abteilungen = [...top, { name: "Sonstige", wert: restSumme }];
     }
   }
-  const balkenH = compact ? 150 : 220;
-  const abtH = compact
-    ? Math.max(160, abteilungen.length * 30)
-    : Math.max(220, abteilungen.length * 22);
+  const balkenH = schmal ? 130 : compact ? 150 : 220;
+  const abtH = schmal
+    ? Math.max(150, abteilungen.length * 24)
+    : compact
+      ? Math.max(160, abteilungen.length * 30)
+      : Math.max(220, abteilungen.length * 22);
   const cardP = compact ? "p-2" : "p-4";
   const titelC = compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium";
+  const abtWidth = schmal ? 90 : compact ? 145 : 150;
+  const abtTick =
+    compact || schmal ? { fill: "var(--color-muted-foreground)", fontSize: schmal ? 8 : 9 } : axisProps.tick;
+
+  const donutGeschlecht = (
+    <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" compact={compact} schmal={schmal} />
+  );
+  const donutBesch = (
+    <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} compact={compact} schmal={schmal} />
+  );
+  const cardEintritt = (
+    <Card className={cardP}>
+      <div className={titelC}>{t("belegschaft.eintritt")}</div>
+      <ResponsiveContainer width="100%" height={balkenH}>
+        <BarChart
+          data={data.eintritt.map((d) => ({ name: t(`belegschaft.e.${d.key}`, d.key), wert: d.wert, key: d.key }))}
+          margin={{ top: 24, right: 8, left: 8, bottom: 4 }}
+        >
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="name" {...axisProps} />
+          <YAxis {...axisProps} allowDecimals={false} />
+          <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
+          <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }} isAnimationActive={!compact}>
+            {data.eintritt.map((d) => (
+              <Cell key={d.key} fill={EINTRITT_FARBEN[d.key] ?? "#94a3b8"} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </Card>
+  );
+  const cardAbteilungen = (
+    <Card className={cardP}>
+      <div className={titelC}>{t("belegschaft.abteilungen")}</div>
+      <ResponsiveContainer width="100%" height={abtH}>
+        <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
+          <CartesianGrid {...gridProps} horizontal={false} />
+          <XAxis type="number" {...axisProps} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" {...axisProps} tick={abtTick} width={abtWidth} interval={0} />
+          <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
+          <Bar dataKey="wert" radius={[0, 4, 4, 0]} fill="#2563eb" label={{ position: "right", fontSize: compact ? 10 : 11 }} isAnimationActive={!compact} />
+        </BarChart>
+      </ResponsiveContainer>
+    </Card>
+  );
+
+  // Newsletter (compact): festes 2×2 — auch schmal (Hochformat), damit die vier
+  // KPIs auf eine Seite passen; das Abteilungs-Diagramm wird dafür schmaler
+  // gesetzt (kleinere Achse). Dashboard bleibt responsiv.
   return (
-      <div className={compact ? "grid gap-3 md:grid-cols-2" : "grid gap-4 md:grid-cols-2"}>
-        <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" compact={compact} />
-        <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} compact={compact} />
-
-        {/* Neu vs. Bestand: absolute Zahlen (Balken), kein Prozent. */}
-        <Card className={cardP}>
-          <div className={titelC}>{t("belegschaft.eintritt")}</div>
-          <ResponsiveContainer width="100%" height={balkenH}>
-            <BarChart
-              data={data.eintritt.map((d) => ({ name: t(`belegschaft.e.${d.key}`, d.key), wert: d.wert, key: d.key }))}
-              margin={{ top: 24, right: 8, left: 8, bottom: 4 }}
-            >
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="name" {...axisProps} />
-              <YAxis {...axisProps} allowDecimals={false} />
-              <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-              <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 12 }} isAnimationActive={!compact}>
-                {data.eintritt.map((d) => (
-                  <Cell key={d.key} fill={EINTRITT_FARBEN[d.key] ?? "#94a3b8"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card className={cardP}>
-          <div className={titelC}>{t("belegschaft.abteilungen")}</div>
-          <ResponsiveContainer width="100%" height={abtH}>
-            <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
-              <CartesianGrid {...gridProps} horizontal={false} />
-              <XAxis type="number" {...axisProps} allowDecimals={false} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                {...axisProps}
-                tick={compact ? { fill: "var(--color-muted-foreground)", fontSize: 9 } : axisProps.tick}
-                width={compact ? 145 : 150}
-                interval={0}
-              />
-              <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-              <Bar
-                dataKey="wert"
-                radius={[0, 4, 4, 0]}
-                fill="#2563eb"
-                label={{ position: "right", fontSize: compact ? 10 : 11 }}
-                isAnimationActive={!compact}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
+    <div className={compact ? "grid grid-cols-2 gap-2" : "grid gap-4 md:grid-cols-2"}>
+      {donutGeschlecht}
+      {donutBesch}
+      {cardEintritt}
+      {cardAbteilungen}
+    </div>
   );
 }
 
