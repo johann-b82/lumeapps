@@ -49,6 +49,39 @@ function prozente(werte: number[]): number[] {
   return out;
 }
 
+const RAD = Math.PI / 180;
+
+/** Label MITTIG im Donut-Ring (statt außen) — nötig für die kleine (compact)
+ *  Newsletter-Pie, wo außenliegende Labels oben abgeschnitten würden bzw. mit
+ *  der Legende kollidieren. Weiße Schrift auf den Segmentfarben. */
+function insideLabel(showPct: boolean) {
+  return (p: {
+    cx?: number;
+    cy?: number;
+    midAngle?: number;
+    innerRadius?: number;
+    outerRadius?: number;
+    value?: number;
+    pct?: number;
+    payload?: { pct?: number };
+  }) => {
+    const cx = p.cx ?? 0;
+    const cy = p.cy ?? 0;
+    const mid = p.midAngle ?? 0;
+    const ir = p.innerRadius ?? 0;
+    const or = p.outerRadius ?? 0;
+    const r = ir + (or - ir) * 0.5;
+    const x = cx + r * Math.cos(-mid * RAD);
+    const y = cy + r * Math.sin(-mid * RAD);
+    const text = showPct ? `${p.pct ?? p.payload?.pct ?? 0}%` : `${p.value ?? ""}`;
+    return (
+      <text x={x} y={y} fill="#fff" fontSize={10} fontWeight={600} textAnchor="middle" dominantBaseline="central">
+        {text}
+      </text>
+    );
+  };
+}
+
 function PieKachel({
   titel,
   daten,
@@ -83,8 +116,10 @@ function PieKachel({
             nameKey="name"
             innerRadius={compact ? 28 : 40}
             outerRadius={compact ? 52 : 75}
-            label={(e: { value?: number; pct?: number }) =>
-              prozent ? `${e.pct ?? 0}%` : `${e.value}`
+            label={
+              compact
+                ? insideLabel(prozent)
+                : (e: { value?: number; pct?: number }) => (prozent ? `${e.pct ?? 0}%` : `${e.value}`)
             }
             labelLine={false}
             // Bei kleiner (compact) Pie rendert Recharts die Zahlen-Labels mit
@@ -114,10 +149,25 @@ export function BelegschaftKpiCharts({
   compact?: boolean;
 }) {
   const { t } = useTranslation();
-  const abteilungen = data.abteilungen.map((a) => ({ name: a.name, wert: a.wert }));
+  const abteilungenAlle = data.abteilungen.map((a) => ({ name: a.name, wert: a.wert }));
+  // Compact (Newsletter, Quadrat): 16 lange Abteilungsnamen sind unlesbar →
+  // größte 7 behalten, der Rest fließt in „Sonstige". Das Dashboard zeigt alle.
+  let abteilungen = abteilungenAlle;
+  if (compact && abteilungenAlle.length > 8) {
+    const sortiert = [...abteilungenAlle].sort((a, b) => b.wert - a.wert);
+    const top = sortiert.slice(0, 7);
+    const restSumme = sortiert.slice(7).reduce((s, d) => s + d.wert, 0);
+    const sonstIdx = top.findIndex((d) => /sonstige/i.test(d.name));
+    if (sonstIdx >= 0) {
+      top[sonstIdx] = { ...top[sonstIdx], wert: top[sonstIdx].wert + restSumme };
+      abteilungen = top;
+    } else {
+      abteilungen = [...top, { name: "Sonstige", wert: restSumme }];
+    }
+  }
   const balkenH = compact ? 150 : 220;
   const abtH = compact
-    ? Math.min(300, Math.max(140, abteilungen.length * 16))
+    ? Math.max(160, abteilungen.length * 30)
     : Math.max(220, abteilungen.length * 22);
   const cardP = compact ? "p-2" : "p-4";
   const titelC = compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium";
@@ -158,7 +208,7 @@ export function BelegschaftKpiCharts({
                 dataKey="name"
                 {...axisProps}
                 tick={compact ? { fill: "var(--color-muted-foreground)", fontSize: 9 } : axisProps.tick}
-                width={compact ? 116 : 150}
+                width={compact ? 145 : 150}
                 interval={0}
               />
               <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
