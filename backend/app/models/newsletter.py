@@ -64,6 +64,9 @@ class Newsletter(Base):
     cover_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rueck_bild: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     rueck_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Überschriebene Abschnitts-Titel (v1.118) — {block_key: titel} je Rubrik
+    #: oder "kpi"; fehlt ein Key, gilt der i18n-Standardname.
+    rubrik_titel: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

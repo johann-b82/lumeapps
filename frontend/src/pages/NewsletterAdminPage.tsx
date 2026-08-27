@@ -266,7 +266,9 @@ function Editor({ id }: { id: number }) {
       {/* ACM-KPI-Block: eingefrorener Snapshot der Belegschafts-KPIs. */}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border p-3">
         <BarChart3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm">{t("newsletter.kpiTitel")}</span>
+        <div className="min-w-[8rem] flex-1">
+          <AbschnittTitel ausgabe={ausgabe} blockKey="kpi" standard={t("newsletter.kpiTitel")} onSaved={invalidate} />
+        </div>
         <span className="text-xs text-muted-foreground">
           {ausgabe.kpi_snapshot ? t("newsletter.kpiEnthalten") : t("newsletter.kpiOhne")}
         </span>
@@ -336,9 +338,14 @@ function RubrikSektion({
 
   return (
     <section className="mb-5 rounded-lg border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{t(`newsletter.rubrik.${rubrik}`)}</h2>
-        <button type="button" className={btn} disabled={hinzufuegen.isPending} onClick={() => hinzufuegen.mutate()}>
+      <div className="mb-2 flex items-center gap-2">
+        <AbschnittTitel
+          ausgabe={ausgabe}
+          blockKey={rubrik}
+          standard={t(`newsletter.rubrik.${rubrik}`)}
+          onSaved={onChange}
+        />
+        <button type="button" className={`${btn} shrink-0`} disabled={hinzufuegen.isPending} onClick={() => hinzufuegen.mutate()}>
           <Plus className="h-3.5 w-3.5" /> {t("newsletter.eintragHinzufuegen")}
         </button>
       </div>
@@ -460,6 +467,43 @@ function SortItem({ id, label }: { id: string; label: string }) {
       <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       {label}
     </div>
+  );
+}
+
+/** Bearbeitbarer Abschnitts-Titel — überschreibt den i18n-Standardnamen je Block
+ *  (Rubrik oder "kpi") pro Ausgabe. Leer = Standardname. Speichert beim Verlassen. */
+function AbschnittTitel({
+  ausgabe,
+  blockKey,
+  standard,
+  onSaved,
+}: {
+  ausgabe: AusgabeDetail;
+  blockKey: string;
+  standard: string;
+  onSaved: () => void;
+}) {
+  const gespeichert = ausgabe.rubrik_titel?.[blockKey] ?? "";
+  const [wert, setWert] = useState(gespeichert);
+  useEffect(() => {
+    setWert(ausgabe.rubrik_titel?.[blockKey] ?? "");
+  }, [ausgabe.id, ausgabe.rubrik_titel, blockKey]);
+  const speichern = useMutation({
+    mutationFn: (v: string) =>
+      updateAusgabe(ausgabe.id, { rubrik_titel: { ...(ausgabe.rubrik_titel ?? {}), [blockKey]: v.trim() } }),
+    onSuccess: () => onSaved(),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <input
+      value={wert}
+      onChange={(e) => setWert(e.target.value)}
+      onBlur={() => {
+        if (wert.trim() !== gespeichert) speichern.mutate(wert);
+      }}
+      placeholder={standard}
+      className={`${feld} w-full font-semibold`}
+    />
   );
 }
 

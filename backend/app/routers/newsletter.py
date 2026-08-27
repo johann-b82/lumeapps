@@ -83,6 +83,8 @@ class AusgabeDetail(BaseModel):
     kpi_snapshot: dict | None = None
     #: Block-Reihenfolge (Rubrik-Schlüssel + "kpi"); None = Standard.
     block_reihenfolge: list[str] | None = None
+    #: Überschriebene Abschnitts-Titel {block_key: titel}; fehlt ein Key → Standard.
+    rubrik_titel: dict[str, str] | None = None
     #: Ob ein vollflächiges Titel- bzw. Rückseitenbild hinterlegt ist.
     hat_cover: bool = False
     hat_rueck: bool = False
@@ -98,6 +100,8 @@ class AusgabeAendern(BaseModel):
     titel: str | None = None
     status: str | None = None
     block_reihenfolge: list[str] | None = None
+    #: {block_key: titel} — leere/whitespace-Werte entfernen den Override.
+    rubrik_titel: dict[str, str] | None = None
 
 
 class EintragAnlegen(BaseModel):
@@ -143,6 +147,7 @@ def _detail(n: Newsletter) -> AusgabeDetail:
         eintraege=[_eintrag_read(e) for e in n.eintraege],
         kpi_snapshot=n.kpi_snapshot,
         block_reihenfolge=n.block_reihenfolge,
+        rubrik_titel=n.rubrik_titel,
         hat_cover=n.cover_bild is not None,
         hat_rueck=n.rueck_bild is not None,
     )
@@ -314,6 +319,13 @@ async def aendern(
         if any(b not in erlaubt for b in eingabe.block_reihenfolge):
             raise HTTPException(status_code=400, detail="Unbekannter Block in der Reihenfolge.")
         n.block_reihenfolge = list(eingabe.block_reihenfolge)
+    if eingabe.rubrik_titel is not None:
+        erlaubt = set(NEWSLETTER_RUBRIKEN) | {"kpi"}
+        if any(k not in erlaubt for k in eingabe.rubrik_titel):
+            raise HTTPException(status_code=400, detail="Unbekannter Block-Titel.")
+        # Nur nicht-leere Titel als Override behalten; alles leer → kein Override.
+        bereinigt = {k: v.strip() for k, v in eingabe.rubrik_titel.items() if v and v.strip()}
+        n.rubrik_titel = bereinigt or None
     n.aktualisiert_am = _jetzt()
     await db.commit()
     return _detail(await _hole_ausgabe(db, n.id))
