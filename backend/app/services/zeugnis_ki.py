@@ -69,7 +69,7 @@ _ART_HINWEIS = {
     ),
 }
 
-_SYSTEM = (
+_SYSTEM_BASE = (
     "Du bist erfahrene:r Personalreferent:in in Deutschland und formulierst "
     "Arbeits-, Ausbildungs- und Praktikumszeugnisse. Beachte strikt:\n"
     "- Wohlwollende, verkehrsübliche Zeugnissprache; die Gesamtaussage muss der "
@@ -84,12 +84,19 @@ _SYSTEM = (
     "grammatische Formen gemäß dem angegebenen Geschlecht.\n"
     "- Nutze die HR-Freitexte (Aufgaben, besondere Kompetenzen, Erfolge), sofern "
     "vorhanden.\n"
-    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit genau diesen Schlüsseln: "
-    + ", ".join(ZEUGNIS_ABSCHNITTE)
-    + ". Jeder Wert ist der fertige deutsche Fließtext dieses Abschnitts (keine "
-    "Aufzählungszeichen außer in der Tätigkeitsbeschreibung, wo eine kurze "
-    "Aufgabenliste als Fließtext oder mit Semikolon getrennt zulässig ist)."
 )
+
+
+def _system(keys: tuple[str, ...]) -> str:
+    """System-Prompt mit den erwarteten JSON-Schlüsseln (alle oder nur einer)."""
+    return (
+        _SYSTEM_BASE
+        + "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit genau diesen "
+        "Schlüsseln: " + ", ".join(keys) + ". Jeder Wert ist der fertige deutsche "
+        "Fließtext dieses Abschnitts (keine Aufzählungszeichen außer in der "
+        "Tätigkeitsbeschreibung, wo eine kurze Aufgabenliste als Fließtext oder "
+        "mit Semikolon getrennt zulässig ist)."
+    )
 
 
 class ZeugnisKIError(RuntimeError):
@@ -174,8 +181,14 @@ async def generiere_abschnitte(
     stichpunkte: str | None,
     kompetenzen: str | None,
     erfolge: str | None,
+    nur_abschnitt: str | None = None,
+    bestehende: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Ruft Claude und liefert die Zeugnis-Abschnitte als ``{schluessel: text}``.
+
+    ``nur_abschnitt`` (optional): Nur diesen einen Abschnitt neu erzeugen — die
+    übrigen (``bestehende``) werden der KI zur Ton-Abstimmung mitgegeben, aber
+    nicht verändert. Rückgabe enthält dann nur diesen Schlüssel.
 
     Raises:
         ZeugnisKIError: Paket fehlt, kein Key, oder unbrauchbare Antwort.
@@ -206,24 +219,26 @@ async def generiere_abschnitte(
         erfolge=erfolge,
     )
 
+    keys: tuple[str, ...] = (nur_abschnitt,) if nur_abschnitt else ZEUGNIS_ABSCHNITTE
+    aufgabe = "Zeugnisart-Hinweis: " + _ART_HINWEIS.get(art, _ART_HINWEIS["qualifiziert"])
+    if nur_abschnitt:
+        aufgabe += (
+            f"\n\nErzeuge NUR den Abschnitt '{nur_abschnitt}' neu und stimme ihn "
+            "auf die bereits vorhandenen Abschnitte ab (Ton/Konsistenz):\n"
+            + json.dumps(bestehende or {}, ensure_ascii=False, indent=2)
+        )
+    aufgabe += "\n\nErstelle den Zeugnistext aus diesen Angaben (JSON):\n\n" + json.dumps(
+        eingaben, ensure_ascii=False, indent=2
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
     try:
         antwort = await client.messages.create(
             model=settings.ZEUGNIS_MODEL,
             max_tokens=4000,
             thinking={"type": "adaptive"},
-            system=_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Zeugnisart-Hinweis: "
-                        + _ART_HINWEIS.get(art, _ART_HINWEIS["qualifiziert"])
-                        + "\n\nErstelle den Zeugnistext aus diesen Angaben (JSON):\n\n"
-                        + json.dumps(eingaben, ensure_ascii=False, indent=2)
-                    ),
-                }
-            ],
+            system=_system(keys),
+            messages=[{"role": "user", "content": aufgabe}],
         )
     except anthropic.APIError as exc:
         raise ZeugnisKIError(f"Anthropic-API-Fehler: {exc}") from exc
@@ -238,4 +253,4 @@ async def generiere_abschnitte(
         log.warning("Zeugnis-KI: JSON nicht parsebar: %s", text[:200])
         raise ZeugnisKIError("KI-Antwort war kein gültiges JSON.") from exc
 
-    return {k: str(daten.get(k, "")).strip() for k in ZEUGNIS_ABSCHNITTE}
+    return {k: str(daten.get(k, "")).strip() for k in keys}

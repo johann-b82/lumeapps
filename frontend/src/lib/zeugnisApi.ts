@@ -137,6 +137,11 @@ export function generateZeugnis(id: number): Promise<ZeugnisDetail> {
   return apiClient<ZeugnisDetail>(`${BASE}/${id}/generate`, { method: "POST" });
 }
 
+/** Nur einen einzelnen Abschnitt gezielt neu erzeugen. */
+export function generateAbschnitt(id: number, abschnitt: string): Promise<ZeugnisDetail> {
+  return apiClient<ZeugnisDetail>(`${BASE}/${id}/generate/${abschnitt}`, { method: "POST" });
+}
+
 export function fetchAussteller(): Promise<Aussteller | null> {
   return apiClient<Aussteller | null>(`${BASE}/aussteller`);
 }
