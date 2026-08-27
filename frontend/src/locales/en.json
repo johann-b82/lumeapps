@@ -34,6 +34,7 @@
   "newsletter.zurueck": "Back",
   "newsletter.bearbeiten": "Edit",
   "newsletter.pdf": "Export as PDF",
+  "newsletter.pdfFehler": "PDF export failed. Please try again.",
   "newsletter.nichtGefunden": "Issue not found.",
   "newsletter.rubrik.arash": "A note from Arash",
   "newsletter.rubrik.aschkan": "A note from Aschkan",
