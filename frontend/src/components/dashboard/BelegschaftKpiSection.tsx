@@ -55,12 +55,14 @@ function PieKachel({
   farben,
   i18nPrefix,
   prozent = true,
+  compact = false,
 }: {
   titel: string;
   daten: LabelWert[];
   farben: Record<string, string>;
   i18nPrefix: string;
   prozent?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const pcts = prozente(daten.map((d) => d.wert));
@@ -71,16 +73,16 @@ function PieKachel({
     pct: pcts[i],
   }));
   return (
-    <Card className="p-4">
-      <div className="mb-2 text-sm font-medium">{titel}</div>
-      <ResponsiveContainer width="100%" height={220}>
+    <Card className={compact ? "p-2" : "p-4"}>
+      <div className={compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium"}>{titel}</div>
+      <ResponsiveContainer width="100%" height={compact ? 150 : 220}>
         <PieChart>
           <Pie
             data={chart}
             dataKey="value"
             nameKey="name"
-            innerRadius={40}
-            outerRadius={75}
+            innerRadius={compact ? 28 : 40}
+            outerRadius={compact ? 52 : 75}
             label={(e: { value?: number; pct?: number }) =>
               prozent ? `${e.pct ?? 0}%` : `${e.value}`
             }
@@ -91,26 +93,40 @@ function PieKachel({
             ))}
           </Pie>
           <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-          <Legend />
+          <Legend wrapperStyle={compact ? { fontSize: 11 } : undefined} />
         </PieChart>
       </ResponsiveContainer>
     </Card>
   );
 }
 
-/** Die vier KPI-Kacheln aus gegebenen Daten — genutzt vom Dashboard UND vom Newsletter. */
-export function BelegschaftKpiCharts({ data }: { data: BelegschaftKpi }) {
+/** Die vier KPI-Kacheln aus gegebenen Daten — genutzt vom Dashboard UND vom
+ *  Newsletter. `compact` verkleinert Höhen/Ränder für die quadratische
+ *  Newsletter-Seite; das Dashboard nutzt die normale Größe. */
+export function BelegschaftKpiCharts({
+  data,
+  compact = false,
+}: {
+  data: BelegschaftKpi;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const abteilungen = data.abteilungen.map((a) => ({ name: a.name, wert: a.wert }));
+  const balkenH = compact ? 150 : 220;
+  const abtH = compact
+    ? Math.min(300, Math.max(140, abteilungen.length * 16))
+    : Math.max(220, abteilungen.length * 22);
+  const cardP = compact ? "p-2" : "p-4";
+  const titelC = compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium";
   return (
-      <div className="grid gap-4 md:grid-cols-2">
-        <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" />
-        <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} />
+      <div className={compact ? "grid gap-3 md:grid-cols-2" : "grid gap-4 md:grid-cols-2"}>
+        <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" compact={compact} />
+        <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} compact={compact} />
 
         {/* Neu vs. Bestand: absolute Zahlen (Balken), kein Prozent. */}
-        <Card className="p-4">
-          <div className="mb-2 text-sm font-medium">{t("belegschaft.eintritt")}</div>
-          <ResponsiveContainer width="100%" height={220}>
+        <Card className={cardP}>
+          <div className={titelC}>{t("belegschaft.eintritt")}</div>
+          <ResponsiveContainer width="100%" height={balkenH}>
             <BarChart
               data={data.eintritt.map((d) => ({ name: t(`belegschaft.e.${d.key}`, d.key), wert: d.wert, key: d.key }))}
               margin={{ top: 24, right: 8, left: 8, bottom: 4 }}
@@ -128,15 +144,15 @@ export function BelegschaftKpiCharts({ data }: { data: BelegschaftKpi }) {
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-4">
-          <div className="mb-2 text-sm font-medium">{t("belegschaft.abteilungen")}</div>
-          <ResponsiveContainer width="100%" height={Math.max(220, abteilungen.length * 22)}>
+        <Card className={cardP}>
+          <div className={titelC}>{t("belegschaft.abteilungen")}</div>
+          <ResponsiveContainer width="100%" height={abtH}>
             <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
               <CartesianGrid {...gridProps} horizontal={false} />
               <XAxis type="number" {...axisProps} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" {...axisProps} width={150} interval={0} />
+              <YAxis type="category" dataKey="name" {...axisProps} width={compact ? 120 : 150} interval={0} />
               <Tooltip cursor={tooltipCursorProps} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} />
-              <Bar dataKey="wert" radius={[0, 4, 4, 0]} fill="#2563eb" label={{ position: "right", fontSize: 11 }} />
+              <Bar dataKey="wert" radius={[0, 4, 4, 0]} fill="#2563eb" label={{ position: "right", fontSize: compact ? 10 : 11 }} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
