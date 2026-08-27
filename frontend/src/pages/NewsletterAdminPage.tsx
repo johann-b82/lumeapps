@@ -216,7 +216,8 @@ function Editor({ id }: { id: number }) {
   const veroeffentlicht = ausgabe.status === "veroeffentlicht";
 
   return (
-    <div className="mx-auto max-w-3xl px-6 pt-4 pb-10">
+    <div className="mx-auto max-w-6xl px-6 pt-4 pb-10">
+      <div className="mx-auto max-w-3xl">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setLocation("/newsletter/admin")} className={btn}>
           <ChevronLeft className="h-3.5 w-3.5" /> {t("newsletter.zurueck")}
@@ -294,29 +295,32 @@ function Editor({ id }: { id: number }) {
       <CoverBilder ausgabe={ausgabe} onChange={invalidate} />
 
       <BlockReihenfolge ausgabe={ausgabe} onSaved={invalidate} />
+      </div>
 
       {vorschau && (
         <div className="mb-4">
-          <div className="mb-2 flex items-center justify-end">
+          <div className="mx-auto mb-2 flex max-w-3xl items-center justify-end">
             <button type="button" className={primary} disabled={pdfLaeuft} onClick={alsPdf}>
               {pdfLaeuft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
               {t("newsletter.pdf")}
             </button>
           </div>
-          <div ref={previewRef} className="overflow-x-auto rounded-lg border bg-muted/40 p-4">
+          <div ref={previewRef} className="flex justify-center overflow-x-auto rounded-lg border bg-muted/40 p-4">
             <NewsletterPdfPages ausgabe={ausgabe} />
           </div>
         </div>
       )}
 
-      {NEWSLETTER_RUBRIKEN.map((rubrik) => (
-        <RubrikSektion
-          key={rubrik}
-          ausgabe={ausgabe}
-          rubrik={rubrik}
-          onChange={invalidate}
-        />
-      ))}
+      <div className="mx-auto max-w-3xl">
+        {NEWSLETTER_RUBRIKEN.map((rubrik) => (
+          <RubrikSektion
+            key={rubrik}
+            ausgabe={ausgabe}
+            rubrik={rubrik}
+            onChange={invalidate}
+          />
+        ))}
+      </div>
     </div>
   );
 }
