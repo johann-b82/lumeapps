@@ -8,6 +8,8 @@ import type { BelegschaftKpi } from "@/lib/belegschaftApi";
 import {
   NEWSLETTER_RUBRIKEN,
   bildUrl,
+  coverUrl,
+  rueckUrl,
   type AusgabeDetail,
   type Eintrag,
   type Rubrik,
@@ -40,28 +42,42 @@ export function ordereBloecke(a: AusgabeDetail): NewsletterBlock[] {
   return bloecke;
 }
 
-/** Bild von einem auth-gegateten Endpoint (Bearer nötig) → Blob → Object-URL. */
-export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+/** Bild von einem auth-gegateten Endpoint (Bearer nötig) → Blob → Object-URL.
+ *  Rendert nichts, solange der Blob nicht geladen ist. */
+export function AuthImageUrl({
+  url,
+  alt,
+  className,
+}: {
+  url: string;
+  alt: string;
+  className?: string;
+}) {
+  const [obj, setObj] = useState<string | null>(null);
   useEffect(() => {
     let aktiv = true;
     let objUrl: string | null = null;
-    fetchBlob(bildUrl(eintragId))
+    fetchBlob(url)
       .then((b) => {
         if (!aktiv) return;
         objUrl = URL.createObjectURL(b);
-        setUrl(objUrl);
+        setObj(objUrl);
       })
-      .catch(() => setUrl(null));
+      .catch(() => setObj(null));
     return () => {
       aktiv = false;
       if (objUrl) URL.revokeObjectURL(objUrl);
     };
-  }, [eintragId]);
-  if (!url) return null;
+  }, [url]);
+  if (!obj) return null;
+  return <img src={obj} alt={alt} className={className} />;
+}
+
+/** Bild eines Eintrags (auth-gegatet), im Inhalt eingebettet. */
+export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }) {
   return (
-    <img
-      src={url}
+    <AuthImageUrl
+      url={bildUrl(eintragId)}
       alt={alt}
       className="my-2 max-h-72 w-auto rounded-md border border-border object-contain"
     />
@@ -109,20 +125,31 @@ export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const titel = ausgabe.titel || `Q${ausgabe.quartal} ${ausgabe.jahr}`;
   const bloecke = ordereBloecke(ausgabe);
   const seite = { width: 945, minHeight: 945 };
+  const bildSeite = { ...seite, position: "relative" as const, overflow: "hidden" as const };
   return (
     <div className="flex flex-col items-center gap-4">
-      <div
-        data-pdf-page
-        style={seite}
-        className="flex flex-col items-center justify-center bg-gradient-to-br from-sky-600
-                   to-blue-800 p-16 text-center text-white"
-      >
-        <div className="mb-3 text-base uppercase tracking-widest opacity-90">
-          {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
+      {ausgabe.hat_cover ? (
+        <div data-pdf-page style={bildSeite} className="bg-neutral-200">
+          <AuthImageUrl
+            url={coverUrl(ausgabe.id)}
+            alt={t("newsletter.titelbild")}
+            className="absolute inset-0 block h-full w-full object-cover"
+          />
         </div>
-        <div className="text-5xl font-bold leading-tight">{titel}</div>
-        <div className="mt-8 text-sm opacity-80">{t("newsletter.title")}</div>
-      </div>
+      ) : (
+        <div
+          data-pdf-page
+          style={seite}
+          className="flex flex-col items-center justify-center bg-gradient-to-br from-sky-600
+                     to-blue-800 p-16 text-center text-white"
+        >
+          <div className="mb-3 text-base uppercase tracking-widest opacity-90">
+            {t("newsletter.kopf", { quartal: ausgabe.quartal, jahr: ausgabe.jahr })}
+          </div>
+          <div className="text-5xl font-bold leading-tight">{titel}</div>
+          <div className="mt-8 text-sm opacity-80">{t("newsletter.title")}</div>
+        </div>
+      )}
 
       {bloecke.map((b, i) => (
         <div key={i} data-pdf-page style={seite} className="bg-white p-12 text-neutral-900">
@@ -130,14 +157,24 @@ export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
         </div>
       ))}
 
-      <div
-        data-pdf-page
-        style={seite}
-        className="flex items-center justify-center bg-neutral-100 p-16 text-center text-sm
-                   text-neutral-500"
-      >
-        {t("newsletter.buchEnde")}
-      </div>
+      {ausgabe.hat_rueck ? (
+        <div data-pdf-page style={bildSeite} className="bg-neutral-200">
+          <AuthImageUrl
+            url={rueckUrl(ausgabe.id)}
+            alt={t("newsletter.rueckseitenbild")}
+            className="absolute inset-0 block h-full w-full object-cover"
+          />
+        </div>
+      ) : (
+        <div
+          data-pdf-page
+          style={seite}
+          className="flex items-center justify-center bg-neutral-100 p-16 text-center text-sm
+                     text-neutral-500"
+        >
+          {t("newsletter.buchEnde")}
+        </div>
+      )}
     </div>
   );
 }

@@ -14,7 +14,11 @@ die Entwurfs-Ansicht:
   - DELETE /eintrag/{eintrag_id}
   - PUT  /eintrag/{eintrag_id}/bild (Bild hochladen)
   - DELETE /eintrag/{eintrag_id}/bild
-Die übrigen GET-Routen (veröffentlichte Ausgaben + Bild) sind viewer-lesbar.
+  - PUT  /{ausgabe_id}/cover        (Titelbild hochladen)
+  - DELETE /{ausgabe_id}/cover
+  - PUT  /{ausgabe_id}/rueckseite   (Rückseitenbild hochladen)
+  - DELETE /{ausgabe_id}/rueckseite
+Die übrigen GET-Routen (veröffentlichte Ausgaben + Bilder) sind viewer-lesbar.
 """
 from __future__ import annotations
 
@@ -79,6 +83,9 @@ class AusgabeDetail(BaseModel):
     kpi_snapshot: dict | None = None
     #: Block-Reihenfolge (Rubrik-Schlüssel + "kpi"); None = Standard.
     block_reihenfolge: list[str] | None = None
+    #: Ob ein vollflächiges Titel- bzw. Rückseitenbild hinterlegt ist.
+    hat_cover: bool = False
+    hat_rueck: bool = False
 
 
 class AusgabeAnlegen(BaseModel):
@@ -136,6 +143,8 @@ def _detail(n: Newsletter) -> AusgabeDetail:
         eintraege=[_eintrag_read(e) for e in n.eintraege],
         kpi_snapshot=n.kpi_snapshot,
         block_reihenfolge=n.block_reihenfolge,
+        hat_cover=n.cover_bild is not None,
+        hat_rueck=n.rueck_bild is not None,
     )
 
 
@@ -157,6 +166,24 @@ async def _hole_eintrag(db: AsyncSession, eintrag_id: int) -> NewsletterEintrag:
     if e is None:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden.")
     return e
+
+
+async def _hole_newsletter(db: AsyncSession, ausgabe_id: int) -> Newsletter:
+    """Nur die Ausgabe-Zeile (ohne Einträge) — für Cover-Bild-Operationen."""
+    n = await db.get(Newsletter, ausgabe_id)
+    if n is None:
+        raise HTTPException(status_code=404, detail="Ausgabe nicht gefunden.")
+    return n
+
+
+async def _lies_bild(datei: UploadFile) -> tuple[bytes, str]:
+    mime = (datei.content_type or "").split(";")[0].strip().lower()
+    if mime not in _BILD_MIMES:
+        raise HTTPException(status_code=400, detail="Nur PNG/JPEG/WebP/GIF erlaubt.")
+    daten = await datei.read()
+    if len(daten) > _MAX_BILD:
+        raise HTTPException(status_code=400, detail="Bild ist größer als 8 MB.")
+    return daten, mime
 
 
 # --------------------------------------------------------------------------
@@ -193,6 +220,22 @@ async def bild(eintrag_id: int, db: AsyncSession = Depends(get_async_db_session)
     if e.bild_data is None:
         raise HTTPException(status_code=404, detail="Kein Bild.")
     return Response(content=e.bild_data, media_type=e.bild_mime or "image/png")
+
+
+@router.get("/{ausgabe_id}/cover")
+async def cover(ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    n = await _hole_newsletter(db, ausgabe_id)
+    if n.cover_bild is None:
+        raise HTTPException(status_code=404, detail="Kein Titelbild.")
+    return Response(content=n.cover_bild, media_type=n.cover_mime or "image/png")
+
+
+@router.get("/{ausgabe_id}/rueckseite")
+async def rueckseite(ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    n = await _hole_newsletter(db, ausgabe_id)
+    if n.rueck_bild is None:
+        raise HTTPException(status_code=404, detail="Kein Rückseitenbild.")
+    return Response(content=n.rueck_bild, media_type=n.rueck_mime or "image/png")
 
 
 # --------------------------------------------------------------------------
@@ -385,6 +428,64 @@ async def bild_entfernen(
     e.bild_mime = None
     await db.commit()
     return Response(status_code=204)
+
+
+@router.put(
+    "/{ausgabe_id}/cover", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def cover_hochladen(
+    ausgabe_id: int,
+    datei: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AusgabeDetail:
+    n = await _hole_newsletter(db, ausgabe_id)
+    n.cover_bild, n.cover_mime = await _lies_bild(datei)
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, ausgabe_id))
+
+
+@router.delete(
+    "/{ausgabe_id}/cover", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def cover_entfernen(
+    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    n = await _hole_newsletter(db, ausgabe_id)
+    n.cover_bild = None
+    n.cover_mime = None
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, ausgabe_id))
+
+
+@router.put(
+    "/{ausgabe_id}/rueckseite", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def rueckseite_hochladen(
+    ausgabe_id: int,
+    datei: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> AusgabeDetail:
+    n = await _hole_newsletter(db, ausgabe_id)
+    n.rueck_bild, n.rueck_mime = await _lies_bild(datei)
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, ausgabe_id))
+
+
+@router.delete(
+    "/{ausgabe_id}/rueckseite", response_model=AusgabeDetail, dependencies=[Depends(require_admin)]
+)
+async def rueckseite_entfernen(
+    ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    n = await _hole_newsletter(db, ausgabe_id)
+    n.rueck_bild = None
+    n.rueck_mime = None
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    return _detail(await _hole_ausgabe(db, ausgabe_id))
 
 
 @router.post(
