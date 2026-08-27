@@ -9,7 +9,6 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -44,11 +43,9 @@ class AtrPart(Base):
 
 
 class AtrTemplate(Base):
-    """Singleton (id=1): editable header-block defaults + the stored structural workbook."""
+    """Structural workbook + header defaults, one row per programme: id=1 = A350,
+    id=2 = A380."""
     __tablename__ = "atr_template"
-    __table_args__ = (
-        CheckConstraint("id = 1", name="ck_atr_template_singleton"),
-    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     customer: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -80,6 +77,7 @@ class AtrDelivery(Base):
     ba_auftrag: Mapped[str | None] = mapped_column(String(40), nullable=True)
     po_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
     ac_programme: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    programme_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     compartment: Mapped[str | None] = mapped_column(String(8), nullable=True)
     msn: Mapped[str | None] = mapped_column(String(20), nullable=True)
     bed_config: Mapped[str | None] = mapped_column(String(8), nullable=True)
@@ -128,6 +126,7 @@ class AtrDeliveryItem(Base):
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(8, 3), nullable=True)
     po_pos: Mapped[str | None] = mapped_column(String(20), nullable=True)
     match_status: Mapped[str] = mapped_column(String(12), nullable=False, default="unmatched")
+    serial_numbers: Mapped[str | None] = mapped_column(Text, nullable=True)
     row_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     delivery: Mapped["AtrDelivery"] = relationship("AtrDelivery", back_populates="items")

@@ -69,27 +69,55 @@ def delivery_filename_base(delivery, items=None) -> str:
     return _sanitize_filename(base)
 
 
-async def compute_next_atr_number(db: AsyncSession) -> str | None:
-    """Next running ATR number = highest numeric ``atr_number`` on record + 1.
-    Returns None when no numeric ATR number exists yet (seed the first one
-    manually). Non-numeric (manually formatted) numbers are ignored."""
-    rows = (await db.execute(select(AtrDelivery.atr_number))).scalars().all()
+async def compute_next_atr_number(db: AsyncSession, ac_programme: str | None = None) -> str | None:
+    """Next running ATR number = highest numeric ``atr_number`` on record + 1,
+    scoped to the same programme family (A350 vs A380 have separate number
+    ranges). Returns None when no numeric ATR number exists yet for that family
+    (seed the first one manually). Non-numeric numbers are ignored."""
+    q = select(AtrDelivery.atr_number)
+    if ac_programme:
+        fam = "380" if "380" in ac_programme else "350"
+        q = q.where(AtrDelivery.ac_programme.like(f"%{fam}%"))
+    rows = (await db.execute(q)).scalars().all()
     nums = [int(v) for v in rows if v and v.strip().isdigit()]
     return str(max(nums) + 1) if nums else None
 
 
+def _a380_serial_problems(items) -> list[str]:
+    """A380: every part needs one serial per delivered unit. Return a list of
+    positions where the serial count doesn't match the quantity or has
+    duplicates (empty list = OK)."""
+    problems: list[str] = []
+    for it in items:
+        serials = [s.strip() for s in (it.serial_numbers or "").split(",") if s.strip()]
+        label = f"Pos {it.pos if it.pos is not None else (it.po_pos or '?')}"
+        if len(serials) != (it.qty or 0):
+            problems.append(f"{label}: {len(serials)} Seriennummer(n) bei Stückzahl {it.qty}")
+        elif len(set(serials)) != len(serials):
+            problems.append(f"{label}: doppelte Seriennummern")
+    return problems
+
+
 async def generate_and_deliver(db: AsyncSession, delivery, settings_row) -> AtrGenerateManifest:
     items = list(delivery.items)
+    # A380: block generation until serial numbers are complete (one per unit).
+    if "380" in (delivery.ac_programme or ""):
+        problems = _a380_serial_problems(items)
+        if problems:
+            raise ValueError("A380 – Seriennummern unvollständig: " + "; ".join(problems))
     # Auto-assign a running ATR number when none was entered manually
     # (manual entry always wins). Covers both the review Generate button and
     # the unattended scan/auto path, which has no mask.
     if not (delivery.atr_number or "").strip():
-        auto = await compute_next_atr_number(db)
+        auto = await compute_next_atr_number(db, delivery.ac_programme)
         if auto:
             delivery.atr_number = auto
-    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == 1))).scalar_one_or_none()
+    # Template per programme: id=1 = A350, id=2 = A380.
+    tmpl_id = 2 if "380" in (delivery.ac_programme or "") else 1
+    tmpl = (await db.execute(select(AtrTemplate).where(AtrTemplate.id == tmpl_id))).scalar_one_or_none()
     if tmpl is None or tmpl.structure_xlsx is None:
-        raise ValueError("no structural template set")
+        prog = "A380" if tmpl_id == 2 else "A350"
+        raise ValueError(f"no structural template set for {prog}")
 
     warnings: list[str] = []
     logo_bytes = getattr(settings_row, "logo_data", None)

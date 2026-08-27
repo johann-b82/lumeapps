@@ -25,6 +25,7 @@ class AtrDeliveryItemRead(BaseModel):
     po_pos: str | None
     match_status: str
     row_order: int
+    serial_numbers: str | None = None
     model_config = {"from_attributes": True}
 
 
@@ -34,6 +35,7 @@ class AtrDeliveryItemUpdate(BaseModel):
     part_name: str | None = Field(default=None, max_length=200)
     drawing_number_issue: str | None = Field(default=None, max_length=60)
     category: str | None = Field(default=None, max_length=40)
+    serial_numbers: str | None = Field(default=None, max_length=2000)
 
     @field_validator("po_pos")
     @classmethod
@@ -49,6 +51,7 @@ class AtrDeliveryRead(BaseModel):
     ba_auftrag: str | None
     po_number: str | None
     ac_programme: str | None
+    programme_reason: str | None
     compartment: str | None
     msn: str | None
     bed_config: str | None
