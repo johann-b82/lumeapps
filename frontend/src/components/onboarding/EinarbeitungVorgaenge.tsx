@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowRight,
   CheckCircle2,
+  Eye,
   FileText,
   Loader2,
   Upload,
@@ -14,6 +15,7 @@ import {
   aktualisiereVorgang,
   fetchVorgaenge,
   oeffneVorgangPdf,
+  oeffneVorgangScan,
   scanHochladen,
   setzeVorgangStatus,
   type PruefErgebnis,
@@ -67,6 +69,11 @@ export function EinarbeitungVorgaenge() {
 
   const pdf = useMutation({
     mutationFn: (id: number) => oeffneVorgangPdf(id),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const scanAnsehen = useMutation({
+    mutationFn: (id: number) => oeffneVorgangScan(id),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -153,6 +160,16 @@ export function EinarbeitungVorgaenge() {
                         >
                           <FileText className="h-4 w-4" aria-hidden="true" />
                         </button>
+                        {v.hat_scan && (
+                          <button
+                            type="button"
+                            title={t("onboarding.vorgang.scanAnsehen")}
+                            onClick={() => scanAnsehen.mutate(v.id)}
+                            className="rounded-md border p-1.5 hover:bg-muted"
+                          >
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
                         {naechster && (
                           <button
                             type="button"
@@ -229,6 +246,11 @@ function PruefModal({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const scanOeffnen = useMutation({
+    mutationFn: () => oeffneVorgangScan(dokument.id),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -244,6 +266,15 @@ function PruefModal({
           </h3>
           <VollstaendigBadge wert={vollstaendig} />
         </div>
+
+        <button
+          type="button"
+          onClick={() => scanOeffnen.mutate()}
+          className="mb-3 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:bg-muted"
+        >
+          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("onboarding.vorgang.scanAnsehen")}
+        </button>
 
         <ul className="mb-3 divide-y rounded-md border text-sm">
           {ergebnis.felder.map((f) => (

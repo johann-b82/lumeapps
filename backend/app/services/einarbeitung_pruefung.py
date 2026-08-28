@@ -35,7 +35,7 @@ _INSET_X, _INSET_TOP, _INSET_BOT = 0.12, 0.14, 0.30
 #: übertrifft. Maßgeblich ist der Flächenanteil (auflösungsunabhängig); die
 #: absolute Pixelzahl ist nur ein niedriger Rauschboden. Kalibriert: Blanko-Rest
 #: (Restversatz an Linien) ≤ ~1,3 %, echte Einträge ≥ ~9 %.
-_MIN_NETTO_FRAC = 0.035
+_MIN_NETTO_FRAC = 0.02
 _MIN_NETTO_PX = 200
 #: DPI für die Rasterung hochgeladener PDF-Scans (genug für QR + Tintenmessung).
 _SCAN_DPI = 300

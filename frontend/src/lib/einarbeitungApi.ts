@@ -196,3 +196,9 @@ export async function oeffneVorgangPdf(id: number): Promise<void> {
   const blob = await fetchBlob(`/api/hr/einarbeitung/dokument/${id}/pdf`);
   openBlob(blob);
 }
+
+/** Den hochgeladenen (eingescannten) Bogen im neuen Tab ansehen. */
+export async function oeffneVorgangScan(id: number): Promise<void> {
+  const blob = await fetchBlob(`/api/hr/einarbeitung/dokument/${id}/scan`);
+  openBlob(blob);
+}

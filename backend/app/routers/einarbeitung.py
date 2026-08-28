@@ -471,6 +471,31 @@ async def dokument_pdf(
     )
 
 
+@router.get("/dokument/{dok_id}/scan")
+async def dokument_scan(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    """Den hochgeladenen (eingescannten) Bogen ansehen."""
+    d = await _hole_vorgang(db, dok_id)
+    if not d.scan_uuid:
+        raise HTTPException(status_code=404, detail="Kein Scan hinterlegt.")
+    daten = await datei_laden(d.scan_uuid)
+    # Dateityp aus den Magic Bytes ableiten (Scan kann PDF oder Bild sein).
+    if daten[:4] == b"%PDF":
+        mime, ext = "application/pdf", "pdf"
+    elif daten[:8] == b"\x89PNG\r\n\x1a\n":
+        mime, ext = "image/png", "png"
+    elif daten[:3] == b"\xff\xd8\xff":
+        mime, ext = "image/jpeg", "jpg"
+    else:
+        mime, ext = "application/octet-stream", "bin"
+    return Response(
+        content=daten,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="scan_{d.doc_uid}.{ext}"'},
+    )
+
+
 @router.patch("/dokument/{dok_id}/status")
 async def status_setzen(
     dok_id: int, eingabe: StatusSetzen, db: AsyncSession = Depends(get_async_db_session)

@@ -1857,5 +1857,6 @@
   "onboarding.vorgang.manuellVollstaendig": "Mark as complete manually",
   "onboarding.vorgang.schliessen": "Close",
   "onboarding.vorgang.speichern": "Save",
-  "onboarding.vorgang.gespeichert": "Saved"
+  "onboarding.vorgang.gespeichert": "Saved",
+  "onboarding.vorgang.scanAnsehen": "View scan"
 }
