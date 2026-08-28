@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt && \
         libreoffice-core \
         python3-uno \
         poppler-utils \
+        libzbar0 \
         fonts-crosextra-carlito \
         fonts-crosextra-caladea \
         fonts-noto-core \
