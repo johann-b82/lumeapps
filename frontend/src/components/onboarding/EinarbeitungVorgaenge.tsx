@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowRight,
   CheckCircle2,
+  ClipboardCheck,
   Eye,
   FileText,
   Loader2,
@@ -69,6 +70,8 @@ export function EinarbeitungVorgaenge() {
 
   const pdf = useMutation({
     mutationFn: (id: number) => oeffneVorgangPdf(id),
+    // Download = Übergabe → Zeitstempel wird serverseitig gesetzt, Liste neu laden.
+    onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -170,6 +173,19 @@ export function EinarbeitungVorgaenge() {
                             <Eye className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
+                        {v.pruef_ergebnis && (
+                          <button
+                            type="button"
+                            title={t("onboarding.vorgang.pruefungOeffnen")}
+                            onClick={() =>
+                              v.pruef_ergebnis &&
+                              setModal({ dokument: v, ergebnis: v.pruef_ergebnis })
+                            }
+                            className="rounded-md border p-1.5 hover:bg-muted"
+                          >
+                            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
                         {naechster && (
                           <button
                             type="button"
@@ -234,10 +250,20 @@ function PruefModal({
   const { t } = useTranslation();
   const { dokument, ergebnis } = daten;
   const [kommentar, setKommentar] = useState(dokument.kommentar ?? "");
-  const [vollstaendig, setVollstaendig] = useState<boolean>(!!ergebnis.vollstaendig);
+  const [bestaetigt, setBestaetigt] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(ergebnis.felder.filter((f) => f.bestaetigt).map((f) => [f.key, true])),
+  );
+
+  const istOk = (f: (typeof ergebnis.felder)[number]) => f.erkannt || !!bestaetigt[f.key];
+  const offen = ergebnis.felder.filter((f) => !istOk(f));
+  const vollstaendig = ergebnis.felder.length > 0 && offen.length === 0;
 
   const speichern = useMutation({
-    mutationFn: () => aktualisiereVorgang(dokument.id, { kommentar, vollstaendig }),
+    mutationFn: () =>
+      aktualisiereVorgang(dokument.id, {
+        kommentar,
+        bestaetigte_felder: Object.keys(bestaetigt).filter((k) => bestaetigt[k]),
+      }),
     onSuccess: () => {
       toast.success(t("onboarding.vorgang.gespeichert"));
       onGespeichert();
@@ -277,26 +303,44 @@ function PruefModal({
         </button>
 
         <ul className="mb-3 divide-y rounded-md border text-sm">
-          {ergebnis.felder.map((f) => (
-            <li key={f.key} className="flex items-center gap-2 px-3 py-1.5">
-              {f.erkannt ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" aria-hidden="true" />
-              ) : (
-                <XCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
-              )}
-              <span className={f.erkannt ? "" : "text-muted-foreground"}>{f.label}</span>
-            </li>
-          ))}
+          {ergebnis.felder.map((f) => {
+            const ok = istOk(f);
+            return (
+              <li key={f.key} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                <span className="flex min-w-0 items-center gap-2">
+                  {ok ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+                  )}
+                  <span className={ok ? "" : "text-muted-foreground"}>{f.label}</span>
+                </span>
+                {!f.erkannt && (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!!bestaetigt[f.key]}
+                      onChange={(e) =>
+                        setBestaetigt((b) => ({ ...b, [f.key]: e.target.checked }))
+                      }
+                      className="h-3.5 w-3.5 rounded border-input"
+                    />
+                    {t("onboarding.vorgang.bestaetigen")}
+                  </label>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
-        {ergebnis.fehlend.length > 0 && (
+        {offen.length > 0 && (
           <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800
                         dark:bg-amber-900/30 dark:text-amber-200">
-            {t("onboarding.vorgang.fehlt", { felder: ergebnis.fehlend.join(", ") })}
+            {t("onboarding.vorgang.fehlt", { felder: offen.map((f) => f.label).join(", ") })}
           </p>
         )}
 
-        <label className="mb-3 block">
+        <label className="mb-4 block">
           <span className="mb-1 block text-xs font-medium">{t("onboarding.vorgang.kommentar")}</span>
           <textarea
             value={kommentar}
@@ -306,16 +350,6 @@ function PruefModal({
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("onboarding.vorgang.kommentarPlaceholder")}
           />
-        </label>
-
-        <label className="mb-4 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={vollstaendig}
-            onChange={(e) => setVollstaendig(e.target.checked)}
-            className="h-4 w-4 rounded border-input"
-          />
-          {t("onboarding.vorgang.manuellVollstaendig")}
         </label>
 
         <div className="flex justify-end gap-2">

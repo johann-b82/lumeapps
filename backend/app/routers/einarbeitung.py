@@ -364,6 +364,9 @@ class VorgangAktualisieren(BaseModel):
     kommentar: str | None = None
     #: manuelles Überstimmen der automatischen Vollständigkeitsprüfung.
     vollstaendig: bool | None = None
+    #: Feld-Keys, die manuell als vorhanden bestätigt wurden (rote Protokoll-
+    #: zeilen einzeln bestätigen). „vollständig" ergibt sich dann automatisch.
+    bestaetigte_felder: list[str] | None = None
 
 
 #: Statuswechsel → Zeitstempel-Spalte (der Laufweg, jetzt im System statt auf Papier).
@@ -463,6 +466,14 @@ async def dokument_pdf(
     if not d.pdf_uuid:
         raise HTTPException(status_code=404, detail="Kein PDF hinterlegt.")
     pdf = await datei_laden(d.pdf_uuid)
+
+    # Der Download zum Ausdrucken gilt als Übergabe → einmalig datieren.
+    if d.uebergeben_am is None:
+        d.uebergeben_am = datetime.now(timezone.utc)
+        if d.status == "erstellt":
+            d.status = "uebergeben"
+        await db.commit()
+
     datei = dateiname(d.mitarbeiter_name, date.today())
     return Response(
         content=pdf,
@@ -533,12 +544,29 @@ async def dokument_aktualisieren(
     eingabe: VorgangAktualisieren,
     db: AsyncSession = Depends(get_async_db_session),
 ) -> VorgangRead:
-    """Kommentar hinterlegen bzw. die Vollständigkeit manuell überstimmen."""
+    """Kommentar hinterlegen, einzelne Protokollzeilen bestätigen bzw. die
+    Vollständigkeit manuell überstimmen."""
     d = await _hole_vorgang(db, dok_id)
     if eingabe.kommentar is not None:
         d.kommentar = eingabe.kommentar
-    if eingabe.vollstaendig is not None:
+
+    if eingabe.bestaetigte_felder is not None:
+        # Bestätigungen ins Prüfergebnis einarbeiten; „vollständig" neu berechnen.
+        # Neue Dicts bauen, damit SQLAlchemy die JSONB-Änderung erkennt.
+        erg = dict(d.pruef_ergebnis or {})
+        keys = set(eingabe.bestaetigte_felder)
+        felder = [{**f, "bestaetigt": f["key"] in keys} for f in erg.get("felder", [])]
+        offen = [f["label"] for f in felder if not (f.get("erkannt") or f.get("bestaetigt"))]
+        vollstaendig = bool(felder) and not offen
+        erg["felder"] = felder
+        erg["fehlend"] = offen
+        erg["vollstaendig"] = vollstaendig
+        d.pruef_ergebnis = erg
+        d.vollstaendig = vollstaendig
+
+    if eingabe.vollstaendig is not None:  # expliziter Override hat Vorrang
         d.vollstaendig = eingabe.vollstaendig
+
     await db.commit()
     await db.refresh(d)
     return _vorgang_read(d)

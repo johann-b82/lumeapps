@@ -110,6 +110,8 @@ export interface PruefFeld {
   key: string;
   label: string;
   erkannt: boolean;
+  /** Rote Zeile manuell als vorhanden bestätigt. */
+  bestaetigt?: boolean;
 }
 
 /** Ergebnis der halbautomatischen Scan-Prüfung. */
@@ -167,10 +169,10 @@ export function setzeVorgangStatus(id: number, status: VorgangStatus): Promise<V
   });
 }
 
-/** Kommentar hinterlegen bzw. Vollständigkeit manuell überstimmen. */
+/** Kommentar hinterlegen, einzelne Felder bestätigen bzw. Vollständigkeit überstimmen. */
 export function aktualisiereVorgang(
   id: number,
-  eingabe: { kommentar?: string; vollstaendig?: boolean },
+  eingabe: { kommentar?: string; vollstaendig?: boolean; bestaetigte_felder?: string[] },
 ): Promise<Vorgang> {
   return apiClient<Vorgang>(`/api/hr/einarbeitung/dokument/${id}`, {
     method: "PATCH",

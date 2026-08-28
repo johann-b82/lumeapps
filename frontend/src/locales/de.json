@@ -1858,5 +1858,7 @@
   "onboarding.vorgang.schliessen": "Schließen",
   "onboarding.vorgang.speichern": "Speichern",
   "onboarding.vorgang.gespeichert": "Gespeichert",
-  "onboarding.vorgang.scanAnsehen": "Scan ansehen"
+  "onboarding.vorgang.scanAnsehen": "Scan ansehen",
+  "onboarding.vorgang.bestaetigen": "Bestätigen",
+  "onboarding.vorgang.pruefungOeffnen": "Prüfung öffnen"
 }
