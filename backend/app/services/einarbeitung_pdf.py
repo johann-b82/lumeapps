@@ -94,9 +94,9 @@ _A4_W_PT, _A4_H_PT = 595.276, 841.890
 _RAND_L_PX, _RAND_T_PT = 48.0, 36.0  # 0,5" links (px@96) / oben (pt)
 _PX_PRO_BREITE, _PX_PAD, _PT_PRO_PX = 7.0, 5.0, 0.75
 
-#: QR-Code: klein und unauffällig oben rechts (Ankerzelle G4, leerer Bereich
-#: rechts neben dem Namensblock). Kantenlänge in Pixel (~1,2 cm im Druck).
-_QR_ANKER, _QR_ANKER_COL, _QR_ANKER_ROW, _QR_PX = "G4", 7, 4, 46
+#: QR-Code: klein und unauffällig oben rechts, direkt unter dem Logo (Spalte H,
+#: Zeile 4). Kantenlänge in Pixel (~1,2 cm im Druck).
+_QR_ANKER, _QR_ANKER_COL, _QR_ANKER_ROW, _QR_PX = "H4", 8, 4, 46
 
 #: Passermarken (kleine gefüllte Quadrate) in der leeren Gutter-Spalte A, oben
 #: und unten links. Zusammen mit dem QR oben rechts ergeben sich drei über die
@@ -233,6 +233,25 @@ def _marke_einsetzen(ws, anker: str) -> None:
     ws.add_image(img, anker)
 
 
+def _logo_zentriert(
+    ws, logo: LogoBild, col0: int, row0: int, zelle_breite_px: int, zelle_hoehe_px: int
+) -> None:
+    """Logo in der (gemergten) Zelle horizontal und vertikal mittig einsetzen."""
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+
+    img = XLImage(BytesIO(logo.daten))
+    img.width, img.height = logo.breite, logo.hoehe
+    col_off = pixels_to_EMU(max(0, (zelle_breite_px - logo.breite) // 2))
+    row_off = pixels_to_EMU(max(0, (zelle_hoehe_px - logo.hoehe) // 2))
+    marker = AnchorMarker(col=col0, colOff=col_off, row=row0, rowOff=row_off)
+    ext = XDRPositiveSize2D(pixels_to_EMU(logo.breite), pixels_to_EMU(logo.hoehe))
+    img.anchor = OneCellAnchor(_from=marker, ext=ext)
+    ws.add_image(img)
+
+
 def _umbruch_zeilen(text: str, breite: int) -> int:
     """Anzahl Zeilen, die ``text`` bei ``breite`` Zeichen umbrochen belegt."""
     text = (text or "").strip()
@@ -285,7 +304,7 @@ def _kopfzeilen_tabelle(ws, logo: LogoBild | None) -> int:
     z.font = Font(size=8)
     z.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-    # Rechter Block: Logo (auf Kopfzeilenhöhe verkleinert).
+    # Rechter Block: Logo (auf Kopfzeilenhöhe verkleinert, im Feld H1:H3 mittig).
     ws.merge_cells("H1:H3")
     if logo is not None:
         breite = 90
@@ -294,7 +313,8 @@ def _kopfzeilen_tabelle(ws, logo: LogoBild | None) -> int:
             breite=breite,
             hoehe=max(1, round(breite * logo.hoehe / logo.breite)),
         )
-        bild_einsetzen(ws, kopf_logo, "H1")
+        # Spalte H ≈ 103 px breit, Kopfzeile (3×16 pt) ≈ 64 px hoch.
+        _logo_zentriert(ws, kopf_logo, col0=7, row0=0, zelle_breite_px=103, zelle_hoehe_px=64)
 
     _rahmen_bereich(ws, 1, 2, 3, 8)
     return 5
@@ -333,22 +353,30 @@ def _kopf(
     ws.row_dimensions[r].height = 16
     r += 2
 
-    # Feedbackgespräch: Bezeichnung + klar beschriftete Felder zum Ausfüllen.
+    # Feedbackgespräch: Bezeichnung + klar strukturierte Felder als saubere
+    # zweispaltige Tabelle (Datum | Unterschrift Vorgesetzter).
     ws.cell(row=r, column=2, value="Feedbackgespräch nach spätestens 4 Wochen:").font = Font(bold=True)
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=8)
     ws.row_dimensions[r].height = 16
-    r += 1
-    ws.cell(row=r, column=2, value="Datum:").font = Font(bold=True)
-    _linie(ws, r, 3, 5)
-    ws.row_dimensions[r].height = 20
-    if felder is not None:
-        felder.append(("feedback_datum", "Feedbackgespräch – Datum", r, 3, 5))
     r += 2
+
+    # Kopfzeile der Feedback-Tabelle.
+    for (c1, c2), text in (((2, 4), "Datum"), ((5, 8), "Unterschrift Vorgesetzter")):
+        z = ws.cell(row=r, column=c1, value=text)
+        z.font = Font(size=9, bold=True)
+        z.alignment = _LINKS
+        ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
+    _rahmen_bereich(ws, r, 2, r, 8)
+    ws.row_dimensions[r].height = 16
+    r += 1
+
+    # Ausfüllzeile (leer, mit ausreichender Höhe zum Eintragen/Unterschreiben).
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
-    ws.cell(row=r, column=2, value="Unterschrift Vorgesetzter:").font = Font(bold=True)
-    _linie(ws, r, 5, 8)
-    ws.row_dimensions[r].height = 20
+    ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=8)
+    _rahmen_bereich(ws, r, 2, r, 8)
+    ws.row_dimensions[r].height = 30
     if felder is not None:
+        felder.append(("feedback_datum", "Feedbackgespräch – Datum", r, 2, 4))
         felder.append(("feedback_unterschrift", "Feedbackgespräch – Unterschrift Vorgesetzter", r, 5, 8))
     return r + 1
 
