@@ -11,9 +11,47 @@ dieser Baukasten vollständig offline und ohne API-Key.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from app.models.zeugnis import ZEUGNIS_ABSCHNITTE
+
+#: Pronomen-/Possessiv-Platzhalter für gegenderte Bausteine.
+#: Werte je (männlich, weiblich, divers/unbekannt). Für „divers/unbekannt" wird
+#: geschlechtsneutral auf „die/der Person" bzw. die grammatisch feminine
+#: Possessivform (Bezug „die Person") ausgewichen — nie misgendernd.
+_PRONOMEN: dict[str, tuple[str, str, str]] = {
+    "ER_SIE": ("er", "sie", "die Person"),          # Nominativ (Subjekt)
+    "IHN_SIE": ("ihn", "sie", "die Person"),        # Akkusativ (Objekt)
+    "IHM_IHR": ("ihm", "ihr", "der Person"),        # Dativ (Objekt)
+    "SEIN_IHR": ("sein", "ihr", "ihr"),             # Possessiv: mask./neutr. Nom.
+    "SEINE_IHRE": ("seine", "ihre", "ihre"),        # Possessiv: fem./Plural Nom./Akk.
+    "SEINEN_IHREN": ("seinen", "ihren", "ihren"),   # Possessiv: mask. Akk. / Plural Dat.
+    "SEINEM_IHREM": ("seinem", "ihrem", "ihrem"),   # Possessiv: mask./neutr. Dativ
+    "SEINER_IHRER": ("seiner", "ihrer", "ihrer"),   # Possessiv: fem. Dativ/Genitiv
+    "SEINES_IHRES": ("seines", "ihres", "ihres"),   # Possessiv: mask./neutr. Genitiv
+}
+
+_PRONOMEN_RE = re.compile(r"\[(" + "|".join(_PRONOMEN) + r")\]")
+
+
+def ersetze_pronomen(text: str, geschlecht: str | None) -> str:
+    """Pronomen-Platzhalter geschlechtsgerecht ersetzen (mit Satzanfang-Großschreibung).
+
+    ``geschlecht``: ``m`` → männlich, ``w`` → weiblich, sonst geschlechtsneutral.
+    """
+    if not text or "[" not in text:
+        return text
+    idx = {"m": 0, "w": 1}.get((geschlecht or "").lower(), 2)
+
+    def ersetze(treffer: re.Match) -> str:
+        wort = _PRONOMEN[treffer.group(1)][idx]
+        vor = text[: treffer.start()].rstrip()
+        if not vor or vor[-1] in ".!?\n":  # Satzanfang → großschreiben
+            return wort[:1].upper() + wort[1:]
+        return wort
+
+    return _PRONOMEN_RE.sub(ersetze, text)
 
 #: Zufriedenheitsskala für den zusammenfassenden Leistungssatz (Note → Wortlaut).
 _ZUFRIEDENHEIT = {
