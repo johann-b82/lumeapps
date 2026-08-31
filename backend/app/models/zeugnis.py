@@ -71,6 +71,11 @@ class ZeugnisAussteller(Base):
     unterzeichner1_titel: Mapped[str | None] = mapped_column(Text, nullable=True)
     unterzeichner2_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     unterzeichner2_titel: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: HR-Manager (2. Unterschrift) als Personio-Person — Name/Titel werden wie
+    #: beim Vorgesetzten LIVE aus Personio aufgelöst. NULL → unterzeichner2 (Freitext).
+    hr_employee_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("personio_employees.id", ondelete="SET NULL"), nullable=True
+    )
     aktualisiert_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
