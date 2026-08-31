@@ -11,9 +11,9 @@ hochgeladene .xlsx serverseitig ein; clause 3 (multi-row atomic compute) — die
 from __future__ import annotations
 
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,11 +22,17 @@ from app.database import get_async_db_session
 from app.models import (
     OnboardingExtern,
     PersonioEmployee,
+    SchulungDokument,
     SchulungKatalog,
     SchulungPflicht,
     SchulungTeilnahme,
     SchulungUnterlage,
+    SchulungZertifikat,
 )
+from app.services import schulung_dokument as schulung_vorgang
+from app.services.directus_files import datei_laden, datei_speichern
+from app.services.onboarding import schulungsplan
+from app.services.schulungsuebersicht_pdf import UebersichtZeile
 from app.models.schulung import PFLICHT_EBENEN
 from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
@@ -1567,3 +1573,329 @@ async def schulungsprotokoll_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
     )
+
+
+# --------------------------------------------------------------------------
+# Schulungsvorgang: persistiertes Formblatt 71 mit QR, Lebenszyklus, Scan-
+# Prüfung + je Schulungszeile zugeordneten Zertifikaten (v1.121). Prüfung und
+# Datei-Ablage teilen sich die Services mit dem Einarbeitungsvorgang.
+# --------------------------------------------------------------------------
+
+
+class SchulungZertifikatRead(BaseModel):
+    id: int
+    schulung_bezeichnung: str | None
+    dateiname: str
+    hochgeladen_am: datetime
+
+
+class SchulungVorgangRead(BaseModel):
+    id: int
+    #: Diskriminator für die gemeinsame Vorgangs-Liste im Frontend.
+    typ: str = "schulung"
+    doc_uid: str
+    employee_id: int | None
+    mitarbeiter_name: str
+    funktion: str | None
+    status: str
+    erstellt_am: datetime
+    uebergeben_am: datetime | None
+    zurueck_am: datetime | None
+    geprueft_am: datetime | None
+    vollstaendig: bool | None
+    kommentar: str | None
+    hat_scan: bool
+    pruef_ergebnis: dict | None
+    zertifikate: list[SchulungZertifikatRead]
+
+
+class SchulungVorgangAnlegen(BaseModel):
+    employee_id: int
+
+
+class SchulungStatusSetzen(BaseModel):
+    status: str
+
+
+class SchulungVorgangAktualisieren(BaseModel):
+    kommentar: str | None = None
+    vollstaendig: bool | None = None
+    bestaetigte_felder: list[str] | None = None
+
+
+_SCHULUNG_STATUS_FELD = {
+    "uebergeben": "uebergeben_am",
+    "zurueck": "zurueck_am",
+    "geprueft": "geprueft_am",
+}
+
+
+def _zertifikat_read(z: SchulungZertifikat) -> SchulungZertifikatRead:
+    return SchulungZertifikatRead(
+        id=z.id,
+        schulung_bezeichnung=z.schulung_bezeichnung,
+        dateiname=z.dateiname,
+        hochgeladen_am=z.hochgeladen_am,
+    )
+
+
+def _schulung_vorgang_read(
+    d: SchulungDokument, zertifikate: list[SchulungZertifikat]
+) -> SchulungVorgangRead:
+    return SchulungVorgangRead(
+        id=d.id,
+        doc_uid=d.doc_uid,
+        employee_id=d.employee_id,
+        mitarbeiter_name=d.mitarbeiter_name,
+        funktion=d.funktion,
+        status=d.status,
+        erstellt_am=d.erstellt_am,
+        uebergeben_am=d.uebergeben_am,
+        zurueck_am=d.zurueck_am,
+        geprueft_am=d.geprueft_am,
+        vollstaendig=d.vollstaendig,
+        kommentar=d.kommentar,
+        hat_scan=d.scan_uuid is not None,
+        pruef_ergebnis=d.pruef_ergebnis,
+        zertifikate=[_zertifikat_read(z) for z in zertifikate],
+    )
+
+
+async def _hole_schulung_vorgang(db: AsyncSession, dok_id: int) -> SchulungDokument:
+    d = (
+        await db.execute(select(SchulungDokument).where(SchulungDokument.id == dok_id))
+    ).scalar_one_or_none()
+    if d is None:
+        raise HTTPException(status_code=404, detail="Schulungsvorgang nicht gefunden.")
+    return d
+
+
+async def _zertifikate_von(db: AsyncSession, dok_id: int) -> list[SchulungZertifikat]:
+    return list(
+        (
+            await db.execute(
+                select(SchulungZertifikat)
+                .where(SchulungZertifikat.dokument_id == dok_id)
+                .order_by(SchulungZertifikat.hochgeladen_am)
+            )
+        ).scalars().all()
+    )
+
+
+async def _schulung_read_voll(db: AsyncSession, d: SchulungDokument) -> SchulungVorgangRead:
+    return _schulung_vorgang_read(d, await _zertifikate_von(db, d.id))
+
+
+def _mime_von_bytes(daten: bytes) -> tuple[str, str]:
+    if daten[:4] == b"%PDF":
+        return "application/pdf", "pdf"
+    if daten[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png", "png"
+    if daten[:3] == b"\xff\xd8\xff":
+        return "image/jpeg", "jpg"
+    return "application/octet-stream", "bin"
+
+
+@router.post("/dokument")
+async def schulung_dokument_anlegen(
+    eingabe: SchulungVorgangAnlegen, db: AsyncSession = Depends(get_async_db_session)
+) -> SchulungVorgangRead:
+    """Schulungsvorgang anlegen: Formblatt 71 mit QR aus dem Soll-Schulungsplan."""
+    emp = (
+        await db.execute(
+            select(PersonioEmployee).where(PersonioEmployee.id == eingabe.employee_id)
+        )
+    ).scalar_one_or_none()
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
+    plan = await schulungsplan(db, emp)
+    zeilen = [
+        UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)
+        for s in plan.soll
+    ]
+    dok = await schulung_vorgang.vorgang_anlegen(
+        db,
+        employee_id=emp.id,
+        name=plan.name,
+        funktion=plan.position or "",
+        zeilen=zeilen,
+        logo=await lade_logo(db),
+    )
+    return await _schulung_read_voll(db, dok)
+
+
+@router.get("/dokumente")
+async def schulung_dokumente(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> list[SchulungVorgangRead]:
+    rows = (
+        await db.execute(
+            select(SchulungDokument).order_by(SchulungDokument.erstellt_am.desc())
+        )
+    ).scalars().all()
+    return [await _schulung_read_voll(db, d) for d in rows]
+
+
+@router.get("/dokument/{dok_id}")
+async def schulung_dokument(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> SchulungVorgangRead:
+    return await _schulung_read_voll(db, await _hole_schulung_vorgang(db, dok_id))
+
+
+@router.get("/dokument/{dok_id}/pdf")
+async def schulung_dokument_pdf(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    d = await _hole_schulung_vorgang(db, dok_id)
+    if not d.pdf_uuid:
+        raise HTTPException(status_code=404, detail="Kein PDF hinterlegt.")
+    pdf = await datei_laden(d.pdf_uuid)
+    # Der Download zum Ausdrucken gilt als Übergabe → einmalig datieren.
+    if d.uebergeben_am is None:
+        d.uebergeben_am = datetime.now(timezone.utc)
+        if d.status == "erstellt":
+            d.status = "uebergeben"
+        await db.commit()
+    teil = "_".join(d.mitarbeiter_name.split()) or "Unbekannt"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{teil}_Schulungsuebersicht.pdf"'},
+    )
+
+
+@router.get("/dokument/{dok_id}/scan")
+async def schulung_dokument_scan(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    d = await _hole_schulung_vorgang(db, dok_id)
+    if not d.scan_uuid:
+        raise HTTPException(status_code=404, detail="Kein Scan hinterlegt.")
+    daten = await datei_laden(d.scan_uuid)
+    mime, ext = _mime_von_bytes(daten)
+    return Response(
+        content=daten,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="scan_{d.doc_uid}.{ext}"'},
+    )
+
+
+@router.patch("/dokument/{dok_id}/status")
+async def schulung_status_setzen(
+    dok_id: int,
+    eingabe: SchulungStatusSetzen,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SchulungVorgangRead:
+    if eingabe.status not in _SCHULUNG_STATUS_FELD:
+        raise HTTPException(status_code=400, detail="Unbekannter Status.")
+    d = await _hole_schulung_vorgang(db, dok_id)
+    setattr(d, _SCHULUNG_STATUS_FELD[eingabe.status], datetime.now(timezone.utc))
+    d.status = eingabe.status
+    await db.commit()
+    await db.refresh(d)
+    return await _schulung_read_voll(db, d)
+
+
+@router.post("/scan")
+async def schulung_scan_hochladen(
+    datei: UploadFile = File(...), db: AsyncSession = Depends(get_async_db_session)
+) -> dict:
+    daten = await datei.read()
+    ist_pdf = (datei.content_type == "application/pdf") or (
+        (datei.filename or "").lower().endswith(".pdf")
+    )
+    dok, ergebnis = await schulung_vorgang.scan_verarbeiten(db, daten, ist_pdf)
+    if dok is None:
+        raise HTTPException(status_code=422, detail=ergebnis)
+    return {"dokument": await _schulung_read_voll(db, dok), "ergebnis": ergebnis}
+
+
+@router.patch("/dokument/{dok_id}")
+async def schulung_dokument_aktualisieren(
+    dok_id: int,
+    eingabe: SchulungVorgangAktualisieren,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SchulungVorgangRead:
+    d = await _hole_schulung_vorgang(db, dok_id)
+    if eingabe.kommentar is not None:
+        d.kommentar = eingabe.kommentar
+    if eingabe.bestaetigte_felder is not None:
+        erg = dict(d.pruef_ergebnis or {})
+        keys = set(eingabe.bestaetigte_felder)
+        felder = [{**f, "bestaetigt": f["key"] in keys} for f in erg.get("felder", [])]
+        offen = [f["label"] for f in felder if not (f.get("erkannt") or f.get("bestaetigt"))]
+        vollstaendig = bool(felder) and not offen
+        erg["felder"] = felder
+        erg["fehlend"] = offen
+        erg["vollstaendig"] = vollstaendig
+        d.pruef_ergebnis = erg
+        d.vollstaendig = vollstaendig
+    if eingabe.vollstaendig is not None:
+        d.vollstaendig = eingabe.vollstaendig
+    await db.commit()
+    await db.refresh(d)
+    return await _schulung_read_voll(db, d)
+
+
+# ── Zertifikate / Schulungsnachweise (je Schulungszeile) ──────────────────
+@router.post("/dokument/{dok_id}/zertifikat")
+async def schulung_zertifikat_hochladen(
+    dok_id: int,
+    datei: UploadFile = File(...),
+    schulung_bezeichnung: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SchulungVorgangRead:
+    """Zertifikat/Nachweis hochladen und (optional) einer Schulungszeile zuordnen."""
+    d = await _hole_schulung_vorgang(db, dok_id)
+    daten = await datei.read()
+    _, ext = _mime_von_bytes(daten)
+    ref = await datei_speichern(
+        datei.filename or f"zertifikat_{d.doc_uid}.{ext}",
+        daten,
+        datei.content_type or "application/octet-stream",
+    )
+    db.add(
+        SchulungZertifikat(
+            dokument_id=d.id,
+            schulung_bezeichnung=(schulung_bezeichnung or None),
+            datei_uuid=ref,
+            dateiname=datei.filename or f"zertifikat.{ext}",
+        )
+    )
+    await db.commit()
+    await db.refresh(d)
+    return await _schulung_read_voll(db, d)
+
+
+@router.get("/zertifikat/{zert_id}/datei")
+async def schulung_zertifikat_datei(
+    zert_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    z = (
+        await db.execute(select(SchulungZertifikat).where(SchulungZertifikat.id == zert_id))
+    ).scalar_one_or_none()
+    if z is None:
+        raise HTTPException(status_code=404, detail="Zertifikat nicht gefunden.")
+    daten = await datei_laden(z.datei_uuid)
+    mime, _ = _mime_von_bytes(daten)
+    return Response(
+        content=daten,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="{z.dateiname}"'},
+    )
+
+
+@router.delete("/zertifikat/{zert_id}")
+async def schulung_zertifikat_loeschen(
+    zert_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> SchulungVorgangRead:
+    z = (
+        await db.execute(select(SchulungZertifikat).where(SchulungZertifikat.id == zert_id))
+    ).scalar_one_or_none()
+    if z is None:
+        raise HTTPException(status_code=404, detail="Zertifikat nicht gefunden.")
+    dok_id = z.dokument_id
+    await db.delete(z)
+    await db.commit()
+    return await _schulung_read_voll(db, await _hole_schulung_vorgang(db, dok_id))
