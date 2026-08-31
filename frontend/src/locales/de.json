@@ -108,6 +108,8 @@
   "zeugnisse.bausteineTitel": "Textbausteine",
   "zeugnisse.bausteineHint": "Formulierungen je Bewertungsbereich und Note (1–4) bearbeiten",
   "zeugnisse.bausteinePlatzhalter": "Der Platzhalter [NAME] wird beim Erstellen durch „Herr/Frau Nachname“ ersetzt. Leeres Feld = Standardformulierung.",
+  "zeugnisse.bausteinePronomenTitel": "Pronomen-Platzhalter (gegenderte Formulierungen)",
+  "zeugnisse.bausteinePronomen": "[ER_SIE] → er/sie · [IHN_SIE] → ihn/sie · [IHM_IHR] → ihm/ihr\nPossessiv: [SEIN_IHR], [SEINE_IHRE], [SEINEN_IHREN], [SEINEM_IHREM], [SEINER_IHRER], [SEINES_IHRES] → sein/ihr, seine/ihre …\nBei „divers/unbekannt“ wird geschlechtsneutral „die/der Person“ bzw. die Form „ihr…“ verwendet. Am Satzanfang werden die Wörter automatisch großgeschrieben.",
   "zeugnisse.speichern": "Speichern",
   "zeugnisse.gespeichert": "Gespeichert",
   "zeugnisse.stammdaten": "Stammdaten",

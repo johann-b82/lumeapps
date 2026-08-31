@@ -108,6 +108,8 @@
   "zeugnisse.bausteineTitel": "Text modules",
   "zeugnisse.bausteineHint": "Edit the wording per rating area and grade (1–4)",
   "zeugnisse.bausteinePlatzhalter": "The placeholder [NAME] is replaced with “Mr/Ms Lastname” when generating. Empty field = default wording.",
+  "zeugnisse.bausteinePronomenTitel": "Pronoun placeholders (gendered wording)",
+  "zeugnisse.bausteinePronomen": "[ER_SIE] → he/she · [IHN_SIE] → him/her · [IHM_IHR] → (to) him/her\nPossessive: [SEIN_IHR], [SEINE_IHRE], [SEINEN_IHREN], [SEINEM_IHREM], [SEINER_IHRER], [SEINES_IHRES] → his/her forms …\nFor “diverse/unknown”, a gender-neutral “the person” (and feminine-agreeing possessive) is used. Words are auto-capitalized at the start of a sentence.",
   "zeugnisse.speichern": "Save",
   "zeugnisse.gespeichert": "Saved",
   "zeugnisse.stammdaten": "Master data",

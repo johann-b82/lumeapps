@@ -31,7 +31,11 @@ from app.models import (
 from app.models.zeugnis import ZEUGNIS_ABSCHNITTE, ZEUGNIS_ARTEN, ZEUGNIS_DIMENSIONEN
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
-from app.services.zeugnis_baukasten import baue_abschnitte, bausteine_defaults
+from app.services.zeugnis_baukasten import (
+    baue_abschnitte,
+    bausteine_defaults,
+    ersetze_pronomen,
+)
 from app.services.zeugnis_dokument import build_zeugnis_docx, convert_docx_to_pdf
 from app.services.zeugnis_ki import ZeugnisKIError, generiere_abschnitte
 
@@ -214,10 +218,13 @@ def _anrede(geschlecht: str | None) -> str:
 
 
 def _name_ersetzen(abschnitte: dict[str, str], z: Zeugnis) -> dict[str, str]:
-    """Platzhalter [NAME] durch „Anrede Nachname" ersetzen (nach der KI)."""
+    """Platzhalter ersetzen: [NAME] → „Anrede Nachname", Pronomen geschlechtsgerecht."""
     nachname = (z.name or "").split()[-1] if (z.name or "").strip() else ""
     ersatz = f"{_anrede(z.geschlecht)} {nachname}".strip()
-    return {k: (v or "").replace("[NAME]", ersatz) for k, v in abschnitte.items()}
+    return {
+        k: ersetze_pronomen((v or "").replace("[NAME]", ersatz), z.geschlecht)
+        for k, v in abschnitte.items()
+    }
 
 
 async def _hole(db: AsyncSession, zeugnis_id: int) -> Zeugnis:

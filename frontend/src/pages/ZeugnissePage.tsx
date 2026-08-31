@@ -341,6 +341,12 @@ function TextbausteinCard() {
       {offen && (
         <div className="mt-3 space-y-4">
           <p className="text-xs text-muted-foreground">{t("zeugnisse.bausteinePlatzhalter")}</p>
+          <details className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium">
+              {t("zeugnisse.bausteinePronomenTitel")}
+            </summary>
+            <p className="mt-2 whitespace-pre-line">{t("zeugnisse.bausteinePronomen")}</p>
+          </details>
           {ZEUGNIS_DIMENSIONEN.map((dim) => (
             <div key={dim} className="rounded-md border p-2">
               <div className="mb-2 text-xs font-semibold">{t(`zeugnisse.dim.${dim}`)}</div>
