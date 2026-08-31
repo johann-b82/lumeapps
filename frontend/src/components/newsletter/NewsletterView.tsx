@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import ReactMarkdown from "react-markdown";
@@ -480,6 +480,73 @@ export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
   return seiten;
 }
 
+/** Skaliert den Inhalt so, dass er die feste Seitenhöhe füllt — bei wenig Inhalt
+ *  größer, bei viel kleiner. Selbstjustierend (Fixpunkt: sichtbare Höhe →
+ *  verfügbare Höhe), geclampt. Breiten-Kompensation hält die sichtbare Breite bei
+ *  100 %; `transform: scale` ändert nur die Optik, nicht das Layout/scrollHeight. */
+function FitToPage({ children }: { children: ReactNode }) {
+  const aussen = useRef<HTMLDivElement>(null);
+  const innen = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const a = aussen.current;
+    const i = innen.current;
+    if (!a || !i) return;
+    let raf = 0;
+    // Skalierung so bestimmen, dass die sichtbare Höhe die Seite füllt.
+    // (Fixpunkt-Iteration; `width = 100/s%` kompensiert den Transform.)
+    const mess = () => {
+      const verfuegbar = a.clientHeight;
+      if (verfuegbar <= 8) return;
+      let s = 1;
+      for (let k = 0; k < 6; k++) {
+        i.style.width = `${100 / s}%`;
+        const natuerlich = i.scrollHeight;
+        if (natuerlich <= 8) break;
+        const ziel = Math.min(2.0, Math.max(0.6, verfuegbar / natuerlich));
+        if (Math.abs(ziel - s) < 0.01) {
+          s = ziel;
+          break;
+        }
+        s = ziel;
+      }
+      // Schluss-Korrektur gegen Beschnitt (bild-lastiger Inhalt konvergiert nicht
+      // exakt): finale Höhe messen, s nötigenfalls senken.
+      i.style.width = `${100 / s}%`;
+      const final_nat = i.scrollHeight;
+      if (final_nat > 8 && final_nat * s > verfuegbar) {
+        s = Math.max(0.6, verfuegbar / final_nat);
+      }
+      i.style.width = `${100 / s}%`;
+      setScale(s);
+    };
+    // Nachmessen (entprellt), wenn sich Inhalt/Höhe ändert — z. B. wenn Bilder
+    // asynchron nachladen. rAF verhindert die ResizeObserver-Schleife.
+    const plan = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(mess);
+    };
+    mess();
+    const ro = new ResizeObserver(plan);
+    ro.observe(i);
+    ro.observe(a);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+  return (
+    <div ref={aussen} className="h-full overflow-hidden">
+      <div
+        ref={innen}
+        style={{ width: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /** Rendert den Inhalt eines Seiten-Deskriptors (ohne den Seiten-Wrapper).
  *  `schmal` (Online-Hochformat) reicht bis zur KPI-Kachel durch. */
 export function SeiteInhalt({
@@ -507,9 +574,12 @@ export function SeiteInhalt({
   }
   if (desc.art === "inhalt") return <InhaltSeite ausgabe={ausgabe} eintraege={desc.toc} />;
   if (desc.art === "divider") return <DividerSeite titel={desc.titel} edgeLabel={desc.edgeLabel} />;
+  const inhalt = <BlockInhalt block={desc.block} schmal={schmal} />;
   return (
     <SeiteRahmen ausgabe={ausgabe} titel={desc.titel} seiteNr={desc.seiteNr} edgeLabel={desc.edgeLabel}>
-      <BlockInhalt block={desc.block} schmal={schmal} />
+      {/* Rubrik-Inhalte füllen die Seite (Fit-to-Page); KPI-Charts messen sich
+          selbst und bleiben unskaliert. */}
+      {desc.block.art === "rubrik" ? <FitToPage>{inhalt}</FitToPage> : inhalt}
     </SeiteRahmen>
   );
 }
