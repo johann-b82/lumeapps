@@ -137,9 +137,19 @@ export function generateZeugnis(id: number): Promise<ZeugnisDetail> {
   return apiClient<ZeugnisDetail>(`${BASE}/${id}/generate`, { method: "POST" });
 }
 
-/** Nur einen einzelnen Abschnitt gezielt neu erzeugen. */
+/** Nur einen einzelnen Abschnitt gezielt neu erzeugen (KI). */
 export function generateAbschnitt(id: number, abschnitt: string): Promise<ZeugnisDetail> {
   return apiClient<ZeugnisDetail>(`${BASE}/${id}/generate/${abschnitt}`, { method: "POST" });
+}
+
+/** Gesamtes Zeugnis deterministisch aus Textbausteinen erzeugen (ohne KI). */
+export function baukastenZeugnis(id: number): Promise<ZeugnisDetail> {
+  return apiClient<ZeugnisDetail>(`${BASE}/${id}/baukasten`, { method: "POST" });
+}
+
+/** Einen einzelnen Abschnitt aus Textbausteinen erzeugen (ohne KI). */
+export function baukastenAbschnitt(id: number, abschnitt: string): Promise<ZeugnisDetail> {
+  return apiClient<ZeugnisDetail>(`${BASE}/${id}/baukasten/${abschnitt}`, { method: "POST" });
 }
 
 export function fetchAussteller(): Promise<Aussteller | null> {
