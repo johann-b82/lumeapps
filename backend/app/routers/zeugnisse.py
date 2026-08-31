@@ -745,6 +745,8 @@ async def generieren(
 
     z.abschnitte_json = _name_ersetzen(abschnitte, z)
     z.schlussnote = _schnitt(noten)
+    if z.ausstellungsdatum is None:
+        z.ausstellungsdatum = date.today()
     z.aktualisiert_am = _jetzt()
     await db.commit()
     z = await _hole(db, z.id)
@@ -835,6 +837,8 @@ async def baukasten(
     abschnitte = await _baue(db, z)
     z.abschnitte_json = _name_ersetzen(abschnitte, z, pronomen=True)
     z.schlussnote = _schnitt(_noten(z))
+    if z.ausstellungsdatum is None:
+        z.ausstellungsdatum = date.today()
     z.aktualisiert_am = _jetzt()
     await db.commit()
     z = await _hole(db, z.id)

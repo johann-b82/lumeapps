@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import uuid as _uuid
+from datetime import date
 from io import BytesIO
 from pathlib import Path
 
@@ -311,7 +312,7 @@ def build_zeugnis_docx(
     # --- Abschluss-Block: Ort/Datum + Firma + Unterschriften (zusammenhalten) ---
     _zusammen(doc.add_paragraph())
     ort = (aussteller.standort if aussteller else None) or ""
-    datum = _datum_kurz(zeugnis.ausstellungsdatum or zeugnis.austritt)
+    datum = _datum_kurz(zeugnis.ausstellungsdatum or zeugnis.austritt or date.today())
     if ort or datum:
         _zusammen(doc.add_paragraph(", ".join(x for x in (ort, datum) if x)))
     if aussteller and aussteller.firma:
