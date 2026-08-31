@@ -227,6 +227,52 @@ async def _aussteller(db: AsyncSession) -> ZeugnisAussteller | None:
     ).scalar_one_or_none()
 
 
+def _pfad(daten: dict | None, *keys: str):
+    """Sicher durch verschachteltes Personio-raw_json navigieren."""
+    cur = daten
+    for k in keys:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(k)
+    return cur
+
+
+async def _supervisor(
+    db: AsyncSession, z: Zeugnis, aussteller: ZeugnisAussteller | None
+) -> tuple[str | None, str | None]:
+    """Vorgesetzte:r der Person aus Personio (Name + dessen Position als Titel).
+
+    Der Supervisor hängt über die Personio-Org-Struktur an der Abteilung. Fällt
+    er weg (Externe, kein Supervisor gepflegt), greift ``unterzeichner1`` aus dem
+    Ausstellerprofil.
+    """
+    fallback = (
+        (aussteller.unterzeichner1_name, aussteller.unterzeichner1_titel)
+        if aussteller
+        else (None, None)
+    )
+    if not z.employee_id or z.employee_id <= 0:
+        return fallback
+    mitarbeiter = await db.get(PersonioEmployee, z.employee_id)
+    sup = _pfad(
+        mitarbeiter.raw_json if mitarbeiter else None,
+        "attributes", "supervisor", "value", "attributes",
+    )
+    if not isinstance(sup, dict):
+        return fallback
+    name = _pfad(sup, "preferred_name", "value") or " ".join(
+        x for x in (_pfad(sup, "first_name", "value"), _pfad(sup, "last_name", "value")) if x
+    )
+    if not name:
+        return fallback
+    titel = None
+    sup_id = _pfad(sup, "id", "value")
+    if sup_id:
+        chef = await db.get(PersonioEmployee, sup_id)
+        titel = chef.position if chef else None
+    return (name, titel)
+
+
 # --------------------------------------------------------------------------
 # Personen (Personio + Externe)
 # --------------------------------------------------------------------------
@@ -600,10 +646,10 @@ async def _baue(db: AsyncSession, z: Zeugnis) -> dict[str, str]:
         raise HTTPException(
             status_code=400, detail="Bitte zuerst mindestens eine Note vergeben."
         )
-    aussteller = await _aussteller(db)
     schnitt = _schnitt(noten)
     return baue_abschnitte(
         geschlecht=z.geschlecht,
+        geburtsdatum=z.geburtsdatum,
         taetigkeit=z.taetigkeit,
         abteilung=z.abteilung,
         eintritt=z.eintritt,
@@ -616,7 +662,6 @@ async def _baue(db: AsyncSession, z: Zeugnis) -> dict[str, str]:
         stichpunkte=z.taetigkeit_stichpunkte,
         kompetenzen=z.besondere_kompetenzen,
         erfolge=z.besondere_erfolge,
-        firma=aussteller.firma if aussteller else None,
     )
 
 
@@ -671,7 +716,12 @@ async def docx(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session)
     if not z.abschnitte_json:
         raise HTTPException(status_code=400, detail="Noch kein Text generiert.")
     logo = await lade_logo(db)
-    daten = build_zeugnis_docx(z, await _aussteller(db), logo.daten if logo else None)
+    aussteller = await _aussteller(db)
+    sup_name, sup_titel = await _supervisor(db, z, aussteller)
+    daten = build_zeugnis_docx(
+        z, aussteller, logo.daten if logo else None,
+        supervisor_name=sup_name, supervisor_titel=sup_titel,
+    )
     return Response(
         content=daten,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -685,7 +735,12 @@ async def pdf(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session))
     if not z.abschnitte_json:
         raise HTTPException(status_code=400, detail="Noch kein Text generiert.")
     logo = await lade_logo(db)
-    docx_bytes = build_zeugnis_docx(z, await _aussteller(db), logo.daten if logo else None)
+    aussteller = await _aussteller(db)
+    sup_name, sup_titel = await _supervisor(db, z, aussteller)
+    docx_bytes = build_zeugnis_docx(
+        z, aussteller, logo.daten if logo else None,
+        supervisor_name=sup_name, supervisor_titel=sup_titel,
+    )
     try:
         pdf_bytes = await convert_docx_to_pdf(docx_bytes)
     except RuntimeError as exc:
