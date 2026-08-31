@@ -247,16 +247,39 @@ export function BlockInhalt({ block, schmal }: { block: NewsletterBlock; schmal?
   if (block.art === "kpi") {
     return <BelegschaftKpiCharts data={block.data} compact schmal={schmal} />;
   }
-  return (
-    <>
-      {block.neueMitarbeiter && block.neueMitarbeiter.length > 0 && (
-        <NeuImTeam leute={block.neueMitarbeiter} />
-      )}
-      {/* PDF (breit): zweispaltig; Online-Hochformat: einspaltig. */}
-      <div className={schmal ? "" : "columns-2 gap-x-5"}>
+  const neu = block.neueMitarbeiter?.length ? (
+    <NeuImTeam leute={block.neueMitarbeiter} />
+  ) : null;
+
+  // Online-Hochformat: einspaltig. PDF (breit): zwei feste Spalten, wobei jeder
+  // Beitrag KOMPLETT in seiner Spalte bleibt (kein CSS-Mehrspalten-Umbruch, der
+  // Beiträge zerreißt/überlappt). Verteilung abwechselnd → ausgewogene Höhen.
+  if (schmal) {
+    return (
+      <>
+        {neu}
         {block.eintraege.map((e) => (
           <EintragBlock key={e.id} eintrag={e} />
         ))}
+      </>
+    );
+  }
+  const links = block.eintraege.filter((_, i) => i % 2 === 0);
+  const rechts = block.eintraege.filter((_, i) => i % 2 === 1);
+  return (
+    <>
+      {neu}
+      <div className="flex items-start gap-5">
+        <div className="min-w-0 flex-1">
+          {links.map((e) => (
+            <EintragBlock key={e.id} eintrag={e} />
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          {rechts.map((e) => (
+            <EintragBlock key={e.id} eintrag={e} />
+          ))}
+        </div>
       </div>
     </>
   );
