@@ -18,7 +18,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
@@ -171,22 +171,61 @@ def _feld(paragraph, code: str) -> None:
     run._r.append(end)
 
 
-def _fusszeile(doc: Document, dateiname: str | None) -> None:
-    """Fußzeile je Seite: Dateiname (links) + „Seite X von Y" (rechts)."""
-    p = doc.sections[0].footer.paragraphs[0]
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.tab_stops.add_tab_stop(Cm(16.0), WD_TAB_ALIGNMENT.RIGHT)
+def _tabelle_oberlinie(tabelle) -> None:
+    """Dünne graue Linie über der Tabelle (Trenner über der Fußzeile)."""
+    borders = OxmlElement("w:tblBorders")
+    top = OxmlElement("w:top")
+    top.set(qn("w:val"), "single")
+    top.set(qn("w:sz"), "6")  # 0,75 pt
+    top.set(qn("w:space"), "0")
+    top.set(qn("w:color"), "AAAAAA")
+    borders.append(top)
+    tabelle._tbl.tblPr.append(borders)
 
+
+def _ohne_endung(dateiname: str | None) -> str:
+    name = dateiname or ""
+    for ext in (".pdf", ".docx"):
+        if name.lower().endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+def _fusszeile(doc: Document, dateiname: str | None) -> None:
+    """Fußzeile je Seite: Trennlinie + Dateiname (links) + „Seite X von Y" (rechts)."""
+    footer = doc.sections[0].footer
+    tabelle = footer.add_table(rows=1, cols=2, width=Cm(16.0))
+    tabelle.autofit = False
+    _tabelle_oberlinie(tabelle)
+    links_z, rechts_z = tabelle.rows[0].cells
+    links_z.width = Cm(9.0)
+    rechts_z.width = Cm(7.0)
     grau = RGBColor(0x88, 0x88, 0x88)
-    links = p.add_run(f"{dateiname or ''}\tSeite ")
-    links.font.size = Pt(8)
-    links.font.color.rgb = grau
-    _feld(p, "PAGE")
-    mitte = p.add_run(" von ")
-    mitte.font.size = Pt(8)
-    mitte.font.color.rgb = grau
-    _feld(p, "NUMPAGES")
+
+    lp = links_z.paragraphs[0]
+    lp.paragraph_format.space_before = Pt(4)
+    lp.paragraph_format.space_after = Pt(0)
+    lr = lp.add_run(_ohne_endung(dateiname))
+    lr.font.size = Pt(8)
+    lr.font.color.rgb = grau
+
+    rp = rechts_z.paragraphs[0]
+    rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    rp.paragraph_format.space_before = Pt(4)
+    rp.paragraph_format.space_after = Pt(0)
+    sr = rp.add_run("Seite ")
+    sr.font.size = Pt(8)
+    sr.font.color.rgb = grau
+    _feld(rp, "PAGE")
+    mr = rp.add_run(" von ")
+    mr.font.size = Pt(8)
+    mr.font.color.rgb = grau
+    _feld(rp, "NUMPAGES")
+
+    # führende Leerzeile der Fußzeile entfernen, damit sie unten bündig sitzt
+    leer = footer.paragraphs[0]
+    if not leer.text and leer._element.getnext() is not None:
+        leer._element.getparent().remove(leer._element)
 
 
 def _unterschriften(
