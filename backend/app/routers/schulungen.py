@@ -50,6 +50,7 @@ from app.services.maintenance_files import (
     upload_maintenance_file_to_directus,
 )
 from app.services.pdf_logo import lade_logo
+from app.services.schulung_paket_pdf import erzeuge_schulung_paket_pdf
 from app.services.schulungsprotokoll_pdf import (
     dateiname as protokoll_dateiname,
     erzeuge_schulungsprotokoll_pdf,
@@ -1767,9 +1768,17 @@ async def schulung_dokument_pdf(
     dok_id: int, db: AsyncSession = Depends(get_async_db_session)
 ) -> Response:
     d = await _hole_schulung_vorgang(db, dok_id)
-    if not d.pdf_uuid:
+    schulungen = d.schulungen or []
+    if schulungen:
+        # Schulungsplan (Fbl. 71) + je Schulung ein vorausgefülltes Fbl. 68 als ein
+        # PDF — druckt zusammen aus, jeder Nachweis trägt seinen QR zur Zuordnung.
+        pdf = await erzeuge_schulung_paket_pdf(
+            d.mitarbeiter_name, d.funktion or "", schulungen, d.doc_uid, logo=await lade_logo(db)
+        )
+    elif d.pdf_uuid:
+        pdf = await datei_laden(d.pdf_uuid)
+    else:
         raise HTTPException(status_code=404, detail="Kein PDF hinterlegt.")
-    pdf = await datei_laden(d.pdf_uuid)
     # Der Download zum Ausdrucken gilt als Übergabe → einmalig datieren.
     if d.uebergeben_am is None:
         d.uebergeben_am = datetime.now(timezone.utc)

@@ -170,6 +170,19 @@ def _fuelle_blatt(
     ws.page_margins = PageMargins(left=0.6, right=0.5, top=0.5, bottom=0.5, header=0.3)
 
 
+def fuelle_blatt(
+    ws,
+    titel: str,
+    teilnehmer: list[str] | None = None,
+    trainer: str = "",
+    intern: bool = True,
+    logo: LogoBild | None = None,
+    qr_payload: str | None = None,
+) -> None:
+    """Fbl. 68 in ein vorhandenes Arbeitsblatt schreiben (für Sammel-PDFs)."""
+    _fuelle_blatt(ws, titel, teilnehmer or [], trainer, intern, logo, qr_payload)
+
+
 async def erzeuge_schulungsprotokoll_pdf(
     titel: str,
     teilnehmer: list[str] | None = None,
