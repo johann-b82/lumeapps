@@ -474,11 +474,15 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
       if (!form) return null;
       await updateZeugnis(id, {
         geschlecht: form.geschlecht,
+        geburtsdatum: form.geburtsdatum,
+        personalnummer: form.personalnummer,
         taetigkeit: form.taetigkeit,
         abteilung: form.abteilung,
         eintritt: form.eintritt,
         austritt: form.austritt,
+        ausstellungsdatum: form.ausstellungsdatum,
         art: form.art,
+        anlass: form.anlass,
         fuehrungskraft: form.fuehrungskraft,
         taetigkeit_stichpunkte: form.taetigkeit_stichpunkte,
         besondere_kompetenzen: form.besondere_kompetenzen,
@@ -513,10 +517,13 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
       if (!form) return null;
       await updateZeugnis(id, {
         geschlecht: form.geschlecht,
+        geburtsdatum: form.geburtsdatum,
+        personalnummer: form.personalnummer,
         taetigkeit: form.taetigkeit,
         abteilung: form.abteilung,
         eintritt: form.eintritt,
         austritt: form.austritt,
+        ausstellungsdatum: form.ausstellungsdatum,
         art: form.art,
         anlass: form.anlass,
         fuehrungskraft: form.fuehrungskraft,

@@ -217,14 +217,31 @@ def _anrede(geschlecht: str | None) -> str:
     return {"w": "Frau", "m": "Herr"}.get((geschlecht or "").lower(), "Herr/Frau")
 
 
-def _name_ersetzen(abschnitte: dict[str, str], z: Zeugnis) -> dict[str, str]:
-    """Platzhalter ersetzen: [NAME] → „Anrede Nachname", Pronomen geschlechtsgerecht."""
+def _name_ersetzen(
+    abschnitte: dict[str, str], z: Zeugnis, *, pronomen: bool = False
+) -> dict[str, str]:
+    """Platzhalter im generierten Text ersetzen.
+
+    - **Einleitung**: [NAME] → „Anrede Vorname Nachname" (einmalige volle Nennung).
+    - **Übrige Abschnitte**: mit ``pronomen`` (Baukasten) → Personalpronomen
+      (er/sie), damit sich „Herr/Frau Nachname" nicht wiederholt; sonst (KI, die
+      eigene Pronomen schreibt) → „Anrede Nachname".
+    - Pronomen-Platzhalter ([ER_SIE], [IHM_IHR] …) werden geschlechtsgerecht ersetzt.
+    """
+    voll = f"{_anrede(z.geschlecht)} {(z.name or '').strip()}".strip()
     nachname = (z.name or "").split()[-1] if (z.name or "").strip() else ""
-    ersatz = f"{_anrede(z.geschlecht)} {nachname}".strip()
-    return {
-        k: ersetze_pronomen((v or "").replace("[NAME]", ersatz), z.geschlecht)
-        for k, v in abschnitte.items()
-    }
+    kurz = f"{_anrede(z.geschlecht)} {nachname}".strip()
+    ergebnis: dict[str, str] = {}
+    for k, v in abschnitte.items():
+        text = v or ""
+        if k == "einleitung":
+            text = text.replace("[NAME]", voll)
+        elif pronomen:
+            text = text.replace("[NAME]", "[ER_SIE]")
+        else:
+            text = text.replace("[NAME]", kurz)
+        ergebnis[k] = ersetze_pronomen(text, z.geschlecht)
+    return ergebnis
 
 
 async def _hole(db: AsyncSession, zeugnis_id: int) -> Zeugnis:
@@ -755,7 +772,7 @@ async def baukasten(
     """Gesamtes Zeugnis aus Textbausteinen erzeugen (ohne KI)."""
     z = await _hole(db, zeugnis_id)
     abschnitte = await _baue(db, z)
-    z.abschnitte_json = _name_ersetzen(abschnitte, z)
+    z.abschnitte_json = _name_ersetzen(abschnitte, z, pronomen=True)
     z.schlussnote = _schnitt(_noten(z))
     z.aktualisiert_am = _jetzt()
     await db.commit()
@@ -775,7 +792,7 @@ async def baukasten_abschnitt(
     z = await _hole(db, zeugnis_id)
     abschnitte = await _baue(db, z)
     zusammen = dict(z.abschnitte_json or {})
-    zusammen[abschnitt] = _name_ersetzen(abschnitte, z)[abschnitt]
+    zusammen[abschnitt] = _name_ersetzen(abschnitte, z, pronomen=True)[abschnitt]
     z.abschnitte_json = zusammen
     z.aktualisiert_am = _jetzt()
     await db.commit()

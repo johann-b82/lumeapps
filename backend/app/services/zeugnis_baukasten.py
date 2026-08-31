@@ -267,12 +267,12 @@ def _schluss(*, art, geschlecht, schnitt, austritt, anlass) -> str:
     if art == "ausbildungszeugnis":
         ende = f"Die Ausbildung endete zum {aus}. " if aus else ""
         return (
-            f"{ende}Wir danken [NAME] für die Mitarbeit während der Ausbildung "
+            f"{ende}Wir danken [IHM_IHR] für die Mitarbeit während der Ausbildung "
             f"und wünschen {dat} für den weiteren Berufs- und Lebensweg alles Gute."
         )
     if art == "praktikumszeugnis":
         return (
-            "Wir danken [NAME] für das gezeigte Engagement während des Praktikums "
+            "Wir danken [IHM_IHR] für das gezeigte Engagement während des Praktikums "
             f"und wünschen {dat} für die Zukunft alles Gute."
         )
     # qualifiziert
