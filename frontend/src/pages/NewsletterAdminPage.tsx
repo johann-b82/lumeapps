@@ -24,8 +24,11 @@ import {
   fetchAdminAusgabe,
   fetchAdminAusgaben,
   insertKpi,
+  kapitelKeys,
   removeKpi,
   reorderEintragBilder,
+  rubrikAnlegen,
+  rubrikLoeschen,
   rueckUrl,
   updateAusgabe,
   updateEintrag,
@@ -37,7 +40,6 @@ import {
   type AusgabeDetail,
   type Eintrag,
   type EintragBild,
-  type Rubrik,
 } from "@/lib/newsletterApi";
 
 const feld =
@@ -312,7 +314,7 @@ function Editor({ id }: { id: number }) {
       )}
 
       <div className="mx-auto max-w-3xl">
-        {NEWSLETTER_RUBRIKEN.map((rubrik) => (
+        {kapitelKeys(ausgabe).map((rubrik) => (
           <RubrikSektion
             key={rubrik}
             ausgabe={ausgabe}
@@ -320,6 +322,7 @@ function Editor({ id }: { id: number }) {
             onChange={invalidate}
           />
         ))}
+        <NeuesKapitel ausgabe={ausgabe} onChange={invalidate} />
       </div>
     </div>
   );
@@ -331,10 +334,11 @@ function RubrikSektion({
   onChange,
 }: {
   ausgabe: AusgabeDetail;
-  rubrik: Rubrik;
+  rubrik: string;
   onChange: () => void;
 }) {
   const { t } = useTranslation();
+  const istStandard = (NEWSLETTER_RUBRIKEN as readonly string[]).includes(rubrik);
   const eintraege = ausgabe.eintraege
     .filter((e) => e.rubrik === rubrik)
     .sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -345,6 +349,14 @@ function RubrikSektion({
     onSuccess: () => onChange(),
     onError: (e: Error) => toast.error(e.message),
   });
+  const loeschen = useMutation({
+    mutationFn: () => rubrikLoeschen(ausgabe.id, rubrik),
+    onSuccess: () => {
+      toast.success(t("newsletter.kapitelGeloescht"));
+      onChange();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return (
     <section className="mb-5 rounded-lg border p-3">
@@ -352,11 +364,22 @@ function RubrikSektion({
         <AbschnittTitel
           ausgabe={ausgabe}
           blockKey={rubrik}
-          standard={t(`newsletter.rubrik.${rubrik}`)}
+          standard={istStandard ? t(`newsletter.rubrik.${rubrik}`) : rubrik}
           onSaved={onChange}
         />
         <button type="button" className={`${btn} shrink-0`} disabled={hinzufuegen.isPending} onClick={() => hinzufuegen.mutate()}>
           <Plus className="h-3.5 w-3.5" /> {t("newsletter.eintragHinzufuegen")}
+        </button>
+        <button
+          type="button"
+          className={`${btn} shrink-0 text-destructive`}
+          disabled={loeschen.isPending}
+          title={t("newsletter.kapitelLoeschen")}
+          onClick={() => {
+            if (confirm(t("newsletter.kapitelLoeschenBestaetigen"))) loeschen.mutate();
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
       {eintraege.length === 0 ? (
@@ -369,6 +392,43 @@ function RubrikSektion({
         </div>
       )}
     </section>
+  );
+}
+
+/** „Neues Kapitel" — legt ein Ausgabe-eigenes Kapitel an (ans Ende der Liste). */
+function NeuesKapitel({ ausgabe, onChange }: { ausgabe: AusgabeDetail; onChange: () => void }) {
+  const { t } = useTranslation();
+  const [titel, setTitel] = useState("");
+  const anlegen = useMutation({
+    mutationFn: () => rubrikAnlegen(ausgabe.id, titel.trim()),
+    onSuccess: () => {
+      setTitel("");
+      toast.success(t("newsletter.kapitelAngelegt"));
+      onChange();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="mb-5 flex items-center gap-2 rounded-lg border border-dashed p-3">
+      <input
+        value={titel}
+        onChange={(e) => setTitel(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && titel.trim()) anlegen.mutate();
+        }}
+        placeholder={t("newsletter.kapitelName")}
+        className={`${feld} flex-1`}
+      />
+      <button
+        type="button"
+        className={`${primary} shrink-0`}
+        disabled={anlegen.isPending || !titel.trim()}
+        onClick={() => anlegen.mutate()}
+      >
+        {anlegen.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        {t("newsletter.kapitelHinzufuegen")}
+      </button>
+    </div>
   );
 }
 
@@ -755,22 +815,19 @@ function BildSlot({
 function BlockReihenfolge({ ausgabe, onSaved }: { ausgabe: AusgabeDetail; onSaved: () => void }) {
   const { t } = useTranslation();
   const standard = [...NEWSLETTER_RUBRIKEN] as string[];
-  const merge = (gespeichert: string[] | null | undefined) => {
-    const g = (gespeichert ?? []).filter((k) => standard.includes(k));
-    return [...g, ...standard.filter((k) => !g.includes(k))];
-  };
-  const [items, setItems] = useState<string[]>(merge(ausgabe.block_reihenfolge));
+  const [items, setItems] = useState<string[]>(kapitelKeys(ausgabe));
   useEffect(() => {
-    setItems(merge(ausgabe.block_reihenfolge));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ausgabe.id]);
+    setItems(kapitelKeys(ausgabe));
+  }, [ausgabe.id, ausgabe.block_reihenfolge]);
 
   const save = useMutation({
     mutationFn: (order: string[]) => updateAusgabe(ausgabe.id, { block_reihenfolge: order }),
     onSuccess: () => onSaved(),
     onError: (e: Error) => toast.error(e.message),
   });
-  const label = (k: string) => (k === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${k}`));
+  const label = (k: string) =>
+    ausgabe.rubrik_titel?.[k]?.trim() ||
+    (standard.includes(k) ? t(`newsletter.rubrik.${k}`) : k);
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (over && active.id !== over.id) {
