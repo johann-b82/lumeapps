@@ -43,9 +43,10 @@ import {
   type EinarbeitungPflicht,
 } from "@/lib/einarbeitungApi";
 import { fetchSchulungen } from "@/lib/schulungApi";
+import { schulungVorgangAnlegen } from "@/lib/schulungVorgangApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
-import { EinarbeitungVorgaenge } from "@/components/onboarding/EinarbeitungVorgaenge";
+import { Vorgaenge } from "@/components/onboarding/Vorgaenge";
 
 function datum(wert: string | null): string {
   if (!wert) return "—";
@@ -177,9 +178,16 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
         <AbteilungsDownload
           eintritt={eintritt}
           label={t("onboarding.vorgang.anlegen")}
-          laden={(a) => vorgangAnlegen(eintritt.employee_id, a).then(() => undefined)}
+          // Beide Vorgänge gleichzeitig starten: Einarbeitung + Schulung.
+          laden={(a) =>
+            Promise.all([
+              vorgangAnlegen(eintritt.employee_id, a),
+              schulungVorgangAnlegen(eintritt.employee_id),
+            ]).then(() => undefined)
+          }
           nachDownload={() => {
             qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungVorgaenge() });
+            qc.invalidateQueries({ queryKey: hrKpiKeys.schulungVorgaenge() });
             toast.success(t("onboarding.vorgang.angelegt"));
           }}
         />
@@ -1035,7 +1043,7 @@ export function OnboardingPage() {
       <EinarbeitungMatrixPanel />
       <DokumentePanel />
       <RollenPanel />
-      <EinarbeitungVorgaenge />
+      <Vorgaenge />
 
       <section>
         <h2 className="mb-1 text-sm font-medium">{t("onboarding.eintritte.title")}</h2>

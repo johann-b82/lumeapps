@@ -1,14 +1,16 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowRight,
+  Award,
   CheckCircle2,
   ClipboardCheck,
   Eye,
   FileText,
   Loader2,
+  Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -20,10 +22,57 @@ import {
   scanHochladen,
   setzeVorgangStatus,
   type PruefErgebnis,
-  type Vorgang,
   type VorgangStatus,
 } from "@/lib/einarbeitungApi";
+import {
+  aktualisiereSchulungVorgang,
+  fetchSchulungVorgaenge,
+  oeffneSchulungPdf,
+  oeffneSchulungScan,
+  oeffneZertifikat,
+  scanSchulungHochladen,
+  setzeSchulungStatus,
+  zertifikatHochladen,
+  zertifikatLoeschen,
+  type SchulungVorgang,
+  type SchulungZertifikat,
+} from "@/lib/schulungVorgangApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
+
+type Typ = "einarbeitung" | "schulung";
+
+/** Vereinheitlichte Zeile — beide Vorgangsarten in einer Liste. */
+interface Zeile {
+  typ: Typ;
+  id: number;
+  mitarbeiter_name: string;
+  status: VorgangStatus;
+  erstellt_am: string;
+  uebergeben_am: string | null;
+  zurueck_am: string | null;
+  geprueft_am: string | null;
+  vollstaendig: boolean | null;
+  kommentar: string | null;
+  hat_scan: boolean;
+  pruef_ergebnis: PruefErgebnis | null;
+  zertifikate: SchulungZertifikat[] | null;
+}
+
+/** Typ-abhängige API — dispatcht Aktionen an den richtigen Endpunkt. */
+const API = {
+  einarbeitung: {
+    pdf: oeffneVorgangPdf,
+    scan: oeffneVorgangScan,
+    status: setzeVorgangStatus,
+    aktualisieren: aktualisiereVorgang,
+  },
+  schulung: {
+    pdf: oeffneSchulungPdf,
+    scan: oeffneSchulungScan,
+    status: setzeSchulungStatus,
+    aktualisieren: aktualisiereSchulungVorgang,
+  },
+} as const;
 
 /** Nächster Lebenszyklus-Schritt (der Laufweg, jetzt im System statt auf Papier). */
 const NAECHSTER: Record<VorgangStatus, VorgangStatus | null> = {
@@ -37,23 +86,64 @@ function datum(wert: string | null): string {
   return wert ? new Date(wert).toLocaleDateString("de-DE") : "—";
 }
 
-/** Einarbeitungs-Vorgänge: Lebenszyklus + Scan-Upload mit Prüfung. */
-export function EinarbeitungVorgaenge() {
+/** Scan hochladen: die Art steckt im QR — erst Einarbeitung, sonst Schulung. */
+async function scanBeide(
+  datei: File,
+): Promise<{ typ: Typ; ergebnis: PruefErgebnis; id: number; name: string; kommentar: string | null }> {
+  try {
+    const r = await scanHochladen(datei);
+    return {
+      typ: "einarbeitung",
+      ergebnis: r.ergebnis,
+      id: r.dokument.id,
+      name: r.dokument.mitarbeiter_name,
+      kommentar: r.dokument.kommentar,
+    };
+  } catch {
+    const r = await scanSchulungHochladen(datei);
+    return {
+      typ: "schulung",
+      ergebnis: r.ergebnis,
+      id: r.dokument.id,
+      name: r.dokument.mitarbeiter_name,
+      kommentar: r.dokument.kommentar,
+    };
+  }
+}
+
+/** Einarbeitungs- und Schulungsvorgänge: eine Liste mit Typ-Spalte. */
+export function Vorgaenge() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const dateiRef = useRef<HTMLInputElement>(null);
-  const [modal, setModal] = useState<{ dokument: Vorgang; ergebnis: PruefErgebnis } | null>(null);
+  const [modal, setModal] = useState<{
+    typ: Typ;
+    id: number;
+    name: string;
+    kommentar: string | null;
+    ergebnis: PruefErgebnis;
+  } | null>(null);
+  const [zertModal, setZertModal] = useState<Zeile | null>(null);
 
-  const { data: vorgaenge, isLoading } = useQuery({
-    queryKey: hrKpiKeys.einarbeitungVorgaenge(),
-    queryFn: fetchVorgaenge,
-  });
+  const ea = useQuery({ queryKey: hrKpiKeys.einarbeitungVorgaenge(), queryFn: fetchVorgaenge });
+  const sch = useQuery({ queryKey: hrKpiKeys.schulungVorgaenge(), queryFn: fetchSchulungVorgaenge });
 
-  const invalidate = () =>
+  const invalidate = () => {
     qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungVorgaenge() });
+    qc.invalidateQueries({ queryKey: hrKpiKeys.schulungVorgaenge() });
+  };
+
+  const zeilen = useMemo<Zeile[]>(() => {
+    const aus: Zeile[] = [];
+    for (const v of ea.data ?? [])
+      aus.push({ ...v, typ: "einarbeitung", zertifikate: null });
+    for (const v of sch.data ?? [])
+      aus.push({ ...v, typ: "schulung", zertifikate: v.zertifikate });
+    return aus.sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am));
+  }, [ea.data, sch.data]);
 
   const upload = useMutation({
-    mutationFn: (datei: File) => scanHochladen(datei),
+    mutationFn: (datei: File) => scanBeide(datei),
     onSuccess: (r) => {
       setModal(r);
       invalidate();
@@ -62,23 +152,25 @@ export function EinarbeitungVorgaenge() {
   });
 
   const status = useMutation({
-    mutationFn: ({ id, ziel }: { id: number; ziel: VorgangStatus }) =>
-      setzeVorgangStatus(id, ziel),
+    mutationFn: ({ typ, id, ziel }: { typ: Typ; id: number; ziel: VorgangStatus }) =>
+      API[typ].status(id, ziel).then(() => {}),
     onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const pdf = useMutation({
-    mutationFn: (id: number) => oeffneVorgangPdf(id),
+    mutationFn: ({ typ, id }: { typ: Typ; id: number }) => API[typ].pdf(id),
     // Download = Übergabe → Zeitstempel wird serverseitig gesetzt, Liste neu laden.
     onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const scanAnsehen = useMutation({
-    mutationFn: (id: number) => oeffneVorgangScan(id),
+    mutationFn: ({ typ, id }: { typ: Typ; id: number }) => API[typ].scan(id),
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const isLoading = ea.isLoading || sch.isLoading;
 
   return (
     <section className="mb-6">
@@ -118,13 +210,14 @@ export function EinarbeitungVorgaenge() {
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           {t("onboarding.vorgang.laden")}
         </div>
-      ) : !vorgaenge?.length ? (
+      ) : !zeilen.length ? (
         <p className="py-4 text-sm text-muted-foreground">{t("onboarding.vorgang.leer")}</p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
+                <th className="px-3 py-2 font-medium">{t("onboarding.vorgang.typ")}</th>
                 <th className="px-3 py-2 font-medium">{t("onboarding.vorgang.mitarbeiter")}</th>
                 <th className="px-3 py-2 font-medium">{t("onboarding.vorgang.status")}</th>
                 <th className="px-3 py-2 font-medium">{t("onboarding.vorgang.erstellt")}</th>
@@ -136,10 +229,13 @@ export function EinarbeitungVorgaenge() {
               </tr>
             </thead>
             <tbody>
-              {vorgaenge.map((v) => {
+              {zeilen.map((v) => {
                 const naechster = NAECHSTER[v.status];
                 return (
-                  <tr key={v.id} className="border-t">
+                  <tr key={`${v.typ}-${v.id}`} className="border-t">
+                    <td className="px-3 py-2">
+                      <TypBadge typ={v.typ} />
+                    </td>
                     <td className="px-3 py-2">{v.mitarbeiter_name}</td>
                     <td className="px-3 py-2">
                       <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
@@ -158,7 +254,7 @@ export function EinarbeitungVorgaenge() {
                         <button
                           type="button"
                           title={t("onboarding.vorgang.pdf")}
-                          onClick={() => pdf.mutate(v.id)}
+                          onClick={() => pdf.mutate({ typ: v.typ, id: v.id })}
                           className="rounded-md border p-1.5 hover:bg-muted"
                         >
                           <FileText className="h-4 w-4" aria-hidden="true" />
@@ -167,7 +263,7 @@ export function EinarbeitungVorgaenge() {
                           <button
                             type="button"
                             title={t("onboarding.vorgang.scanAnsehen")}
-                            onClick={() => scanAnsehen.mutate(v.id)}
+                            onClick={() => scanAnsehen.mutate({ typ: v.typ, id: v.id })}
                             className="rounded-md border p-1.5 hover:bg-muted"
                           >
                             <Eye className="h-4 w-4" aria-hidden="true" />
@@ -179,17 +275,39 @@ export function EinarbeitungVorgaenge() {
                             title={t("onboarding.vorgang.pruefungOeffnen")}
                             onClick={() =>
                               v.pruef_ergebnis &&
-                              setModal({ dokument: v, ergebnis: v.pruef_ergebnis })
+                              setModal({
+                                typ: v.typ,
+                                id: v.id,
+                                name: v.mitarbeiter_name,
+                                kommentar: v.kommentar,
+                                ergebnis: v.pruef_ergebnis,
+                              })
                             }
                             className="rounded-md border p-1.5 hover:bg-muted"
                           >
                             <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
+                        {v.typ === "schulung" && (
+                          <button
+                            type="button"
+                            title={t("onboarding.vorgang.zertifikate")}
+                            onClick={() => setZertModal(v)}
+                            className="relative rounded-md border p-1.5 hover:bg-muted"
+                          >
+                            <Award className="h-4 w-4" aria-hidden="true" />
+                            {!!v.zertifikate?.length && (
+                              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center
+                                               rounded-full bg-primary px-1 text-[10px] text-primary-foreground">
+                                {v.zertifikate.length}
+                              </span>
+                            )}
+                          </button>
+                        )}
                         {naechster && (
                           <button
                             type="button"
-                            onClick={() => status.mutate({ id: v.id, ziel: naechster })}
+                            onClick={() => status.mutate({ typ: v.typ, id: v.id, ziel: naechster })}
                             disabled={status.isPending}
                             className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs
                                        hover:bg-muted disabled:opacity-60"
@@ -209,13 +327,32 @@ export function EinarbeitungVorgaenge() {
       )}
 
       {modal && (
-        <PruefModal
-          daten={modal}
-          onClose={() => setModal(null)}
-          onGespeichert={invalidate}
+        <PruefModal daten={modal} onClose={() => setModal(null)} onGespeichert={invalidate} />
+      )}
+      {zertModal && (
+        <ZertifikatModal
+          vorgang={zertModal}
+          onClose={() => setZertModal(null)}
+          onGeaendert={(neu) => {
+            setZertModal(neu);
+            invalidate();
+          }}
         />
       )}
     </section>
+  );
+}
+
+function TypBadge({ typ }: { typ: Typ }) {
+  const { t } = useTranslation();
+  const stil =
+    typ === "einarbeitung"
+      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+      : "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs ${stil}`}>
+      {t(`onboarding.vorgang.typName.${typ}`)}
+    </span>
   );
 }
 
@@ -243,13 +380,13 @@ function PruefModal({
   onClose,
   onGespeichert,
 }: {
-  daten: { dokument: Vorgang; ergebnis: PruefErgebnis };
+  daten: { typ: Typ; id: number; name: string; kommentar: string | null; ergebnis: PruefErgebnis };
   onClose: () => void;
   onGespeichert: () => void;
 }) {
   const { t } = useTranslation();
-  const { dokument, ergebnis } = daten;
-  const [kommentar, setKommentar] = useState(dokument.kommentar ?? "");
+  const { typ, id, name, ergebnis } = daten;
+  const [kommentar, setKommentar] = useState(daten.kommentar ?? "");
   const [bestaetigt, setBestaetigt] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(ergebnis.felder.filter((f) => f.bestaetigt).map((f) => [f.key, true])),
   );
@@ -260,10 +397,12 @@ function PruefModal({
 
   const speichern = useMutation({
     mutationFn: () =>
-      aktualisiereVorgang(dokument.id, {
-        kommentar,
-        bestaetigte_felder: Object.keys(bestaetigt).filter((k) => bestaetigt[k]),
-      }),
+      API[typ]
+        .aktualisieren(id, {
+          kommentar,
+          bestaetigte_felder: Object.keys(bestaetigt).filter((k) => bestaetigt[k]),
+        })
+        .then(() => {}),
     onSuccess: () => {
       toast.success(t("onboarding.vorgang.gespeichert"));
       onGespeichert();
@@ -273,7 +412,7 @@ function PruefModal({
   });
 
   const scanOeffnen = useMutation({
-    mutationFn: () => oeffneVorgangScan(dokument.id),
+    mutationFn: () => API[typ].scan(id),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -288,7 +427,7 @@ function PruefModal({
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">
-            {t("onboarding.vorgang.pruefTitel", { name: dokument.mitarbeiter_name })}
+            {t("onboarding.vorgang.pruefTitel", { name })}
           </h3>
           <VollstaendigBadge wert={vollstaendig} />
         </div>
@@ -369,6 +508,164 @@ function PruefModal({
           >
             {speichern.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {t("onboarding.vorgang.speichern")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Zertifikate/Nachweise eines Schulungsvorgangs: hochladen, ansehen, löschen. */
+function ZertifikatModal({
+  vorgang,
+  onClose,
+  onGeaendert,
+}: {
+  vorgang: Zeile;
+  onClose: () => void;
+  onGeaendert: (neu: Zeile) => void;
+}) {
+  const { t } = useTranslation();
+  const dateiRef = useRef<HTMLInputElement>(null);
+  const [bezeichnung, setBezeichnung] = useState("");
+  const zertifikate = vorgang.zertifikate ?? [];
+
+  // Vorschläge für die Zuordnung: die Schulungen aus dem Prüf-Ergebnis (Nachweis-Zeilen).
+  const schulungen = useMemo(
+    () =>
+      (vorgang.pruef_ergebnis?.felder ?? [])
+        .filter((f) => f.key.startsWith("nachweis_"))
+        .map((f) => f.label.replace(/^Nachweis vorhanden:\s*/, "")),
+    [vorgang.pruef_ergebnis],
+  );
+
+  const uebernehmen = (neu: SchulungVorgang) =>
+    onGeaendert({ ...vorgang, zertifikate: neu.zertifikate });
+
+  const upload = useMutation({
+    mutationFn: (datei: File) => zertifikatHochladen(vorgang.id, datei, bezeichnung.trim() || undefined),
+    onSuccess: (neu) => {
+      setBezeichnung("");
+      uebernehmen(neu);
+      toast.success(t("onboarding.vorgang.zertHochgeladen"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const loeschen = useMutation({
+    mutationFn: (zertId: number) => zertifikatLoeschen(zertId),
+    onSuccess: (neu) => uebernehmen(neu),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const ansehen = useMutation({
+    mutationFn: (zertId: number) => oeffneZertifikat(zertId),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-background p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-3 text-sm font-semibold">
+          {t("onboarding.vorgang.zertTitel", { name: vorgang.mitarbeiter_name })}
+        </h3>
+
+        {zertifikate.length ? (
+          <ul className="mb-3 divide-y rounded-md border text-sm">
+            {zertifikate.map((z) => (
+              <li key={z.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{z.dateiname}</span>
+                  {z.schulung_bezeichnung && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {z.schulung_bezeichnung}
+                    </span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    title={t("onboarding.vorgang.zertAnsehen")}
+                    onClick={() => ansehen.mutate(z.id)}
+                    className="rounded-md border p-1.5 hover:bg-muted"
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    title={t("onboarding.vorgang.zertLoeschen")}
+                    onClick={() => loeschen.mutate(z.id)}
+                    disabled={loeschen.isPending}
+                    className="rounded-md border p-1.5 text-red-600 hover:bg-muted disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mb-3 py-2 text-sm text-muted-foreground">
+            {t("onboarding.vorgang.zertLeer")}
+          </p>
+        )}
+
+        <label className="mb-2 block">
+          <span className="mb-1 block text-xs font-medium">{t("onboarding.vorgang.zertZuordnung")}</span>
+          <input
+            list="schulungs-liste"
+            value={bezeichnung}
+            onChange={(e) => setBezeichnung(e.target.value)}
+            placeholder={t("onboarding.vorgang.zertZuordnungPlaceholder")}
+            className="w-full rounded-md border bg-background px-2 py-1.5 text-sm
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <datalist id="schulungs-liste">
+            {schulungen.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </label>
+
+        <input
+          ref={dateiRef}
+          type="file"
+          accept="application/pdf,image/*"
+          className="hidden"
+          onChange={(e) => {
+            const datei = e.target.files?.[0];
+            if (datei) upload.mutate(datei);
+            e.target.value = "";
+          }}
+        />
+
+        <div className="flex justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => dateiRef.current?.click()}
+            disabled={upload.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm
+                       text-primary-foreground disabled:opacity-60"
+          >
+            {upload.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Upload className="h-4 w-4" aria-hidden="true" />
+            )}
+            {t("onboarding.vorgang.zertHochladen")}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            {t("onboarding.vorgang.schliessen")}
           </button>
         </div>
       </div>
