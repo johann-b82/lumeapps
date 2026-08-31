@@ -9,6 +9,8 @@ die Entwurfs-Ansicht:
   - POST /                          (Ausgabe anlegen)
   - PUT  /{ausgabe_id}              (Titel/Status ändern, veröffentlichen)
   - DELETE /{ausgabe_id}
+  - POST /{ausgabe_id}/rubrik       (Ausgabe-eigenes Kapitel anlegen)
+  - DELETE /{ausgabe_id}/rubrik/{key} (Kapitel + Einträge entfernen)
   - POST /{ausgabe_id}/eintrag      (Eintrag anlegen)
   - PUT  /eintrag/{eintrag_id}      (Eintrag ändern)
   - DELETE /eintrag/{eintrag_id}
@@ -116,6 +118,11 @@ class AusgabeAnlegen(BaseModel):
     jahr: int
     quartal: int
     titel: str | None = None
+
+
+class RubrikAnlegen(BaseModel):
+    #: Anzeigetitel des neuen (Ausgabe-eigenen) Kapitels.
+    titel: str
 
 
 class AusgabeAendern(BaseModel):
@@ -296,6 +303,42 @@ async def _lies_bild(datei: UploadFile) -> tuple[bytes, str]:
     return daten, mime
 
 
+def _kapitel_keys(n: Newsletter) -> list[str]:
+    """Kapitel dieser Ausgabe in Reihenfolge. ``block_reihenfolge`` ist maßgeblich
+    (Teilmenge der Standard-Sechs = entfernt, plus Ausgabe-eigene Custom-Keys);
+    ``None`` → die Standard-Sechs. ``"kpi"`` ist kein Kapitel (wird an „Intern"
+    gekoppelt)."""
+    liste = list(n.block_reihenfolge) if n.block_reihenfolge is not None else list(NEWSLETTER_RUBRIKEN)
+    return [k for k in liste if k != "kpi"]
+
+
+def _erlaubte_rubriken(n: Newsletter) -> set[str]:
+    """Rubrik-Schlüssel, unter denen Einträge liegen dürfen: die Standard-Sechs
+    plus die Custom-Kapitel dieser Ausgabe."""
+    return set(NEWSLETTER_RUBRIKEN) | set(_kapitel_keys(n))
+
+
+def _bekannte_blocks(n: Newsletter) -> set[str]:
+    """Alle für ``block_reihenfolge``/``rubrik_titel`` zulässigen Schlüssel."""
+    return (
+        set(NEWSLETTER_RUBRIKEN)
+        | {"kpi"}
+        | set(n.block_reihenfolge or [])
+        | set((n.rubrik_titel or {}).keys())
+    )
+
+
+def _neuer_rubrik_key(titel: str, belegt: set[str]) -> str:
+    """Kurzer, in dieser Ausgabe eindeutiger Schlüssel aus dem Titel (≤ 20 Zeichen,
+    passend zur ``rubrik``-Spalte)."""
+    basis = "".join(c for c in titel.lower() if c.isalnum())[:14] or "kapitel"
+    kandidat, i = basis, 2
+    while kandidat in belegt:
+        kandidat = f"{basis}{i}"
+        i += 1
+    return kandidat[:20]
+
+
 # --------------------------------------------------------------------------
 # Viewer: veröffentlichte Ausgaben lesen
 # --------------------------------------------------------------------------
@@ -428,12 +471,12 @@ async def aendern(
             raise HTTPException(status_code=400, detail="Unbekannter Status.")
         n.status = eingabe.status
     if eingabe.block_reihenfolge is not None:
-        erlaubt = set(NEWSLETTER_RUBRIKEN) | {"kpi"}
+        erlaubt = _bekannte_blocks(n)
         if any(b not in erlaubt for b in eingabe.block_reihenfolge):
             raise HTTPException(status_code=400, detail="Unbekannter Block in der Reihenfolge.")
         n.block_reihenfolge = list(eingabe.block_reihenfolge)
     if eingabe.rubrik_titel is not None:
-        erlaubt = set(NEWSLETTER_RUBRIKEN) | {"kpi"}
+        erlaubt = _bekannte_blocks(n)
         if any(k not in erlaubt for k in eingabe.rubrik_titel):
             raise HTTPException(status_code=400, detail="Unbekannter Block-Titel.")
         # Nur nicht-leere Titel als Override behalten; alles leer → kein Override.
@@ -453,14 +496,66 @@ async def entfernen(ausgabe_id: int, db: AsyncSession = Depends(get_async_db_ses
 
 
 @router.post(
+    "/{ausgabe_id}/rubrik", response_model=AusgabeDetail, status_code=201,
+    dependencies=[Depends(require_admin)],
+)
+async def rubrik_anlegen(
+    ausgabe_id: int, eingabe: RubrikAnlegen, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    """Ein neues, Ausgabe-eigenes Kapitel anlegen (an das Ende der Reihenfolge)."""
+    n = await _hole_ausgabe(db, ausgabe_id)
+    titel = (eingabe.titel or "").strip()
+    if not titel:
+        raise HTTPException(status_code=400, detail="Kapitel-Titel ist Pflicht.")
+    aktuell = _kapitel_keys(n)
+    key = _neuer_rubrik_key(titel, _bekannte_blocks(n) | set(aktuell))
+    n.block_reihenfolge = aktuell + [key]
+    titel_map = dict(n.rubrik_titel or {})
+    titel_map[key] = titel
+    n.rubrik_titel = titel_map
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    n = await _hole_ausgabe(db, ausgabe_id)
+    return _detail(n, await _neue_mitarbeiter(db, n.jahr, n.quartal))
+
+
+@router.delete(
+    "/{ausgabe_id}/rubrik/{key}", response_model=AusgabeDetail,
+    dependencies=[Depends(require_admin)],
+)
+async def rubrik_loeschen(
+    ausgabe_id: int, key: str, db: AsyncSession = Depends(get_async_db_session)
+) -> AusgabeDetail:
+    """Ein Kapitel aus dieser Ausgabe entfernen — samt seiner Einträge. Erlaubt für
+    Standard- wie Custom-Kapitel; der KPI-Block wird über „Intern" gesteuert."""
+    n = await _hole_ausgabe(db, ausgabe_id)
+    if key == "kpi":
+        raise HTTPException(status_code=400, detail="Der KPI-Block wird über Intern gesteuert.")
+    aktuell = _kapitel_keys(n)
+    if key not in aktuell:
+        raise HTTPException(status_code=404, detail="Kapitel nicht in dieser Ausgabe.")
+    n.block_reihenfolge = [k for k in aktuell if k != key]
+    if n.rubrik_titel and key in n.rubrik_titel:
+        rest = {k: v for k, v in n.rubrik_titel.items() if k != key}
+        n.rubrik_titel = rest or None
+    for e in list(n.eintraege):
+        if e.rubrik == key:
+            await db.delete(e)
+    n.aktualisiert_am = _jetzt()
+    await db.commit()
+    n = await _hole_ausgabe(db, ausgabe_id)
+    return _detail(n, await _neue_mitarbeiter(db, n.jahr, n.quartal))
+
+
+@router.post(
     "/{ausgabe_id}/eintrag", response_model=EintragRead, status_code=201,
     dependencies=[Depends(require_admin)],
 )
 async def eintrag_anlegen(
     ausgabe_id: int, eingabe: EintragAnlegen, db: AsyncSession = Depends(get_async_db_session)
 ) -> EintragRead:
-    await _hole_ausgabe(db, ausgabe_id)
-    if eingabe.rubrik not in NEWSLETTER_RUBRIKEN:
+    n = await _hole_ausgabe(db, ausgabe_id)
+    if eingabe.rubrik not in _erlaubte_rubriken(n):
         raise HTTPException(status_code=400, detail="Unbekannte Rubrik.")
     if not eingabe.untertitel.strip():
         raise HTTPException(status_code=400, detail="Untertitel ist Pflicht.")
@@ -493,7 +588,8 @@ async def eintrag_aendern(
 ) -> EintragRead:
     e = await _hole_eintrag(db, eintrag_id)
     if eingabe.rubrik is not None:
-        if eingabe.rubrik not in NEWSLETTER_RUBRIKEN:
+        n = await _hole_newsletter(db, e.newsletter_id)
+        if eingabe.rubrik not in _erlaubte_rubriken(n):
             raise HTTPException(status_code=400, detail="Unbekannte Rubrik.")
         e.rubrik = eingabe.rubrik
     if eingabe.untertitel is not None:

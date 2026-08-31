@@ -18,6 +18,16 @@ export const NEWSLETTER_RUBRIKEN = [
 ] as const;
 export type Rubrik = (typeof NEWSLETTER_RUBRIKEN)[number];
 
+/** Die Kapitel-Schlüssel einer Ausgabe in Reihenfolge. `block_reihenfolge` ist
+ *  maßgeblich (Teilmenge der Standard-Sechs = entfernt, plus Custom-Kapitel);
+ *  `null` → die Standard-Sechs. „kpi" ist kein Kapitel (an „Intern" gekoppelt). */
+export function kapitelKeys(ausgabe: {
+  block_reihenfolge?: string[] | null;
+}): string[] {
+  const liste = ausgabe.block_reihenfolge ?? [...NEWSLETTER_RUBRIKEN];
+  return liste.filter((k) => k !== "kpi");
+}
+
 export interface AusgabeListItem {
   id: number;
   jahr: number;
@@ -36,7 +46,8 @@ export interface EintragBild {
 
 export interface Eintrag {
   id: number;
-  rubrik: Rubrik;
+  /** Standard-Rubrik oder ein Ausgabe-eigener Kapitel-Schlüssel. */
+  rubrik: string;
   untertitel: string;
   inhalt_md: string;
   reihenfolge: number;
@@ -140,12 +151,26 @@ export function deleteAusgabe(id: number): Promise<void> {
 }
 export function addEintrag(
   ausgabeId: number,
-  eingabe: { rubrik: Rubrik; untertitel: string; inhalt_md?: string },
+  eingabe: { rubrik: string; untertitel: string; inhalt_md?: string },
 ): Promise<Eintrag> {
   return apiClient<Eintrag>(`${BASE}/${ausgabeId}/eintrag`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(eingabe),
+  });
+}
+/** Ein neues, Ausgabe-eigenes Kapitel anlegen (ans Ende der Reihenfolge). */
+export function rubrikAnlegen(ausgabeId: number, titel: string): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/rubrik`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ titel }),
+  });
+}
+/** Ein Kapitel aus dieser Ausgabe entfernen — samt seiner Einträge. */
+export function rubrikLoeschen(ausgabeId: number, key: string): Promise<AusgabeDetail> {
+  return apiClient<AusgabeDetail>(`${BASE}/${ausgabeId}/rubrik/${encodeURIComponent(key)}`, {
+    method: "DELETE",
   });
 }
 export function updateEintrag(

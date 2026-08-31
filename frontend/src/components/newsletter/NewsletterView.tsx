@@ -17,7 +17,6 @@ import {
   type Eintrag,
   type EintragBild,
   type NeuerMitarbeiter,
-  type Rubrik,
 } from "@/lib/newsletterApi";
 import { packePuzzle } from "@/lib/puzzle";
 
@@ -26,7 +25,8 @@ export type NewsletterBlock =
   | { art: "kpi"; data: BelegschaftKpi }
   | {
       art: "rubrik";
-      rubrik: Rubrik;
+      /** Standard-Rubrik oder ein Ausgabe-eigener Kapitel-Schlüssel. */
+      rubrik: string;
       eintraege: Eintrag[];
       /** Nur „Menschen": Neuzugänge aus Personio (vor den Einträgen gezeigt). */
       neueMitarbeiter?: NeuerMitarbeiter[];
@@ -37,9 +37,10 @@ export type NewsletterBlock =
  *  Kapitel „Intern" und werden als eigene Seite VOR den Intern-Einträgen
  *  eingefügt (ein evtl. altes "kpi" in block_reihenfolge wird ignoriert). */
 export function ordereBloecke(a: AusgabeDetail): NewsletterBlock[] {
-  const istRubrik = (k: string): k is Rubrik => (NEWSLETTER_RUBRIKEN as readonly string[]).includes(k);
-  const reihenfolge = (a.block_reihenfolge ?? []).filter(istRubrik);
-  for (const k of NEWSLETTER_RUBRIKEN) if (!reihenfolge.includes(k)) reihenfolge.push(k);
+  // block_reihenfolge ist maßgeblich: Teilmenge der Standard-Sechs = entfernt,
+  // Custom-Keys erlaubt; null → die Standard-Sechs. „kpi" ist kein Kapitel
+  // (wird als eigene Seite VOR „Intern" injiziert).
+  const reihenfolge = (a.block_reihenfolge ?? [...NEWSLETTER_RUBRIKEN]).filter((k) => k !== "kpi");
 
   const bloecke: NewsletterBlock[] = [];
   for (const k of reihenfolge) {
@@ -238,7 +239,12 @@ export function blockTitelText(
   t: TFunction,
 ): string {
   const eigen = rubrikTitel?.[blockKey(block)]?.trim();
-  return eigen || (block.art === "kpi" ? t("newsletter.kpiTitel") : t(`newsletter.rubrik.${block.rubrik}`));
+  if (eigen) return eigen;
+  if (block.art === "kpi") return t("newsletter.kpiTitel");
+  // Custom-Kapitel haben keinen i18n-Standardtitel → Schlüssel als Fallback.
+  return (NEWSLETTER_RUBRIKEN as readonly string[]).includes(block.rubrik)
+    ? t(`newsletter.rubrik.${block.rubrik}`)
+    : block.rubrik;
 }
 
 /** Reiner Block-Inhalt (KPI-Charts bzw. Einträge) — den Titel liefert der
@@ -471,7 +477,12 @@ export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
   const toc: { titel: string; seite: number }[] = [];
   for (const b of bloecke) {
     const titel = blockTitelText(b, ausgabe.rubrik_titel, t);
-    const kategorie = b.art === "kpi" ? t("newsletter.rubrik.intern") : t(`newsletter.rubrik.${b.rubrik}`);
+    const kategorie =
+      b.art === "kpi"
+        ? t("newsletter.rubrik.intern")
+        : (NEWSLETTER_RUBRIKEN as readonly string[]).includes(b.rubrik)
+          ? t(`newsletter.rubrik.${b.rubrik}`)
+          : titel;
     const edge = kategorie.toUpperCase();
     // Der Titel steht im Seitenrahmen der Inhaltsseite (keine eigene Trennseite).
 
