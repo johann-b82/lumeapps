@@ -272,3 +272,182 @@ def dateiname(name: str, stand: date) -> str:
     """Namensschema der Vorlage: 2026.03.03_Marcel_Brose_Schulungsübersicht."""
     teil = "_".join(name.split()) or "Unbekannt"
     return f"{stand:%Y.%m.%d}_{teil}_Schulungsuebersicht"
+
+
+# ---------------------------------------------------------------------------
+# Vorgangs-Variante (v1.108): dasselbe Formblatt 71 mit QR-Code + Feld-Layout,
+# damit ein ausgefüllter Scan über den QR zugeordnet und halbautomatisch geprüft
+# werden kann (Prüfung teilt sich app.services.einarbeitung_pruefung). Ohne QR
+# bleibt die klassische Schulungsübersicht (oben) unverändert.
+# ---------------------------------------------------------------------------
+
+#: Schmalere Spalten als die klassische Übersicht, damit A1:G bei 100 % (ohne
+#: Druckskalierung) auf A4 passt → exakte Zeilenhöhen für das Feld-Layout.
+_VG_SPALTEN = (11, 15, 42, 5, 5, 5, 6)  # A-G, Summe 89 (passt auf A4-Breite)
+_A4_W_PT, _A4_H_PT = 595.276, 841.890
+_RAND_L_PX, _RAND_T_PT = 48.0, 36.0  # 0,5" links / oben
+_PX_PRO_BREITE, _PX_PAD, _PT_PRO_PX = 7.0, 5.0, 0.75
+_VG_QR_PX = 46
+_VG_QR_ANKER, _VG_QR_COL, _VG_QR_ROW = "F1", 6, 1
+
+
+def _vg_x_norm(col: int) -> float:
+    px = _RAND_L_PX
+    for k in range(1, col):
+        px += _VG_SPALTEN[k - 1] * _PX_PRO_BREITE + _PX_PAD
+    return (px * _PT_PRO_PX) / _A4_W_PT
+
+
+def _vg_y_norm(ws, row: int) -> float:
+    pt = _RAND_T_PT
+    for i in range(1, row):
+        h = ws.row_dimensions[i].height
+        pt += h if h is not None else 15.0
+    return pt / _A4_H_PT
+
+
+def _vg_norm_box(ws, row: int, c1: int, c2: int, rows: int = 1) -> list[float]:
+    return [
+        round(_vg_x_norm(c1), 5),
+        round(_vg_y_norm(ws, row), 5),
+        round(_vg_x_norm(c2 + 1), 5),
+        round(_vg_y_norm(ws, row + rows), 5),
+    ]
+
+
+def _vg_qr_png(doc_uid: str) -> bytes:
+    import qrcode
+
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_Q, box_size=8, border=2
+    )
+    qr.add_data(doc_uid)
+    qr.make(fit=True)
+    puffer = BytesIO()
+    qr.make_image(fill_color="black", back_color="white").convert("RGB").save(puffer, "PNG")
+    return puffer.getvalue()
+
+
+def _vg_qr_einsetzen(ws, doc_uid: str) -> None:
+    from openpyxl.drawing.image import Image as XLImage
+
+    img = XLImage(BytesIO(_vg_qr_png(doc_uid)))
+    img.width = img.height = _VG_QR_PX
+    ws.add_image(img, _VG_QR_ANKER)
+
+
+def _vg_qr_box(ws) -> list[float]:
+    x0, y0 = _vg_x_norm(_VG_QR_COL), _vg_y_norm(ws, _VG_QR_ROW)
+    return [
+        round(x0, 5),
+        round(y0, 5),
+        round(x0 + (_VG_QR_PX * _PT_PRO_PX) / _A4_W_PT, 5),
+        round(y0 + (_VG_QR_PX * _PT_PRO_PX) / _A4_H_PT, 5),
+    ]
+
+
+_VG_MARKE_PX = 16
+
+
+def _vg_marke_einsetzen(ws, anker: str) -> None:
+    from PIL import Image as PILImage
+    from openpyxl.drawing.image import Image as XLImage
+
+    puffer = BytesIO()
+    PILImage.new("RGB", (40, 40), (0, 0, 0)).save(puffer, "PNG")
+    img = XLImage(puffer)
+    img.width = img.height = _VG_MARKE_PX
+    ws.add_image(img, anker)
+
+
+def _vg_marke_box(ws, col: int, row: int) -> list[float]:
+    x0, y0 = _vg_x_norm(col), _vg_y_norm(ws, row)
+    return [
+        round(x0, 5),
+        round(y0, 5),
+        round(x0 + (_VG_MARKE_PX * _PT_PRO_PX) / _A4_W_PT, 5),
+        round(y0 + (_VG_MARKE_PX * _PT_PRO_PX) / _A4_H_PT, 5),
+    ]
+
+
+def fuelle_vorgang_blatt(
+    ws,
+    name: str,
+    funktion: str,
+    zeilen: list[UebersichtZeile],
+    doc_uid: str,
+    freigegeben_von: str = "",
+    erstellt_von: str = "",
+    logo: LogoBild | None = None,
+) -> dict:
+    """Formblatt 71 als Vorgang (mit QR + Feld-Layout). Gibt das Layout zurück."""
+    ws.title = "Schulungsübersicht"
+    for spalte, breite in zip("ABCDEFG", _VG_SPALTEN):
+        ws.column_dimensions[spalte].width = breite
+
+    r = _kopf(ws, name, funktion, logo)
+    kopfzeile = r
+    r = _tabellenkopf(ws, r)
+
+    felder: list[dict] = []
+    for i, z in enumerate(zeilen, start=1):
+        _zeile_schreiben(ws, r, i, z)
+        kurz = (z.bezeichnung or "").strip()[:32]
+        # Pflichtfelder je Schulungszeile: „durchgeführt am" (Spalte B) und das
+        # Nachweis-Kreuz ja/nein (Spalten F–G).
+        felder.append({"key": f"durchgefuehrt_{i - 1}", "label": f"Durchgeführt am: {kurz}",
+                       "box": _vg_norm_box(ws, r, 2, 2)})
+        felder.append({"key": f"nachweis_{i - 1}", "label": f"Nachweis vorhanden: {kurz}",
+                       "box": _vg_norm_box(ws, r, SP_JA, SP_NEIN)})
+        r += 1
+    _fuss(ws, freigegeben_von, erstellt_von)
+
+    _vg_qr_einsetzen(ws, doc_uid)
+
+    # Zwei Passermarken im leeren Bereich unter der Tabelle (unten links/rechts);
+    # zusammen mit dem QR oben rechts drei über die Seite verteilte Referenzpunkte.
+    marken_zeile = r + 3
+    for rr in range(r, marken_zeile + 1):
+        if ws.row_dimensions[rr].height is None:
+            ws.row_dimensions[rr].height = 15
+    _vg_marke_einsetzen(ws, f"A{marken_zeile}")
+    _vg_marke_einsetzen(ws, f"G{marken_zeile}")
+    marken = [_vg_marke_box(ws, 1, marken_zeile), _vg_marke_box(ws, 7, marken_zeile)]
+
+    ws.print_area = f"A1:G{marken_zeile}"
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.scale = 100  # keine Skalierung → exakte Zeilenhöhen
+    from openpyxl.worksheet.properties import PageSetupProperties
+
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=False)
+    ws.page_margins = PageMargins(
+        left=0.5, right=0.4, top=0.5, bottom=0.6, header=0.3, footer=0.3
+    )
+    ws.print_title_rows = f"{kopfzeile}:{kopfzeile + 1}"
+
+    return {
+        "seite": {"w_pt": _A4_W_PT, "h_pt": _A4_H_PT},
+        "qr": {"doc_uid": doc_uid, "box": _vg_qr_box(ws)},
+        "marken": marken,
+        "felder": felder,
+    }
+
+
+async def erzeuge_schulung_vorgang_pdf(
+    name: str,
+    funktion: str,
+    zeilen: list[UebersichtZeile],
+    doc_uid: str,
+    freigegeben_von: str = "",
+    erstellt_von: str = "",
+    logo: LogoBild | None = None,
+) -> tuple[bytes, dict]:
+    """PDF mit QR + seitenrelativem Feld-Layout für den Schulungsvorgang."""
+    wb = Workbook()
+    layout = fuelle_vorgang_blatt(
+        wb.active, name, funktion, zeilen, doc_uid, freigegeben_von, erstellt_von, logo
+    )
+    puffer = BytesIO()
+    wb.save(puffer)
+    return await convert_xlsx_to_pdf(puffer.getvalue()), layout
