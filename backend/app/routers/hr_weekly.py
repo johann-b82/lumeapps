@@ -131,12 +131,16 @@ class WeeklyReport(BaseModel):
 
 
 async def _entschuldigte_stunden(
-    db: AsyncSession, montag: date, sonntag: date
+    db: AsyncSession, montag: date, sonntag: date, soll: dict[int, dict[int, float]]
 ) -> dict[tuple[int, date], float]:
     """Entschuldigte Soll-Stunden je (Mitarbeiter, Tag) aus **allen** Abwesenheiten
-    (Urlaub, Krank, Freizeitausgleich …), die in die Woche fallen — anteilig über
-    die Abwesenheits-Spanne verteilt (wie bei der Krank-Kachel). So kürzt ein
-    Urlaubstag das Wochen-Soll, statt als Fehlstunde zu zählen."""
+    (Urlaub, Krank, Freizeitausgleich …), die in die Woche fallen.
+
+    Die Abwesenheits-Stunden werden über die **Soll-Tage** der Spanne verteilt
+    (proportional zum Tagessoll), nicht über Kalendertage. Da Personio ``hours``
+    = Summe der Tagessolls über die Abwesenheitstage liefert, entschuldigt ein
+    voller Urlaub jeden betroffenen Soll-Tag vollständig (Wochenende/Folgewoche
+    verwässern das nicht); halbe Tage werden anteilig entschuldigt."""
     rows = (
         await db.execute(
             select(
@@ -154,13 +158,26 @@ async def _entschuldigte_stunden(
     for a in rows:
         if a.hours is None or not a.start_date or not a.end_date:
             continue
-        spanne = (a.end_date - a.start_date).days + 1
-        pro_tag = float(a.hours) / spanne if spanne > 0 else float(a.hours)
-        d = max(a.start_date, montag)
-        ende = min(a.end_date, sonntag)
-        while d <= ende:
-            frei[(a.employee_id, d)] = frei.get((a.employee_id, d), 0.0) + pro_tag
+        smap = soll.get(a.employee_id)
+        if not smap:
+            continue
+        # Soll-Tage der GANZEN Abwesenheits-Spanne (auch außerhalb der Woche) —
+        # die Stunden werden proportional zum Tagessoll darauf verteilt.
+        soll_tage: list[tuple[date, float]] = []
+        d = a.start_date
+        while d <= a.end_date:
+            s = smap.get(d.weekday(), 0.0)
+            if s > 0:
+                soll_tage.append((d, s))
             d += timedelta(days=1)
+        summe = sum(s for _, s in soll_tage)
+        if summe <= 0:
+            continue
+        for d, s in soll_tage:
+            if montag <= d <= sonntag:
+                frei[(a.employee_id, d)] = (
+                    frei.get((a.employee_id, d), 0.0) + float(a.hours) * s / summe
+                )
     return frei
 
 
@@ -222,7 +239,7 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
         if wtag > 0:
             worked[eid] = worked.get(eid, 0.0) + wtag
 
-    entschuldigt = await _entschuldigte_stunden(db, montag, sonntag)
+    entschuldigt = await _entschuldigte_stunden(db, montag, sonntag, soll)
     woche = [montag + timedelta(days=i) for i in range(7)]
 
     ist: dict[int, float] = {}
