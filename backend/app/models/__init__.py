@@ -85,8 +85,10 @@ from app.models.schulung import (  # noqa: F401
     OnboardingDokument,
     OnboardingExtern,
     OnboardingPaketDownload,
+    SchulungDokument,
     SchulungTeilnahme,
     SchulungUnterlage,
+    SchulungZertifikat,
 )
 from app.models.kompetenz import (  # noqa: F401
     KompetenzBewertung,
@@ -161,6 +163,7 @@ __all__ = [
     # Schulungen
     "SchulungKatalog", "SchulungImport", "SchulungTeilnahme", "SchulungPflicht", "SchulungRolle",
     "SchulungUnterlage",
+    "SchulungDokument", "SchulungZertifikat",
     "OnboardingAbteilung", "OnboardingDokument", "OnboardingExtern", "OnboardingPaketDownload",
     "KompetenzMatrix", "KompetenzQualifikation", "KompetenzPerson", "KompetenzBewertung",
     "KompetenzKategorie",

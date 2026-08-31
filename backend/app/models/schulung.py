@@ -21,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -280,6 +281,62 @@ class SchulungUnterlage(Base):
     directus_file_uuid: Mapped[str] = mapped_column(String(64), nullable=False)
     dateiname: Mapped[str] = mapped_column(Text, nullable=False)
     mime: Mapped[str | None] = mapped_column(String(127), nullable=True)
+    hochgeladen_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SchulungDokument(Base):
+    """Ein Schulungsvorgang: Formblatt 71 mit QR, Lebenszyklus, Scan-Prüfung.
+
+    Analog zu ``EinarbeitungDokument`` — gleiche Mechanik (persistiertes Formular,
+    QR-``doc_uid`` zur Scan-Zuordnung, vier Zeitstempel als Laufweg, halbautomatische
+    Prüfung des ausgefüllten Protokolls). Zusätzlich hängen Zertifikate/Nachweise
+    (``SchulungZertifikat``) am Vorgang. Prüfung/Ablage teilen sich die gemeinsamen
+    Services (einarbeitung_pruefung, directus_files).
+    """
+
+    __tablename__ = "schulung_dokument"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    doc_uid: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
+
+    employee_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("personio_employees.id", ondelete="SET NULL"), nullable=True
+    )
+    mitarbeiter_name: Mapped[str] = mapped_column(Text, nullable=False)
+    funktion: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    pdf_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scan_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    feld_layout: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="erstellt")
+    erstellt_am: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    uebergeben_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    zurueck_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    geprueft_am: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    pruef_ergebnis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    vollstaendig: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    kommentar: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SchulungZertifikat(Base):
+    """Ein hochgeladenes Zertifikat/Schulungsnachweis, einer Schulungszeile zugeordnet."""
+
+    __tablename__ = "schulung_zertifikat"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dokument_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("schulung_dokument.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: Bezug zur Schulungszeile (Bezeichnung), damit das Zertifikat zugeordnet ist.
+    schulung_bezeichnung: Mapped[str | None] = mapped_column(Text, nullable=True)
+    datei_uuid: Mapped[str] = mapped_column(String(64), nullable=False)
+    dateiname: Mapped[str] = mapped_column(Text, nullable=False)
     hochgeladen_am: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
