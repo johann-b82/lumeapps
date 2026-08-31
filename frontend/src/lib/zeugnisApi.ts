@@ -87,6 +87,11 @@ export interface Aussteller {
   unterzeichner1_titel: string | null;
   unterzeichner2_name: string | null;
   unterzeichner2_titel: string | null;
+  /** HR-Manager (2. Unterschrift) als Personio-Employee-ID; Name/Titel live aus Personio. */
+  hr_employee_id: number | null;
+  /** Vom Server aufgelöster HR-Name (read-only). */
+  hr_name?: string | null;
+  hr_titel?: string | null;
 }
 
 const BASE = "/api/hr/zeugnisse";

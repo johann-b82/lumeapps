@@ -110,11 +110,10 @@ def _unterschriften(
     doc: Document,
     supervisor_name: str | None,
     supervisor_titel: str | None,
-    aussteller: ZeugnisAussteller | None,
+    hr_name: str | None,
+    hr_titel: str | None,
 ) -> None:
-    """Zwei Unterschriften nebeneinander: Supervisor (Personio) + HR (Aussteller)."""
-    hr_name = aussteller.unterzeichner2_name if aussteller else None
-    hr_titel = aussteller.unterzeichner2_titel if aussteller else None
+    """Zwei Unterschriften nebeneinander: Supervisor + HR-Manager (beide aus Personio)."""
     if not supervisor_name and not hr_name:
         return
     doc.add_paragraph()
@@ -140,6 +139,8 @@ def build_zeugnis_docx(
     *,
     supervisor_name: str | None = None,
     supervisor_titel: str | None = None,
+    hr_name: str | None = None,
+    hr_titel: str | None = None,
 ) -> bytes:
     """Baut das Zeugnis als .docx (ACM-Endzeugnis-Vorlage) und gibt die Bytes zurück."""
     doc = Document()
@@ -196,7 +197,7 @@ def build_zeugnis_docx(
         doc.add_paragraph(aussteller.firma).runs[0].bold = True
 
     # --- Unterschriften ---
-    _unterschriften(doc, supervisor_name, supervisor_titel, aussteller)
+    _unterschriften(doc, supervisor_name, supervisor_titel, hr_name, hr_titel)
 
     buf = BytesIO()
     doc.save(buf)

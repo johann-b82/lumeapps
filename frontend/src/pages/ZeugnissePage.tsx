@@ -189,6 +189,7 @@ function AusstellerCard() {
     unterzeichner1_titel: "",
     unterzeichner2_name: "",
     unterzeichner2_titel: "",
+    hr_employee_id: null,
   });
   useEffect(() => {
     if (data) setForm({ ...data });
@@ -250,33 +251,28 @@ function AusstellerCard() {
             </label>
             <select
               className={`${feld} mt-1 w-full`}
-              value={
-                (personen ?? []).find((p) => p.name === form.unterzeichner2_name)
-                  ?.employee_id ?? ""
-              }
-              onChange={(e) => {
-                const p = (personen ?? []).find(
-                  (x) => String(x.employee_id) === e.target.value,
-                );
+              value={form.hr_employee_id ?? ""}
+              onChange={(e) =>
                 setForm({
                   ...form,
-                  unterzeichner2_name: p ? p.name : "",
-                  unterzeichner2_titel: p ? p.position ?? "" : "",
-                });
-              }}
+                  hr_employee_id: e.target.value ? Number(e.target.value) : null,
+                })
+              }
             >
               <option value="">{t("zeugnisse.personWaehlen")}</option>
-              {(personen ?? []).map((p: Person) => (
-                <option key={p.employee_id} value={p.employee_id}>
-                  {p.name}
-                  {p.position ? ` – ${p.position}` : ""}
-                </option>
-              ))}
+              {(personen ?? [])
+                .filter((p) => p.employee_id > 0)
+                .map((p: Person) => (
+                  <option key={p.employee_id} value={p.employee_id}>
+                    {p.name}
+                    {p.position ? ` – ${p.position}` : ""}
+                  </option>
+                ))}
             </select>
-            {form.unterzeichner2_name && (
+            {form.hr_name && (
               <p className="mt-1 text-[0.7rem] text-muted-foreground">
-                {form.unterzeichner2_name}
-                {form.unterzeichner2_titel ? ` – ${form.unterzeichner2_titel}` : ""}
+                {form.hr_name}
+                {form.hr_titel ? ` – ${form.hr_titel}` : ""}
               </p>
             )}
           </div>

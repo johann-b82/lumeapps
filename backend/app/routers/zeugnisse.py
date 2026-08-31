@@ -135,6 +135,11 @@ class AusstellerRead(BaseModel):
     unterzeichner1_titel: str | None
     unterzeichner2_name: str | None
     unterzeichner2_titel: str | None
+    #: HR-Manager (2. Unterschrift) als Personio-Employee-ID; Anzeige-Name/​Titel
+    #: kommen live aus Personio.
+    hr_employee_id: int | None = None
+    hr_name: str | None = None
+    hr_titel: str | None = None
 
 
 class AusstellerUpdate(BaseModel):
@@ -144,6 +149,7 @@ class AusstellerUpdate(BaseModel):
     unterzeichner1_titel: str | None = None
     unterzeichner2_name: str | None = None
     unterzeichner2_titel: str | None = None
+    hr_employee_id: int | None = None
 
 
 class VorlageRead(BaseModel):
@@ -318,6 +324,53 @@ async def _supervisor(
     return (name, titel)
 
 
+def _personio_geburtstag(mitarbeiter: PersonioEmployee | None) -> date | None:
+    """Geburtsdatum aus Personio (dynamisches Feld mit Label „Geburtsdatum")."""
+    attrs = _pfad(mitarbeiter.raw_json if mitarbeiter else None, "attributes")
+    if not isinstance(attrs, dict):
+        return None
+    for feld in attrs.values():
+        if (
+            isinstance(feld, dict)
+            and feld.get("type") == "date"
+            and (feld.get("label") or "").strip().lower() == "geburtsdatum"
+            and feld.get("value")
+        ):
+            try:
+                return date.fromisoformat(str(feld["value"])[:10])
+            except ValueError:
+                return None
+    return None
+
+
+def _personio_geschlecht(mitarbeiter: PersonioEmployee | None) -> str | None:
+    """Personio-``gender`` → 'm' | 'w' | 'd' (unbekannt → None)."""
+    wert = (_pfad(mitarbeiter.raw_json if mitarbeiter else None, "attributes", "gender", "value") or "")
+    return {"male": "m", "female": "w", "diverse": "d"}.get(str(wert).strip().lower())
+
+
+async def _hr_manager(
+    db: AsyncSession, aussteller: ZeugnisAussteller | None
+) -> tuple[str | None, str | None]:
+    """HR-Manager (2. Unterschrift): live aus Personio über ``hr_employee_id``.
+
+    Wie beim Vorgesetzten kommen Name + Position aus Personio. Ist keine
+    HR-Person gewählt, greifen die Freitextfelder ``unterzeichner2``.
+    """
+    fallback = (
+        (aussteller.unterzeichner2_name, aussteller.unterzeichner2_titel)
+        if aussteller
+        else (None, None)
+    )
+    if not aussteller or not aussteller.hr_employee_id:
+        return fallback
+    hr = await db.get(PersonioEmployee, aussteller.hr_employee_id)
+    if hr is None:
+        return fallback
+    name = f"{hr.first_name or ''} {hr.last_name or ''}".strip()
+    return (name or fallback[0], hr.position or fallback[1])
+
+
 # --------------------------------------------------------------------------
 # Personen (Personio + Externe)
 # --------------------------------------------------------------------------
@@ -371,11 +424,9 @@ async def personen(db: AsyncSession = Depends(get_async_db_session)) -> list[Per
 # --------------------------------------------------------------------------
 
 
-@router.get("/aussteller", response_model=AusstellerRead | None)
-async def aussteller_lesen(db: AsyncSession = Depends(get_async_db_session)):
-    a = await _aussteller(db)
-    if a is None:
-        return None
+async def _aussteller_read(db: AsyncSession, a: ZeugnisAussteller) -> AusstellerRead:
+    """AusstellerRead inkl. live aus Personio aufgelöstem HR-Manager (Name/Titel)."""
+    hr_name, hr_titel = await _hr_manager(db, a)
     return AusstellerRead(
         firma=a.firma,
         standort=a.standort,
@@ -383,7 +434,16 @@ async def aussteller_lesen(db: AsyncSession = Depends(get_async_db_session)):
         unterzeichner1_titel=a.unterzeichner1_titel,
         unterzeichner2_name=a.unterzeichner2_name,
         unterzeichner2_titel=a.unterzeichner2_titel,
+        hr_employee_id=a.hr_employee_id,
+        hr_name=hr_name,
+        hr_titel=hr_titel,
     )
+
+
+@router.get("/aussteller", response_model=AusstellerRead | None)
+async def aussteller_lesen(db: AsyncSession = Depends(get_async_db_session)):
+    a = await _aussteller(db)
+    return await _aussteller_read(db, a) if a is not None else None
 
 
 @router.put("/aussteller", response_model=AusstellerRead)
@@ -400,17 +460,11 @@ async def aussteller_speichern(
     a.unterzeichner1_titel = (eingabe.unterzeichner1_titel or "").strip() or None
     a.unterzeichner2_name = (eingabe.unterzeichner2_name or "").strip() or None
     a.unterzeichner2_titel = (eingabe.unterzeichner2_titel or "").strip() or None
+    a.hr_employee_id = eingabe.hr_employee_id
     a.aktualisiert_am = _jetzt()
     await db.commit()
     await db.refresh(a)
-    return AusstellerRead(
-        firma=a.firma,
-        standort=a.standort,
-        unterzeichner1_name=a.unterzeichner1_name,
-        unterzeichner1_titel=a.unterzeichner1_titel,
-        unterzeichner2_name=a.unterzeichner2_name,
-        unterzeichner2_titel=a.unterzeichner2_titel,
-    )
+    return await _aussteller_read(db, a)
 
 
 # --------------------------------------------------------------------------
@@ -574,6 +628,8 @@ async def anlegen(
         z.taetigkeit = emp.position
         z.eintritt = emp.hire_date
         z.austritt = emp.termination_date
+        z.geburtsdatum = _personio_geburtstag(emp)
+        z.geschlecht = _personio_geschlecht(emp)
     else:
         ext = await db.get(OnboardingExtern, -eid)
         if ext is None:
@@ -746,9 +802,14 @@ async def _baue(db: AsyncSession, z: Zeugnis) -> dict[str, str]:
             status_code=400, detail="Bitte zuerst mindestens eine Note vergeben."
         )
     schnitt = _schnitt(noten)
+    # Geburtsdatum: manueller Wert hat Vorrang, sonst live aus Personio
+    # (deckt ältere Zeugnisse ab, die vor dem Personio-Abgleich angelegt wurden).
+    geburtsdatum = z.geburtsdatum
+    if geburtsdatum is None and z.employee_id and z.employee_id > 0:
+        geburtsdatum = _personio_geburtstag(await db.get(PersonioEmployee, z.employee_id))
     return baue_abschnitte(
         geschlecht=z.geschlecht,
-        geburtsdatum=z.geburtsdatum,
+        geburtsdatum=geburtsdatum,
         taetigkeit=z.taetigkeit,
         abteilung=z.abteilung,
         eintritt=z.eintritt,
@@ -818,9 +879,11 @@ async def docx(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session)
     logo = await lade_logo(db)
     aussteller = await _aussteller(db)
     sup_name, sup_titel = await _supervisor(db, z, aussteller)
+    hr_name, hr_titel = await _hr_manager(db, aussteller)
     daten = build_zeugnis_docx(
         z, aussteller, logo.daten if logo else None,
         supervisor_name=sup_name, supervisor_titel=sup_titel,
+        hr_name=hr_name, hr_titel=hr_titel,
     )
     return Response(
         content=daten,
@@ -837,9 +900,11 @@ async def pdf(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session))
     logo = await lade_logo(db)
     aussteller = await _aussteller(db)
     sup_name, sup_titel = await _supervisor(db, z, aussteller)
+    hr_name, hr_titel = await _hr_manager(db, aussteller)
     docx_bytes = build_zeugnis_docx(
         z, aussteller, logo.daten if logo else None,
         supervisor_name=sup_name, supervisor_titel=sup_titel,
+        hr_name=hr_name, hr_titel=hr_titel,
     )
     try:
         pdf_bytes = await convert_docx_to_pdf(docx_bytes)
