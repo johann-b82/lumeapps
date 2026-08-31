@@ -65,6 +65,38 @@ def _worked(start_time, end_time, break_minutes) -> float:
     return w if w > 0 else 0.0
 
 
+#: Wochentag-Schlüssel im Personio-``work_schedule`` (Index = date.weekday()).
+_WOCHENTAGE = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _hhmm_std(v) -> float:
+    """„HH:MM" → Stunden (``08:45`` → 8.75). Ungültig/leer → 0.0."""
+    if not isinstance(v, str) or ":" not in v:
+        return 0.0
+    hh, _, mm = v.partition(":")
+    try:
+        return int(hh) + int(mm) / 60.0
+    except ValueError:
+        return 0.0
+
+
+def _tagessoll_aus_schedule(ws) -> dict[int, float] | None:
+    """Wochentags-Soll (weekday-Index → Stunden) aus dem Personio-Arbeitszeitmodell.
+    ``None``, wenn kein verwertbares Modell vorliegt (alle Tage 0/fehlen)."""
+    if not isinstance(ws, dict):
+        return None
+    soll = {i: _hhmm_std(ws.get(tag)) for i, tag in enumerate(_WOCHENTAGE)}
+    return soll if any(h > 0 for h in soll.values()) else None
+
+
+def _fallback_soll(weekly_working_hours) -> dict[int, float]:
+    """Ersatz-Tagessoll, falls kein Arbeitszeitmodell hinterlegt ist (kommt bei
+    aktueller Datenlage praktisch nicht vor). Verhält sich wie zuvor: flaches
+    Tagessoll = Wochenstunden/5 (Fallback 8 h) an allen Tagen."""
+    daily = float(weekly_working_hours) / 5.0 if weekly_working_hours else 8.0
+    return {i: daily for i in range(7)}
+
+
 def _woche_grenzen(year: int, week: int) -> tuple[date, date]:
     montag = date.fromisocalendar(year, week, 1)
     return montag, montag + timedelta(days=6)
@@ -102,9 +134,15 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     """Ist-Stunden, Überstunden und Saldo je Mitarbeiter für eine Woche.
 
     Personio liefert je Tag oft **mehrere** Zeilen (Vor-/Nachmittag). Deshalb
-    erst je (Mitarbeiter, Tag) summieren und dann gegen das **Tagessoll**
-    rechnen — sonst würde das Soll pro Segment abgezogen (Faktor 2+).
+    erst je (Mitarbeiter, Tag) summieren und dann gegen das **Tagessoll** rechnen —
+    sonst würde das Soll pro Segment abgezogen (Faktor 2+).
+
+    Das Tagessoll kommt aus dem **Personio-Arbeitszeitmodell** (``work_schedule``,
+    Soll je Wochentag). So zählt z. B. Samstagsarbeit voll als Überstunde und ein
+    Kurztag (Freitag 5 h) verzerrt den Saldo nicht. Nur falls kein Modell
+    hinterlegt ist, greift der frühere Wochenstunden/5-Fallback.
     """
+    _ws = PersonioEmployee.raw_json["attributes"]["work_schedule"]["value"]["attributes"]
     rows = (
         await db.execute(
             select(
@@ -116,6 +154,7 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
                 PersonioEmployee.weekly_working_hours,
                 PersonioEmployee.first_name,
                 PersonioEmployee.last_name,
+                _ws.label("work_schedule"),
             )
             .join(PersonioEmployee, PersonioAttendance.employee_id == PersonioEmployee.id)
             .where(PersonioAttendance.date >= montag, PersonioAttendance.date <= sonntag)
@@ -123,14 +162,16 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     ).all()
 
     tag: dict[tuple[int, date], float] = {}
-    quota: dict[int, float] = {}
+    soll: dict[int, dict[int, float]] = {}
     name: dict[int, str] = {}
     for r in rows:
         w = _worked(r.start_time, r.end_time, r.break_minutes)
         tag[(r.employee_id, r.date)] = tag.get((r.employee_id, r.date), 0.0) + w
-        quota[r.employee_id] = (
-            float(r.weekly_working_hours) / 5.0 if r.weekly_working_hours else 8.0
-        )
+        if r.employee_id not in soll:
+            soll[r.employee_id] = (
+                _tagessoll_aus_schedule(r.work_schedule)
+                or _fallback_soll(r.weekly_working_hours)
+            )
         name[r.employee_id] = (
             f"{r.first_name or ''} {r.last_name or ''}".strip() or f"#{r.employee_id}"
         )
@@ -138,10 +179,10 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     ist: dict[int, float] = {}
     ueber: dict[int, float] = {}
     netto: dict[int, float] = {}
-    for (eid, _d), wtag in tag.items():
+    for (eid, d), wtag in tag.items():
         if wtag <= 0:  # unvollständige Stempelung (kein Ende) → Tag nicht werten
             continue
-        q = quota[eid]
+        q = soll[eid].get(d.weekday(), 0.0)  # echtes Soll für diesen Wochentag
         ist[eid] = ist.get(eid, 0.0) + wtag
         # Nur gearbeitete Tage zählen; ein Abwesenheitstag erzeugt keinen Minus-Saldo.
         netto[eid] = netto.get(eid, 0.0) + (wtag - q)
