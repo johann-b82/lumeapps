@@ -123,6 +123,10 @@ export interface PruefErgebnis {
   fehlend: string[];
   /** Bei qr_ok=false: warum (kein_qr / unbekannt). */
   grund?: string;
+  /** Schulung: eingescanntes Fbl. 68 wurde als Nachweis/Zertifikat zugeordnet. */
+  nachweis?: boolean;
+  /** Bei nachweis=true: Name der zugeordneten Schulung. */
+  schulung?: string | null;
 }
 
 export type VorgangStatus = "erstellt" | "uebergeben" | "zurueck" | "geprueft";

@@ -27,6 +27,7 @@ import {
 import {
   aktualisiereSchulungVorgang,
   fetchSchulungVorgaenge,
+  oeffneNachweisPdf,
   oeffneSchulungPdf,
   oeffneSchulungScan,
   oeffneZertifikat,
@@ -55,6 +56,7 @@ interface Zeile {
   kommentar: string | null;
   hat_scan: boolean;
   pruef_ergebnis: PruefErgebnis | null;
+  schulungen: string[];
   zertifikate: SchulungZertifikat[] | null;
 }
 
@@ -136,16 +138,21 @@ export function Vorgaenge() {
   const zeilen = useMemo<Zeile[]>(() => {
     const aus: Zeile[] = [];
     for (const v of ea.data ?? [])
-      aus.push({ ...v, typ: "einarbeitung", zertifikate: null });
+      aus.push({ ...v, typ: "einarbeitung", schulungen: [], zertifikate: null });
     for (const v of sch.data ?? [])
-      aus.push({ ...v, typ: "schulung", zertifikate: v.zertifikate });
+      aus.push({ ...v, typ: "schulung", schulungen: v.schulungen, zertifikate: v.zertifikate });
     return aus.sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am));
   }, [ea.data, sch.data]);
 
   const upload = useMutation({
     mutationFn: (datei: File) => scanBeide(datei),
     onSuccess: (r) => {
-      setModal(r);
+      // Fbl. 68 (Nachweis) wird direkt als Zertifikat zugeordnet — kein Feld-Modal.
+      if (r.ergebnis.nachweis) {
+        toast.success(t("onboarding.vorgang.nachweisZugeordnet", { schulung: r.ergebnis.schulung ?? "" }));
+      } else {
+        setModal(r);
+      }
       invalidate();
     },
     onError: () => toast.error(t("onboarding.vorgang.scanFehler")),
@@ -527,17 +534,14 @@ function ZertifikatModal({
 }) {
   const { t } = useTranslation();
   const dateiRef = useRef<HTMLInputElement>(null);
-  const [bezeichnung, setBezeichnung] = useState("");
+  const schulungen = vorgang.schulungen;
+  const [bezeichnung, setBezeichnung] = useState(schulungen[0] ?? "");
   const zertifikate = vorgang.zertifikate ?? [];
 
-  // Vorschläge für die Zuordnung: die Schulungen aus dem Prüf-Ergebnis (Nachweis-Zeilen).
-  const schulungen = useMemo(
-    () =>
-      (vorgang.pruef_ergebnis?.felder ?? [])
-        .filter((f) => f.key.startsWith("nachweis_"))
-        .map((f) => f.label.replace(/^Nachweis vorhanden:\s*/, "")),
-    [vorgang.pruef_ergebnis],
-  );
+  const nachweisPdf = useMutation({
+    mutationFn: (index: number) => oeffneNachweisPdf(vorgang.id, index),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const uebernehmen = (neu: SchulungVorgang) =>
     onGeaendert({ ...vorgang, zertifikate: neu.zertifikate });
@@ -576,6 +580,29 @@ function ZertifikatModal({
           {t("onboarding.vorgang.zertTitel", { name: vorgang.mitarbeiter_name })}
         </h3>
 
+        {schulungen.length > 0 && (
+          <div className="mb-3">
+            <p className="mb-1 text-xs font-medium">{t("onboarding.vorgang.fbl68Titel")}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{t("onboarding.vorgang.fbl68Hinweis")}</p>
+            <ul className="divide-y rounded-md border text-sm">
+              {schulungen.map((s, i) => (
+                <li key={s} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <span className="truncate">{s}</span>
+                  <button
+                    type="button"
+                    onClick={() => nachweisPdf.mutate(i)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:bg-muted"
+                  >
+                    <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t("onboarding.vorgang.fbl68Download")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="mb-1 text-xs font-medium">{t("onboarding.vorgang.zertHochgeladenTitel")}</p>
         {zertifikate.length ? (
           <ul className="mb-3 divide-y rounded-md border text-sm">
             {zertifikate.map((z) => (
@@ -618,19 +645,21 @@ function ZertifikatModal({
 
         <label className="mb-2 block">
           <span className="mb-1 block text-xs font-medium">{t("onboarding.vorgang.zertZuordnung")}</span>
-          <input
-            list="schulungs-liste"
+          <select
             value={bezeichnung}
             onChange={(e) => setBezeichnung(e.target.value)}
-            placeholder={t("onboarding.vorgang.zertZuordnungPlaceholder")}
             className="w-full rounded-md border bg-background px-2 py-1.5 text-sm
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <datalist id="schulungs-liste">
+          >
+            {schulungen.length === 0 && (
+              <option value="">{t("onboarding.vorgang.zertKeineSchulung")}</option>
+            )}
             {schulungen.map((s) => (
-              <option key={s} value={s} />
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
-          </datalist>
+          </select>
         </label>
 
         <input

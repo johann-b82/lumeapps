@@ -32,6 +32,8 @@ export interface SchulungVorgang {
   kommentar: string | null;
   hat_scan: boolean;
   pruef_ergebnis: PruefErgebnis | null;
+  /** Schulungen des Vorgangs (Namen) — für das Zuordnungs-Dropdown + Fbl.-68-Download. */
+  schulungen: string[];
   zertifikate: SchulungZertifikat[];
 }
 
@@ -84,6 +86,11 @@ export async function oeffneSchulungPdf(id: number): Promise<void> {
 
 export async function oeffneSchulungScan(id: number): Promise<void> {
   openBlob(await fetchBlob(`/api/hr/schulungen/dokument/${id}/scan`));
+}
+
+/** Vorausgefülltes Fbl. 68 (Schulungsnachweis mit QR) einer Schulung öffnen. */
+export async function oeffneNachweisPdf(id: number, index: number): Promise<void> {
+  openBlob(await fetchBlob(`/api/hr/schulungen/dokument/${id}/nachweis/${index}/pdf`));
 }
 
 /** Zertifikat/Nachweis hochladen und optional einer Schulungszeile zuordnen. */

@@ -32,7 +32,6 @@ from app.models import (
 from app.services import schulung_dokument as schulung_vorgang
 from app.services.directus_files import datei_laden, datei_speichern
 from app.services.onboarding import schulungsplan
-from app.services.schulungsuebersicht_pdf import UebersichtZeile
 from app.models.schulung import PFLICHT_EBENEN
 from app.parsing.schulung_parser import parse_schulungsuebersicht
 # Bewusst wiederverwendet statt dupliziert: der JSON-Pfad zum Vorgesetzten in
@@ -1606,6 +1605,8 @@ class SchulungVorgangRead(BaseModel):
     kommentar: str | None
     hat_scan: bool
     pruef_ergebnis: dict | None
+    #: Schulungen des Vorgangs (Namen) — für das Zuordnungs-Dropdown + Fbl.-68-Download.
+    schulungen: list[str]
     zertifikate: list[SchulungZertifikatRead]
 
 
@@ -1657,6 +1658,7 @@ def _schulung_vorgang_read(
         kommentar=d.kommentar,
         hat_scan=d.scan_uuid is not None,
         pruef_ergebnis=d.pruef_ergebnis,
+        schulungen=[s.get("name", "") for s in (d.schulungen or [])],
         zertifikate=[_zertifikat_read(z) for z in zertifikate],
     )
 
@@ -1709,8 +1711,25 @@ async def schulung_dokument_anlegen(
     if emp is None:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden.")
     plan = await schulungsplan(db, emp)
-    zeilen = [
-        UebersichtZeile(bezeichnung=f"{s.bereich}: {s.name}" if s.bereich else s.name)
+    ids = [s.schulung_id for s in plan.soll]
+    trainer = (
+        dict(
+            (
+                await db.execute(
+                    select(SchulungKatalog.id, SchulungKatalog.verantwortlicher).where(
+                        SchulungKatalog.id.in_(ids)
+                    )
+                )
+            ).all()
+        )
+        if ids
+        else {}
+    )
+    schulungen = [
+        {
+            "name": f"{s.bereich}: {s.name}" if s.bereich else s.name,
+            "trainer": trainer.get(s.schulung_id) or "",
+        }
         for s in plan.soll
     ]
     dok = await schulung_vorgang.vorgang_anlegen(
@@ -1718,7 +1737,7 @@ async def schulung_dokument_anlegen(
         employee_id=emp.id,
         name=plan.name,
         funktion=plan.position or "",
-        zeilen=zeilen,
+        schulungen=schulungen,
         logo=await lade_logo(db),
     )
     return await _schulung_read_voll(db, dok)
@@ -1762,6 +1781,36 @@ async def schulung_dokument_pdf(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{teil}_Schulungsuebersicht.pdf"'},
+    )
+
+
+@router.get("/dokument/{dok_id}/nachweis/{index}/pdf")
+async def schulung_nachweis_pdf(
+    dok_id: int, index: int, db: AsyncSession = Depends(get_async_db_session)
+) -> Response:
+    """Vorausgefülltes Fbl. 68 (Schulungsnachweis) für eine Schulung des Vorgangs.
+
+    Titel = Schulung, Teilnehmer = Mitarbeiter, Trainer = Verantwortlicher. Der QR
+    kodiert ``doc_uid#index`` — der ausgefüllte, eingescannte Nachweis wird darüber
+    automatisch dieser Schulung als Zertifikat zugeordnet.
+    """
+    d = await _hole_schulung_vorgang(db, dok_id)
+    schulungen = d.schulungen or []
+    if not (0 <= index < len(schulungen)):
+        raise HTTPException(status_code=404, detail="Schulung nicht gefunden.")
+    s = schulungen[index]
+    pdf = await erzeuge_schulungsprotokoll_pdf(
+        titel=s.get("name", ""),
+        teilnehmer=[d.mitarbeiter_name],
+        trainer=s.get("trainer") or "",
+        qr_payload=f"{d.doc_uid}#{index}",
+        logo=await lade_logo(db),
+    )
+    fn = protokoll_dateiname(s.get("name", "Schulung"), date.today())
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fn}.pdf"'},
     )
 
 

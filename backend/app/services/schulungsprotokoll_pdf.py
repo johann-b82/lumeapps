@@ -41,6 +41,20 @@ LEERE_ZEILEN = 12
 _THIN = Side(style="thin", color="000000")
 _RAHMEN = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
+#: Kantenlänge des QR-Codes auf dem Vorgangs-Nachweis (px).
+_QR_PX = 60
+
+
+def _qr_einsetzen(ws, payload: str, anker: str) -> None:
+    """QR-Code (Vorgangs-Zuordnung) rechts oben einsetzen."""
+    from openpyxl.drawing.image import Image as XLImage
+
+    from app.services.schulungsuebersicht_pdf import _vg_qr_png
+
+    img = XLImage(BytesIO(_vg_qr_png(payload)))
+    img.width = img.height = _QR_PX
+    ws.add_image(img, anker)
+
 
 def _fuelle_blatt(
     ws,
@@ -49,6 +63,7 @@ def _fuelle_blatt(
     trainer: str,
     intern: bool,
     logo: LogoBild | None,
+    qr_payload: str | None = None,
 ) -> None:
     ws.title = "Schulungsnachweis"
     # A = Nr.-Spalte der Teilnehmertabelle (schmal). Label-Zeilen oben/unten
@@ -61,9 +76,14 @@ def _fuelle_blatt(
     ws.oddHeader.right.text = "&9Blatt &P von &N"
     ws.evenHeader.right.text = ws.oddHeader.right.text
 
+    # Kopfband (Zeilen 1–3): Logo links, QR rechts. Titel/Formblatt-Block folgen
+    # darunter ab Zeile 4, damit nichts überlappt.
     top = 1
     if logo is not None:
         bild_einsetzen(ws, logo, "A1")
+    if qr_payload:
+        _qr_einsetzen(ws, qr_payload, "C1")
+    if logo is not None or qr_payload:
         for r in (1, 2, 3):
             ws.row_dimensions[r].height = 20
         top = 4
@@ -156,9 +176,10 @@ async def erzeuge_schulungsprotokoll_pdf(
     trainer: str = "",
     intern: bool = True,
     logo: LogoBild | None = None,
+    qr_payload: str | None = None,
 ) -> bytes:
     wb = Workbook()
-    _fuelle_blatt(wb.active, titel, teilnehmer or [], trainer, intern, logo)
+    _fuelle_blatt(wb.active, titel, teilnehmer or [], trainer, intern, logo, qr_payload)
     puffer = BytesIO()
     wb.save(puffer)
     return await convert_xlsx_to_pdf(puffer.getvalue())

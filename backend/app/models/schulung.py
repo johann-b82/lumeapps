@@ -306,6 +306,9 @@ class SchulungDokument(Base):
     )
     mitarbeiter_name: Mapped[str] = mapped_column(Text, nullable=False)
     funktion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Geordnete Schulungsliste des Vorgangs [{"name", "trainer"}] (v1.122). Bindet
+    #: Index→Schulung stabil: der QR auf dem Fbl.-68-Nachweis kodiert doc_uid#index.
+    schulungen: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     pdf_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scan_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
