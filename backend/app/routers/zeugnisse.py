@@ -884,6 +884,7 @@ async def docx(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session)
         z, aussteller, logo.daten if logo else None,
         supervisor_name=sup_name, supervisor_titel=sup_titel,
         hr_name=hr_name, hr_titel=hr_titel,
+        dateiname=await _dateiname(z, "docx"),
     )
     return Response(
         content=daten,
@@ -905,6 +906,7 @@ async def pdf(zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session))
         z, aussteller, logo.daten if logo else None,
         supervisor_name=sup_name, supervisor_titel=sup_titel,
         hr_name=hr_name, hr_titel=hr_titel,
+        dateiname=await _dateiname(z, "pdf"),
     )
     try:
         pdf_bytes = await convert_docx_to_pdf(docx_bytes)

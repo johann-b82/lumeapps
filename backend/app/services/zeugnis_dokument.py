@@ -18,7 +18,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
@@ -141,6 +141,54 @@ def _aufgaben(doc: Document, text: str) -> None:
         doc.add_paragraph(punkt.strip(), style="List Bullet")
 
 
+def _zusammen(paragraph) -> None:
+    """Absatz mit dem folgenden zusammenhalten (kein Seitenumbruch dazwischen)."""
+    pf = paragraph.paragraph_format
+    pf.keep_with_next = True
+    pf.keep_together = True
+
+
+def _zeile_nicht_trennen(tabelle) -> None:
+    """Tabellenzeilen nicht über einen Seitenumbruch trennen (w:cantSplit)."""
+    for row in tabelle.rows:
+        row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+
+
+def _feld(paragraph, code: str) -> None:
+    """Word-Feld (z. B. PAGE / NUMPAGES) einfügen — von LibreOffice beim PDF-Export ausgewertet."""
+    run = paragraph.add_run()
+    run.font.size = Pt(8)
+    run.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = f" {code} "
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    run._r.append(begin)
+    run._r.append(instr)
+    run._r.append(end)
+
+
+def _fusszeile(doc: Document, dateiname: str | None) -> None:
+    """Fußzeile je Seite: Dateiname (links) + „Seite X von Y" (rechts)."""
+    p = doc.sections[0].footer.paragraphs[0]
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.tab_stops.add_tab_stop(Cm(16.0), WD_TAB_ALIGNMENT.RIGHT)
+
+    grau = RGBColor(0x88, 0x88, 0x88)
+    links = p.add_run(f"{dateiname or ''}\tSeite ")
+    links.font.size = Pt(8)
+    links.font.color.rgb = grau
+    _feld(p, "PAGE")
+    mitte = p.add_run(" von ")
+    mitte.font.size = Pt(8)
+    mitte.font.color.rgb = grau
+    _feld(p, "NUMPAGES")
+
+
 def _unterschriften(
     doc: Document,
     supervisor_name: str | None,
@@ -151,9 +199,10 @@ def _unterschriften(
     """Zwei Unterschriften nebeneinander: Supervisor + HR-Manager (beide aus Personio)."""
     if not supervisor_name and not hr_name:
         return
-    doc.add_paragraph()
-    doc.add_paragraph()  # Platz für die eigentliche Unterschrift
+    _zusammen(doc.add_paragraph())
+    _zusammen(doc.add_paragraph())  # Platz für die eigentliche Unterschrift
     tabelle = doc.add_table(rows=1, cols=2)
+    _zeile_nicht_trennen(tabelle)
     for zelle, name, titel in (
         (tabelle.rows[0].cells[0], supervisor_name, supervisor_titel),
         (tabelle.rows[0].cells[1], hr_name, hr_titel),
@@ -176,6 +225,7 @@ def build_zeugnis_docx(
     supervisor_titel: str | None = None,
     hr_name: str | None = None,
     hr_titel: str | None = None,
+    dateiname: str | None = None,
 ) -> bytes:
     """Baut das Zeugnis als .docx (ACM-Endzeugnis-Vorlage) und gibt die Bytes zurück."""
     doc = Document()
@@ -219,20 +269,21 @@ def build_zeugnis_docx(
         if text:
             _fliesstext(doc, text)
 
-    # --- Ort, Datum ---
-    doc.add_paragraph()
+    # --- Abschluss-Block: Ort/Datum + Firma + Unterschriften (zusammenhalten) ---
+    _zusammen(doc.add_paragraph())
     ort = (aussteller.standort if aussteller else None) or ""
     datum = _datum_kurz(zeugnis.ausstellungsdatum or zeugnis.austritt)
     if ort or datum:
-        doc.add_paragraph(", ".join(x for x in (ort, datum) if x))
-
-    # --- Firma über den Unterschriften ---
+        _zusammen(doc.add_paragraph(", ".join(x for x in (ort, datum) if x)))
     if aussteller and aussteller.firma:
-        doc.add_paragraph()
-        doc.add_paragraph(aussteller.firma).runs[0].bold = True
-
-    # --- Unterschriften ---
+        _zusammen(doc.add_paragraph())
+        firma_p = doc.add_paragraph(aussteller.firma)
+        firma_p.runs[0].bold = True
+        _zusammen(firma_p)
     _unterschriften(doc, supervisor_name, supervisor_titel, hr_name, hr_titel)
+
+    # --- Fußzeile: Dateiname + Seite X von Y ---
+    _fusszeile(doc, dateiname)
 
     buf = BytesIO()
     doc.save(buf)
