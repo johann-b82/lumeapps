@@ -577,9 +577,10 @@ export function SeiteInhalt({
   const inhalt = <BlockInhalt block={desc.block} schmal={schmal} />;
   return (
     <SeiteRahmen ausgabe={ausgabe} titel={desc.titel} seiteNr={desc.seiteNr} edgeLabel={desc.edgeLabel}>
-      {/* Rubrik-Inhalte füllen die Seite (Fit-to-Page); KPI-Charts messen sich
-          selbst und bleiben unskaliert. */}
-      {desc.block.art === "rubrik" ? <FitToPage>{inhalt}</FitToPage> : inhalt}
+      {/* Fit-to-Page NUR im PDF (feste Seiten): Rubrik-Inhalte füllen die Seite.
+          Online-Hochformat (schmal, scrollend) bleibt unskaliert; KPI-Charts
+          messen sich selbst und werden nie skaliert. */}
+      {desc.block.art === "rubrik" && !schmal ? <FitToPage>{inhalt}</FitToPage> : inhalt}
     </SeiteRahmen>
   );
 }
