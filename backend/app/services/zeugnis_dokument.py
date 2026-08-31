@@ -17,8 +17,11 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
 
 from app.models.zeugnis import Zeugnis, ZeugnisAussteller
 
@@ -67,25 +70,57 @@ def _titel(art: str, austritt) -> str:
     }.get(art, "Endzeugnis" if austritt else "Zeugnis")
 
 
+def _tabelle_unterlinie(tabelle) -> None:
+    """Dünne graue Linie unter der Kopfzeilen-Tabelle (Briefkopf-Trenner)."""
+    borders = OxmlElement("w:tblBorders")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "6")  # 0,75 pt
+    bottom.set(qn("w:space"), "0")
+    bottom.set(qn("w:color"), "AAAAAA")
+    borders.append(bottom)
+    tabelle._tbl.tblPr.append(borders)
+
+
 def _briefkopf(doc: Document, aussteller: ZeugnisAussteller | None, logo_png: bytes | None) -> None:
-    """Logo (links) + Zertifizierungen (rechts) in den Seitenkopf — je Seite."""
+    """Logo (links) + Zertifizierungen (rechts) als kompakte Kopfzeile — je Seite."""
     header = doc.sections[0].header
     tabelle = header.add_table(rows=1, cols=2, width=Cm(16.0))
+    tabelle.autofit = False
     links, rechts = tabelle.rows[0].cells
-    links.width = Cm(6.0)
-    rechts.width = Cm(10.0)
+    links.width = Cm(7.0)
+    rechts.width = Cm(9.0)
+    links.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    rechts.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+
+    lp = links.paragraphs[0]
+    lp.paragraph_format.space_before = Pt(0)
+    lp.paragraph_format.space_after = Pt(0)
     if logo_png:
         try:
-            links.paragraphs[0].add_run().add_picture(BytesIO(logo_png), width=Cm(4.0))
+            lp.add_run().add_picture(BytesIO(logo_png), width=Cm(4.2))
         except Exception:  # pragma: no cover - defektes Bild bricht das Zeugnis nicht
             pass
+
     if _ist_acm(aussteller):
         erste = True
         for zeile in _ACM_ZERTIFIKATE:
             p = rechts.paragraphs[0] if erste else rechts.add_paragraph()
             erste = False
             p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            p.add_run(zeile).font.size = Pt(8)
+            pf = p.paragraph_format
+            pf.space_before = Pt(0)
+            pf.space_after = Pt(0)
+            pf.line_spacing = 1.15
+            run = p.add_run(zeile)
+            run.font.size = Pt(8)
+            run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        _tabelle_unterlinie(tabelle)
+
+    # Führende Leerzeile der Kopfzeile entfernen, damit der Kopf oben sauber sitzt.
+    leer = header.paragraphs[0]
+    if not leer.text and leer._element.getnext() is not None:
+        leer._element.getparent().remove(leer._element)
 
 
 def _fliesstext(doc: Document, text: str) -> None:
