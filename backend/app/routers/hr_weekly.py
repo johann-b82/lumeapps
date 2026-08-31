@@ -20,7 +20,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
@@ -198,6 +198,11 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     unentschuldigte Soll-Tage zählen damit als Fehlstunden — wer die Woche unter
     Soll bleibt, erscheint nicht als Überstunde. Fehlt ein Modell, greift der
     Wochenstunden/5-Fallback.
+
+    **Laufende Woche:** Soll zählt je Person nur bis zu ihrem letzten vollständig
+    gestempelten Tag; spätere offene/fehlende Tage gelten als noch nicht erfasst
+    (nicht als Fehlstunde). So ist die noch nicht fertig gesyncte aktuelle Woche
+    nicht künstlich negativ; fertige Wochen bleiben unverändert.
     """
     _ws = PersonioEmployee.raw_json["attributes"]["work_schedule"]["value"]["attributes"]
     rows = (
@@ -234,10 +239,24 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
         )
 
     # Ist je Mitarbeiter — nur vollständig gestempelte Tage (kein Ende → verwerfen).
+    # ``letzter_tag`` = letzter Tag der Woche mit vollständiger Stempelung.
     worked: dict[int, float] = {}
-    for (eid, _d), wtag in tag.items():
+    letzter_tag: dict[int, date] = {}
+    for (eid, d), wtag in tag.items():
         if wtag > 0:
             worked[eid] = worked.get(eid, 0.0) + wtag
+            if eid not in letzter_tag or d > letzter_tag[eid]:
+                letzter_tag[eid] = d
+
+    # Nur die **laufende** (noch nicht fertig gesyncte) Woche bekommt die Kappung
+    # „Soll nur bis zum letzten gestempelten Tag": spätere offene/fehlende Tage
+    # gelten dort als noch nicht erfasst, nicht als Fehlstunde. Eine voll
+    # zurückliegende Woche (Sonntag vor dem letzten Anwesenheitsdatum) wird
+    # komplett gewertet — dort sind fehlende Tage echte Fehlstunden.
+    max_att = (
+        await db.execute(select(func.max(PersonioAttendance.date)))
+    ).scalar_one_or_none()
+    laufend = max_att is not None and sonntag >= max_att
 
     entschuldigt = await _entschuldigte_stunden(db, montag, sonntag, soll)
     woche = [montag + timedelta(days=i) for i in range(7)]
@@ -246,8 +265,11 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     ueber: dict[int, float] = {}
     netto: dict[int, float] = {}
     for eid, smap in soll.items():
+        grenze = letzter_tag.get(eid) if laufend else sonntag
         soll_eff = 0.0
         for d in woche:
+            if grenze is None or d > grenze:
+                continue
             s = smap.get(d.weekday(), 0.0)
             if s <= 0:
                 continue
