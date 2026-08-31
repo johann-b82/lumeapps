@@ -2,11 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Sparkles, Loader2, Trash2, Download, Building2, RefreshCw } from "lucide-react";
+import { FileText, Sparkles, Loader2, Trash2, Download, Building2, RefreshCw, Blocks } from "lucide-react";
 
 import {
   ZEUGNIS_ABSCHNITTE,
   ZEUGNIS_DIMENSIONEN,
+  baukastenAbschnitt,
+  baukastenZeugnis,
   createVorlage,
   createZeugnis,
   deleteVorlage,
@@ -388,6 +390,46 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const baukasten = useMutation({
+    mutationFn: async () => {
+      // Erst die Eingaben (Noten + Freitexte) sichern, dann aus Bausteinen bauen.
+      if (!form) return null;
+      await updateZeugnis(id, {
+        geschlecht: form.geschlecht,
+        taetigkeit: form.taetigkeit,
+        abteilung: form.abteilung,
+        eintritt: form.eintritt,
+        austritt: form.austritt,
+        art: form.art,
+        anlass: form.anlass,
+        fuehrungskraft: form.fuehrungskraft,
+        taetigkeit_stichpunkte: form.taetigkeit_stichpunkte,
+        besondere_kompetenzen: form.besondere_kompetenzen,
+        besondere_erfolge: form.besondere_erfolge,
+        bewertungen: form.bewertungen,
+      });
+      return baukastenZeugnis(id);
+    },
+    onSuccess: (d) => {
+      if (d) {
+        setForm(d);
+        invalidate();
+        toast.success(t("zeugnisse.bausteineErzeugt"));
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const baustein = useMutation({
+    mutationFn: (key: string) => baukastenAbschnitt(id, key),
+    onSuccess: (d) => {
+      setForm(d);
+      invalidate();
+      toast.success(t("zeugnisse.abschnittBaustein"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const entfernen = useMutation({
     mutationFn: () => deleteZeugnis(id),
     onSuccess: () => {
@@ -527,49 +569,70 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
         </div>
       </section>
 
-      {/* Aktionen: speichern + KI */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className={ghost}
-          disabled={speichern.isPending}
-          onClick={() =>
-            speichern.mutate({
-              geschlecht: form.geschlecht,
-              geburtsdatum: form.geburtsdatum,
-              personalnummer: form.personalnummer,
-              abteilung: form.abteilung,
-              taetigkeit: form.taetigkeit,
-              eintritt: form.eintritt,
-              austritt: form.austritt,
-              art: form.art,
-              anlass: form.anlass,
-              fuehrungskraft: form.fuehrungskraft,
-              ausstellungsdatum: form.ausstellungsdatum,
-              taetigkeit_stichpunkte: form.taetigkeit_stichpunkte,
-              besondere_kompetenzen: form.besondere_kompetenzen,
-              besondere_erfolge: form.besondere_erfolge,
-              bewertungen: form.bewertungen,
-            })
-          }
-        >
-          {speichern.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {t("zeugnisse.speichern")}
-        </button>
-        <button
-          type="button"
-          className={primary}
-          disabled={generieren.isPending || Object.keys(form.bewertungen).length === 0}
-          onClick={() => generieren.mutate()}
-        >
-          {generieren.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="h-3.5 w-3.5" />
-          )}
-          {t("zeugnisse.generieren")}
-        </button>
-      </div>
+      {/* Aktionen: speichern + erzeugen (Textbausteine oder KI) */}
+      {(() => {
+        const keineNoten = Object.keys(form.bewertungen).length === 0;
+        const laeuft = baukasten.isPending || generieren.isPending;
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={ghost}
+              disabled={speichern.isPending}
+              onClick={() =>
+                speichern.mutate({
+                  geschlecht: form.geschlecht,
+                  geburtsdatum: form.geburtsdatum,
+                  personalnummer: form.personalnummer,
+                  abteilung: form.abteilung,
+                  taetigkeit: form.taetigkeit,
+                  eintritt: form.eintritt,
+                  austritt: form.austritt,
+                  art: form.art,
+                  anlass: form.anlass,
+                  fuehrungskraft: form.fuehrungskraft,
+                  ausstellungsdatum: form.ausstellungsdatum,
+                  taetigkeit_stichpunkte: form.taetigkeit_stichpunkte,
+                  besondere_kompetenzen: form.besondere_kompetenzen,
+                  besondere_erfolge: form.besondere_erfolge,
+                  bewertungen: form.bewertungen,
+                })
+              }
+            >
+              {speichern.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {t("zeugnisse.speichern")}
+            </button>
+            <button
+              type="button"
+              className={primary}
+              disabled={laeuft || keineNoten}
+              title={t("zeugnisse.ausBausteinenTitel")}
+              onClick={() => baukasten.mutate()}
+            >
+              {baukasten.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Blocks className="h-3.5 w-3.5" />
+              )}
+              {t("zeugnisse.ausBausteinen")}
+            </button>
+            <button
+              type="button"
+              className={ghost}
+              disabled={laeuft || keineNoten}
+              title={t("zeugnisse.mitKiTitel")}
+              onClick={() => generieren.mutate()}
+            >
+              {generieren.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {t("zeugnisse.mitKi")}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Generierter, editierbarer Text */}
       {form.abschnitte && (
@@ -577,7 +640,12 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
           <div className="mb-2 text-xs font-medium">{t("zeugnisse.text")}</div>
           <div className="space-y-2">
             {ZEUGNIS_ABSCHNITTE.map((key) => {
-              const laeuft = neuAbschnitt.isPending && neuAbschnitt.variables === key;
+              const kiLaeuft = neuAbschnitt.isPending && neuAbschnitt.variables === key;
+              const bLaeuft = baustein.isPending && baustein.variables === key;
+              const gesperrt = neuAbschnitt.isPending || baustein.isPending;
+              const btn =
+                "inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 " +
+                "text-[0.7rem] hover:bg-muted disabled:opacity-50";
               return (
                 <AreaFeld
                   key={key}
@@ -588,21 +656,36 @@ function ZeugnisEditor({ id, onDeleted }: { id: number; onDeleted: () => void })
                     setForm({ ...form, abschnitte: { ...(form.abschnitte ?? {}), [key]: v } })
                   }
                   action={
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5
-                                 text-[0.7rem] hover:bg-muted disabled:opacity-50"
-                      disabled={neuAbschnitt.isPending}
-                      title={t("zeugnisse.abschnittNeuTitel")}
-                      onClick={() => neuAbschnitt.mutate(key)}
-                    >
-                      {laeuft ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-3 w-3" />
-                      )}
-                      {t("zeugnisse.abschnittNeuKurz")}
-                    </button>
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className={btn}
+                        disabled={gesperrt}
+                        title={t("zeugnisse.abschnittBausteinTitel")}
+                        onClick={() => baustein.mutate(key)}
+                      >
+                        {bLaeuft ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Blocks className="h-3 w-3" />
+                        )}
+                        {t("zeugnisse.abschnittBausteinKurz")}
+                      </button>
+                      <button
+                        type="button"
+                        className={btn}
+                        disabled={gesperrt}
+                        title={t("zeugnisse.abschnittNeuTitel")}
+                        onClick={() => neuAbschnitt.mutate(key)}
+                      >
+                        {kiLaeuft ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        {t("zeugnisse.abschnittNeuKurz")}
+                      </button>
+                    </span>
                   }
                 />
               );
