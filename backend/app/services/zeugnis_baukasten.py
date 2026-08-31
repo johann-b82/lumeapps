@@ -60,11 +60,11 @@ _BAUSTEINE: dict[str, dict[int, str]] = {
         4: "Den üblichen Anforderungen war [NAME] gewachsen.",
     },
     "arbeitserfolg": {
-        1: "Die Arbeitsergebnisse von [NAME] waren stets von hervorragender "
-        "Qualität.",
-        2: "Die Arbeitsergebnisse von [NAME] waren von sehr guter Qualität.",
-        3: "Die Arbeitsergebnisse von [NAME] entsprachen stets den Erwartungen.",
-        4: "Die Arbeitsergebnisse von [NAME] entsprachen den Erwartungen.",
+        1: "[NAME] lieferte stets Arbeitsergebnisse von hervorragender Qualität.",
+        2: "[NAME] lieferte Arbeitsergebnisse von sehr guter Qualität.",
+        3: "[NAME] lieferte stets Arbeitsergebnisse, die den Erwartungen "
+        "entsprachen.",
+        4: "[NAME] lieferte Arbeitsergebnisse, die den Erwartungen entsprachen.",
     },
     "fuehrung": {
         1: "Als Führungskraft überzeugte [NAME] durch einen kooperativen, "
@@ -76,15 +76,16 @@ _BAUSTEINE: dict[str, dict[int, str]] = {
         4: "[NAME] nahm die übertragenen Führungsaufgaben wahr.",
     },
     "sozialverhalten": {
-        1: "Das Verhalten von [NAME] gegenüber Vorgesetzten, Kolleginnen und "
-        "Kollegen sowie Kundinnen und Kunden war stets vorbildlich und von "
-        "Respekt und Hilfsbereitschaft geprägt.",
-        2: "Das Verhalten von [NAME] gegenüber Vorgesetzten, Kolleginnen und "
-        "Kollegen sowie Kundinnen und Kunden war stets einwandfrei.",
-        3: "Das Verhalten von [NAME] gegenüber Vorgesetzten, Kolleginnen und "
-        "Kollegen sowie Kundinnen und Kunden war einwandfrei.",
-        4: "Das Verhalten von [NAME] gegenüber Vorgesetzten, Kolleginnen und "
-        "Kollegen sowie Kundinnen und Kunden gab keinen Anlass zu Beanstandungen.",
+        1: "[NAME] verhielt sich gegenüber Vorgesetzten, Kolleginnen und Kollegen "
+        "sowie Kundinnen und Kunden stets vorbildlich und begegnete allen mit "
+        "Respekt und Hilfsbereitschaft.",
+        2: "[NAME] verhielt sich gegenüber Vorgesetzten, Kolleginnen und Kollegen "
+        "sowie Kundinnen und Kunden stets einwandfrei.",
+        3: "[NAME] verhielt sich gegenüber Vorgesetzten, Kolleginnen und Kollegen "
+        "sowie Kundinnen und Kunden einwandfrei.",
+        4: "[NAME] verhielt sich gegenüber Vorgesetzten, Kolleginnen und Kollegen "
+        "sowie Kundinnen und Kunden korrekt; es gab keinen Anlass zu "
+        "Beanstandungen.",
     },
 }
 
@@ -108,66 +109,70 @@ def _runde(note: float) -> int:
     return min(4, max(1, round(note)))
 
 
-def _stichpunkte(text: str | None) -> str | None:
-    """Freitext-Aufzählung zu einer Semikolon-Liste normalisieren."""
+def _dativ(geschlecht: str | None) -> str:
+    """Dativ-Pronomen (für „wir danken …", „wünschen …")."""
+    return {"m": "ihm", "w": "ihr"}.get((geschlecht or "").lower(), "ihm bzw. ihr")
+
+
+def _liste(text: str | None) -> list[str]:
+    """Freitext-Aufzählung in Einzelpunkte zerlegen."""
     if not text or not text.strip():
-        return None
-    teile = [
+        return []
+    return [
         z.strip(" \t-•*")
         for z in text.replace(";", "\n").splitlines()
         if z.strip(" \t-•*")
     ]
-    return "; ".join(teile) if teile else None
 
 
-def _satz(*teile: str | None) -> str:
-    """Nicht-leere Teile zu einem Absatz verbinden."""
-    return " ".join(t for t in teile if t)
+def _geb(geburtsdatum: date | None) -> str:
+    d = _d(geburtsdatum)
+    return f", geboren am {d}," if d else ""
 
 
-def _einleitung(*, art, taetigkeit, abteilung, eintritt, austritt, firma) -> str:
+def _einleitung(*, art, geburtsdatum, taetigkeit, abteilung, eintritt, austritt) -> str:
     tk = taetigkeit or "Mitarbeiter/in"
-    haus = f"bei {firma}" if firma else "in unserem Hause"
+    abt = f" in der Abteilung {abteilung}" if abteilung else ""
+    geb = _geb(geburtsdatum)
     ein, aus = _d(eintritt), _d(austritt)
     if art == "zwischenzeugnis":
         seit = f"seit dem {ein} " if ein else ""
-        return f"[NAME] ist {seit}als {tk} {haus} tätig."
+        return f"[NAME]{geb} ist {seit}{abt.strip()} als {tk} in unserem Unternehmen tätig.".replace("  ", " ")
     if art == "ausbildungszeugnis":
         zeitraum = f"vom {ein} bis zum {aus} " if ein and aus else ""
-        return f"[NAME] absolvierte {zeitraum}{haus} eine Ausbildung zum/zur {tk}."
+        return f"[NAME]{geb} absolvierte {zeitraum}in unserem Unternehmen eine Ausbildung zum/zur {tk}."
     if art == "praktikumszeugnis":
         bereich = abteilung or tk
         zeitraum = f"vom {ein} bis zum {aus} " if ein and aus else ""
-        return f"[NAME] absolvierte {zeitraum}{haus} ein Praktikum im Bereich {bereich}."
+        return f"[NAME]{geb} absolvierte {zeitraum}in unserem Unternehmen ein Praktikum im Bereich {bereich}."
     # qualifiziert / einfach
-    abt = f" in der Abteilung {abteilung}" if abteilung else ""
     if ein and aus:
         zeit = f"vom {ein} bis zum {aus}"
     elif ein:
         zeit = f"seit dem {ein}"
     else:
-        zeit = "in unserem Unternehmen"
-    return f"[NAME] war {zeit} als {tk}{abt} {haus} beschäftigt.".replace("  ", " ")
+        zeit = ""
+    return f"[NAME]{geb} war {zeit}{abt} als {tk} in unserem Unternehmen tätig.".replace("  ", " ")
 
 
-def _taetigkeit(*, taetigkeit, stichpunkte, kompetenzen, fuehrungskraft) -> str:
-    tk = taetigkeit or "die übertragenen Aufgaben"
-    liste = _stichpunkte(stichpunkte)
-    if liste:
-        kern = f"Zu den Aufgaben von [NAME] als {tk} gehörten insbesondere: {liste}."
-    else:
-        kern = f"[NAME] war mit den Aufgaben als {tk} betraut."
-    fuehrung = (
-        "Dabei trug [NAME] Verantwortung für die fachliche und disziplinarische "
-        "Führung eines Teams." if fuehrungskraft else None
-    )
-    komp = _stichpunkte(kompetenzen)
-    komp_satz = f"Besondere Stärken zeigte [NAME] in folgenden Bereichen: {komp}." if komp else None
-    return _satz(kern, fuehrung, komp_satz)
+def _taetigkeit(*, taetigkeit, stichpunkte) -> str:
+    """Lead-in + Aufgaben als Zeilenliste (das Dokument rendert sie als Aufzählung)."""
+    tk = taetigkeit or "Mitarbeiter/in"
+    punkte = _liste(stichpunkte)
+    if not punkte:
+        return f"[NAME] war als {tk} mit vielfältigen Aufgaben betraut."
+    lead = f"Als {tk} war [NAME] insbesondere für folgende Aufgaben zuständig:"
+    return lead + "\n" + "\n".join(punkte)
 
 
-def _leistung(*, noten, schnitt, erfolge, fuehrungskraft) -> str:
+def _leistung(*, noten, schnitt, kompetenzen, erfolge, fuehrungskraft) -> str:
     saetze: list[str] = []
+    komp = _liste(kompetenzen)
+    if komp:
+        saetze.append(
+            "[NAME] brachte fundierte Kenntnisse in folgenden Bereichen ein: "
+            + "; ".join(komp) + "."
+        )
     for dim in _LEISTUNG_DIMS:
         if dim == "fuehrung" and not fuehrungskraft:
             continue
@@ -192,11 +197,12 @@ def _sozial(*, noten, schnitt) -> str:
     return _BAUSTEINE["sozialverhalten"][note]
 
 
-def _schluss(*, art, schnitt, austritt, anlass) -> str:
+def _schluss(*, art, geschlecht, schnitt, austritt, anlass) -> str:
     aus = _d(austritt)
+    dat = _dativ(geschlecht)
     gut = schnitt is not None and _runde(schnitt) <= 2
     if art == "zwischenzeugnis":
-        grund = (anlass or "").strip() or "auf Wunsch von [NAME]"
+        grund = (anlass or "").strip() or "auf eigenen Wunsch"
         return f"Dieses Zwischenzeugnis wird {grund} ausgestellt."
     if art == "einfach":
         return f"Das Arbeitsverhältnis endete zum {aus}." if aus else \
@@ -205,31 +211,33 @@ def _schluss(*, art, schnitt, austritt, anlass) -> str:
         ende = f"Die Ausbildung endete zum {aus}. " if aus else ""
         return (
             f"{ende}Wir danken [NAME] für die Mitarbeit während der Ausbildung "
-            "und wünschen für den weiteren Berufs- und Lebensweg alles Gute."
+            f"und wünschen {dat} für den weiteren Berufs- und Lebensweg alles Gute."
         )
     if art == "praktikumszeugnis":
         return (
             "Wir danken [NAME] für das gezeigte Engagement während des Praktikums "
-            "und wünschen für die Zukunft alles Gute."
+            f"und wünschen {dat} für die Zukunft alles Gute."
         )
     # qualifiziert
-    ende = f"Das Arbeitsverhältnis endet zum {aus} im besten gegenseitigen Einvernehmen. " if aus else ""
+    grund = f" {anlass.strip()}" if (anlass or "").strip() else " im besten gegenseitigen Einvernehmen"
+    verlaesst = f"[NAME] verlässt unser Unternehmen zum {aus}{grund}. " if aus else ""
     if gut:
         return (
-            "Wir danken [NAME] für die stets sehr guten Leistungen und die "
-            f"überaus angenehme Zusammenarbeit. {ende}Wir bedauern das Ausscheiden "
-            "von [NAME] und wünschen für die berufliche und persönliche Zukunft "
-            "weiterhin viel Erfolg und alles Gute."
+            f"{verlaesst}Wir bedauern dies sehr, denn wir verlieren mit {dat} eine "
+            "geschätzte Fachkraft. Wir bedanken uns für die stets sehr guten "
+            f"Leistungen und wünschen {dat} für die berufliche und persönliche "
+            "Zukunft weiterhin viel Erfolg und alles Gute."
         )
     return (
-        f"Wir danken [NAME] für die Zusammenarbeit. {ende}Für die Zukunft "
-        "wünschen wir [NAME] alles Gute."
+        f"{verlaesst}Wir danken für die Zusammenarbeit und wünschen {dat} für die "
+        "Zukunft alles Gute."
     )
 
 
 def baue_abschnitte(
     *,
     geschlecht: str | None,
+    geburtsdatum: date | None,
     taetigkeit: str | None,
     abteilung: str | None,
     eintritt: date | None,
@@ -242,29 +250,31 @@ def baue_abschnitte(
     stichpunkte: str | None,
     kompetenzen: str | None,
     erfolge: str | None,
-    firma: str | None,
 ) -> dict[str, str]:
     """Baut die fünf Abschnitte deterministisch aus Textbausteinen.
 
-    ``einfach`` lässt Leistungs- und Verhaltensbeurteilung bewusst leer.
+    ``einfach`` lässt Leistungs- und Verhaltensbeurteilung bewusst leer. Die
+    Tätigkeitsbeschreibung enthält bei vorhandenen Stichpunkten je Aufgabe eine
+    eigene Zeile — das Dokument rendert sie als Aufzählung.
     Rückgabe: ``{schluessel: text}`` für alle ``ZEUGNIS_ABSCHNITTE``.
     """
     einfach = art == "einfach"
     daten = {
         "einleitung": _einleitung(
-            art=art, taetigkeit=taetigkeit, abteilung=abteilung,
-            eintritt=eintritt, austritt=austritt, firma=firma,
+            art=art, geburtsdatum=geburtsdatum, taetigkeit=taetigkeit,
+            abteilung=abteilung, eintritt=eintritt, austritt=austritt,
         ),
         "taetigkeitsbeschreibung": _taetigkeit(
             taetigkeit=taetigkeit, stichpunkte=stichpunkte,
-            kompetenzen=kompetenzen, fuehrungskraft=fuehrungskraft,
         ),
         "leistungsbeurteilung": "" if einfach else _leistung(
-            noten=noten, schnitt=schnitt, erfolge=erfolge, fuehrungskraft=fuehrungskraft,
+            noten=noten, schnitt=schnitt, kompetenzen=kompetenzen,
+            erfolge=erfolge, fuehrungskraft=fuehrungskraft,
         ),
         "sozialverhalten": "" if einfach else _sozial(noten=noten, schnitt=schnitt),
         "schlussformel": _schluss(
-            art=art, schnitt=schnitt, austritt=austritt, anlass=anlass,
+            art=art, geschlecht=geschlecht, schnitt=schnitt,
+            austritt=austritt, anlass=anlass,
         ),
     }
     return {k: daten.get(k, "") for k in ZEUGNIS_ABSCHNITTE}

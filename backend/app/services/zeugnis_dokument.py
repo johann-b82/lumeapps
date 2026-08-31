@@ -1,8 +1,12 @@
 """Arbeitszeugnis als DOCX (editierbar) und PDF (v1.110).
 
-Der Fließtext kommt aus ``zeugnis.abschnitte_json`` (KI-generiert, danach von HR
-editiert). Das DOCX entsteht mit python-docx auf Briefkopf (App-Logo), das PDF
-per LibreOffice — derselbe ``soffice``-Pfad wie Wartung/ATR/Signage.
+Der Fließtext kommt aus ``zeugnis.abschnitte_json`` (Baukasten oder KI, danach
+von HR editiert). Das DOCX wird der ACM-Endzeugnis-Vorlage nachgebaut:
+Zertifizierungs-Briefkopf, Firmenbeschreibung, Aufgaben als Aufzählung, die
+Beurteilungs-Absätze und zwei Unterschriften — der/die **Supervisor:in kommt
+aus Personio** (abteilungsabhängig, vom Aufrufer übergeben), der/die zweite
+Unterzeichner:in (HR) aus dem Ausstellerprofil. Das PDF entsteht per LibreOffice
+— derselbe ``soffice``-Pfad wie Wartung/ATR/Signage.
 """
 from __future__ import annotations
 
@@ -14,34 +18,130 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Pt, RGBColor
+from docx.shared import Cm, Pt
 
-from app.models.zeugnis import ZEUGNIS_ABSCHNITTE, Zeugnis, ZeugnisAussteller
+from app.models.zeugnis import Zeugnis, ZeugnisAussteller
 
-_MONATE = (
-    "Januar", "Februar", "März", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+# --- ACM-Briefkopf (feste Zertifizierungen + Firmenbeschreibung) ------------
+#: Nur einblenden, wenn der Aussteller die ACM ist — ein anderer Betrieb bekommt
+#: seinen eigenen (schlichten) Kopf ohne diese festen Angaben.
+_ACM_KENN = "aircraft cabin modification"
+_ACM_ZERTIFIKATE = (
+    "EASA Part 21J    EASA.21J.456",
+    "EASA Part 21G    DE.21G.0170",
+    "EASA Part 145    DE.145.0222",
+    "DIN EN ISO 9001:2015",
+    "DIN EN ISO 9100:2018",
+    "DIN EN ISO 9110:2018",
+)
+_ACM_BESCHREIBUNG = (
+    "Die Aircraft Cabin Modification GmbH ist ein nach EASA Part 21J, 21G und "
+    "145 zertifizierter Betrieb. Damit qualifiziert sie sich als idealer Partner "
+    "in der Luftfahrtindustrie in Sachen Entwicklung, Produktion, Instandhaltung "
+    "und Überarbeitung von Flugzeuginnenausstattungen.",
+    "Die Kombination von Entwicklungs-, Produktions- und Instandhaltungsbetrieb "
+    "führt zu einem einzigartigen Portfolio an Produkten und Dienstleistungen, "
+    "das zusätzlich ständig weiter entwickelt und ausgebaut wird.",
+    "Zu unserer Produktpalette gehören die Herstellung, Überholung und Reparatur "
+    "von hochwertigen Flugzeugsitzbezügen, Sicherheits- und Anschnallgurten sowie "
+    "Kabinen-Equipment. Des Weiteren stellen wir Composite Verbundteile und "
+    "Paneele, Crew Rest Compartments und textile Innenausstattung für Flugzeuge "
+    "und Helikopter her.",
 )
 
 
-def _datum_lang(d) -> str:
-    return f"{d.day}. {_MONATE[d.month - 1]} {d.year}" if d else ""
+def _datum_kurz(d) -> str:
+    return d.strftime("%d.%m.%Y") if d else ""
 
 
-def _titel(art: str) -> str:
-    if art == "zwischenzeugnis":
-        return "Zwischenzeugnis"
-    if art == "einfach":
-        return "Arbeitszeugnis"
-    return "Arbeitszeugnis"
+def _ist_acm(aussteller: ZeugnisAussteller | None) -> bool:
+    return bool(aussteller and aussteller.firma and _ACM_KENN in aussteller.firma.lower())
+
+
+def _titel(art: str, austritt) -> str:
+    return {
+        "zwischenzeugnis": "Zwischenzeugnis",
+        "ausbildungszeugnis": "Ausbildungszeugnis",
+        "praktikumszeugnis": "Praktikumszeugnis",
+        "einfach": "Arbeitszeugnis",
+    }.get(art, "Endzeugnis" if austritt else "Zeugnis")
+
+
+def _briefkopf(doc: Document, aussteller: ZeugnisAussteller | None, logo_png: bytes | None) -> None:
+    """Logo (links) + Zertifizierungen (rechts) in den Seitenkopf — je Seite."""
+    header = doc.sections[0].header
+    tabelle = header.add_table(rows=1, cols=2, width=Cm(16.0))
+    links, rechts = tabelle.rows[0].cells
+    links.width = Cm(6.0)
+    rechts.width = Cm(10.0)
+    if logo_png:
+        try:
+            links.paragraphs[0].add_run().add_picture(BytesIO(logo_png), width=Cm(4.0))
+        except Exception:  # pragma: no cover - defektes Bild bricht das Zeugnis nicht
+            pass
+    if _ist_acm(aussteller):
+        erste = True
+        for zeile in _ACM_ZERTIFIKATE:
+            p = rechts.paragraphs[0] if erste else rechts.add_paragraph()
+            erste = False
+            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            p.add_run(zeile).font.size = Pt(8)
+
+
+def _fliesstext(doc: Document, text: str) -> None:
+    para = doc.add_paragraph(text)
+    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    para.paragraph_format.space_after = Pt(10)
+
+
+def _aufgaben(doc: Document, text: str) -> None:
+    """Tätigkeit: erste Zeile als Einleitung, Folgezeilen als Aufzählung."""
+    zeilen = [z for z in text.splitlines() if z.strip()]
+    if len(zeilen) <= 1:
+        _fliesstext(doc, text.replace("\n", " ").strip())
+        return
+    einleit = doc.add_paragraph(zeilen[0])
+    einleit.paragraph_format.space_after = Pt(4)
+    for punkt in zeilen[1:]:
+        doc.add_paragraph(punkt.strip(), style="List Bullet")
+
+
+def _unterschriften(
+    doc: Document,
+    supervisor_name: str | None,
+    supervisor_titel: str | None,
+    aussteller: ZeugnisAussteller | None,
+) -> None:
+    """Zwei Unterschriften nebeneinander: Supervisor (Personio) + HR (Aussteller)."""
+    hr_name = aussteller.unterzeichner2_name if aussteller else None
+    hr_titel = aussteller.unterzeichner2_titel if aussteller else None
+    if not supervisor_name and not hr_name:
+        return
+    doc.add_paragraph()
+    doc.add_paragraph()  # Platz für die eigentliche Unterschrift
+    tabelle = doc.add_table(rows=1, cols=2)
+    for zelle, name, titel in (
+        (tabelle.rows[0].cells[0], supervisor_name, supervisor_titel),
+        (tabelle.rows[0].cells[1], hr_name, hr_titel),
+    ):
+        if not name:
+            continue
+        zelle.paragraphs[0].add_run(name).font.size = Pt(10)
+        if titel:
+            r = zelle.add_paragraph().add_run(f"– {titel} –")
+            r.font.size = Pt(10)
+            r.italic = True
 
 
 def build_zeugnis_docx(
     zeugnis: Zeugnis,
     aussteller: ZeugnisAussteller | None,
     logo_png: bytes | None,
+    *,
+    supervisor_name: str | None = None,
+    supervisor_titel: str | None = None,
 ) -> bytes:
-    """Baut das Arbeitszeugnis als .docx und gibt die Bytes zurück."""
+    """Baut das Zeugnis als .docx (ACM-Endzeugnis-Vorlage) und gibt die Bytes zurück."""
     doc = Document()
     for section in doc.sections:
         section.top_margin = Cm(2.0)
@@ -49,69 +149,54 @@ def build_zeugnis_docx(
         section.left_margin = Cm(2.5)
         section.right_margin = Cm(2.5)
 
-    # --- Briefkopf: Logo + Firma ---
-    if logo_png:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        try:
-            p.add_run().add_picture(BytesIO(logo_png), width=Cm(4.0))
-        except Exception:  # pragma: no cover - defektes Bild bricht das Zeugnis nicht
-            pass
-    if aussteller and aussteller.firma:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run = p.add_run(aussteller.firma)
-        run.bold = True
-        if aussteller.standort:
-            ps = doc.add_paragraph()
-            ps.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r = ps.add_run(aussteller.standort)
-            r.font.size = Pt(9)
-            r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
-
-    doc.add_paragraph()
+    _briefkopf(doc, aussteller, logo_png)
 
     # --- Titel ---
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(_titel(zeugnis.art))
+    run = p.add_run(_titel(zeugnis.art, zeugnis.austritt))
     run.bold = True
     run.font.size = Pt(16)
     doc.add_paragraph()
 
-    # --- Fließtext-Abschnitte (leere überspringen) ---
     abschnitte = zeugnis.abschnitte_json or {}
-    for key in ZEUGNIS_ABSCHNITTE:
+
+    # --- Einleitung ---
+    einleitung = str(abschnitte.get("einleitung", "") or "").strip()
+    if einleitung:
+        _fliesstext(doc, einleitung)
+
+    # --- Firmenbeschreibung (nur ACM) ---
+    if _ist_acm(aussteller):
+        for absatz in _ACM_BESCHREIBUNG:
+            _fliesstext(doc, absatz)
+
+    # --- Tätigkeiten (als Aufzählung) ---
+    taetigkeit = str(abschnitte.get("taetigkeitsbeschreibung", "") or "").strip()
+    if taetigkeit:
+        _aufgaben(doc, taetigkeit)
+        doc.add_paragraph()
+
+    # --- Beurteilung + Schluss ---
+    for key in ("leistungsbeurteilung", "sozialverhalten", "schlussformel"):
         text = str(abschnitte.get(key, "") or "").strip()
-        if not text:
-            continue
-        para = doc.add_paragraph(text)
-        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        para.paragraph_format.space_after = Pt(10)
+        if text:
+            _fliesstext(doc, text)
 
     # --- Ort, Datum ---
     doc.add_paragraph()
     ort = (aussteller.standort if aussteller else None) or ""
-    datum = _datum_lang(zeugnis.ausstellungsdatum)
+    datum = _datum_kurz(zeugnis.ausstellungsdatum or zeugnis.austritt)
     if ort or datum:
-        p = doc.add_paragraph(", ".join(x for x in (ort, f"den {datum}" if datum else "") if x))
+        doc.add_paragraph(", ".join(x for x in (ort, datum) if x))
+
+    # --- Firma über den Unterschriften ---
+    if aussteller and aussteller.firma:
+        doc.add_paragraph()
+        doc.add_paragraph(aussteller.firma).runs[0].bold = True
 
     # --- Unterschriften ---
-    if aussteller and (aussteller.unterzeichner1_name or aussteller.unterzeichner2_name):
-        doc.add_paragraph()
-        doc.add_paragraph()
-        zeile = doc.add_paragraph()
-        for name, titel in (
-            (aussteller.unterzeichner1_name, aussteller.unterzeichner1_titel),
-            (aussteller.unterzeichner2_name, aussteller.unterzeichner2_titel),
-        ):
-            if not name:
-                continue
-            block = f"{name}"
-            if titel:
-                block += f"\n{titel}"
-            run = zeile.add_run(block + "\t\t")
-            run.font.size = Pt(10)
+    _unterschriften(doc, supervisor_name, supervisor_titel, aussteller)
 
     buf = BytesIO()
     doc.save(buf)
