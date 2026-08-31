@@ -88,6 +88,8 @@
   "zeugnisse.hinweis": "AI-assisted drafting. People come from Personio or the externals list. The generated text needs legal review and is editable here.",
   "zeugnisse.neu": "New reference",
   "zeugnisse.personWaehlen": "Choose a person…",
+  "zeugnisse.personSuchen": "Search person…",
+  "zeugnisse.keineTreffer": "No matches",
   "zeugnisse.art.qualifiziert": "Detailed",
   "zeugnisse.art.einfach": "Simple",
   "zeugnisse.art.zwischenzeugnis": "Interim",

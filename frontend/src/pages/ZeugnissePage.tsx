@@ -92,20 +92,11 @@ export function ZeugnissePage() {
         <div className="space-y-3">
           <div className="rounded-lg border p-3">
             <div className="mb-2 text-xs font-medium">{t("zeugnisse.neu")}</div>
-            <select
+            <PersonWaehler
+              personen={personen ?? []}
               value={neuePerson}
-              onChange={(e) => setNeuePerson(e.target.value)}
-              className={`${feld} w-full`}
-            >
-              <option value="">{t("zeugnisse.personWaehlen")}</option>
-              {(personen ?? []).map((p: Person) => (
-                <option key={p.employee_id} value={p.employee_id}>
-                  {p.name}
-                  {p.status === "inactive" ? " · ausgeschieden" : ""}
-                  {p.status === "extern" ? " · extern" : ""}
-                </option>
-              ))}
-            </select>
+              onChange={setNeuePerson}
+            />
             <div className="mt-2 flex items-center gap-2">
               <select
                 value={neueArt}
@@ -171,6 +162,82 @@ export function ZeugnissePage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Suchbare Personen-Auswahl (tippen filtert, alphabetisch sortiert). */
+function PersonWaehler({
+  personen,
+  value,
+  onChange,
+}: {
+  personen: Person[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [offen, setOffen] = useState(false);
+
+  const gewaehlt = personen.find((p) => String(p.employee_id) === value);
+  const suffix = (p: Person) =>
+    p.status === "inactive" ? " · ausgeschieden" : p.status === "extern" ? " · extern" : "";
+  const q = query.trim().toLowerCase();
+  const gefiltert = [...personen]
+    .sort((a, b) => a.name.localeCompare(b.name, "de"))
+    .filter((p) => `${p.name} ${p.position ?? ""}`.toLowerCase().includes(q))
+    .slice(0, 50);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className={`${feld} w-full`}
+        placeholder={t("zeugnisse.personSuchen")}
+        value={offen ? query : gewaehlt?.name ?? ""}
+        onFocus={() => {
+          setQuery("");
+          setOffen(true);
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOffen(true);
+        }}
+        onBlur={() => window.setTimeout(() => setOffen(false), 150)}
+      />
+      {offen && (
+        <ul
+          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-background
+                     shadow-md"
+        >
+          {gefiltert.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-muted-foreground">{t("zeugnisse.keineTreffer")}</li>
+          ) : (
+            gefiltert.map((p) => (
+              <li key={p.employee_id}>
+                <button
+                  type="button"
+                  className="flex w-full flex-col items-start px-3 py-1.5 text-left text-sm hover:bg-muted"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(String(p.employee_id));
+                    setOffen(false);
+                  }}
+                >
+                  <span>
+                    {p.name}
+                    {suffix(p)}
+                  </span>
+                  {p.position && (
+                    <span className="text-xs text-muted-foreground">{p.position}</span>
+                  )}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
     </div>
   );
 }
