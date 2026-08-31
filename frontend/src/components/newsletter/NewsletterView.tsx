@@ -94,7 +94,7 @@ export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }
     <AuthImageUrl
       url={bildUrl(eintragId)}
       alt={alt}
-      className="mb-2 max-h-48 w-full rounded-lg border border-border object-cover shadow-sm"
+      className="mb-2 mx-auto block max-h-40 w-auto max-w-full rounded-lg border border-border shadow-sm"
     />
   );
 }
