@@ -86,6 +86,7 @@ class EintragRead(BaseModel):
 
 
 class NeuerMitarbeiter(BaseModel):
+    employee_id: int
     name: str
     abteilung: str | None = None
     position: str | None = None
@@ -202,6 +203,7 @@ async def _neue_mitarbeiter(
     )
     return [
         NeuerMitarbeiter(
+            employee_id=e.id,
             name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
             abteilung=e.department,
             position=e.position,
