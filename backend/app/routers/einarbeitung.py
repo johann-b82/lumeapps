@@ -522,6 +522,16 @@ async def status_setzen(
     return _vorgang_read(d)
 
 
+@router.delete("/dokument/{dok_id}", status_code=204)
+async def dokument_loeschen(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> None:
+    """Einarbeitungsvorgang endgültig löschen (aus der Liste entfernen)."""
+    d = await _hole_vorgang(db, dok_id)
+    await db.delete(d)
+    await db.commit()
+
+
 @router.post("/scan")
 async def scan_hochladen(
     datei: UploadFile = File(...), db: AsyncSession = Depends(get_async_db_session)

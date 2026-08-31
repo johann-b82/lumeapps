@@ -117,3 +117,8 @@ export function zertifikatLoeschen(zertId: number): Promise<SchulungVorgang> {
     method: "DELETE",
   });
 }
+
+/** Einen Schulungsvorgang endgültig löschen (inkl. Zertifikate). */
+export function loescheSchulungVorgang(id: number): Promise<void> {
+  return apiClient<void>(`/api/hr/schulungen/dokument/${id}`, { method: "DELETE" });
+}

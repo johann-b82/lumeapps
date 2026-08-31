@@ -50,7 +50,6 @@ from app.services.maintenance_files import (
     upload_maintenance_file_to_directus,
 )
 from app.services.pdf_logo import lade_logo
-from app.services.schulung_paket_pdf import erzeuge_schulung_paket_pdf
 from app.services.schulungsprotokoll_pdf import (
     dateiname as protokoll_dateiname,
     erzeuge_schulungsprotokoll_pdf,
@@ -1768,17 +1767,11 @@ async def schulung_dokument_pdf(
     dok_id: int, db: AsyncSession = Depends(get_async_db_session)
 ) -> Response:
     d = await _hole_schulung_vorgang(db, dok_id)
-    schulungen = d.schulungen or []
-    if schulungen:
-        # Schulungsplan (Fbl. 71) + je Schulung ein vorausgefülltes Fbl. 68 als ein
-        # PDF — druckt zusammen aus, jeder Nachweis trägt seinen QR zur Zuordnung.
-        pdf = await erzeuge_schulung_paket_pdf(
-            d.mitarbeiter_name, d.funktion or "", schulungen, d.doc_uid, logo=await lade_logo(db)
-        )
-    elif d.pdf_uuid:
-        pdf = await datei_laden(d.pdf_uuid)
-    else:
+    if not d.pdf_uuid:
         raise HTTPException(status_code=404, detail="Kein PDF hinterlegt.")
+    # Das komplette Bündel (Fbl. 71 + Fbl. 68 je Schulung) wurde beim Anlegen
+    # erzeugt und gespeichert — hier nur noch abrufen, keine erneute Generierung.
+    pdf = await datei_laden(d.pdf_uuid)
     # Der Download zum Ausdrucken gilt als Übergabe → einmalig datieren.
     if d.uebergeben_am is None:
         d.uebergeben_am = datetime.now(timezone.utc)
@@ -1853,6 +1846,16 @@ async def schulung_status_setzen(
     await db.commit()
     await db.refresh(d)
     return await _schulung_read_voll(db, d)
+
+
+@router.delete("/dokument/{dok_id}", status_code=204)
+async def schulung_dokument_loeschen(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> None:
+    """Schulungsvorgang endgültig löschen (inkl. zugeordneter Zertifikate via FK-Cascade)."""
+    d = await _hole_schulung_vorgang(db, dok_id)
+    await db.delete(d)
+    await db.commit()
 
 
 @router.post("/scan")

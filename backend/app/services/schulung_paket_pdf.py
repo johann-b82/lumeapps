@@ -25,12 +25,17 @@ async def erzeuge_schulung_paket_pdf(
     schulungen: list[dict],
     doc_uid: str,
     logo: LogoBild | None = None,
-) -> bytes:
-    """Fbl. 71 (Blatt 1) + je Schulung ein Fbl. 68 (Blätter 2..N) als ein PDF."""
+) -> tuple[bytes, dict]:
+    """Fbl. 71 (Blatt 1) + je Schulung ein Fbl. 68 (Blätter 2..N) als ein PDF.
+
+    Gibt zusätzlich das Feld-Layout des Fbl. 71 (Blatt 1) zurück — dieselbe Mappe
+    liefert damit sowohl das Druck-Bündel als auch die Scan-Prüf-Geometrie in
+    einem LibreOffice-Durchlauf.
+    """
     wb = Workbook()
     # Blatt 1: Schulungsübersicht als Vorgang (QR + Passermarken).
     zeilen = [UebersichtZeile(bezeichnung=s["name"]) for s in schulungen]
-    fuelle_vorgang_blatt(wb.active, name, funktion, zeilen, doc_uid, logo=logo)
+    layout = fuelle_vorgang_blatt(wb.active, name, funktion, zeilen, doc_uid, logo=logo)
     # Blätter 2..N: je Schulung ein vorausgefülltes Fbl. 68 mit QR doc_uid#index.
     for i, s in enumerate(schulungen):
         fuelle_nachweis_blatt(
@@ -45,4 +50,4 @@ async def erzeuge_schulung_paket_pdf(
 
     puffer = BytesIO()
     wb.save(puffer)
-    return await convert_xlsx_to_pdf(puffer.getvalue())
+    return await convert_xlsx_to_pdf(puffer.getvalue()), layout

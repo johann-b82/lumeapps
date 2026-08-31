@@ -17,6 +17,7 @@ import {
 import {
   aktualisiereVorgang,
   fetchVorgaenge,
+  loescheVorgang,
   oeffneVorgangPdf,
   oeffneVorgangScan,
   scanHochladen,
@@ -27,6 +28,7 @@ import {
 import {
   aktualisiereSchulungVorgang,
   fetchSchulungVorgaenge,
+  loescheSchulungVorgang,
   oeffneNachweisPdf,
   oeffneSchulungPdf,
   oeffneSchulungScan,
@@ -67,12 +69,14 @@ const API = {
     scan: oeffneVorgangScan,
     status: setzeVorgangStatus,
     aktualisieren: aktualisiereVorgang,
+    loeschen: loescheVorgang,
   },
   schulung: {
     pdf: oeffneSchulungPdf,
     scan: oeffneSchulungScan,
     status: setzeSchulungStatus,
     aktualisieren: aktualisiereSchulungVorgang,
+    loeschen: loescheSchulungVorgang,
   },
 } as const;
 
@@ -174,6 +178,15 @@ export function Vorgaenge() {
 
   const scanAnsehen = useMutation({
     mutationFn: ({ typ, id }: { typ: Typ; id: number }) => API[typ].scan(id),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const loeschen = useMutation({
+    mutationFn: ({ typ, id }: { typ: Typ; id: number }) => API[typ].loeschen(id),
+    onSuccess: () => {
+      toast.success(t("onboarding.vorgang.geloescht"));
+      invalidate();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -323,6 +336,18 @@ export function Vorgaenge() {
                             {t(`onboarding.vorgang.weiterZu.${naechster}`)}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          title={t("onboarding.vorgang.loeschen")}
+                          onClick={() => {
+                            if (window.confirm(t("onboarding.vorgang.loeschenBestaetigen", { name: v.mitarbeiter_name })))
+                              loeschen.mutate({ typ: v.typ, id: v.id });
+                          }}
+                          disabled={loeschen.isPending}
+                          className="rounded-md border p-1.5 text-red-600 hover:bg-muted disabled:opacity-60"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
                       </div>
                     </td>
                   </tr>

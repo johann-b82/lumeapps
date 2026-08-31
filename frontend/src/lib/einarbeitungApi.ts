@@ -197,6 +197,11 @@ export function scanHochladen(
   );
 }
 
+/** Einen Einarbeitungsvorgang endgültig löschen. */
+export function loescheVorgang(id: number): Promise<void> {
+  return apiClient<void>(`/api/hr/einarbeitung/dokument/${id}`, { method: "DELETE" });
+}
+
 /** Das hinterlegte Blanko-PDF eines Vorgangs im neuen Tab öffnen. */
 export async function oeffneVorgangPdf(id: number): Promise<void> {
   const blob = await fetchBlob(`/api/hr/einarbeitung/dokument/${id}/pdf`);

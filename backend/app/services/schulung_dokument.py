@@ -16,11 +16,8 @@ from app.models import SchulungDokument, SchulungZertifikat
 from app.services.directus_files import datei_laden, datei_speichern
 from app.services.einarbeitung_pruefung import feld_pruefung, qr_dekodieren, scan_rastern
 from app.services.pdf_logo import LogoBild
-from app.services.schulungsuebersicht_pdf import (
-    UebersichtZeile,
-    dateiname,
-    erzeuge_schulung_vorgang_pdf,
-)
+from app.services.schulung_paket_pdf import erzeuge_schulung_paket_pdf
+from app.services.schulungsuebersicht_pdf import dateiname
 
 
 def neue_doc_uid() -> str:
@@ -43,8 +40,10 @@ async def vorgang_anlegen(
     bindet den Fbl.-68-Index (QR ``doc_uid#index``) stabil an die Schulung.
     """
     doc_uid = neue_doc_uid()
-    zeilen = [UebersichtZeile(bezeichnung=s["name"]) for s in schulungen]
-    pdf, layout = await erzeuge_schulung_vorgang_pdf(name, funktion, zeilen, doc_uid, logo=logo)
+    # Schon beim Anlegen das komplette Druck-Bündel (Fbl. 71 + je Schulung ein
+    # Fbl. 68) erzeugen und speichern — „PDF öffnen" liefert es später ohne
+    # erneute Generierung. Blatt 1 (Fbl. 71) bleibt die Scan-Prüf-Referenz.
+    pdf, layout = await erzeuge_schulung_paket_pdf(name, funktion, schulungen, doc_uid, logo=logo)
     pdf_ref = await datei_speichern(f"{dateiname(name, date.today())}.pdf", pdf)
 
     dok = SchulungDokument(

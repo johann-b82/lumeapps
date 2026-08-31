@@ -1253,6 +1253,8 @@
   "onboarding.eintritte.abteilung": "Department",
   "onboarding.eintritte.eintritt": "Start date",
   "onboarding.eintritte.plan": "Training plan",
+  "onboarding.eintritte.statusEinarbeitung": "Onboarding",
+  "onboarding.eintritte.statusSchulung": "Training",
   "onboarding.keineRegel": "no rule defined",
   "onboarding.vollstaendig": "{{count}} created",
   "onboarding.offenVon": "{{fehlend}} of {{gesamt}} open",
@@ -1841,7 +1843,7 @@
   "audit.trail.action.status_change": "Status change",
   "audit.trail.action.phase_skip": "Phase skipped",
   "launcher.section.quality": "Quality",
-  "onboarding.vorgang.anlegen": "Create process",
+  "onboarding.vorgang.anlegen": "Start process",
   "onboarding.vorgang.angelegt": "Onboarding and training process created",
   "onboarding.vorgang.titel": "Onboarding & training processes",
   "onboarding.vorgang.hinweis": "Created onboarding and training plans with their lifecycle. Scan the completed sheet and upload it — assignment happens automatically via the QR code.",
@@ -1894,5 +1896,8 @@
   "onboarding.vorgang.zertHochladen": "Upload certificate",
   "onboarding.vorgang.zertHochgeladen": "Certificate uploaded",
   "onboarding.vorgang.zertAnsehen": "View",
-  "onboarding.vorgang.zertLoeschen": "Delete"
+  "onboarding.vorgang.zertLoeschen": "Delete",
+  "onboarding.vorgang.loeschen": "Delete process",
+  "onboarding.vorgang.loeschenBestaetigen": "Permanently delete the process for {{name}}?",
+  "onboarding.vorgang.geloescht": "Process deleted"
 }

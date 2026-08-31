@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,7 +6,6 @@ import {
   Check,
   FileDown,
   ClipboardList,
-  FileText,
   Loader2,
   UserPlus,
   Wrench,
@@ -14,19 +13,13 @@ import {
 } from "lucide-react";
 import {
   entferneExtern,
-  erzeugeDokumente,
   erzeugePlan,
   fetchAbteilungen,
-  fetchDokumente,
   fetchEintritte,
   fetchPlan,
   fetchRollen,
-  ladeDokument,
-  ladeOnboardingPaket,
-  ladeSchulungsuebersicht,
   legeExternAn,
   type Eintritt,
-  type OnboardingDokument,
 } from "@/lib/onboardingApi";
 import {
   aendereKatalog,
@@ -35,15 +28,16 @@ import {
   fetchEinarbeitungAbteilungen,
   fetchEinarbeitungKatalog,
   fetchEinarbeitungPflicht,
-  ladeEinarbeitungsplan,
+  fetchVorgaenge,
   legeKatalogAn,
   setzeEinarbeitungPflicht,
   vorgangAnlegen,
   type EinarbeitungKatalog,
   type EinarbeitungPflicht,
+  type VorgangStatus,
 } from "@/lib/einarbeitungApi";
 import { fetchSchulungen } from "@/lib/schulungApi";
-import { schulungVorgangAnlegen } from "@/lib/schulungVorgangApi";
+import { fetchSchulungVorgaenge, schulungVorgangAnlegen } from "@/lib/schulungVorgangApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 import { Vorgaenge } from "@/components/onboarding/Vorgaenge";
@@ -52,6 +46,23 @@ function datum(wert: string | null): string {
   if (!wert) return "—";
   const d = new Date(wert);
   return Number.isNaN(d.getTime()) ? wert : d.toLocaleDateString();
+}
+
+/** Status eines Vorgangs (Einarbeitung oder Schulung) als Badge; „—" ohne Vorgang. */
+function VorgangStatusZelle({ status }: { status: VorgangStatus | undefined }) {
+  const { t } = useTranslation();
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  const stil =
+    status === "geprueft"
+      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+      : status === "erstellt"
+        ? "bg-muted text-muted-foreground"
+        : "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-xs ${stil}`}>
+      {t(`onboarding.vorgang.statusName.${status}`)}
+    </span>
+  );
 }
 
 /** Schulungsplan einer Person — Soll aus der Matrix, Ist aus dem Bestand. */
@@ -72,11 +83,6 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
       // Die Schulungssichten zeigen die neuen Zeilen ebenfalls.
       qc.invalidateQueries({ queryKey: hrKpiKeys.schulungMitarbeiter() });
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const pdfLaden = useMutation({
-    mutationFn: () => ladeSchulungsuebersicht(eintritt.employee_id, eintritt.name),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -153,32 +159,12 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={() => pdfLaden.mutate()}
-          disabled={pdfLaden.isPending}
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm
-                     transition-colors hover:bg-muted disabled:opacity-60
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {pdfLaden.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <FileDown className="h-4 w-4" aria-hidden="true" />
-          )}
-          {t("onboarding.uebersichtPdf")}
-        </button>
-
         <AbteilungsDownload
           eintritt={eintritt}
-          label={t("onboarding.einarbeitung.pdf")}
-          laden={(a) => ladeEinarbeitungsplan(eintritt.employee_id, eintritt.name, a)}
-        />
-
-        <AbteilungsDownload
-          eintritt={eintritt}
+          primaer
           label={t("onboarding.vorgang.anlegen")}
-          // Beide Vorgänge gleichzeitig starten: Einarbeitung + Schulung.
+          // Beide Vorgänge gleichzeitig starten: Einarbeitung + Schulung. Alle PDFs
+          // (Einarbeitungsbogen, Schulungsplan + Fbl. 68) werden dabei erzeugt.
           laden={(a) =>
             Promise.all([
               vorgangAnlegen(eintritt.employee_id, a),
@@ -188,19 +174,8 @@ function PlanDetail({ eintritt }: { eintritt: Eintritt }) {
           nachDownload={() => {
             qc.invalidateQueries({ queryKey: hrKpiKeys.einarbeitungVorgaenge() });
             qc.invalidateQueries({ queryKey: hrKpiKeys.schulungVorgaenge() });
-            toast.success(t("onboarding.vorgang.angelegt"));
-          }}
-        />
-
-        <AbteilungsDownload
-          eintritt={eintritt}
-          primaer
-          label={t("onboarding.paket.pdf")}
-          laden={(a) => ladeOnboardingPaket(eintritt.employee_id, eintritt.name, a)}
-          nachDownload={() => {
-            // Paket geladen → "neu"-Markierung fällt weg; Liste + Detail neu laden.
             qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingEintritte() });
-            qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingPlan(eintritt.employee_id) });
+            toast.success(t("onboarding.vorgang.angelegt"));
           }}
         />
       </div>
@@ -763,137 +738,6 @@ function EinarbeitungMatrixPanel() {
   );
 }
 
-/** Automatisch erzeugte Schulungsübersichten.
- *
- *  Der Lauf hängt am Personio-Abgleich; der Knopf hier ist für den Fall, dass
- *  gerade die Anforderungsmatrix gepflegt wurde und man nicht bis zum nächsten
- *  Abgleich warten will.
- */
-function DokumentePanel() {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { data } = useQuery({
-    queryKey: hrKpiKeys.onboardingDokumente(),
-    queryFn: fetchDokumente,
-  });
-
-  const erzeugen = useMutation({
-    mutationFn: erzeugeDokumente,
-    onSuccess: (r) => {
-      toast.success(
-        t("onboarding.dokumente.lauf", {
-          erzeugt: r.erzeugt,
-          aktualisiert: r.aktualisiert,
-        }),
-      );
-      if (r.uebersprungen_leer > 0) {
-        // Kein Fehler, aber der häufigste Grund für "es passiert nichts".
-        toast.warning(
-          t("onboarding.dokumente.ohneSoll", { count: r.uebersprungen_leer }),
-        );
-      }
-      qc.invalidateQueries({ queryKey: hrKpiKeys.onboardingDokumente() });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const laden = useMutation({
-    mutationFn: (d: OnboardingDokument) => ladeDokument(d.employee_id, d.dateiname),
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const veraltet = (data ?? []).filter((d) => d.veraltet).length;
-
-  return (
-    <section className="mb-6">
-      <Klappbar
-        titel={t("onboarding.dokumente.title")}
-        anzahl={data?.length ?? 0}
-        icon={<FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-        offenStart={false}
-      >
-        <div className="space-y-3 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              {t("onboarding.dokumente.hinweis")}
-            </p>
-            <button
-              type="button"
-              onClick={() => erzeugen.mutate()}
-              disabled={erzeugen.isPending}
-              className="ml-auto inline-flex items-center gap-2 rounded-md border px-3 py-1.5
-                         text-xs transition-colors hover:bg-muted disabled:opacity-60
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {erzeugen.isPending && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              )}
-              {t("onboarding.dokumente.jetztErzeugen")}
-            </button>
-          </div>
-
-          {veraltet > 0 && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
-              {t("onboarding.dokumente.veraltetHinweis", { count: veraltet })}
-            </p>
-          )}
-
-          {(data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("onboarding.dokumente.leer")}
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/20">
-                  <Th>{t("onboarding.dokumente.datei")}</Th>
-                  <Th rechts>{t("onboarding.schulung")}</Th>
-                  <Th rechts>{t("onboarding.dokumente.erzeugtAm")}</Th>
-                  <Th rechts>{""}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data ?? []).map((d) => (
-                  <tr
-                    key={d.employee_id}
-                    className="border-b border-border/40 last:border-0"
-                  >
-                    <td className="px-4 py-1.5">
-                      {d.dateiname}
-                      {d.veraltet && (
-                        <span className="ml-2 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-                          {t("onboarding.dokumente.veraltet")}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-1.5 text-right tabular-nums">{d.schulungen}</td>
-                    <td className="px-4 py-1.5 text-right whitespace-nowrap tabular-nums text-muted-foreground">
-                      {datum(d.erzeugt_am)}
-                    </td>
-                    <td className="px-4 py-1.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => laden.mutate(d)}
-                        aria-label={t("onboarding.dokumente.herunterladen")}
-                        title={t("onboarding.dokumente.herunterladen")}
-                        className="rounded-md p-1 text-muted-foreground transition-colors
-                                   hover:bg-muted hover:text-foreground
-                                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <FileDown className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </Klappbar>
-    </section>
-  );
-}
-
 /** Übersicht der bestehenden Positions→Kürzel-Zuordnungen (nur Anzeige). */
 function RollenPanel() {
   const { t } = useTranslation();
@@ -1022,6 +866,30 @@ export function OnboardingPage() {
     queryFn: fetchEintritte,
   });
 
+  // Vorgangs-Status je Mitarbeiter (jeweils der neueste) — zwei Spalten in der
+  // Übersicht: Einarbeitung und Schulung. Die Listen sind nach Erstellung
+  // absteigend sortiert, der erste Treffer je Mitarbeiter ist also der aktuelle.
+  const eaVorgaenge = useQuery({
+    queryKey: hrKpiKeys.einarbeitungVorgaenge(),
+    queryFn: fetchVorgaenge,
+  });
+  const schVorgaenge = useQuery({
+    queryKey: hrKpiKeys.schulungVorgaenge(),
+    queryFn: fetchSchulungVorgaenge,
+  });
+  const eaStatus = useMemo(() => {
+    const m = new Map<number, VorgangStatus>();
+    for (const v of eaVorgaenge.data ?? [])
+      if (v.employee_id != null && !m.has(v.employee_id)) m.set(v.employee_id, v.status);
+    return m;
+  }, [eaVorgaenge.data]);
+  const schStatus = useMemo(() => {
+    const m = new Map<number, VorgangStatus>();
+    for (const v of schVorgaenge.data ?? [])
+      if (v.employee_id != null && !m.has(v.employee_id)) m.set(v.employee_id, v.status);
+    return m;
+  }, [schVorgaenge.data]);
+
   const externLoeschen = useMutation({
     mutationFn: (externId: number) => entferneExtern(externId),
     onSuccess: () => {
@@ -1041,7 +909,6 @@ export function OnboardingPage() {
 
       <EinarbeitungKatalogPanel />
       <EinarbeitungMatrixPanel />
-      <DokumentePanel />
       <RollenPanel />
       <Vorgaenge />
 
@@ -1074,7 +941,9 @@ export function OnboardingPage() {
                   <Th>{t("onboarding.eintritte.position")}</Th>
                   <Th>{t("onboarding.eintritte.abteilung")}</Th>
                   <Th>{t("onboarding.eintritte.eintritt")}</Th>
-                  <Th rechts>{t("onboarding.eintritte.plan")}</Th>
+                  <Th rechts>{t("onboarding.eintritte.statusEinarbeitung")}</Th>
+                  <Th rechts>{t("onboarding.eintritte.statusSchulung")}</Th>
+                  <Th rechts>{""}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -1106,22 +975,12 @@ export function OnboardingPage() {
                         {datum(e.hire_date)}
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
-                        {e.soll_gesamt === 0 ? (
-                          <span className="text-xs text-muted-foreground">
-                            {t("onboarding.keineRegel")}
-                          </span>
-                        ) : e.fehlend === 0 ? (
-                          <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">
-                            {t("onboarding.vollstaendig", { count: e.soll_gesamt })}
-                          </span>
-                        ) : (
-                          <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            {t("onboarding.offenVon", {
-                              fehlend: e.fehlend,
-                              gesamt: e.soll_gesamt,
-                            })}
-                          </span>
-                        )}
+                        <VorgangStatusZelle status={eaStatus.get(e.employee_id)} />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <VorgangStatusZelle status={schStatus.get(e.employee_id)} />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
                         {!e.in_personio && (
                           <button
                             type="button"
@@ -1132,7 +991,7 @@ export function OnboardingPage() {
                             disabled={externLoeschen.isPending}
                             aria-label={t("onboarding.extern.loeschen")}
                             title={t("onboarding.extern.loeschen")}
-                            className="ml-2 rounded p-0.5 align-middle text-muted-foreground
+                            className="rounded p-0.5 align-middle text-muted-foreground
                                        transition-colors hover:bg-destructive/10 hover:text-destructive
                                        disabled:opacity-50"
                           >
@@ -1143,7 +1002,7 @@ export function OnboardingPage() {
                     </tr>,
                     offen ? (
                       <tr key={`${e.employee_id}-detail`} className="border-b bg-muted/10">
-                        <td colSpan={5} className="p-0">
+                        <td colSpan={7} className="p-0">
                           <PlanDetail eintritt={e} />
                         </td>
                       </tr>
