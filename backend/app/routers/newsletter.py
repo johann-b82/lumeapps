@@ -26,7 +26,7 @@ Die übrigen GET-Routen (veröffentlichte Ausgaben + Bilder) sind viewer-lesbar.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_async_db_session
-from app.models import Newsletter, NewsletterEintrag, NewsletterEintragBild
+from app.models import Newsletter, NewsletterEintrag, NewsletterEintragBild, PersonioEmployee
 from app.models.newsletter import NEWSLETTER_RUBRIKEN, NEWSLETTER_STATUS
 from app.routers.hr_belegschaft import aggregiere_belegschaft
 from app.security.directus_auth import get_current_user, require_admin, require_dashboard_read
@@ -85,6 +85,12 @@ class EintragRead(BaseModel):
     bilder: list[BildRead] = []
 
 
+class NeuerMitarbeiter(BaseModel):
+    name: str
+    abteilung: str | None = None
+    position: str | None = None
+
+
 class AusgabeDetail(BaseModel):
     id: int
     jahr: int
@@ -94,6 +100,8 @@ class AusgabeDetail(BaseModel):
     eintraege: list[EintragRead]
     #: Eingefrorener KPI-Stand (Belegschaft) für den „ACM KPIs"-Block; None = ohne.
     kpi_snapshot: dict | None = None
+    #: Neuzugänge im Quartal — live aus Personio (Rubrik „Menschen").
+    neue_mitarbeiter: list[NeuerMitarbeiter] = []
     #: Block-Reihenfolge (Rubrik-Schlüssel + "kpi"); None = Standard.
     block_reihenfolge: list[str] | None = None
     #: Überschriebene Abschnitts-Titel {block_key: titel}; fehlt ein Key → Standard.
@@ -166,7 +174,45 @@ def _eintrag_read(e: NewsletterEintrag) -> EintragRead:
     )
 
 
-def _detail(n: Newsletter) -> AusgabeDetail:
+def _quartal_fenster(jahr: int, quartal: int) -> tuple[date, date]:
+    """[Start, Ende) des Quartals (Ende = erster Tag des Folgequartals)."""
+    start = date(jahr, (quartal - 1) * 3 + 1, 1)
+    ende = date(jahr + 1, 1, 1) if quartal == 4 else date(jahr, quartal * 3 + 1, 1)
+    return start, ende
+
+
+async def _neue_mitarbeiter(
+    db: AsyncSession, jahr: int, quartal: int
+) -> list[NeuerMitarbeiter]:
+    """Neuzugänge im Quartal — live aus Personio (Eintrittsdatum im Fenster)."""
+    start, ende = _quartal_fenster(jahr, quartal)
+    rows = (
+        (
+            await db.execute(
+                select(PersonioEmployee)
+                .where(
+                    PersonioEmployee.hire_date >= start,
+                    PersonioEmployee.hire_date < ende,
+                )
+                .order_by(PersonioEmployee.hire_date, PersonioEmployee.last_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        NeuerMitarbeiter(
+            name=f"{e.first_name or ''} {e.last_name or ''}".strip() or f"#{e.id}",
+            abteilung=e.department,
+            position=e.position,
+        )
+        for e in rows
+    ]
+
+
+def _detail(
+    n: Newsletter, neue_mitarbeiter: list[NeuerMitarbeiter] | None = None
+) -> AusgabeDetail:
     return AusgabeDetail(
         id=n.id,
         jahr=n.jahr,
@@ -175,6 +221,7 @@ def _detail(n: Newsletter) -> AusgabeDetail:
         status=n.status,
         eintraege=[_eintrag_read(e) for e in n.eintraege],
         kpi_snapshot=n.kpi_snapshot,
+        neue_mitarbeiter=neue_mitarbeiter or [],
         block_reihenfolge=n.block_reihenfolge,
         rubrik_titel=n.rubrik_titel,
         hat_cover=n.cover_bild is not None,
@@ -335,7 +382,8 @@ async def admin_ausgabe(
     ausgabe_id: int, db: AsyncSession = Depends(get_async_db_session)
 ) -> AusgabeDetail:
     """Eine Ausgabe (auch Entwurf) mit Einträgen — für die Redaktion."""
-    return _detail(await _hole_ausgabe(db, ausgabe_id))
+    n = await _hole_ausgabe(db, ausgabe_id)
+    return _detail(n, await _neue_mitarbeiter(db, n.jahr, n.quartal))
 
 
 @router.post("", response_model=AusgabeDetail, status_code=201, dependencies=[Depends(require_admin)])
@@ -665,4 +713,4 @@ async def ausgabe(
     n = await _hole_ausgabe(db, ausgabe_id)
     if n.status != "veroeffentlicht":
         raise HTTPException(status_code=404, detail="Ausgabe nicht gefunden.")
-    return _detail(n)
+    return _detail(n, await _neue_mitarbeiter(db, n.jahr, n.quartal))

@@ -15,6 +15,7 @@ import {
   type AusgabeDetail,
   type Eintrag,
   type EintragBild,
+  type NeuerMitarbeiter,
   type Rubrik,
 } from "@/lib/newsletterApi";
 import { packePuzzle } from "@/lib/puzzle";
@@ -22,7 +23,13 @@ import { packePuzzle } from "@/lib/puzzle";
 /** Ein Block des Newsletters: eine Rubrik (mit Einträgen) oder der KPI-Block. */
 export type NewsletterBlock =
   | { art: "kpi"; data: BelegschaftKpi }
-  | { art: "rubrik"; rubrik: Rubrik; eintraege: Eintrag[] };
+  | {
+      art: "rubrik";
+      rubrik: Rubrik;
+      eintraege: Eintrag[];
+      /** Nur „Menschen": Neuzugänge aus Personio (vor den Einträgen gezeigt). */
+      neueMitarbeiter?: NeuerMitarbeiter[];
+    };
 
 /** Die Blöcke einer Ausgabe in gespeicherter Reihenfolge; leere Rubriken fallen
  *  raus. Der KPI-Block ist kein eigenständiger Block mehr: die KPIs gehören ins
@@ -41,7 +48,10 @@ export function ordereBloecke(a: AusgabeDetail): NewsletterBlock[] {
     const eintraege = a.eintraege
       .filter((e) => e.rubrik === k)
       .sort((x, y) => x.reihenfolge - y.reihenfolge);
-    if (eintraege.length) bloecke.push({ art: "rubrik", rubrik: k, eintraege });
+    // „Menschen": Neuzugänge aus Personio kommen vor die Einträge.
+    const neueMitarbeiter = k === "menschen" ? a.neue_mitarbeiter ?? [] : [];
+    if (eintraege.length || neueMitarbeiter.length)
+      bloecke.push({ art: "rubrik", rubrik: k, eintraege, neueMitarbeiter });
   }
   return bloecke;
 }
@@ -83,7 +93,7 @@ export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }
     <AuthImageUrl
       url={bildUrl(eintragId)}
       alt={alt}
-      className="my-2 max-h-72 w-auto rounded-md border border-border object-contain"
+      className="my-2 max-h-72 w-auto max-w-full rounded-md border border-border object-contain"
     />
   );
 }
@@ -113,6 +123,33 @@ export function PuzzleBilder({ bilder }: { bilder: EintragBild[] }) {
           <AuthImageUrl url={eintragBildUrl(b.id)} alt="" className="absolute inset-0 block h-full w-full object-cover" />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** „Neu im Team" — Neuzugänge des Quartals aus Personio (Rubrik Menschen). */
+function NeuImTeam({ leute }: { leute: NeuerMitarbeiter[] }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="mb-4 break-inside-avoid rounded-md border border-border/60 p-3"
+      style={{ borderLeft: `4px solid ${NL_BLUE}` }}
+    >
+      <h3 className="mb-1.5 text-base font-semibold" style={{ color: NL_OLIVE }}>
+        {t("newsletter.neuImTeam")}
+      </h3>
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+        {leute.map((p, i) => (
+          <li key={i} className="leading-tight">
+            <span className="font-medium">{p.name}</span>
+            {(p.abteilung || p.position) && (
+              <span className="block text-xs text-muted-foreground">
+                {p.abteilung || p.position}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -150,13 +187,20 @@ export function blockTitelText(
 /** Reiner Block-Inhalt (KPI-Charts bzw. Einträge) — den Titel liefert der
  *  Seiten-Rahmen ({@link SeiteRahmen}). `schmal` = Online-Hochformat. */
 export function BlockInhalt({ block, schmal }: { block: NewsletterBlock; schmal?: boolean }) {
-  return block.art === "kpi" ? (
-    <BelegschaftKpiCharts data={block.data} compact schmal={schmal} />
-  ) : (
+  if (block.art === "kpi") {
+    return <BelegschaftKpiCharts data={block.data} compact schmal={schmal} />;
+  }
+  return (
     <>
-      {block.eintraege.map((e) => (
-        <EintragBlock key={e.id} eintrag={e} />
-      ))}
+      {block.neueMitarbeiter && block.neueMitarbeiter.length > 0 && (
+        <NeuImTeam leute={block.neueMitarbeiter} />
+      )}
+      {/* Beiträge nebeneinander (zweispaltig); jeder Beitrag bleibt zusammen. */}
+      <div className="columns-2 gap-x-5">
+        {block.eintraege.map((e) => (
+          <EintragBlock key={e.id} eintrag={e} />
+        ))}
+      </div>
     </>
   );
 }
