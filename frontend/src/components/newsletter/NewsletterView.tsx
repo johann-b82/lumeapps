@@ -461,6 +461,10 @@ export type SeiteDesc =
 
 /** Baut die flache Seitenfolge: Cover → INHALT → (Divider je Rubrik →) Inhalt je
  *  Block → Rückseite, inkl. Seitenzahlen. Vertikales Label = Rubrik-Kategorie. */
+/** Max. Einträge pro Inhaltsseite — mehr Einträge laufen unter demselben Titel
+ *  auf Folgeseiten (ausgewogen verteilt). */
+const MAX_EINTRAEGE_PRO_SEITE = 6;
+
 export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
   const bloecke = ordereBloecke(ausgabe);
   const seiten: SeiteDesc[] = [{ art: "cover" }, { art: "inhalt", toc: [] }];
@@ -469,11 +473,30 @@ export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
     const titel = blockTitelText(b, ausgabe.rubrik_titel, t);
     const kategorie = b.art === "kpi" ? t("newsletter.rubrik.intern") : t(`newsletter.rubrik.${b.rubrik}`);
     const edge = kategorie.toUpperCase();
-    // Keine eigene Trennseite mehr — der Titel steht im Seitenrahmen der
-    // Inhaltsseite, so nutzt der Inhalt den vollen Platz.
-    const nr = seiten.length + 1; // 1-basierte Seite der gleich gepushten Inhaltsseite
-    seiten.push({ art: "content", block: b, titel, edgeLabel: edge, seiteNr: nr });
-    toc.push({ titel, seite: nr });
+    // Der Titel steht im Seitenrahmen der Inhaltsseite (keine eigene Trennseite).
+
+    if (b.art === "kpi") {
+      const nr = seiten.length + 1;
+      seiten.push({ art: "content", block: b, titel, edgeLabel: edge, seiteNr: nr });
+      toc.push({ titel, seite: nr });
+      continue;
+    }
+
+    // Rubrik: Einträge ausgewogen auf so wenige Seiten wie nötig verteilen.
+    // Der „Neu im Team"-Block kommt nur auf die erste Seite.
+    const anzahl = Math.max(1, Math.ceil(b.eintraege.length / MAX_EINTRAEGE_PRO_SEITE));
+    const proSeite = Math.ceil(b.eintraege.length / anzahl);
+    for (let sN = 0; sN < anzahl; sN++) {
+      const teilBlock: NewsletterBlock = {
+        art: "rubrik",
+        rubrik: b.rubrik,
+        eintraege: b.eintraege.slice(sN * proSeite, (sN + 1) * proSeite),
+        neueMitarbeiter: sN === 0 ? b.neueMitarbeiter : [],
+      };
+      const nr = seiten.length + 1;
+      seiten.push({ art: "content", block: teilBlock, titel, edgeLabel: edge, seiteNr: nr });
+      if (sN === 0) toc.push({ titel, seite: nr });
+    }
   }
   seiten.push({ art: "back" });
   (seiten[1] as { art: "inhalt"; toc: { titel: string; seite: number }[] }).toc = toc;
