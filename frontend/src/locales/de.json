@@ -1841,7 +1841,7 @@
   "audit.trail.action.status_change": "Statuswechsel",
   "audit.trail.action.phase_skip": "Phase übersprungen",
   "launcher.section.quality": "Qualität",
-  "onboarding.vorgang.anlegen": "Vorgang anlegen",
+  "onboarding.vorgang.anlegen": "Vorgang starten",
   "onboarding.vorgang.angelegt": "Einarbeitungs- und Schulungsvorgang angelegt",
   "onboarding.vorgang.titel": "Einarbeitungs- & Schulungsvorgänge",
   "onboarding.vorgang.hinweis": "Erstellte Einarbeitungs- und Schulungspläne mit Lebenszyklus. Ausgefüllten Bogen einscannen und hochladen — die Zuordnung erfolgt automatisch über den QR-Code.",
