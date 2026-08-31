@@ -300,12 +300,21 @@ export function SeiteRahmen({
           {`Q${ausgabe.quartal} · ${ausgabe.jahr}`}
         </span>
       </div>
-      <div className="text-center" style={{ paddingTop: "5cqw" }}>
-        <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
-        <h2 className="font-bold" style={{ fontSize: "6.2cqw", lineHeight: 1.05, margin: "2.4cqw 0", padding: "0 8cqw" }}>
+      <div className="text-center" style={{ paddingTop: "7cqw" }}>
+        <div className="mx-auto" style={{ height: "0.9cqw", width: "13cqw", background: NL_BLUE }} />
+        <h2
+          className="font-bold"
+          style={{
+            fontSize: "9.5cqw",
+            lineHeight: 1.02,
+            margin: "3.4cqw 0",
+            padding: "0 6cqw",
+            textWrap: "balance",
+          }}
+        >
           {titel}
         </h2>
-        <div className="mx-auto" style={{ height: "0.7cqw", width: "9cqw", background: NL_BLUE }} />
+        <div className="mx-auto" style={{ height: "0.9cqw", width: "13cqw", background: NL_BLUE }} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto" style={{ padding: "4cqw 8.5cqw 7cqw 6cqw" }}>
         {children}
@@ -474,9 +483,9 @@ export function SeiteInhalt({
   );
 }
 
-/** Seitenweise Ansicht — je Deskriptor eine quadratische Seite (945 px = 250 mm)
- *  im Referenz-Design (Oliv-Kopfband, Divider je Rubrik, vertikale Rand-Labels,
- *  INHALT, Seitenzahlen). Jede trägt `data-pdf-page` für den seitenweisen Export
+/** Seitenweise Ansicht — je Deskriptor eine Seite im A4-Hochformat (945×1337 px
+ *  ≈ 210×297 mm), passend zum Online-Buch. Oliv-Kopfband, vertikale Rand-Labels,
+ *  INHALT, Seitenzahlen. Jede trägt `data-pdf-page` für den seitenweisen Export
  *  ({@link exportNewsletterPdf}). */
 export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
   const { t } = useTranslation();
@@ -487,7 +496,7 @@ export function NewsletterPdfPages({ ausgabe }: { ausgabe: AusgabeDetail }) {
         <div
           key={i}
           data-pdf-page
-          style={{ width: 945, height: 945 }}
+          style={{ width: 945, height: 1337 }}
           className="relative overflow-hidden bg-[#3e3a1d]"
         >
           <SeiteInhalt desc={desc} ausgabe={ausgabe} />
