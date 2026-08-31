@@ -45,10 +45,18 @@ export interface Eintrag {
   bilder: EintragBild[];
 }
 
+export interface NeuerMitarbeiter {
+  name: string;
+  abteilung: string | null;
+  position: string | null;
+}
+
 export interface AusgabeDetail extends AusgabeListItem {
   eintraege: Eintrag[];
   /** Eingefrorener KPI-Stand für den „ACM KPIs"-Block; null = ohne. */
   kpi_snapshot: BelegschaftKpi | null;
+  /** Neuzugänge im Quartal (live aus Personio) — Rubrik „Menschen". */
+  neue_mitarbeiter: NeuerMitarbeiter[];
   /** Block-Reihenfolge (Rubrik-Schlüssel); null = Standard. */
   block_reihenfolge: string[] | null;
   /** Überschriebene Abschnitts-Titel {block_key: titel}; null/fehlend = Standard. */
