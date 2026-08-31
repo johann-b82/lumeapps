@@ -88,6 +88,8 @@
   "zeugnisse.hinweis": "KI-gestützte Erstellung. Personen kommen aus Personio bzw. der Externe-Liste. Der generierte Text ist rechtlich zu prüfen und hier editierbar.",
   "zeugnisse.neu": "Neues Zeugnis",
   "zeugnisse.personWaehlen": "Person wählen…",
+  "zeugnisse.personSuchen": "Person suchen…",
+  "zeugnisse.keineTreffer": "Keine Treffer",
   "zeugnisse.art.qualifiziert": "Qualifiziert",
   "zeugnisse.art.einfach": "Einfach",
   "zeugnisse.art.zwischenzeugnis": "Zwischenzeugnis",
