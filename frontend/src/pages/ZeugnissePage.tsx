@@ -16,6 +16,7 @@ import {
   downloadDocx,
   downloadPdf,
   fetchAussteller,
+  fetchBausteine,
   fetchPersonen,
   fetchVorlagen,
   fetchZeugnis,
@@ -23,9 +24,10 @@ import {
   generateAbschnitt,
   generateZeugnis,
   saveAussteller,
+  saveBausteine,
   updateZeugnis,
 } from "@/lib/zeugnisApi";
-import type { Aussteller, Person, Vorlage, ZeugnisArt, ZeugnisDetail } from "@/lib/zeugnisApi";
+import type { Aussteller, Baustein, Person, Vorlage, ZeugnisArt, ZeugnisDetail } from "@/lib/zeugnisApi";
 
 const feld =
   "h-8 rounded-md border border-input bg-background px-2 text-sm " +
@@ -51,6 +53,7 @@ const zKeys = {
   personen: () => ["hr", "zeugnisse", "personen"] as const,
   detail: (id: number) => ["hr", "zeugnisse", id] as const,
   aussteller: () => ["hr", "zeugnisse", "aussteller"] as const,
+  bausteine: () => ["hr", "zeugnisse", "bausteine"] as const,
 };
 
 export function ZeugnissePage() {
@@ -82,6 +85,7 @@ export function ZeugnissePage() {
       <p className="mb-4 text-xs text-muted-foreground">{t("zeugnisse.hinweis")}</p>
 
       <AusstellerCard />
+      <TextbausteinCard />
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* Liste + Anlegen */}
@@ -287,6 +291,88 @@ function AusstellerCard() {
               {t("zeugnisse.speichern")}
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Verwaltung „Textbausteine": editierbare Formulierung je Bewertungsbereich × Note (1–4). */
+function TextbausteinCard() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [offen, setOffen] = useState(false);
+  const { data } = useQuery({ queryKey: zKeys.bausteine(), queryFn: fetchBausteine });
+  const [texte, setTexte] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (data) {
+      const m: Record<string, string> = {};
+      for (const b of data) m[`${b.dimension}-${b.note}`] = b.text;
+      setTexte(m);
+    }
+  }, [data]);
+
+  const speichern = useMutation({
+    mutationFn: () => {
+      const liste: Baustein[] = Object.entries(texte).map(([k, text]) => {
+        const trenn = k.lastIndexOf("-");
+        return { dimension: k.slice(0, trenn), note: Number(k.slice(trenn + 1)), text };
+      });
+      return saveBausteine(liste);
+    },
+    onSuccess: () => {
+      toast.success(t("zeugnisse.gespeichert"));
+      qc.invalidateQueries({ queryKey: zKeys.bausteine() });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="mb-4 rounded-lg border p-3">
+      <button
+        type="button"
+        onClick={() => setOffen((o) => !o)}
+        className="flex w-full items-center gap-2 text-sm font-medium"
+      >
+        <Blocks className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        {t("zeugnisse.bausteineTitel")}
+        <span className="ml-2 text-xs text-muted-foreground">{t("zeugnisse.bausteineHint")}</span>
+      </button>
+      {offen && (
+        <div className="mt-3 space-y-4">
+          <p className="text-xs text-muted-foreground">{t("zeugnisse.bausteinePlatzhalter")}</p>
+          {ZEUGNIS_DIMENSIONEN.map((dim) => (
+            <div key={dim} className="rounded-md border p-2">
+              <div className="mb-2 text-xs font-semibold">{t(`zeugnisse.dim.${dim}`)}</div>
+              <div className="grid gap-2 lg:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <label key={n} className="block text-xs">
+                    <span className="text-muted-foreground">
+                      {n} – {t(`zeugnisse.note.${n}`)}
+                    </span>
+                    <textarea
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm
+                                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={texte[`${dim}-${n}`] ?? ""}
+                      onChange={(e) =>
+                        setTexte((m) => ({ ...m, [`${dim}-${n}`]: e.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            className={primary}
+            disabled={speichern.isPending}
+            onClick={() => speichern.mutate()}
+          >
+            {speichern.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {t("zeugnisse.speichern")}
+          </button>
         </div>
       )}
     </div>
