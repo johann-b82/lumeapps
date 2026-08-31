@@ -3,8 +3,8 @@
  *
  * Der übergebene Knoten enthält je Block eine Seite (`[data-pdf-page]`, siehe
  * `NewsletterPdfPages`). Jede solche Seite wird einzeln zu einem JPEG gerendert
- * (html-to-image) und als eigene quadratische Seite gesetzt (jsPDF, 250×250 mm
- * wie die physische Ausgabe) — so beginnt jeder Block auf einer neuen Seite statt
+ * (html-to-image) und als eigene quadratische Seite gesetzt (jsPDF, 200×200 mm
+ * wie das physische Buch) — so beginnt jeder Block auf einer neuen Seite statt
  * mitten durchgeschnitten zu werden. Ein Block, der höher als eine Seite ist,
  * läuft auf Folgeseiten über. Fehlen `data-pdf-page`-Knoten, wird der Knoten als
  * Ganzes seitenweise verteilt (Rückfall). Genutzt von der Reader-Seite UND der
@@ -23,8 +23,8 @@ export async function exportNewsletterPdf(node: HTMLElement, filename: string): 
   const seiten = Array.from(node.querySelectorAll<HTMLElement>("[data-pdf-page]"));
   const knoten = seiten.length ? seiten : [node];
 
-  // Quadratisches Format wie die physische Ausgabe: 250 × 250 mm.
-  const pdf = new jsPDF({ unit: "mm", format: [250, 250] });
+  // Quadratisches Format wie das physische Buch: 200 × 200 mm.
+  const pdf = new jsPDF({ unit: "mm", format: [200, 200] });
   const pw = pdf.internal.pageSize.getWidth();
   const ph = pdf.internal.pageSize.getHeight();
 

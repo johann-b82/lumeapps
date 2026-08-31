@@ -11,6 +11,7 @@ import {
   bildUrl,
   coverUrl,
   eintragBildUrl,
+  mitarbeiterFotoUrl,
   rueckUrl,
   type AusgabeDetail,
   type Eintrag,
@@ -93,7 +94,7 @@ export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }
     <AuthImageUrl
       url={bildUrl(eintragId)}
       alt={alt}
-      className="my-2 max-h-72 w-auto max-w-full rounded-md border border-border object-contain"
+      className="my-2 w-full h-auto rounded-md border border-border object-cover"
     />
   );
 }
@@ -127,26 +128,72 @@ export function PuzzleBilder({ bilder }: { bilder: EintragBild[] }) {
   );
 }
 
-/** „Neu im Team" — Neuzugänge des Quartals aus Personio (Rubrik Menschen). */
+/** Personio-Profilfoto (rund) mit Initialen-Fallback, falls kein Foto vorliegt. */
+function MitarbeiterFoto({ id, name }: { id: number; name: string }) {
+  const [obj, setObj] = useState<string | null>(null);
+  useEffect(() => {
+    let aktiv = true;
+    let u: string | null = null;
+    fetchBlob(mitarbeiterFotoUrl(id))
+      .then((b) => {
+        if (!aktiv) return;
+        u = URL.createObjectURL(b);
+        setObj(u);
+      })
+      .catch(() => {
+        if (aktiv) setObj(null);
+      });
+    return () => {
+      aktiv = false;
+      if (u) URL.revokeObjectURL(u);
+    };
+  }, [id]);
+  if (obj) {
+    return (
+      <img
+        src={obj}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-full border border-border object-cover"
+      />
+    );
+  }
+  const initialen = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-[0.7rem] font-semibold text-muted-foreground">
+      {initialen}
+    </span>
+  );
+}
+
+/** „Neu im Team" — Neuzugänge des Quartals aus Personio (mit Foto, Rubrik Menschen). */
 function NeuImTeam({ leute }: { leute: NeuerMitarbeiter[] }) {
   const { t } = useTranslation();
   return (
     <div
-      className="mb-4 break-inside-avoid rounded-md border border-border/60 p-3"
+      className="mb-5 break-inside-avoid rounded-md border border-border/60 p-3"
       style={{ borderLeft: `4px solid ${NL_BLUE}` }}
     >
-      <h3 className="mb-1.5 text-base font-semibold" style={{ color: NL_OLIVE }}>
+      <h3 className="mb-2 text-base font-semibold" style={{ color: NL_OLIVE }}>
         {t("newsletter.neuImTeam")}
       </h3>
-      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-        {leute.map((p, i) => (
-          <li key={i} className="leading-tight">
-            <span className="font-medium">{p.name}</span>
-            {(p.abteilung || p.position) && (
-              <span className="block text-xs text-muted-foreground">
-                {p.abteilung || p.position}
-              </span>
-            )}
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
+        {leute.map((p) => (
+          <li key={p.employee_id} className="flex items-center gap-2">
+            <MitarbeiterFoto id={p.employee_id} name={p.name} />
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-medium">{p.name}</div>
+              {(p.abteilung || p.position) && (
+                <div className="truncate text-xs text-muted-foreground">
+                  {p.abteilung || p.position}
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -156,12 +203,14 @@ function NeuImTeam({ leute }: { leute: NeuerMitarbeiter[] }) {
 
 function EintragBlock({ eintrag }: { eintrag: Eintrag }) {
   return (
-    <div className="mb-4 break-inside-avoid">
-      <h3 className="mb-1 text-base font-semibold">{eintrag.untertitel}</h3>
+    <div className="mb-5 break-inside-avoid">
+      <h3 className="mb-1.5 text-base font-semibold leading-snug" style={{ color: NL_OLIVE }}>
+        {eintrag.untertitel}
+      </h3>
       {eintrag.hat_bild && <AuthImage eintragId={eintrag.id} alt={eintrag.untertitel} />}
       <PuzzleBilder bilder={eintrag.bilder} />
       {eintrag.inhalt_md.trim() && (
-        <div className="prose prose-sm max-w-none dark:prose-invert">
+        <div className="prose prose-sm mt-1.5 max-w-none dark:prose-invert">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{eintrag.inhalt_md}</ReactMarkdown>
         </div>
       )}
@@ -380,10 +429,11 @@ export function baueSeiten(ausgabe: AusgabeDetail, t: TFunction): SeiteDesc[] {
     const titel = blockTitelText(b, ausgabe.rubrik_titel, t);
     const kategorie = b.art === "kpi" ? t("newsletter.rubrik.intern") : t(`newsletter.rubrik.${b.rubrik}`);
     const edge = kategorie.toUpperCase();
-    if (b.art === "rubrik") seiten.push({ art: "divider", titel, edgeLabel: edge });
+    // Keine eigene Trennseite mehr — der Titel steht im Seitenrahmen der
+    // Inhaltsseite, so nutzt der Inhalt den vollen Platz.
     const nr = seiten.length + 1; // 1-basierte Seite der gleich gepushten Inhaltsseite
     seiten.push({ art: "content", block: b, titel, edgeLabel: edge, seiteNr: nr });
-    toc.push({ titel, seite: b.art === "rubrik" ? nr - 1 : nr }); // Divider-Seite bzw. Inhalt
+    toc.push({ titel, seite: nr });
   }
   seiten.push({ art: "back" });
   (seiten[1] as { art: "inhalt"; toc: { titel: string; seite: number }[] }).toc = toc;
