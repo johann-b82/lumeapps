@@ -94,7 +94,7 @@ export function AuthImage({ eintragId, alt }: { eintragId: number; alt: string }
     <AuthImageUrl
       url={bildUrl(eintragId)}
       alt={alt}
-      className="my-2 w-full h-auto rounded-md border border-border object-cover"
+      className="mb-2 w-full h-auto rounded-lg border border-border object-cover shadow-sm"
     />
   );
 }
@@ -201,16 +201,24 @@ function NeuImTeam({ leute }: { leute: NeuerMitarbeiter[] }) {
   );
 }
 
+/** Editorial-Beitrag: Bild oben (vollflächig), großer Titel mit blauem Kicker,
+ *  Lead-Absatz betont — Magazin-Anmutung wie im Referenz-Newsletter. */
 function EintragBlock({ eintrag }: { eintrag: Eintrag }) {
   return (
-    <div className="mb-5 break-inside-avoid">
-      <h3 className="mb-1.5 text-base font-semibold leading-snug" style={{ color: NL_OLIVE }}>
-        {eintrag.untertitel}
-      </h3>
+    <div className="mb-6 break-inside-avoid">
       {eintrag.hat_bild && <AuthImage eintragId={eintrag.id} alt={eintrag.untertitel} />}
       <PuzzleBilder bilder={eintrag.bilder} />
+      <div className="mt-2">
+        <div
+          className="mb-1"
+          style={{ height: "0.55cqw", minHeight: 3, width: "6cqw", minWidth: 26, background: NL_BLUE }}
+        />
+        <h3 className="font-bold leading-tight" style={{ fontSize: "3.6cqw", color: NL_OLIVE }}>
+          {eintrag.untertitel}
+        </h3>
+      </div>
       {eintrag.inhalt_md.trim() && (
-        <div className="prose prose-sm mt-1.5 max-w-none dark:prose-invert">
+        <div className="prose prose-sm mt-2 max-w-none dark:prose-invert [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-neutral-800">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{eintrag.inhalt_md}</ReactMarkdown>
         </div>
       )}
