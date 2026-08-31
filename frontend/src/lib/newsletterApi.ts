@@ -46,9 +46,15 @@ export interface Eintrag {
 }
 
 export interface NeuerMitarbeiter {
+  employee_id: number;
   name: string;
   abteilung: string | null;
   position: string | null;
+}
+
+/** Personio-Profilfoto eines Mitarbeiters (auth-gegateter Proxy, 404 = kein Foto). */
+export function mitarbeiterFotoUrl(employeeId: number): string {
+  return `/api/hr/employees/${employeeId}/photo`;
 }
 
 export interface AusgabeDetail extends AusgabeListItem {
