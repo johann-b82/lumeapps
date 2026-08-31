@@ -195,8 +195,8 @@ export function BlockInhalt({ block, schmal }: { block: NewsletterBlock; schmal?
       {block.neueMitarbeiter && block.neueMitarbeiter.length > 0 && (
         <NeuImTeam leute={block.neueMitarbeiter} />
       )}
-      {/* Beiträge nebeneinander (zweispaltig); jeder Beitrag bleibt zusammen. */}
-      <div className="columns-2 gap-x-5">
+      {/* PDF (breit): zweispaltig; Online-Hochformat: einspaltig. */}
+      <div className={schmal ? "" : "columns-2 gap-x-5"}>
         {block.eintraege.map((e) => (
           <EintragBlock key={e.id} eintrag={e} />
         ))}
