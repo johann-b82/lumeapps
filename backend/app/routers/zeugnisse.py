@@ -30,6 +30,7 @@ from app.models import (
 from app.models.zeugnis import ZEUGNIS_ABSCHNITTE, ZEUGNIS_ARTEN, ZEUGNIS_DIMENSIONEN
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
+from app.services.zeugnis_baukasten import baue_abschnitte
 from app.services.zeugnis_dokument import build_zeugnis_docx, convert_docx_to_pdf
 from app.services.zeugnis_ki import ZeugnisKIError, generiere_abschnitte
 
@@ -585,6 +586,68 @@ async def generieren_abschnitt(
 
     zusammen = dict(z.abschnitte_json or {})
     zusammen.update(_name_ersetzen(neu, z))
+    z.abschnitte_json = zusammen
+    z.aktualisiert_am = _jetzt()
+    await db.commit()
+    z = await _hole(db, z.id)
+    return _read(z)
+
+
+async def _baue(db: AsyncSession, z: Zeugnis) -> dict[str, str]:
+    """Deterministischer Textbaustein-Aufbau (ohne KI, ohne API-Key)."""
+    noten = _noten(z)
+    if not noten:
+        raise HTTPException(
+            status_code=400, detail="Bitte zuerst mindestens eine Note vergeben."
+        )
+    aussteller = await _aussteller(db)
+    schnitt = _schnitt(noten)
+    return baue_abschnitte(
+        geschlecht=z.geschlecht,
+        taetigkeit=z.taetigkeit,
+        abteilung=z.abteilung,
+        eintritt=z.eintritt,
+        austritt=z.austritt,
+        art=z.art,
+        anlass=z.anlass,
+        fuehrungskraft=z.fuehrungskraft,
+        noten=noten,
+        schnitt=float(schnitt) if schnitt is not None else None,
+        stichpunkte=z.taetigkeit_stichpunkte,
+        kompetenzen=z.besondere_kompetenzen,
+        erfolge=z.besondere_erfolge,
+        firma=aussteller.firma if aussteller else None,
+    )
+
+
+@router.post("/{zeugnis_id}/baukasten", response_model=ZeugnisRead)
+async def baukasten(
+    zeugnis_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> ZeugnisRead:
+    """Gesamtes Zeugnis aus Textbausteinen erzeugen (ohne KI)."""
+    z = await _hole(db, zeugnis_id)
+    abschnitte = await _baue(db, z)
+    z.abschnitte_json = _name_ersetzen(abschnitte, z)
+    z.schlussnote = _schnitt(_noten(z))
+    z.aktualisiert_am = _jetzt()
+    await db.commit()
+    z = await _hole(db, z.id)
+    return _read(z)
+
+
+@router.post("/{zeugnis_id}/baukasten/{abschnitt}", response_model=ZeugnisRead)
+async def baukasten_abschnitt(
+    zeugnis_id: int,
+    abschnitt: str,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ZeugnisRead:
+    """Einen einzelnen Abschnitt aus Textbausteinen (neu) erzeugen (ohne KI)."""
+    if abschnitt not in ZEUGNIS_ABSCHNITTE:
+        raise HTTPException(status_code=404, detail="Unbekannter Abschnitt.")
+    z = await _hole(db, zeugnis_id)
+    abschnitte = await _baue(db, z)
+    zusammen = dict(z.abschnitte_json or {})
+    zusammen[abschnitt] = _name_ersetzen(abschnitte, z)[abschnitt]
     z.abschnitte_json = zusammen
     z.aktualisiert_am = _jetzt()
     await db.commit()
