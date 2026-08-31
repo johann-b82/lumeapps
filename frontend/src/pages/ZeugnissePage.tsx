@@ -177,6 +177,7 @@ function AusstellerCard() {
   const qc = useQueryClient();
   const [offen, setOffen] = useState(false);
   const { data } = useQuery({ queryKey: zKeys.aussteller(), queryFn: fetchAussteller });
+  const { data: personen } = useQuery({ queryKey: zKeys.personen(), queryFn: fetchPersonen });
   const [form, setForm] = useState<Aussteller>({
     firma: "",
     standort: "",
@@ -239,18 +240,42 @@ function AusstellerCard() {
             value={form.unterzeichner1_titel ?? ""}
             onChange={(e) => setForm({ ...form, unterzeichner1_titel: e.target.value })}
           />
-          <input
-            className={feld}
-            placeholder={t("zeugnisse.unterzeichner2Name")}
-            value={form.unterzeichner2_name ?? ""}
-            onChange={(e) => setForm({ ...form, unterzeichner2_name: e.target.value })}
-          />
-          <input
-            className={feld}
-            placeholder={t("zeugnisse.unterzeichner2Titel")}
-            value={form.unterzeichner2_titel ?? ""}
-            onChange={(e) => setForm({ ...form, unterzeichner2_titel: e.target.value })}
-          />
+          <div className="sm:col-span-2">
+            <label className="text-xs text-muted-foreground">
+              {t("zeugnisse.hrManager")}
+            </label>
+            <select
+              className={`${feld} mt-1 w-full`}
+              value={
+                (personen ?? []).find((p) => p.name === form.unterzeichner2_name)
+                  ?.employee_id ?? ""
+              }
+              onChange={(e) => {
+                const p = (personen ?? []).find(
+                  (x) => String(x.employee_id) === e.target.value,
+                );
+                setForm({
+                  ...form,
+                  unterzeichner2_name: p ? p.name : "",
+                  unterzeichner2_titel: p ? p.position ?? "" : "",
+                });
+              }}
+            >
+              <option value="">{t("zeugnisse.personWaehlen")}</option>
+              {(personen ?? []).map((p: Person) => (
+                <option key={p.employee_id} value={p.employee_id}>
+                  {p.name}
+                  {p.position ? ` – ${p.position}` : ""}
+                </option>
+              ))}
+            </select>
+            {form.unterzeichner2_name && (
+              <p className="mt-1 text-[0.7rem] text-muted-foreground">
+                {form.unterzeichner2_name}
+                {form.unterzeichner2_titel ? ` – ${form.unterzeichner2_titel}` : ""}
+              </p>
+            )}
+          </div>
           <div className="sm:col-span-2">
             <button
               type="button"
