@@ -533,6 +533,9 @@ async def aendern(
                 raise HTTPException(status_code=400, detail="Note muss 1–4 sein.")
             neu[dim] = note
         z.bewertungen.clear()
+        # Löschungen zuerst ausspielen, sonst kollidieren die neuen Zeilen mit den
+        # alten am UNIQUE(zeugnis_id, dimension) (Insert-vor-Delete im selben Flush).
+        await db.flush()
         for dim, note in neu.items():
             z.bewertungen.append(ZeugnisBewertung(dimension=dim, note=note))
         z.schlussnote = _schnitt(neu)
