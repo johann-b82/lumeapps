@@ -165,7 +165,26 @@ def _taetigkeit(*, taetigkeit, stichpunkte) -> str:
     return lead + "\n" + "\n".join(punkte)
 
 
-def _leistung(*, noten, schnitt, kompetenzen, erfolge, fuehrungskraft) -> str:
+def bausteine_defaults() -> dict[str, dict[int, str]]:
+    """Kopie der im Code hinterlegten Default-Textbausteine (Dimension → Note → Text)."""
+    return {dim: dict(noten) for dim, noten in _BAUSTEINE.items()}
+
+
+def _eff(bausteine: dict[str, dict[int, str]] | None) -> dict[str, dict[int, str]]:
+    """DB-Bausteine über die Code-Defaults legen (leere DB-Texte → Default)."""
+    merged = {dim: dict(noten) for dim, noten in _BAUSTEINE.items()}
+    for dim, noten in (bausteine or {}).items():
+        for note, text in noten.items():
+            if text and text.strip():
+                merged.setdefault(dim, {})[note] = text
+    return merged
+
+
+def _text(bausteine: dict[str, dict[int, str]], dim: str, note: int) -> str:
+    return bausteine.get(dim, {}).get(note) or _BAUSTEINE[dim][note]
+
+
+def _leistung(*, bausteine, noten, schnitt, kompetenzen, erfolge, fuehrungskraft) -> str:
     saetze: list[str] = []
     komp = _liste(kompetenzen)
     if komp:
@@ -178,7 +197,7 @@ def _leistung(*, noten, schnitt, kompetenzen, erfolge, fuehrungskraft) -> str:
             continue
         note = noten.get(dim)
         if note:
-            saetze.append(_BAUSTEINE[dim][note])
+            saetze.append(_text(bausteine, dim, note))
     erf = (erfolge or "").strip()
     if erf:
         if erf[-1] not in ".!?":
@@ -192,9 +211,9 @@ def _leistung(*, noten, schnitt, kompetenzen, erfolge, fuehrungskraft) -> str:
     return " ".join(saetze)
 
 
-def _sozial(*, noten, schnitt) -> str:
+def _sozial(*, bausteine, noten, schnitt) -> str:
     note = noten.get("sozialverhalten") or (_runde(schnitt) if schnitt is not None else 2)
-    return _BAUSTEINE["sozialverhalten"][note]
+    return _text(bausteine, "sozialverhalten", note)
 
 
 def _schluss(*, art, geschlecht, schnitt, austritt, anlass) -> str:
@@ -250,8 +269,12 @@ def baue_abschnitte(
     stichpunkte: str | None,
     kompetenzen: str | None,
     erfolge: str | None,
+    bausteine: dict[str, dict[int, str]] | None = None,
 ) -> dict[str, str]:
     """Baut die fünf Abschnitte deterministisch aus Textbausteinen.
+
+    ``bausteine`` (optional): DB-Textbausteine ``{dimension: {note: text}}`` —
+    überschreiben die Code-Defaults; fehlende/leere fallen auf den Default zurück.
 
     ``einfach`` lässt Leistungs- und Verhaltensbeurteilung bewusst leer. Die
     Tätigkeitsbeschreibung enthält bei vorhandenen Stichpunkten je Aufgabe eine
@@ -259,6 +282,7 @@ def baue_abschnitte(
     Rückgabe: ``{schluessel: text}`` für alle ``ZEUGNIS_ABSCHNITTE``.
     """
     einfach = art == "einfach"
+    eff = _eff(bausteine)
     daten = {
         "einleitung": _einleitung(
             art=art, geburtsdatum=geburtsdatum, taetigkeit=taetigkeit,
@@ -268,10 +292,12 @@ def baue_abschnitte(
             taetigkeit=taetigkeit, stichpunkte=stichpunkte,
         ),
         "leistungsbeurteilung": "" if einfach else _leistung(
-            noten=noten, schnitt=schnitt, kompetenzen=kompetenzen,
+            bausteine=eff, noten=noten, schnitt=schnitt, kompetenzen=kompetenzen,
             erfolge=erfolge, fuehrungskraft=fuehrungskraft,
         ),
-        "sozialverhalten": "" if einfach else _sozial(noten=noten, schnitt=schnitt),
+        "sozialverhalten": "" if einfach else _sozial(
+            bausteine=eff, noten=noten, schnitt=schnitt,
+        ),
         "schlussformel": _schluss(
             art=art, geschlecht=geschlecht, schnitt=schnitt,
             austritt=austritt, anlass=anlass,

@@ -184,6 +184,23 @@ export function deleteVorlage(id: number): Promise<void> {
   return apiClient<void>(`${BASE}/vorlagen/${id}`, { method: "DELETE" });
 }
 
+// --- Textbausteine (editierbare Standardformulierungen je Dimension × Note) ---
+export interface Baustein {
+  dimension: string;
+  note: number;
+  text: string;
+}
+export function fetchBausteine(): Promise<Baustein[]> {
+  return apiClient<Baustein[]>(`${BASE}/bausteine`);
+}
+export function saveBausteine(bausteine: Baustein[]): Promise<Baustein[]> {
+  return apiClient<Baustein[]>(`${BASE}/bausteine`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bausteine }),
+  });
+}
+
 export async function downloadDocx(id: number, name: string): Promise<void> {
   const blob = await fetchBlob(`${BASE}/${id}/docx`);
   openBlob(blob, `Arbeitszeugnis_${name.replace(/\s+/g, "_")}.docx`);

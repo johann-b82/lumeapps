@@ -113,6 +113,7 @@ from app.models.kpi_review import KpiComment, KpiMeasure  # noqa: F401
 from app.models.zeugnis import (  # noqa: F401
     Zeugnis,
     ZeugnisAussteller,
+    ZeugnisBaustein,
     ZeugnisBewertung,
     ZeugnisVorlage,
 )
@@ -173,7 +174,7 @@ __all__ = [
     # KPI-Bewertung & Maßnahmen
     "KpiComment", "KpiMeasure",
     # Arbeitszeugnis
-    "Zeugnis", "ZeugnisAussteller", "ZeugnisBewertung", "ZeugnisVorlage",
+    "Zeugnis", "ZeugnisAussteller", "ZeugnisBaustein", "ZeugnisBewertung", "ZeugnisVorlage",
     # Newsletter
     "Newsletter", "NewsletterEintrag", "NewsletterEintragBild",
 ]

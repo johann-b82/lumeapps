@@ -24,13 +24,14 @@ from app.models import (
     PersonioEmployee,
     Zeugnis,
     ZeugnisAussteller,
+    ZeugnisBaustein,
     ZeugnisBewertung,
     ZeugnisVorlage,
 )
 from app.models.zeugnis import ZEUGNIS_ABSCHNITTE, ZEUGNIS_ARTEN, ZEUGNIS_DIMENSIONEN
 from app.security.directus_auth import get_current_user, require_admin
 from app.services.pdf_logo import lade_logo
-from app.services.zeugnis_baukasten import baue_abschnitte
+from app.services.zeugnis_baukasten import baue_abschnitte, bausteine_defaults
 from app.services.zeugnis_dokument import build_zeugnis_docx, convert_docx_to_pdf
 from app.services.zeugnis_ki import ZeugnisKIError, generiere_abschnitte
 
@@ -153,6 +154,17 @@ class VorlageCreate(BaseModel):
     noten: dict[str, int]
 
 
+class BausteinRead(BaseModel):
+    dimension: str
+    note: int
+    text: str
+
+
+class BausteinWrite(BaseModel):
+    #: Zu speichernde Bausteine (dimension, note 1–4, text).
+    bausteine: list[BausteinRead]
+
+
 # --------------------------------------------------------------------------
 # Hilfen
 # --------------------------------------------------------------------------
@@ -225,6 +237,15 @@ async def _aussteller(db: AsyncSession) -> ZeugnisAussteller | None:
     return (
         await db.execute(select(ZeugnisAussteller).order_by(ZeugnisAussteller.id).limit(1))
     ).scalar_one_or_none()
+
+
+async def _bausteine(db: AsyncSession) -> dict[str, dict[int, str]]:
+    """DB-Textbausteine als ``{dimension: {note: text}}`` (leere Tabelle → {})."""
+    rows = (await db.execute(select(ZeugnisBaustein))).scalars().all()
+    daten: dict[str, dict[int, str]] = {}
+    for b in rows:
+        daten.setdefault(b.dimension, {})[b.note] = b.text
+    return daten
 
 
 def _pfad(daten: dict | None, *keys: str):
@@ -429,6 +450,57 @@ async def vorlage_entfernen(
     await db.delete(v)
     await db.commit()
     return Response(status_code=204)
+
+
+# --------------------------------------------------------------------------
+# Textbausteine (editierbare Standardformulierungen je Dimension × Note)
+# --------------------------------------------------------------------------
+
+
+async def _baustein_gitter(db: AsyncSession) -> list[BausteinRead]:
+    """Vollständiges Raster (alle Dimensionen × Noten 1–4): DB-Text, sonst Default."""
+    eff = bausteine_defaults()
+    for dim, noten in (await _bausteine(db)).items():
+        for note, text in noten.items():
+            if text and text.strip():
+                eff.setdefault(dim, {})[note] = text
+    return [
+        BausteinRead(dimension=dim, note=note, text=eff.get(dim, {}).get(note, ""))
+        for dim in ZEUGNIS_DIMENSIONEN
+        for note in (1, 2, 3, 4)
+    ]
+
+
+@router.get("/bausteine", response_model=list[BausteinRead])
+async def bausteine_lesen(db: AsyncSession = Depends(get_async_db_session)) -> list[BausteinRead]:
+    """Alle Textbausteine als Raster (Dimension × Note); fehlende mit Default gefüllt."""
+    return await _baustein_gitter(db)
+
+
+@router.put("/bausteine", response_model=list[BausteinRead])
+async def bausteine_speichern(
+    eingabe: BausteinWrite, db: AsyncSession = Depends(get_async_db_session)
+) -> list[BausteinRead]:
+    """Geänderte Textbausteine speichern (Upsert je Dimension × Note)."""
+    vorhanden = {
+        (b.dimension, b.note): b
+        for b in (await db.execute(select(ZeugnisBaustein))).scalars().all()
+    }
+    for e in eingabe.bausteine:
+        if e.dimension not in ZEUGNIS_DIMENSIONEN:
+            raise HTTPException(status_code=400, detail=f"Unbekannte Dimension: {e.dimension}")
+        if e.note not in (1, 2, 3, 4):
+            raise HTTPException(status_code=400, detail="Note muss 1–4 sein.")
+        row = vorhanden.get((e.dimension, e.note))
+        if row is not None:
+            row.text = e.text
+            row.aktualisiert_am = _jetzt()
+        else:
+            db.add(ZeugnisBaustein(
+                dimension=e.dimension, note=e.note, text=e.text, aktualisiert_am=_jetzt(),
+            ))
+    await db.commit()
+    return await _baustein_gitter(db)
 
 
 # --------------------------------------------------------------------------
@@ -665,6 +737,7 @@ async def _baue(db: AsyncSession, z: Zeugnis) -> dict[str, str]:
         stichpunkte=z.taetigkeit_stichpunkte,
         kompetenzen=z.besondere_kompetenzen,
         erfolge=z.besondere_erfolge,
+        bausteine=await _bausteine(db),
     )
 
 

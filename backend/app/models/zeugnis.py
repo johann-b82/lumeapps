@@ -145,6 +145,27 @@ class ZeugnisVorlage(Base):
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ZeugnisBaustein(Base):
+    """Editierbarer Textbaustein je (Dimension, Note 1–4) für die Auto-Erstellung.
+
+    Ersetzt die im Code fest hinterlegten Standardformulierungen: Der Baukasten
+    liest die Bausteine aus dieser Tabelle (Fallback = Code-Defaults). Über die
+    Admin-Verwaltung „Textbausteine" frei editierbar.
+    """
+
+    __tablename__ = "zeugnis_baustein"
+    __table_args__ = (UniqueConstraint("dimension", "note", name="uq_zeugnis_baustein"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    #: Bewertungsdimension (siehe ZEUGNIS_DIMENSIONEN).
+    dimension: Mapped[str] = mapped_column(String(30), nullable=False)
+    #: 1 = sehr gut … 4 = ausreichend.
+    note: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Fertiger Fließtext dieses Abschnitts; „[NAME]" wird beim Erstellen ersetzt.
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ZeugnisBewertung(Base):
     """Eine Note (1–4, Schulnotenprinzip) je Bewertungsdimension."""
 
