@@ -1848,6 +1848,16 @@ async def schulung_status_setzen(
     return await _schulung_read_voll(db, d)
 
 
+@router.delete("/dokument/{dok_id}", status_code=204)
+async def schulung_dokument_loeschen(
+    dok_id: int, db: AsyncSession = Depends(get_async_db_session)
+) -> None:
+    """Schulungsvorgang endgültig löschen (inkl. zugeordneter Zertifikate via FK-Cascade)."""
+    d = await _hole_schulung_vorgang(db, dok_id)
+    await db.delete(d)
+    await db.commit()
+
+
 @router.post("/scan")
 async def schulung_scan_hochladen(
     datei: UploadFile = File(...), db: AsyncSession = Depends(get_async_db_session)

@@ -1249,6 +1249,8 @@
   "onboarding.eintritte.abteilung": "Abteilung",
   "onboarding.eintritte.eintritt": "Eintritt",
   "onboarding.eintritte.plan": "Schulungsplan",
+  "onboarding.eintritte.statusEinarbeitung": "Einarbeitung",
+  "onboarding.eintritte.statusSchulung": "Schulung",
   "onboarding.keineRegel": "keine Regel hinterlegt",
   "onboarding.vollstaendig": "{{count}} angelegt",
   "onboarding.offenVon": "{{fehlend}} von {{gesamt}} offen",
@@ -1894,5 +1896,8 @@
   "onboarding.vorgang.zertHochladen": "Zertifikat hochladen",
   "onboarding.vorgang.zertHochgeladen": "Zertifikat hochgeladen",
   "onboarding.vorgang.zertAnsehen": "Ansehen",
-  "onboarding.vorgang.zertLoeschen": "Löschen"
+  "onboarding.vorgang.zertLoeschen": "Löschen",
+  "onboarding.vorgang.loeschen": "Vorgang löschen",
+  "onboarding.vorgang.loeschenBestaetigen": "Vorgang von {{name}} endgültig löschen?",
+  "onboarding.vorgang.geloescht": "Vorgang gelöscht"
 }

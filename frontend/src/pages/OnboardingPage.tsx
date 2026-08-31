@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,14 +28,16 @@ import {
   fetchEinarbeitungAbteilungen,
   fetchEinarbeitungKatalog,
   fetchEinarbeitungPflicht,
+  fetchVorgaenge,
   legeKatalogAn,
   setzeEinarbeitungPflicht,
   vorgangAnlegen,
   type EinarbeitungKatalog,
   type EinarbeitungPflicht,
+  type VorgangStatus,
 } from "@/lib/einarbeitungApi";
 import { fetchSchulungen } from "@/lib/schulungApi";
-import { schulungVorgangAnlegen } from "@/lib/schulungVorgangApi";
+import { fetchSchulungVorgaenge, schulungVorgangAnlegen } from "@/lib/schulungVorgangApi";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Klappbar, Th } from "@/components/hr/Klappbar";
 import { Vorgaenge } from "@/components/onboarding/Vorgaenge";
@@ -44,6 +46,23 @@ function datum(wert: string | null): string {
   if (!wert) return "—";
   const d = new Date(wert);
   return Number.isNaN(d.getTime()) ? wert : d.toLocaleDateString();
+}
+
+/** Status eines Vorgangs (Einarbeitung oder Schulung) als Badge; „—" ohne Vorgang. */
+function VorgangStatusZelle({ status }: { status: VorgangStatus | undefined }) {
+  const { t } = useTranslation();
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  const stil =
+    status === "geprueft"
+      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+      : status === "erstellt"
+        ? "bg-muted text-muted-foreground"
+        : "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-xs ${stil}`}>
+      {t(`onboarding.vorgang.statusName.${status}`)}
+    </span>
+  );
 }
 
 /** Schulungsplan einer Person — Soll aus der Matrix, Ist aus dem Bestand. */
@@ -847,6 +866,30 @@ export function OnboardingPage() {
     queryFn: fetchEintritte,
   });
 
+  // Vorgangs-Status je Mitarbeiter (jeweils der neueste) — zwei Spalten in der
+  // Übersicht: Einarbeitung und Schulung. Die Listen sind nach Erstellung
+  // absteigend sortiert, der erste Treffer je Mitarbeiter ist also der aktuelle.
+  const eaVorgaenge = useQuery({
+    queryKey: hrKpiKeys.einarbeitungVorgaenge(),
+    queryFn: fetchVorgaenge,
+  });
+  const schVorgaenge = useQuery({
+    queryKey: hrKpiKeys.schulungVorgaenge(),
+    queryFn: fetchSchulungVorgaenge,
+  });
+  const eaStatus = useMemo(() => {
+    const m = new Map<number, VorgangStatus>();
+    for (const v of eaVorgaenge.data ?? [])
+      if (v.employee_id != null && !m.has(v.employee_id)) m.set(v.employee_id, v.status);
+    return m;
+  }, [eaVorgaenge.data]);
+  const schStatus = useMemo(() => {
+    const m = new Map<number, VorgangStatus>();
+    for (const v of schVorgaenge.data ?? [])
+      if (v.employee_id != null && !m.has(v.employee_id)) m.set(v.employee_id, v.status);
+    return m;
+  }, [schVorgaenge.data]);
+
   const externLoeschen = useMutation({
     mutationFn: (externId: number) => entferneExtern(externId),
     onSuccess: () => {
@@ -898,6 +941,8 @@ export function OnboardingPage() {
                   <Th>{t("onboarding.eintritte.position")}</Th>
                   <Th>{t("onboarding.eintritte.abteilung")}</Th>
                   <Th>{t("onboarding.eintritte.eintritt")}</Th>
+                  <Th rechts>{t("onboarding.eintritte.statusEinarbeitung")}</Th>
+                  <Th rechts>{t("onboarding.eintritte.statusSchulung")}</Th>
                   <Th rechts>{""}</Th>
                 </tr>
               </thead>
@@ -930,6 +975,12 @@ export function OnboardingPage() {
                         {datum(e.hire_date)}
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <VorgangStatusZelle status={eaStatus.get(e.employee_id)} />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <VorgangStatusZelle status={schStatus.get(e.employee_id)} />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
                         {!e.in_personio && (
                           <button
                             type="button"
@@ -951,7 +1002,7 @@ export function OnboardingPage() {
                     </tr>,
                     offen ? (
                       <tr key={`${e.employee_id}-detail`} className="border-b bg-muted/10">
-                        <td colSpan={5} className="p-0">
+                        <td colSpan={7} className="p-0">
                           <PlanDetail eintritt={e} />
                         </td>
                       </tr>

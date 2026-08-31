@@ -1253,6 +1253,8 @@
   "onboarding.eintritte.abteilung": "Department",
   "onboarding.eintritte.eintritt": "Start date",
   "onboarding.eintritte.plan": "Training plan",
+  "onboarding.eintritte.statusEinarbeitung": "Onboarding",
+  "onboarding.eintritte.statusSchulung": "Training",
   "onboarding.keineRegel": "no rule defined",
   "onboarding.vollstaendig": "{{count}} created",
   "onboarding.offenVon": "{{fehlend}} of {{gesamt}} open",
@@ -1894,5 +1896,8 @@
   "onboarding.vorgang.zertHochladen": "Upload certificate",
   "onboarding.vorgang.zertHochgeladen": "Certificate uploaded",
   "onboarding.vorgang.zertAnsehen": "View",
-  "onboarding.vorgang.zertLoeschen": "Delete"
+  "onboarding.vorgang.zertLoeschen": "Delete",
+  "onboarding.vorgang.loeschen": "Delete process",
+  "onboarding.vorgang.loeschenBestaetigen": "Permanently delete the process for {{name}}?",
+  "onboarding.vorgang.geloescht": "Process deleted"
 }
