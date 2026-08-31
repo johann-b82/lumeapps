@@ -130,17 +130,57 @@ class WeeklyReport(BaseModel):
     meta: WeeklyMeta
 
 
+async def _entschuldigte_stunden(
+    db: AsyncSession, montag: date, sonntag: date
+) -> dict[tuple[int, date], float]:
+    """Entschuldigte Soll-Stunden je (Mitarbeiter, Tag) aus **allen** Abwesenheiten
+    (Urlaub, Krank, Freizeitausgleich …), die in die Woche fallen — anteilig über
+    die Abwesenheits-Spanne verteilt (wie bei der Krank-Kachel). So kürzt ein
+    Urlaubstag das Wochen-Soll, statt als Fehlstunde zu zählen."""
+    rows = (
+        await db.execute(
+            select(
+                PersonioAbsence.employee_id,
+                PersonioAbsence.start_date,
+                PersonioAbsence.end_date,
+                PersonioAbsence.hours,
+            ).where(
+                PersonioAbsence.start_date <= sonntag,
+                PersonioAbsence.end_date >= montag,
+            )
+        )
+    ).all()
+    frei: dict[tuple[int, date], float] = {}
+    for a in rows:
+        if a.hours is None or not a.start_date or not a.end_date:
+            continue
+        spanne = (a.end_date - a.start_date).days + 1
+        pro_tag = float(a.hours) / spanne if spanne > 0 else float(a.hours)
+        d = max(a.start_date, montag)
+        ende = min(a.end_date, sonntag)
+        while d <= ende:
+            frei[(a.employee_id, d)] = frei.get((a.employee_id, d), 0.0) + pro_tag
+            d += timedelta(days=1)
+    return frei
+
+
 async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
-    """Ist-Stunden, Überstunden und Saldo je Mitarbeiter für eine Woche.
+    """Ist-Stunden, Überstunden und Saldo je Mitarbeiter für eine Woche (Wochen-Netto).
 
     Personio liefert je Tag oft **mehrere** Zeilen (Vor-/Nachmittag). Deshalb
-    erst je (Mitarbeiter, Tag) summieren und dann gegen das **Tagessoll** rechnen —
-    sonst würde das Soll pro Segment abgezogen (Faktor 2+).
+    erst je (Mitarbeiter, Tag) summieren.
 
-    Das Tagessoll kommt aus dem **Personio-Arbeitszeitmodell** (``work_schedule``,
-    Soll je Wochentag). So zählt z. B. Samstagsarbeit voll als Überstunde und ein
-    Kurztag (Freitag 5 h) verzerrt den Saldo nicht. Nur falls kein Modell
-    hinterlegt ist, greift der frühere Wochenstunden/5-Fallback.
+    Gerechnet wird gegen das **volle Wochen-Soll** aus dem Personio-Arbeitszeit­
+    modell (``work_schedule``, Soll je Wochentag):
+
+        Saldo       = Ist_Woche − effektives Wochen-Soll
+        Überstunden = max(0, Saldo)
+
+    Das effektive Wochen-Soll ist die Summe der Tagessolls über die Woche,
+    gekürzt um **entschuldigte** Abwesenheiten (Urlaub/Krank). Nicht gearbeitete,
+    unentschuldigte Soll-Tage zählen damit als Fehlstunden — wer die Woche unter
+    Soll bleibt, erscheint nicht als Überstunde. Fehlt ein Modell, greift der
+    Wochenstunden/5-Fallback.
     """
     _ws = PersonioEmployee.raw_json["attributes"]["work_schedule"]["value"]["attributes"]
     rows = (
@@ -176,17 +216,29 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
             f"{r.first_name or ''} {r.last_name or ''}".strip() or f"#{r.employee_id}"
         )
 
+    # Ist je Mitarbeiter — nur vollständig gestempelte Tage (kein Ende → verwerfen).
+    worked: dict[int, float] = {}
+    for (eid, _d), wtag in tag.items():
+        if wtag > 0:
+            worked[eid] = worked.get(eid, 0.0) + wtag
+
+    entschuldigt = await _entschuldigte_stunden(db, montag, sonntag)
+    woche = [montag + timedelta(days=i) for i in range(7)]
+
     ist: dict[int, float] = {}
     ueber: dict[int, float] = {}
     netto: dict[int, float] = {}
-    for (eid, d), wtag in tag.items():
-        if wtag <= 0:  # unvollständige Stempelung (kein Ende) → Tag nicht werten
-            continue
-        q = soll[eid].get(d.weekday(), 0.0)  # echtes Soll für diesen Wochentag
-        ist[eid] = ist.get(eid, 0.0) + wtag
-        # Nur gearbeitete Tage zählen; ein Abwesenheitstag erzeugt keinen Minus-Saldo.
-        netto[eid] = netto.get(eid, 0.0) + (wtag - q)
-        ueber[eid] = ueber.get(eid, 0.0) + max(0.0, wtag - q)
+    for eid, smap in soll.items():
+        soll_eff = 0.0
+        for d in woche:
+            s = smap.get(d.weekday(), 0.0)
+            if s <= 0:
+                continue
+            soll_eff += max(0.0, s - entschuldigt.get((eid, d), 0.0))
+        w = worked.get(eid, 0.0)
+        ist[eid] = w
+        netto[eid] = w - soll_eff
+        ueber[eid] = max(0.0, w - soll_eff)
     return ist, ueber, netto, name
 
 
