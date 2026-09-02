@@ -40,7 +40,8 @@ export function AtrSettingsPage() {
   async function test() {
     try {
       const r = await testAtrFileserver();
-      r.ok ? toast.success(t("atr.fileserver.test_ok")) : toast.error(r.error ?? "failed");
+      if (r.ok) toast.success(t("atr.fileserver.test_ok"));
+      else toast.error(r.error ?? "failed");
     } catch (e) { toast.error(String(e)); }
   }
 
