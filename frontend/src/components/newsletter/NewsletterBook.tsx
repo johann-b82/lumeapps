@@ -1,10 +1,12 @@
-import { useRef } from "react";
+import { useRef, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-// @ts-expect-error - react-pageflip liefert keine vollständigen Typen
-import HTMLFlipBook from "react-pageflip";
+import HTMLFlipBookImport from "react-pageflip";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SeiteInhalt, baueSeiten } from "./NewsletterView";
 import { type AusgabeDetail } from "@/lib/newsletterApi";
+
+// react-pageflip liefert unvollständige Prop-Typen — als permissive Komponente casten.
+const HTMLFlipBook = HTMLFlipBookImport as unknown as ComponentType<Record<string, unknown>>;
 
 /** Online-Newsletter als Blätter-Buch (react-pageflip) mit Umblätter-Animation. */
 export function NewsletterBook({ ausgabe }: { ausgabe: AusgabeDetail }) {

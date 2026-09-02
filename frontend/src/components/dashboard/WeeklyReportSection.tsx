@@ -213,7 +213,7 @@ function VergleichKachel({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
-            formatter={(v: number) => [`${v.toFixed(2)} h`, ""]}
+            formatter={(v) => [`${Number(v).toFixed(2)} h`, ""]}
           />
           <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 11 }}>
             {data.map((d, i) => (
@@ -260,10 +260,10 @@ function PersonenKachel({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
-            formatter={(v: number) => [`${v.toFixed(2)} h`, ""]}
+            formatter={(v) => [`${Number(v).toFixed(2)} h`, ""]}
           />
           <Bar dataKey="stunden" radius={[0, 4, 4, 0]} fill="var(--primary, #2563eb)"
-               label={{ position: "right", fontSize: 11, formatter: (v: number) => v.toFixed(2) }} />
+               label={{ position: "right", fontSize: 11, formatter: (v) => Number(v).toFixed(2) }} />
         </BarChart>
       </ResponsiveContainer>
     </Card>

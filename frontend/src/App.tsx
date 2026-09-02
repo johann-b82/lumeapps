@@ -134,7 +134,7 @@ function AppShell() {
             </AdminOnly>
           </Route>
           <Route path="/newsletter/:id">{(p) => <NewsletterPage id={Number(p.id)} />}</Route>
-          <Route path="/newsletter" component={NewsletterPage} />
+          <Route path="/newsletter">{() => <NewsletterPage />}</Route>
           <Route path="/hr" component={HRPage} />
           <Route path="/hr/home" component={HrHomePage} />
           <Route path="/hr/organigramm" component={OrganigrammPage} />
