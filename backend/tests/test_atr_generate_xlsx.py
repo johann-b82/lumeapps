@@ -21,6 +21,7 @@ def _item(**kw):
 def _delivery(**kw):
     base = dict(set_title="SET 6 BED CCRC", po_number="4501119979", msn="830",
                 ba_auftrag="1024738", atr_number="ACM-A350CRC-ATR-4545-01",
+                ac_programme="A350",
                 qa_signer="Cordula Kesseler i.A.", max_guaranteed_weight_kg=Decimal("211"))
     base.update(kw)
     return SimpleNamespace(**base)
