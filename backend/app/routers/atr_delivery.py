@@ -169,6 +169,35 @@ async def next_atr_number(db: AsyncSession = Depends(get_async_db_session)) -> d
     return {"next": await compute_next_atr_number(db)}
 
 
+@router.get("/container-label")
+async def container_label(nr: str,
+                          db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    """Combined Containerbeschriftung (.docx) for every delivery assigned to
+    container ``nr``, built on the fly so it always reflects the current
+    assignment. Declared before /{delivery_id} so it isn't parsed as an id."""
+    from urllib.parse import quote
+
+    from app.services.atr_deliver import _sanitize_filename
+    from app.services.atr_generate_docx import build_container_label
+
+    nr = nr.strip()
+    if not nr:
+        raise HTTPException(400, "container number required")
+    rows = list((await db.execute(
+        select(AtrDelivery)
+        .options(selectinload(AtrDelivery.items))
+        .where(AtrDelivery.container_number == nr)
+        .order_by(AtrDelivery.id)
+    )).scalars().all())
+    if not rows:
+        raise HTTPException(404, "no deliveries assigned to this container")
+    data = build_container_label(nr, [(r, list(r.items)) for r in rows])
+    fname = f"Container_{_sanitize_filename(nr)}.docx"
+    disp = f"attachment; filename=\"{fname}\"; filename*=UTF-8''{quote(fname)}"
+    return Response(content=data, media_type=_MEDIA["label_docx"][0],
+                    headers={"Content-Disposition": disp})
+
+
 @router.get("/{delivery_id}", response_model=AtrDeliveryRead)
 async def get_delivery(delivery_id: int,
                        db: AsyncSession = Depends(get_async_db_session)) -> AtrDelivery:

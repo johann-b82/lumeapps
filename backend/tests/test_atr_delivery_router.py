@@ -52,3 +52,36 @@ async def test_input_files_empty_when_unset(client):
     r = await client.get("/api/atr/deliveries/input-files", headers=_auth())
     assert r.status_code == 200
     assert r.json() == {"configured": False, "files": []}
+
+
+async def test_container_label_combines_assigned_deliveries(client):
+    files = {"file": ("LS.pdf", _pdf_like_lieferschein(), "application/pdf")}
+    ids = []
+    for _ in range(2):
+        r = await client.post("/api/atr/deliveries/upload", headers=_auth(), files=files)
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["id"])
+    # nothing assigned yet → 404
+    r = await client.get("/api/atr/deliveries/container-label", headers=_auth(),
+                         params={"nr": "AK222000"})
+    assert r.status_code == 404
+    for did in ids:
+        r = await client.patch(f"/api/atr/deliveries/{did}", headers=_auth(),
+                               json={"container_number": "AK222000"})
+        assert r.status_code == 200
+    # list exposes the container number
+    rows = (await client.get("/api/atr/deliveries", headers=_auth())).json()
+    assert all(d["container_number"] == "AK222000" for d in rows if d["id"] in ids)
+
+    r = await client.get("/api/atr/deliveries/container-label", headers=_auth(),
+                         params={"nr": "AK222000"})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    assert 'filename="Container_AK222000.docx"' in r.headers["content-disposition"]
+    from io import BytesIO
+
+    from docx import Document
+    text = "\n".join(p.text for p in Document(BytesIO(r.content)).paragraphs)
+    assert text.startswith("Container AK222000")
+    assert text.count("BA 1024738") == 2

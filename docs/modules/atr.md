@@ -42,6 +42,16 @@ bearbeitet und pro Position **Gewicht** und **PO Pos** editiert; nicht
 zugeordnete Positionen sind rot markiert. „Generieren" erzeugt die Dateien und
 bietet sie zum Download an.
 
+In der **Lieferungen-Liste** lassen sich mehrere Lieferungen per Checkbox
+markieren; „Containerbeschriftung erstellen" fragt eine Containernummer ab
+(vorbelegt, wenn alle markierten schon dieselbe tragen), schreibt sie in alle
+markierten Lieferungen und lädt eine **gemeinsame Containerbeschriftung** für
+den ganzen Container herunter. Die Spalte **Containernummer** zeigt die
+Zuordnung. Ein Container ist die Menge aller Lieferungen mit derselben Nummer;
+die Sammelbeschriftung wird bei jedem Abruf live daraus gebaut (nicht
+gespeichert) und lässt sich jederzeit über Auswahl + Button neu ziehen. Die
+Containernummer ändert man ebenso: neu markieren, Button, andere Nummer.
+
 Alle Listen nutzen die gemeinsame [`DataTable`](../../frontend/src/components/DataTable.tsx)
 (Card + Suche + sortierbare Spalten + Pagination, 25/Seite).
 
@@ -105,7 +115,13 @@ und Kategorie aus dem Katalog; ohne Treffer bleibt die Position `unmatched`
 - **ATR-PDF** aus dem Excel via LibreOffice (`convert_xlsx_to_pdf`). Schlägt die
   Konvertierung fehl, bleiben xlsx + docx nutzbar (Warnung).
 - **Container-Etikett (docx)** via
-  [`atr_generate_docx.py`](../../backend/app/services/atr_generate_docx.py).
+  [`atr_generate_docx.py`](../../backend/app/services/atr_generate_docx.py)
+  (`build_containerbeschriftung`, eine Lieferung). Dieselbe Datei liefert
+  `build_container_label` für die **Sammelbeschriftung** eines Containers
+  (`GET /api/atr/deliveries/container-label?nr=…`): Überschrift „Container …",
+  darunter ein Block BA/PO/Pos/MSN je Lieferung auf einer Querseite; ab drei
+  Lieferungen mit kleinerer Schrift, ab fünf skaliert (bis acht Lieferungen
+  bleibt es eine Seite).
 - **Kopf:** Titel + Doc-No/Datum/Seite werden im PDF-Schritt via LibreOffice UNO
   gesetzt ([`atr_uno_header.py`](../../backend/app/services/atr_uno_header.py)),
   da openpyxl den Druckkopf verstümmelt. Das **Logo** (App-Logo aus

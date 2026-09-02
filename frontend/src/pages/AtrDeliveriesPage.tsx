@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   fetchDeliveries, uploadLieferschein, fetchInputFiles, processInputFile,
-  deleteDelivery, type AtrDeliverySummary,
+  deleteDelivery, updateDelivery, containerLabelUrl, type AtrDeliverySummary,
 } from "@/lib/atrApi";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
@@ -22,6 +22,8 @@ export function AtrDeliveriesPage() {
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState("");
   const [search, setSearch] = useState("");
+  // Multi-select for the container label (ids survive paging/filtering).
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   async function onUpload(file: File) {
     setBusy(true);
@@ -51,18 +53,63 @@ export function AtrDeliveriesPage() {
     } catch (e) { toast.error(String(e)); }
   }
 
+  function toggle(id: number, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+  async function onContainerLabel() {
+    const picked = (deliveries ?? []).filter((d) => selected.has(d.id));
+    if (picked.length === 0) return;
+    // Prefill when every selected delivery already sits in the same container.
+    const first = picked[0].container_number ?? "";
+    const common = first && picked.every((d) => (d.container_number ?? "") === first) ? first : "";
+    const nr = window.prompt(t("atr.deliveries.container_prompt"), common)?.trim();
+    if (!nr) return;
+    setBusy(true);
+    try {
+      await Promise.all(picked.map((d) => updateDelivery(d.id, { container_number: nr })));
+      qc.invalidateQueries({ queryKey: ["atr", "deliveries"] });
+      setSelected(new Set());
+      toast.success(t("atr.deliveries.container_label_ok", { nr }));
+      // Same cookie-authenticated download path as the per-delivery file links.
+      const a = document.createElement("a");
+      a.href = containerLabelUrl(nr);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) { toast.error(String(e)); } finally { setBusy(false); }
+  }
+
   const q = search.trim().toLowerCase();
   const rows = (deliveries ?? []).filter(
     (d) => !q
       || d.source_filename.toLowerCase().includes(q)
       || (d.ba_auftrag ?? "").toLowerCase().includes(q)
+      || (d.container_number ?? "").toLowerCase().includes(q)
       || d.status.toLowerCase().includes(q),
   ) as DeliveryRow[];
+  const allSelected = rows.length > 0 && rows.every((d) => selected.has(d.id));
 
   const columns: DataTableColumn<DeliveryRow>[] = [
+    {
+      key: "select", sortable: false,
+      header: (
+        <input type="checkbox" checked={allSelected} aria-label={t("atr.deliveries.select_all")}
+          onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((d) => d.id)) : new Set())} />
+      ),
+      cell: (d) => (
+        <input type="checkbox" checked={selected.has(d.id)} aria-label={t("atr.deliveries.select_row")}
+          data-testid={`atr-delivery-select-${d.id}`}
+          onChange={(e) => toggle(d.id, e.target.checked)} />
+      ),
+    },
     { key: "source_filename", header: t("atr.deliveries.col.source"), className: "font-medium" },
     { key: "ba_auftrag", header: t("atr.deliveries.col.ba") },
     { key: "atr_number", header: t("atr.deliveries.col.atr_number") },
+    { key: "container_number", header: t("atr.deliveries.col.container") },
     { key: "msn", header: t("atr.deliveries.col.msn") },
     { key: "status", header: t("atr.deliveries.col.status") },
     {
@@ -95,6 +142,10 @@ export function AtrDeliveriesPage() {
         <input type="file" accept=".pdf" className="hidden" disabled={busy}
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); }} />
       </label>
+      <button className="px-3 py-2 border rounded text-sm disabled:opacity-50"
+        disabled={selected.size === 0 || busy} onClick={onContainerLabel}>
+        {t("atr.deliveries.container_label")}{selected.size > 0 ? ` (${selected.size})` : ""}
+      </button>
       {input?.configured && (
         <>
           <select className="border rounded px-2 py-2 text-sm" value={picked}

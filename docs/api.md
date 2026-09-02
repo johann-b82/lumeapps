@@ -127,6 +127,7 @@ Router-level `require_admin` on `/api/atr` (`atr.py`) and `/api/atr/deliveries` 
 | PATCH  | /api/atr/deliveries/{id} · /{id}/items/{item_id} | —   |   ✓   | Edit header / position data |
 | POST   | /api/atr/deliveries/{id}/generate             |   —    |   ✓   | Build documents (and deliver, for scan origin) |
 | GET    | /api/atr/deliveries/{id}/files/{kind}         |   —    |   ✓   | Download `atr_xlsx` · `atr_pdf` · `label_docx` |
+| GET    | /api/atr/deliveries/container-label?nr=…      |   —    |   ✓   | Combined container label (.docx) for every delivery with that container number |
 
 The auto-scan (`_run_atr_scan` in `scheduler.py`, interval `atr_scan_interval_s`) only re-skips a filename while an **open `draft`** delivery for it still exists — once past draft, a re-appearing same-named file is processed again.
 
@@ -178,6 +179,7 @@ Router-level `require_admin` on both (`backend/app/routers/atr_delivery.py`; fil
 | PATCH  | /api/atr/deliveries/{delivery_id}/items/{item_id} |  —   |   ✓   | Update delivery line item |
 | POST   | /api/atr/deliveries/{delivery_id}/generate      |   —    |   ✓   | Generate PDF/manifest |
 | GET    | /api/atr/deliveries/{delivery_id}/files/{kind}  |   —    |   ✓   | Download a generated file |
+| GET    | /api/atr/deliveries/container-label?nr=…        |   —    |   ✓   | Combined container label (.docx), built on the fly |
 | POST   | /api/atr/fileserver/test                        |   —    |   ✓   | Test SMB fileserver connection |
 
 ### Fair — projects & balloons (`/api/fair`, Admin-only)
