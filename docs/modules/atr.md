@@ -119,9 +119,11 @@ und Kategorie aus dem Katalog; ohne Treffer bleibt die Position `unmatched`
   (`build_containerbeschriftung`, eine Lieferung). Dieselbe Datei liefert
   `build_container_label` für die **Sammelbeschriftung** eines Containers
   (`GET /api/atr/deliveries/container-label?nr=…`): Überschrift „Container …",
-  darunter ein Block BA/PO/Pos/MSN je Lieferung auf einer Querseite; ab drei
-  Lieferungen mit kleinerer Schrift, ab fünf skaliert (bis acht Lieferungen
-  bleibt es eine Seite).
+  darunter ein Block BA/PO/Pos/MSN je Lieferung auf einer Querseite. Bis zwei
+  Lieferungen groß untereinander; ab drei ein rahmenloses Raster mit fester,
+  lesbarer Schrift: eine Spalte bis vier, zwei Spalten bis acht, drei Spalten
+  bis zwölf Lieferungen (vier Zeilen je Seite, schmale Ränder). Mehr als zwölf
+  laufen auf eine zweite Seite weiter — die Schrift wird nie verkleinert.
 - **Kopf:** Titel + Doc-No/Datum/Seite werden im PDF-Schritt via LibreOffice UNO
   gesetzt ([`atr_uno_header.py`](../../backend/app/services/atr_uno_header.py)),
   da openpyxl den Druckkopf verstümmelt. Das **Logo** (App-Logo aus
