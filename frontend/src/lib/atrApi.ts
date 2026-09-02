@@ -192,7 +192,8 @@ export interface AtrDelivery {
 }
 export interface AtrDeliverySummary {
   id: number; source_filename: string; ba_auftrag: string | null;
-  compartment: string | null; atr_number: string | null; msn: string | null;
+  compartment: string | null; atr_number: string | null; container_number: string | null;
+  msn: string | null;
   status: string; created_at: string;
 }
 export interface AtrGenerateManifest {
@@ -252,6 +253,10 @@ export async function saveDeliveryToServer(id: number): Promise<AtrSaveResult> {
   return apiClient<AtrSaveResult>(`/api/atr/deliveries/${id}/save-to-server`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
   });
+}
+/** Combined Containerbeschriftung for every delivery assigned to `nr` (built on the fly). */
+export function containerLabelUrl(nr: string): string {
+  return `/api/atr/deliveries/container-label?nr=${encodeURIComponent(nr)}`;
 }
 export function atrFileUrl(id: number, kind: "atr_xlsx" | "atr_pdf" | "label_docx"): string {
   return `/api/atr/deliveries/${id}/files/${kind}`;
