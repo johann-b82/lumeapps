@@ -13,7 +13,8 @@ def _item(**kw):
     base = dict(pos=1, supplier_article_code="6060", part_number="VR11S 1010 016 000",
                 part_number_norm="111010016000", part_name="CARPET EMERGENCY EXIT HATCH",
                 drawing_number_issue="VR11S 1010-10/D", category="CARPET", qty=1,
-                weight_kg=Decimal("0.413"), po_pos="050", match_status="matched", row_order=1)
+                weight_kg=Decimal("0.413"), po_pos="050", match_status="matched", row_order=1,
+                serial_numbers=None)
     base.update(kw)
     return SimpleNamespace(**base)
 

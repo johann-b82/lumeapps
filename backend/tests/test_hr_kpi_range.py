@@ -127,7 +127,7 @@ async def test_hr_kpis_custom_range_single_window(client):
         # (2h overtime each on a 40h week = 8h daily quota)
         att_id_base = 9_800_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_id_base,
+            id=str(att_id_base),
             employee_id=emp_a,
             date=date(2026, 3, 10),
             start_time=time(8, 0), end_time=time(18, 0),
@@ -135,7 +135,7 @@ async def test_hr_kpis_custom_range_single_window(client):
             synced_at=datetime.now(timezone.utc),
         ))
         session.add(PersonioAttendance(
-            id=att_id_base + 1,
+            id=str(att_id_base + 1),
             employee_id=emp_b,
             date=date(2026, 4, 5),
             start_time=time(8, 0), end_time=time(18, 0),
@@ -189,7 +189,7 @@ async def test_hr_kpis_prior_window_same_length(client):
         # Row inside prior window (Feb) with 9h worked — 1h overtime
         att_base = 9_810_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 2, 10),
             start_time=time(8, 0), end_time=time(17, 0),
@@ -198,7 +198,7 @@ async def test_hr_kpis_prior_window_same_length(client):
         ))
         # Row inside current window — different ratio so we can distinguish
         session.add(PersonioAttendance(
-            id=att_base + 1,
+            id=str(att_base + 1),
             employee_id=emp,
             date=date(2026, 3, 10),
             start_time=time(8, 0), end_time=time(20, 0),
