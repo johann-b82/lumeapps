@@ -78,6 +78,7 @@ class AtrDeliverySummary(BaseModel):
     ba_auftrag: str | None
     compartment: str | None
     atr_number: str | None
+    container_number: str | None
     msn: str | None
     status: str
     created_at: datetime
