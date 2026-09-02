@@ -115,6 +115,17 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/worldcup/embed/knockout", frozenset({"GET"})),
     ("/api/worldcup/embed/scorers", frozenset({"GET"})),
     ("/api/worldcup/embed/tippspiel", frozenset({"GET"})),
+    # Newsletter reads — viewer role (mixed-gate router; writes carry
+    # require_admin). See routers/newsletter.py docstring.
+    ("/api/newsletter", frozenset({"GET"})),
+    ("/api/newsletter/rubriken", frozenset({"GET"})),
+    ("/api/newsletter/{ausgabe_id}", frozenset({"GET"})),
+    ("/api/newsletter/{ausgabe_id}/cover", frozenset({"GET"})),
+    ("/api/newsletter/{ausgabe_id}/rueckseite", frozenset({"GET"})),
+    ("/api/newsletter/eintrag/{eintrag_id}/bild", frozenset({"GET"})),
+    ("/api/newsletter/eintrag-bild/{bild_id}", frozenset({"GET"})),
+    # Belegschafts-KPI dashboard read — viewer role.
+    ("/api/hr/belegschaft-kpi", frozenset({"GET"})),
 }
 
 

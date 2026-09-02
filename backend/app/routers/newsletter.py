@@ -1,5 +1,8 @@
 """Newsletter — vierteljährliche Ausgabe, online + PDF (v1.112).
 
+Compute-justified: PDF-Erzeugung, Bild-Ablage/-Verarbeitung und KPI-Snapshots je
+Ausgabe — nicht als reine Directus-Collection-Reads ausdrückbar.
+
 Gemischt gegated (siehe Konvention in CLAUDE.md): Lesen ist für alle Dashboard-
 Rollen (require_dashboard_read) freigegeben, damit die Belegschaft den Newsletter
 liest. **Admin-only** (Depends(require_admin)) sind alle schreibenden Routen und
