@@ -49,7 +49,11 @@ export function IframePlayer({ uri, durationS, onCycleEnd }: IframePlayerProps) 
   const src = (() => {
     if (durationS == null) return uri;
     try {
-      const u = new URL(uri); // requires absolute URL
+      // Site-relative uris (e.g. "/embed/worldcup") resolve against the
+      // player's own origin, so a media row never has to hard-code the host
+      // it happens to be deployed on.
+      const base = typeof window !== "undefined" ? window.location.origin : undefined;
+      const u = new URL(uri, base);
       u.searchParams.set("duration", String(durationS));
       return u.toString();
     } catch {
