@@ -1,0 +1,14 @@
+// Installed to /etc/polkit-1/rules.d/ by scripts/lib/signage-install.sh
+// (deploy_polkit_rules). Lets the unprivileged `signage` user reboot the Pi
+// through logind (`systemctl reboot`). The sidecar runs that when the admin
+// UI sends the `reboot` event over the player SSE stream; no sudo involved
+// (signage-sidecar.service runs with NoNewPrivileges=yes).
+polkit.addRule(function (action, subject) {
+  if (
+    subject.user === "signage" &&
+    (action.id === "org.freedesktop.login1.reboot" ||
+      action.id === "org.freedesktop.login1.reboot-multiple-sessions")
+  ) {
+    return polkit.Result.YES;
+  }
+});

@@ -1,9 +1,16 @@
-"""Signage device admin endpoints — calibration PATCH only.
+"""Signage device admin endpoints — calibration PATCH + remote commands.
 
 Phase 70 (v1.22 MIG-SIGN-04): list/get/patch-name/delete/put-tags migrated to
 Directus. Only the calibration PATCH survives here. Device row CRUD lives at
 the ``signage_devices`` Directus collection. Per-device resolved playlist
 lives at ``/api/signage/resolved/{device_id}`` (resolved.py).
+
+Remote commands (``POST .../reload`` and ``POST .../reboot``) push a
+one-shot event onto the device's player SSE stream: the kiosk browser
+handles ``reload`` (page reload), the Pi sidecar handles ``reboot``
+(``systemctl reboot`` via logind + polkit rule). Nothing is persisted —
+if no subscriber is connected the command is simply lost and the response
+says so (``delivered: 0``).
 
 Compute-justified: clause 1 (SSE fanout).
 """
@@ -17,7 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
 from app.models import SignageDevice, SignageDeviceTagMap
-from app.schemas.signage import SignageCalibrationUpdate, SignageDeviceRead
+from app.schemas.signage import (
+    SignageCalibrationUpdate,
+    SignageDeviceCommandResult,
+    SignageDeviceRead,
+)
 from app.services import signage_broadcast
 from app.services.signage_resolver import (
     compute_playlist_etag,
@@ -77,3 +88,56 @@ async def update_device_calibration(
     tag_ids = [tid for (tid,) in tag_rows.fetchall()]
     out.tag_ids = tag_ids or None
     return out
+
+
+async def _send_device_command(
+    db: AsyncSession, device_id: uuid.UUID, event: str
+) -> SignageDeviceCommandResult:
+    exists = (
+        await db.execute(
+            select(SignageDevice.id).where(SignageDevice.id == device_id)
+        )
+    ).scalar_one_or_none()
+    if exists is None:
+        raise HTTPException(404, "device not found")
+    delivered = signage_broadcast.notify_device(
+        device_id, {"event": event, "device_id": str(device_id)}
+    )
+    return SignageDeviceCommandResult(
+        event=event, device_id=device_id, delivered=delivered
+    )
+
+
+@router.post(
+    "/{device_id}/reload",
+    response_model=SignageDeviceCommandResult,
+    status_code=202,
+)
+async def reload_device(
+    device_id: uuid.UUID,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SignageDeviceCommandResult:
+    """Ask the kiosk browser to reload the player page (SSE ``reload``).
+
+    Admin gate inherited from the package router. Fire-and-forget: 202 with
+    ``delivered`` = number of live SSE subscribers that received the event.
+    """
+    return await _send_device_command(db, device_id, "reload")
+
+
+@router.post(
+    "/{device_id}/reboot",
+    response_model=SignageDeviceCommandResult,
+    status_code=202,
+)
+async def reboot_device(
+    device_id: uuid.UUID,
+    db: AsyncSession = Depends(get_async_db_session),
+) -> SignageDeviceCommandResult:
+    """Ask the Pi sidecar to reboot the device (SSE ``reboot``).
+
+    The sidecar runs ``systemctl reboot``; see pi-sidecar/sidecar.py
+    ``_reboot_device`` and the polkit rule in scripts/polkit/. Same 202 +
+    ``delivered`` contract as ``reload``.
+    """
+    return await _send_device_command(db, device_id, "reboot")

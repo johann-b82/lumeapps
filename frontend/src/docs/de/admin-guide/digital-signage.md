@@ -320,3 +320,14 @@ Für ein frisch eingerichtetes Gerät, das z. B. erst 30 Minuten online ist, bet
 ### Aktualisierung
 
 Die Tabelle lädt alle 30 Sekunden neu und aktualisiert sich automatisch, wenn du zum Browser-Tab zurückkehrst.
+
+## Geräte fernsteuern
+
+Im Tab „Geräte" gibt es pro Zeile zwei Schaltflächen, mit denen du einen Bildschirm ohne SSH-Zugriff auf den Pi wieder in Gang bringst:
+
+- **Neu laden** (Pfeil-Symbol) - der Kiosk-Browser lädt die Player-Seite sofort neu. Hilft nach einem Player-Update oder wenn die Anzeige hängt. Keine Rückfrage.
+- **Neu starten** (Power-Symbol) - der Pi wird komplett neu gestartet. Der Bildschirm bleibt etwa eine Minute schwarz. Es erscheint ein Bestätigungsdialog.
+
+Beide Befehle gehen über die bestehende Live-Verbindung des Geräts (SSE). Ist das Gerät gerade nicht verbunden, erscheint eine gelbe Meldung „nicht verbunden" - der Befehl wird **nicht** gespeichert und später nachgeholt. Warte, bis die Status-Anzeige wieder grün ist, und versuche es erneut.
+
+Ein Pi, der vor dieser Funktion eingerichtet wurde, braucht für „Neu starten" einmalig ein Sidecar-Update plus die Polkit-Regel aus `scripts/polkit/` (siehe Operator-Runbook, Abschnitt 9.11). „Neu laden" funktioniert ohne Änderung am Pi.

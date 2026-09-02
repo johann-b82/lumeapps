@@ -684,6 +684,37 @@ Every kiosk will show a fresh `XXX-XXX` pairing code within one heartbeat cycle.
 
 ---
 
+### 9.11 Remote Reload / Reboot from the Admin UI
+
+The Devices table (`/signage/devices`) has two per-row buttons that need no SSH:
+
+- **Reload** (`POST /api/signage/devices/{id}/reload`) — pushes a `reload` event on the
+  device's player SSE stream; the kiosk browser runs `location.reload()`. Use it after a
+  player build or when the page looks stuck.
+- **Reboot** (`POST /api/signage/devices/{id}/reboot`, confirmation dialog) — pushes a
+  `reboot` event; the **sidecar** runs `systemctl reboot` through logind. The screen goes
+  black for roughly a minute.
+
+Both are fire-and-forget: the response carries `delivered` = number of live SSE subscribers
+(sidecar + browser). `delivered: 0` means the device is not connected right now and the
+command was dropped — nothing is queued for later.
+
+Reboot requires the polkit rule `/etc/polkit-1/rules.d/50-signage-reboot.rules`
+(`scripts/polkit/`), which `provision-pi.sh` installs via `deploy_polkit_rules`. Without it
+the sidecar logs `systemctl reboot failed ... Interactive authentication required`.
+
+**Upgrading a Pi provisioned before this feature** (sidecar + rule are not pulled in
+automatically):
+
+```bash
+cd /opt/signage && sudo git pull
+sudo install -m 0644 -o root -g root scripts/polkit/50-signage-reboot.rules /etc/polkit-1/rules.d/
+SIGNAGE_UID=$(id -u signage)
+sudo -u signage XDG_RUNTIME_DIR=/run/user/${SIGNAGE_UID} systemctl --user restart signage-sidecar
+```
+
+Verify from the Pi: `sudo -u signage systemctl reboot` must reboot without a password prompt.
+
 ## 10. Fallback: Image-Only Playlist
 
 If a specific Pi hardware configuration cannot render PPTX or PDF items (e.g., conversion succeeded but slides do not display correctly due to font rendering issues), the operator can build an **image-only fallback playlist**:

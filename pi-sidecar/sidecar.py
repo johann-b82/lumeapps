@@ -588,9 +588,30 @@ async def _heartbeat_loop() -> None:
             logger.debug("Heartbeat fire-and-forget error (suppressed): %s", exc)
 
 
+async def _reboot_device() -> None:
+    """Admin-triggered reboot (``reboot`` event on the player SSE stream).
+
+    Goes through logind (``systemctl reboot``) so it works from the hardened
+    user service without sudo (NoNewPrivileges). The polkit rule installed by
+    scripts/lib/signage-install.sh (``deploy_polkit_rules``) grants the
+    ``signage`` user ``org.freedesktop.login1.reboot``. Failures are logged,
+    never raised — the SSE loop must keep running.
+    """
+    logger.warning("Reboot requested by admin — running systemctl reboot")
+    rc, _stdout, stderr = await _run_async("systemctl", "reboot", timeout=10.0)
+    if rc != 0:
+        logger.error(
+            "systemctl reboot failed (rc=%s): %s — is the polkit rule "
+            "50-signage-reboot.rules installed?",
+            rc,
+            stderr.decode(errors="replace").strip(),
+        )
+
+
 async def _calibration_sse_loop() -> None:
     """Subscribe to /api/signage/player/stream; on `calibration-changed` event,
-    fetch full calibration state and apply it (D-04, D-08).
+    fetch full calibration state and apply it (D-04, D-08). On `reboot`
+    (admin remote command) run ``_reboot_device``.
 
     Reuses the existing device JWT (same token the player uses).
     On any disconnect or error, sleep 5s and retry — matches the
@@ -613,7 +634,11 @@ async def _calibration_sse_loop() -> None:
                             payload = sse.json()
                         except (ValueError, json.JSONDecodeError):
                             continue
-                        if payload.get("event") != "calibration-changed":
+                        event = payload.get("event")
+                        if event == "reboot":
+                            await _reboot_device()
+                            continue
+                        if event != "calibration-changed":
                             continue
                         # Fetch full calibration state per D-08
                         try:

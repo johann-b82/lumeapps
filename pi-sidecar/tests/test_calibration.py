@@ -405,3 +405,27 @@ class TestSseCalibrationLoop:
 
         asyncio.run(drive())
         assert applied == [calibration_payload]
+
+
+# ===========================================================================
+# Admin remote command — `reboot` SSE event → systemctl reboot
+# ===========================================================================
+
+class TestRebootCommand:
+    def test_reboot_device_runs_systemctl_reboot(self, tmp_path, monkeypatch):
+        sc, _ = _fresh_sidecar(tmp_path, monkeypatch)
+        fake_exec, calls = _make_exec_recorder(returncode=0)
+        monkeypatch.setattr(sc.asyncio, "create_subprocess_exec", fake_exec)
+
+        asyncio.run(sc._reboot_device())
+
+        assert [list(c) for c in calls] == [["systemctl", "reboot"]]
+
+    def test_reboot_device_failure_is_logged_not_raised(self, tmp_path, monkeypatch):
+        sc, _ = _fresh_sidecar(tmp_path, monkeypatch)
+        fake_exec, calls = _make_exec_recorder(returncode=1, stderr=b"Interactive authentication required")
+        monkeypatch.setattr(sc.asyncio, "create_subprocess_exec", fake_exec)
+
+        asyncio.run(sc._reboot_device())  # must not raise — SSE loop keeps running
+
+        assert len(calls) == 1

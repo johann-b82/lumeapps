@@ -9,6 +9,7 @@ The sidecar is the offline-resilience layer for the signage kiosk. It:
 - Accepts the device JWT via `POST /token` from the player browser
 - Runs a background heartbeat to the backend every 60 seconds
 - Probes backend connectivity every 10 seconds; reports `online` status on `/health`
+- Listens on the player SSE stream for `calibration-changed` (applies display/audio settings) and `reboot` (runs `systemctl reboot` — admin "Reboot" button)
 
 ## Routes
 
@@ -44,6 +45,9 @@ The sidecar is the offline-resilience layer for the signage kiosk. It:
 - Token file written with `os.chmod(path, 0o600)` — not readable by other users.
 - Runs as the `signage` user with systemd hardening (`PrivateTmp=yes`,
   `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=/var/lib/signage`).
+- The only privileged action is `systemctl reboot` (admin remote command). It goes through
+  logind, authorised by the polkit rule `scripts/polkit/50-signage-reboot.rules` installed to
+  `/etc/polkit-1/rules.d/` at provisioning time — no sudo, no capability grant.
 
 ## Dev / Local Run
 

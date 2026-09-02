@@ -217,7 +217,7 @@ Router-level `get_current_device` gate; no user-auth on these routes.
 |--------|-------------------------------------------------|--------|-------|
 | GET    | /api/signage/player/playlist                    | Device | Tag-resolved playlist envelope; ETag + `If-None-Match` → 304 |
 | POST   | /api/signage/player/heartbeat                   | Device | Updates presence; response carries a freshly rolled device JWT |
-| GET    | /api/signage/player/stream                      | Device | SSE: `{event, playlist_id, etag}` frames, 15s pings |
+| GET    | /api/signage/player/stream                      | Device | SSE: `{event, playlist_id, etag}` frames, 15s pings; also `calibration-changed`, `reload`, `reboot` (admin commands) |
 | GET    | /api/signage/player/asset/{media_id}            | Device | Media asset bytes |
 | GET    | /api/signage/player/asset/{media_id}/slide/{idx} | Device | Converted PPTX slide PNG |
 | GET    | /api/signage/player/calibration                 | Device | Per-device display calibration |
@@ -237,6 +237,8 @@ One router-level admin gate in `backend/app/routers/signage_admin/__init__.py` (
 | DELETE | /api/signage/playlists/{playlist_id}              |   —    |   ✓   | 204; 409 `{detail, schedule_ids}` if scheduled |
 | PUT    | /api/signage/playlists/{playlist_id}/items        |   —    |   ✓   | Bulk-replace playlist items |
 | PATCH  | /api/signage/devices/{device_id}/calibration      |   —    |   ✓   | Update device calibration |
+| POST   | /api/signage/devices/{device_id}/reload           |   —    |   ✓   | 202; pushes `reload` on the device SSE stream (kiosk reloads page); `delivered` = live subscribers |
+| POST   | /api/signage/devices/{device_id}/reboot           |   —    |   ✓   | 202; pushes `reboot` on the device SSE stream (Pi sidecar runs `systemctl reboot`) |
 | GET    | /api/signage/resolved/{device_id}                 |   —    |   ✓   | Resolved playlist preview for a device |
 | GET    | /api/signage/admin/stream                         |   —    |   ✓   | SSE for the admin UI |
 

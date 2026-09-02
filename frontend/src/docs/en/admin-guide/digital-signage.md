@@ -320,3 +320,14 @@ For a freshly-provisioned new device that has only been online for e.g. 30 minut
 ### Refresh
 
 The table polls every 30 seconds and refreshes automatically when you switch back to the browser tab.
+
+## Remote Control
+
+The Devices tab has two buttons per row that get a screen going again without SSH access to the Pi:
+
+- **Reload** (arrow icon) - the kiosk browser reloads the player page immediately. Use it after a player update or when the display looks stuck. No confirmation.
+- **Reboot** (power icon) - the Pi does a full reboot. The screen stays black for about a minute. A confirmation dialog appears.
+
+Both commands travel over the device's existing live connection (SSE). If the device is not connected right now you get an amber "not connected" notice - the command is **not** stored for later. Wait until the status chip is green again and retry.
+
+A Pi provisioned before this feature needs a one-time sidecar update plus the polkit rule from `scripts/polkit/` for Reboot to work (see the operator runbook, section 9.11). Reload works without touching the Pi.

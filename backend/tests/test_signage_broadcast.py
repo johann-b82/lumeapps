@@ -203,3 +203,23 @@ async def test_unsubscribe_noop_when_queue_not_present():
     q_orphan = asyncio.Queue()
     signage_broadcast.unsubscribe(1, q_orphan)  # must not raise
     assert 1 not in signage_broadcast._device_queues
+
+
+# --------------------------------------------------------------------------
+# notify_device returns the delivered count (admin reload/reboot commands)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_notify_device_returns_zero_without_subscribers():
+    assert signage_broadcast.notify_device(99, {"event": "reload"}) == 0
+
+
+@pytest.mark.asyncio
+async def test_notify_device_returns_subscriber_count():
+    q1 = signage_broadcast.subscribe(7)
+    q2 = signage_broadcast.subscribe(7)
+    payload = {"event": "reboot", "device_id": "7"}
+    assert signage_broadcast.notify_device(7, payload) == 2
+    assert q1.get_nowait() == payload
+    assert q2.get_nowait() == payload

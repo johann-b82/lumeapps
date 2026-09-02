@@ -221,6 +221,8 @@
   "/api/signage/admin/stream",
   "/api/signage/analytics/devices",
   "/api/signage/devices/{device_id}/calibration",
+  "/api/signage/devices/{device_id}/reboot",
+  "/api/signage/devices/{device_id}/reload",
   "/api/signage/media/pptx",
   "/api/signage/media/{media_id}",
   "/api/signage/media/{media_id}/reconvert",
