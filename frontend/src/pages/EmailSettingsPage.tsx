@@ -52,7 +52,8 @@ export function EmailSettingsPage() {
     if (!testTo) { toast.error(t("email.settings.test_no_address")); return; }
     try {
       const r = await sendTestEmail(testTo);
-      r.ok ? toast.success(t("email.settings.test_ok")) : toast.error(r.error ?? "failed");
+      if (r.ok) toast.success(t("email.settings.test_ok"));
+      else toast.error(r.error ?? "failed");
     } catch (e) { toast.error(String(e)); }
   }
 

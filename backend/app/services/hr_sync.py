@@ -247,7 +247,7 @@ def _normalize_attendance(raw: dict) -> dict:
     if isinstance(employee_id, dict):
         employee_id = employee_id.get("attributes", {}).get("id", {}).get("value") or employee_id.get("id")
     return {
-        "id": raw.get("id") or _attr_val(attrs, "id"),
+        "id": str(raw.get("id") or _attr_val(attrs, "id")),  # id-Spalte ist VARCHAR (v1_111)
         "employee_id": employee_id,
         "date": _parse_date(_attr_val(attrs, "date")),
         "start_time": _parse_time(_attr_val(attrs, "start_time")),

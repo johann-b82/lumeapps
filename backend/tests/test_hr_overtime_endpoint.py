@@ -41,7 +41,7 @@ async def test_overtime_range_scopes_attendance(client):
         ))
         att_base = 9_820_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 4, 10),
             start_time=time(8, 0), end_time=time(16, 0),  # 8h, no OT at 40h/week
@@ -49,7 +49,7 @@ async def test_overtime_range_scopes_attendance(client):
             synced_at=datetime.now(timezone.utc),
         ))
         session.add(PersonioAttendance(
-            id=att_base + 1,
+            id=str(att_base + 1),
             employee_id=emp,
             date=date(2026, 5, 10),
             start_time=time(8, 0), end_time=time(16, 0),
@@ -95,7 +95,7 @@ async def test_overtime_null_times_skipped(client):
         ))
         att_base = 9_830_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 4, 10),
             start_time=None, end_time=time(16, 0),
@@ -103,7 +103,7 @@ async def test_overtime_null_times_skipped(client):
             synced_at=datetime.now(timezone.utc),
         ))
         session.add(PersonioAttendance(
-            id=att_base + 1,
+            id=str(att_base + 1),
             employee_id=emp,
             date=date(2026, 4, 11),
             start_time=time(8, 0), end_time=None,
@@ -142,7 +142,7 @@ async def test_overtime_break_subtraction(client):
         ))
         att_base = 9_840_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 4, 10),
             start_time=time(8, 0), end_time=time(17, 0),  # 9h span
@@ -185,7 +185,7 @@ async def test_overtime_weekly_hours_fallback_to_8h(client):
         ))
         att_base = 9_850_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 4, 10),
             start_time=time(8, 0), end_time=time(18, 0),  # 10h
@@ -229,7 +229,7 @@ async def test_overtime_zero_worked_hours_skipped(client):
         ))
         att_base = 9_860_000 + (abs(hash(prefix)) % 10_000) * 10
         session.add(PersonioAttendance(
-            id=att_base,
+            id=str(att_base),
             employee_id=emp,
             date=date(2026, 4, 10),
             start_time=time(8, 0), end_time=time(9, 0),  # 1h

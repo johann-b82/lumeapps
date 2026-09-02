@@ -1,5 +1,8 @@
 """Weekly Report — Mehrarbeit/Überstunden + Krankheit je ISO-Woche (v1.111).
 
+Compute-justified: aggregiert Personio-Anwesenheit gegen das Arbeitszeit-Soll je
+ISO-Woche (Rechenlogik) — keine reine Directus-Collection-Lesung.
+
 Vier Kennzahlen je Kalenderwoche, wie im Haufe-/Excel-Report:
   1. Saldo Mehrarbeit  — Σ(Ist − Soll) über die Belegschaft, Woche + Vorwoche.
   2. geleistete Überstd. — positive Mehrarbeit je Person (Top-Liste).

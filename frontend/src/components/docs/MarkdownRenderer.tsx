@@ -75,8 +75,8 @@ export function MarkdownRenderer({ content }: Props) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSlug, [rehypeHighlight, { detect: true }]]}
         components={{
-          h2: ({ node, ...props }) => <HeadingWithAnchor level={2} {...props} />,
-          h3: ({ node, ...props }) => <HeadingWithAnchor level={3} {...props} />,
+          h2: ({ node: _node, ...props }) => <HeadingWithAnchor level={2} {...props} />,
+          h3: ({ node: _node, ...props }) => <HeadingWithAnchor level={3} {...props} />,
           pre: CodeBlock,
         }}
       >

@@ -1,5 +1,8 @@
 """Belegschafts-KPIs für das HR-Dashboard (v1.113).
 
+Compute-justified: aggregiert Personio-Stammdaten der aktiven Belegschaft zu
+Kennzahlen — keine reine Directus-Collection-Lesung.
+
 Vier Kennzahlen aus den Personio-Stammdaten der **aktiven** Belegschaft:
 Geschlecht, Beschäftigungsart (Vollzeit/Teilzeit/Geringfügig/Extern), neue vs.
 bestehende Mitarbeiter (Eintritt im laufenden Quartal) und Kopfzahl je Abteilung.

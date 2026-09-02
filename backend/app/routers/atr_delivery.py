@@ -238,21 +238,29 @@ async def generate(delivery_id: int,
 
 # Server destinations for "save to server", all under \\<host>\<share> (= Z:\).
 # {year}/{kw} are filled per save; folders (incl. year/calendar-week) are created
-# on demand. `kind` selects which generated artifact goes where. Add the next
-# destination by appending one tuple.
-_SERVER_TARGETS: list[tuple[str, str, str]] = [
-    ("atr_xlsx",
-     r"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL\A350"
-     r"\ATR_Acceptance Test Report\ACM_ATR_A350_.....{year}",
-     "QS – Acceptance Test Report"),
-    ("atr_pdf",
-     r"1200 - Logistik\Versand\ATR`S_Weight Reports_Firma Diehl_Portal",
-     "Logistik – Versand"),
-    ("atr_pdf",
-     r"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL"
-     r"\Weight Report für Firma Diehl ( verschicken )\{year}\KW {kw:02d}",
-     "QS – Weight Report (verschicken)"),
-]
+# on demand. `kind` selects which generated artifact goes where.
+def _server_targets(is_a380: bool) -> list[tuple[str, str, str]]:
+    """Destinations for a delivery. Only the Excel Acceptance-Test-Report target
+    is programme-specific (A350 vs A380 sub-folder + year-folder name); the two
+    PDF targets carry no A350/A380 marker and are shared. Add the next
+    destination by appending one tuple."""
+    prog = "A380" if is_a380 else "A350"
+    # NB: the A380 year folder is literally "ACM_ATR_A 380_....." (with a space);
+    # {year} stays literal here and is filled later via str.format.
+    year_folder = "ACM_ATR_A 380_.....{year}" if is_a380 else "ACM_ATR_A350_.....{year}"
+    return [
+        ("atr_xlsx",
+         rf"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL\{prog}"
+         rf"\ATR_Acceptance Test Report\{year_folder}",
+         f"QS – Acceptance Test Report ({prog})"),
+        ("atr_pdf",
+         r"1200 - Logistik\Versand\ATR`S_Weight Reports_Firma Diehl_Portal",
+         "Logistik – Versand"),
+        ("atr_pdf",
+         r"1300 - Qualität\1320_QS\132002_WA-Prüfung\132002_02_TR_Spec_QAA\DIEHL"
+         r"\Weight Report für Firma Diehl ( verschicken )\{year}\KW {kw:02d}",
+         "QS – Weight Report (verschicken)"),
+    ]
 
 
 @router.post("/{delivery_id}/save-to-server")
@@ -284,7 +292,7 @@ async def save_to_server(delivery_id: int,
 
     saved: list[dict] = []
     failed: list[dict] = []
-    for kind, tmpl, label in _SERVER_TARGETS:
+    for kind, tmpl, label in _server_targets("380" in (row.ac_programme or "")):
         data, ext = payload[kind]
         rel_path = tmpl.format(**fmt)
         try:

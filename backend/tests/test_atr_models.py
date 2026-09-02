@@ -17,6 +17,8 @@ def test_atr_part_columns():
     assert AtrPart.__table__.c.part_number_norm.unique is True
 
 
-def test_atr_template_is_singleton():
+def test_atr_template_is_per_programme():
+    # Templates are per programme (id=1 A350, id=2 A380); the old singleton
+    # CHECK (id = 1) was dropped in v1_116.
     names = {c.name for c in AtrTemplate.__table__.constraints}
-    assert "ck_atr_template_singleton" in names
+    assert "ck_atr_template_singleton" not in names
