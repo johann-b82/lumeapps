@@ -708,7 +708,7 @@ automatically). The fleet Pis cannot `git pull` — the GitHub repo is private a
 hold no credentials (`/opt/signage` is a stale clone owned by `signage`). Push the two
 files instead, from the app host (`acm@192.9.201.9` holds the SSH key for `acm@<pi>`,
 which has passwordless sudo). Files MUST have LF line endings — a CRLF `sidecar.py`
-pushed from a Windows checkout changes its checksum (run it through `tr -d ''` first).
+pushed from a Windows checkout changes its checksum (run it through `tr -d '\r'` first).
 
 ```bash
 # on your workstation, from a checkout of main (LF-normalised copies)
