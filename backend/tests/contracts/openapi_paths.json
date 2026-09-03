@@ -1,5 +1,6 @@
 [
   "/api/atr/deliveries",
+  "/api/atr/deliveries/container-label",
   "/api/atr/deliveries/input-files",
   "/api/atr/deliveries/input-files/process",
   "/api/atr/deliveries/next-atr-number",
