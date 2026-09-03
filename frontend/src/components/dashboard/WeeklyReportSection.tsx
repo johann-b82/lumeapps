@@ -48,6 +48,7 @@ export function WeeklyReportSection() {
   const [gewaehlt, setGewaehlt] = useState<string>("");
   const [aktiv, setAktiv] = useState<{ year: number; week: number } | null>(null);
   const [exportLaeuft, setExportLaeuft] = useState(false);
+  const [krankEinheit, setKrankEinheit] = useState<"tage" | "std">("tage");
 
   const { data: meta } = useQuery({ queryKey: wKeys.meta(), queryFn: fetchWeeklyMeta });
 
@@ -87,6 +88,21 @@ export function WeeklyReportSection() {
         <CalendarRange className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <h2 className="text-base font-semibold">{t("weekly.title")}</h2>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-md border border-input text-xs" role="group" aria-label={t("weekly.krankheitEinheit")}>
+            {(["tage", "std"] as const).map((u) => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => setKrankEinheit(u)}
+                className={
+                  "h-8 px-3 focus-visible:outline-none " +
+                  (krankEinheit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted")
+                }
+              >
+                {u === "tage" ? t("weekly.einheitTage") : t("weekly.einheitStunden")}
+              </button>
+            ))}
+          </div>
           <select
             value={gewaehlt}
             onChange={(e) => setGewaehlt(e.target.value)}
@@ -158,17 +174,19 @@ export function WeeklyReportSection() {
             leerText={t("weekly.keineDaten")}
           />
           <VergleichKachel
-            titel={`${t("weekly.krankheit")} · ${report.kw_label}`}
-            werte={report.krankheit_tage}
+            titel={`${t(krankEinheit === "tage" ? "weekly.krankheit" : "weekly.krankheitStd")} · ${report.kw_label}`}
+            werte={krankEinheit === "tage" ? report.krankheit_tage : report.krankheit_std}
             prevLabel={report.kw_prev_label}
             curLabel={report.kw_label}
-            einheit={t("weekly.einheitTage")}
+            einheit={krankEinheit === "tage" ? t("weekly.einheitTage") : t("weekly.einheitStunden")}
             leerText={t("weekly.krankAusstehend")}
           />
           <PersonenKachel
-            titel={`${t("weekly.krankheitProPerson")} · ${report.kw_label}`}
-            personen={report.krankheit_top}
-            einheit={t("weekly.einheitTage")}
+            titel={`${t(krankEinheit === "tage" ? "weekly.krankheitProPerson" : "weekly.krankheitProPersonStd")} · ${report.kw_label}`}
+            personen={[...report.krankheit_top]
+              .map((p) => ({ name: p.name, stunden: krankEinheit === "tage" ? (p.tage ?? 0) : p.stunden }))
+              .sort((a, b) => b.stunden - a.stunden)}
+            einheit={krankEinheit === "tage" ? t("weekly.einheitTage") : t("weekly.einheitStunden")}
             leerText={t("weekly.krankAusstehend")}
           />
         </div>

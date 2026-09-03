@@ -108,6 +108,8 @@ def _woche_grenzen(year: int, week: int) -> tuple[date, date]:
 class Person(BaseModel):
     name: str
     stunden: float
+    #: Nur bei Krankheit gesetzt — erlaubt das Umschalten Tage/Stunden im Frontend.
+    tage: float | None = None
 
 
 class WochenKennzahl(BaseModel):
@@ -128,6 +130,7 @@ class WeeklyReport(BaseModel):
     kw_prev_label: str
     saldo_mehrarbeit: WochenKennzahl
     krankheit_tage: WochenKennzahl
+    krankheit_std: WochenKennzahl
     ueberstunden_top: list[Person]
     krankheit_top: list[Person]
     meta: WeeklyMeta
@@ -305,10 +308,11 @@ def _krank_tage_gesamt(absence: PersonioAbsence) -> float | None:
 async def _krankheit_woche(
     db: AsyncSession, montag: date, sonntag: date, sick_ids: set[int]
 ):
-    """Krank-**Tage** je Mitarbeiter für eine Woche (anteilig nach Überlapp-Tagen).
+    """Krank-**Tage und -Stunden** je Mitarbeiter für eine Woche (anteilig nach
+    Überlapp-Tagen). Tage aus ``days_count`` (inkl. Halbtage), Stunden aus
+    ``hours`` — beides proportional zur Kalender-Spanne auf die Woche verteilt.
 
-    Basis ist ``days_count`` aus dem Personio-Payload (inkl. Halbtage); die Tage
-    werden proportional zur Kalender-Spanne auf die betroffene Woche verteilt."""
+    Rückgabe: ``(tage_je_mitarbeiter, stunden_je_mitarbeiter, name)``."""
     rows = (
         await db.execute(
             select(PersonioAbsence, PersonioEmployee)
@@ -320,21 +324,25 @@ async def _krankheit_woche(
             )
         )
     ).all()
-    per_emp: dict[int, float] = {}
+    per_tage: dict[int, float] = {}
+    per_std: dict[int, float] = {}
     name: dict[int, str] = {}
     for absence, emp in rows:
         if not absence.start_date or not absence.end_date:
             continue
-        tage_gesamt = _krank_tage_gesamt(absence)
-        if tage_gesamt is None:
-            continue
         spanne = (absence.end_date - absence.start_date).days + 1
-        pro_tag = tage_gesamt / spanne if spanne > 0 else tage_gesamt
-        ueberlapp = (min(absence.end_date, sonntag) - max(absence.start_date, montag)).days + 1
-        tage = pro_tag * max(0, ueberlapp)
-        per_emp[emp.id] = per_emp.get(emp.id, 0.0) + tage
+        ueberlapp = max(
+            0, (min(absence.end_date, sonntag) - max(absence.start_date, montag)).days + 1
+        )
+        tage_gesamt = _krank_tage_gesamt(absence)
+        if tage_gesamt is not None:
+            pro_tag = tage_gesamt / spanne if spanne > 0 else tage_gesamt
+            per_tage[emp.id] = per_tage.get(emp.id, 0.0) + pro_tag * ueberlapp
+        if absence.hours is not None:
+            pro_std = float(absence.hours) / spanne if spanne > 0 else float(absence.hours)
+            per_std[emp.id] = per_std.get(emp.id, 0.0) + pro_std * ueberlapp
         name[emp.id] = _name(emp)
-    return per_emp, name
+    return per_tage, per_std, name
 
 
 @router.get("/meta", response_model=WeeklyMeta)
@@ -392,8 +400,8 @@ async def weekly_report(
     sick_ids = await _sick_type_ids(db)
     ist, ueber, netto, name = await _anwesenheit_woche(db, montag, sonntag)
     _, _, netto_v, _ = await _anwesenheit_woche(db, p_montag, p_sonntag)
-    krank, kname = await _krankheit_woche(db, montag, sonntag, sick_ids)
-    krank_v, _ = await _krankheit_woche(db, p_montag, p_sonntag, sick_ids)
+    krank_t, krank_s, kname = await _krankheit_woche(db, montag, sonntag, sick_ids)
+    krank_t_v, krank_s_v, _ = await _krankheit_woche(db, p_montag, p_sonntag, sick_ids)
 
     def _saldo(netto_map):
         if not netto_map:
@@ -406,8 +414,16 @@ async def weekly_report(
         reverse=True,
     )[:TOP_N]
     krank_top = sorted(
-        ({"name": kname[e], "stunden": round(h, 2)} for e, h in krank.items() if h > 0.01),
-        key=lambda x: x["stunden"],
+        (
+            {
+                "name": kname[e],
+                "tage": round(krank_t.get(e, 0.0), 2),
+                "stunden": round(krank_s.get(e, 0.0), 2),
+            }
+            for e in set(krank_t) | set(krank_s)
+            if krank_t.get(e, 0.0) > 0.01 or krank_s.get(e, 0.0) > 0.01
+        ),
+        key=lambda x: x["tage"],
         reverse=True,
     )[:TOP_N]
 
@@ -417,8 +433,12 @@ async def weekly_report(
         kw_prev_label=f"KW {p_montag.isocalendar()[1]}",
         saldo_mehrarbeit=WochenKennzahl(aktuell=_saldo(netto), vorwoche=_saldo(netto_v)),
         krankheit_tage=WochenKennzahl(
-            aktuell=round(sum(krank.values()), 2) if krank else None,
-            vorwoche=round(sum(krank_v.values()), 2) if krank_v else None,
+            aktuell=round(sum(krank_t.values()), 2) if krank_t else None,
+            vorwoche=round(sum(krank_t_v.values()), 2) if krank_t_v else None,
+        ),
+        krankheit_std=WochenKennzahl(
+            aktuell=round(sum(krank_s.values()), 2) if krank_s else None,
+            vorwoche=round(sum(krank_s_v.values()), 2) if krank_s_v else None,
         ),
         ueberstunden_top=[Person(**p) for p in ueber_top],
         krankheit_top=[Person(**p) for p in krank_top],

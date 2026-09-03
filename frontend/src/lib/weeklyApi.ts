@@ -18,6 +18,8 @@ export interface WeeklyMeta {
 export interface WeeklyPerson {
   name: string;
   stunden: number;
+  /** Nur bei Krankheit gesetzt — für den Tage/Stunden-Umschalter. */
+  tage?: number | null;
 }
 
 export interface WochenKennzahl {
@@ -30,6 +32,7 @@ export interface WeeklyReport {
   kw_prev_label: string;
   saldo_mehrarbeit: WochenKennzahl;
   krankheit_tage: WochenKennzahl;
+  krankheit_std: WochenKennzahl;
   ueberstunden_top: WeeklyPerson[];
   krankheit_top: WeeklyPerson[];
   meta: WeeklyMeta;
