@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,7 +17,7 @@ import {
 import { Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { axisProps, gridProps, tooltipCursorProps, tooltipItemStyle, tooltipLabelStyle, tooltipStyle } from "@/lib/chartDefaults";
-import { fetchBelegschaftKpi, type BelegschaftKpi, type LabelWert } from "@/lib/belegschaftApi";
+import { fetchBelegschaftKpi, fetchBelegschaftMeta, type BelegschaftKpi, type LabelWert } from "@/lib/belegschaftApi";
 
 const GESCHLECHT_FARBEN: Record<string, string> = {
   maennlich: "#3b82f6",
@@ -240,18 +241,65 @@ export function BelegschaftKpiCharts({
 
 export function BelegschaftKpiSection() {
   const { t } = useTranslation();
-  const { data } = useQuery({ queryKey: ["hr", "belegschaft-kpi"], queryFn: fetchBelegschaftKpi });
-  if (!data) return null;
+  const [jahr, setJahr] = useState<number | null>(null); // null = "Aktuell"
+  const [quartal, setQuartal] = useState<number | null>(null); // null = Gesamtjahr
+
+  const { data: meta } = useQuery({ queryKey: ["hr", "belegschaft-meta"], queryFn: fetchBelegschaftMeta });
+  const { data } = useQuery({
+    queryKey: ["hr", "belegschaft-kpi", jahr, quartal],
+    queryFn: () => fetchBelegschaftKpi(jahr ?? undefined, quartal ?? undefined),
+  });
+
+  const jahre: number[] = meta
+    ? Array.from({ length: meta.aktuelles_jahr - meta.min_jahr + 1 }, (_, i) => meta.aktuelles_jahr - i)
+    : [];
+
+  const selectCls =
+    "h-8 rounded-md border border-input bg-background px-2 text-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
   return (
     <section>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Users className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <h2 className="text-base font-semibold">{t("belegschaft.title")}</h2>
-        <span className="text-xs text-muted-foreground">
-          {t("belegschaft.gesamt", { n: data.gesamt })}
-        </span>
+        {data && (
+          <span className="text-xs text-muted-foreground">
+            {data.stichtag
+              ? t("belegschaft.gesamtStichtag", {
+                  n: data.gesamt,
+                  datum: new Date(data.stichtag).toLocaleDateString(),
+                })
+              : t("belegschaft.gesamt", { n: data.gesamt })}
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <select
+            aria-label={t("belegschaft.jahr")}
+            className={selectCls}
+            value={jahr ?? ""}
+            onChange={(e) => setJahr(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">{t("belegschaft.aktuell")}</option>
+            {jahre.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <select
+            aria-label={t("belegschaft.quartal")}
+            className={selectCls}
+            value={quartal ?? ""}
+            disabled={jahr == null}
+            onChange={(e) => setQuartal(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">{t("belegschaft.gesamtjahr")}</option>
+            {[1, 2, 3, 4].map((q) => (
+              <option key={q} value={q}>{`Q${q}`}</option>
+            ))}
+          </select>
+        </div>
       </div>
-      <BelegschaftKpiCharts data={data} />
+      {data && <BelegschaftKpiCharts data={data} />}
     </section>
   );
 }

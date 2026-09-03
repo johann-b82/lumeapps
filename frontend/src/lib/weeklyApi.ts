@@ -29,7 +29,7 @@ export interface WeeklyReport {
   kw_label: string;
   kw_prev_label: string;
   saldo_mehrarbeit: WochenKennzahl;
-  krankheit_std: WochenKennzahl;
+  krankheit_tage: WochenKennzahl;
   ueberstunden_top: WeeklyPerson[];
   krankheit_top: WeeklyPerson[];
   meta: WeeklyMeta;

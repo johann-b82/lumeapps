@@ -159,14 +159,16 @@ export function WeeklyReportSection() {
           />
           <VergleichKachel
             titel={`${t("weekly.krankheit")} · ${report.kw_label}`}
-            werte={report.krankheit_std}
+            werte={report.krankheit_tage}
             prevLabel={report.kw_prev_label}
             curLabel={report.kw_label}
+            einheit={t("weekly.einheitTage")}
             leerText={t("weekly.krankAusstehend")}
           />
           <PersonenKachel
             titel={`${t("weekly.krankheitProPerson")} · ${report.kw_label}`}
             personen={report.krankheit_top}
+            einheit={t("weekly.einheitTage")}
             leerText={t("weekly.krankAusstehend")}
           />
         </div>
@@ -181,6 +183,7 @@ function VergleichKachel({
   prevLabel,
   curLabel,
   farbeNegativ,
+  einheit = "h",
   leerText,
 }: {
   titel: string;
@@ -188,6 +191,7 @@ function VergleichKachel({
   prevLabel: string;
   curLabel: string;
   farbeNegativ?: boolean;
+  einheit?: string;
   leerText?: string;
 }) {
   if (werte.aktuell == null && werte.vorwoche == null) {
@@ -213,7 +217,7 @@ function VergleichKachel({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
-            formatter={(v) => [`${Number(v).toFixed(2)} h`, ""]}
+            formatter={(v) => [`${Number(v).toFixed(2)} ${einheit}`, ""]}
           />
           <Bar dataKey="wert" radius={[4, 4, 0, 0]} label={{ position: "top", fontSize: 11 }}>
             {data.map((d, i) => (
@@ -236,10 +240,12 @@ function VergleichKachel({
 function PersonenKachel({
   titel,
   personen,
+  einheit = "h",
   leerText,
 }: {
   titel: string;
   personen: WeeklyPerson[];
+  einheit?: string;
   leerText?: string;
 }) {
   if (!personen.length) return <LeerKachel titel={titel} text={leerText} />;
@@ -260,7 +266,7 @@ function PersonenKachel({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
-            formatter={(v) => [`${Number(v).toFixed(2)} h`, ""]}
+            formatter={(v) => [`${Number(v).toFixed(2)} ${einheit}`, ""]}
           />
           <Bar dataKey="stunden" radius={[0, 4, 4, 0]} fill="var(--primary, #2563eb)"
                label={{ position: "right", fontSize: 11, formatter: (v) => Number(v).toFixed(2) }} />

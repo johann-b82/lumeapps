@@ -6,8 +6,8 @@ ISO-Woche (Rechenlogik) — keine reine Directus-Collection-Lesung.
 Vier Kennzahlen je Kalenderwoche, wie im Haufe-/Excel-Report:
   1. Saldo Mehrarbeit  — Σ(Ist − Soll) über die Belegschaft, Woche + Vorwoche.
   2. geleistete Überstd. — positive Mehrarbeit je Person (Top-Liste).
-  3. Krankheit in Std.  — Summe Krank-Stunden, Woche + Vorwoche.
-  4. Krankheit/Std.     — Krank-Stunden je Person (Top-Liste).
+  3. Krankheit in Tagen — Summe Krank-Tage (days_count), Woche + Vorwoche.
+  4. Krankheit/Person    — Krank-Tage je Person (Top-Liste).
 
 Admin-gated: die Kacheln zeigen personenbezogene Leistungs- und
 **Gesundheitsdaten** (Krankheit).
@@ -127,7 +127,7 @@ class WeeklyReport(BaseModel):
     kw_label: str
     kw_prev_label: str
     saldo_mehrarbeit: WochenKennzahl
-    krankheit_std: WochenKennzahl
+    krankheit_tage: WochenKennzahl
     ueberstunden_top: list[Person]
     krankheit_top: list[Person]
     meta: WeeklyMeta
@@ -284,10 +284,31 @@ async def _anwesenheit_woche(db: AsyncSession, montag: date, sonntag: date):
     return ist, ueber, netto, name
 
 
+def _krank_tage_gesamt(absence: PersonioAbsence) -> float | None:
+    """Krank-**Tage** einer Abwesenheit aus dem Personio-Payload (``days_count``,
+    berücksichtigt Halbtage). Fallback über die Stunden (Tagessoll ~8 h), falls
+    ``days_count`` fehlt."""
+    rj = absence.raw_json if isinstance(absence.raw_json, dict) else {}
+    attrs = rj.get("attributes", {}) if isinstance(rj, dict) else {}
+    dc = attrs.get("days_count") if isinstance(attrs, dict) else None
+    try:
+        if dc is not None:
+            return float(dc)
+    except (TypeError, ValueError):
+        pass
+    # Fallback: keine days_count → aus Stunden näherungsweise (8 h/Tag).
+    if absence.hours is not None:
+        return float(absence.hours) / 8.0
+    return None
+
+
 async def _krankheit_woche(
     db: AsyncSession, montag: date, sonntag: date, sick_ids: set[int]
 ):
-    """Krank-Stunden je Mitarbeiter für eine Woche (anteilig nach Überlapp-Tagen)."""
+    """Krank-**Tage** je Mitarbeiter für eine Woche (anteilig nach Überlapp-Tagen).
+
+    Basis ist ``days_count`` aus dem Personio-Payload (inkl. Halbtage); die Tage
+    werden proportional zur Kalender-Spanne auf die betroffene Woche verteilt."""
     rows = (
         await db.execute(
             select(PersonioAbsence, PersonioEmployee)
@@ -302,13 +323,16 @@ async def _krankheit_woche(
     per_emp: dict[int, float] = {}
     name: dict[int, str] = {}
     for absence, emp in rows:
-        if absence.hours is None or not absence.start_date or not absence.end_date:
+        if not absence.start_date or not absence.end_date:
+            continue
+        tage_gesamt = _krank_tage_gesamt(absence)
+        if tage_gesamt is None:
             continue
         spanne = (absence.end_date - absence.start_date).days + 1
-        pro_tag = float(absence.hours) / spanne if spanne > 0 else float(absence.hours)
+        pro_tag = tage_gesamt / spanne if spanne > 0 else tage_gesamt
         ueberlapp = (min(absence.end_date, sonntag) - max(absence.start_date, montag)).days + 1
-        stunden = pro_tag * max(0, ueberlapp)
-        per_emp[emp.id] = per_emp.get(emp.id, 0.0) + stunden
+        tage = pro_tag * max(0, ueberlapp)
+        per_emp[emp.id] = per_emp.get(emp.id, 0.0) + tage
         name[emp.id] = _name(emp)
     return per_emp, name
 
@@ -392,7 +416,7 @@ async def weekly_report(
         kw_label=f"KW {week}",
         kw_prev_label=f"KW {p_montag.isocalendar()[1]}",
         saldo_mehrarbeit=WochenKennzahl(aktuell=_saldo(netto), vorwoche=_saldo(netto_v)),
-        krankheit_std=WochenKennzahl(
+        krankheit_tage=WochenKennzahl(
             aktuell=round(sum(krank.values()), 2) if krank else None,
             vorwoche=round(sum(krank_v.values()), 2) if krank_v else None,
         ),

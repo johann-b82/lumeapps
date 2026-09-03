@@ -18,8 +18,29 @@ export interface BelegschaftKpi {
   beschaeftigung: LabelWert[];
   eintritt: LabelWert[];
   abteilungen: AbteilungWert[];
+  /** Stichtag (ISO) — null bei der aktuellen (statusbasierten) Ansicht;
+   *  in älteren Newsletter-Snapshots evtl. gar nicht vorhanden. */
+  stichtag?: string | null;
 }
 
-export function fetchBelegschaftKpi(): Promise<BelegschaftKpi> {
-  return apiClient<BelegschaftKpi>("/api/hr/belegschaft-kpi");
+export interface BelegschaftMeta {
+  min_jahr: number;
+  aktuelles_jahr: number;
+}
+
+/** Belegschafts-KPIs. Ohne jahr → aktuelle Belegschaft; mit jahr(+quartal) →
+ *  Stichtag am Periodenende. */
+export function fetchBelegschaftKpi(
+  jahr?: number,
+  quartal?: number,
+): Promise<BelegschaftKpi> {
+  const p = new URLSearchParams();
+  if (jahr != null) p.set("jahr", String(jahr));
+  if (quartal != null) p.set("quartal", String(quartal));
+  const qs = p.toString();
+  return apiClient<BelegschaftKpi>(`/api/hr/belegschaft-kpi${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchBelegschaftMeta(): Promise<BelegschaftMeta> {
+  return apiClient<BelegschaftMeta>("/api/hr/belegschaft-kpi/meta");
 }

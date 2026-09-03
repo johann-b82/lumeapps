@@ -11,11 +11,12 @@ Viewer-lesbar (Dashboard-KPIs, keine Namen — nur Aggregate).
 """
 from __future__ import annotations
 
+import calendar
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db_session
@@ -45,6 +46,15 @@ class BelegschaftKpi(BaseModel):
     beschaeftigung: list[LabelWert]
     eintritt: list[LabelWert]
     abteilungen: list[AbteilungWert]
+    #: Stichtag der Auswertung — None bei der aktuellen (statusbasierten) Ansicht,
+    #: sonst das Periodenende (bzw. heute, wenn die Periode noch läuft).
+    stichtag: date | None = None
+
+
+class BelegschaftMeta(BaseModel):
+    #: Frühestes und aktuelles Jahr für die Zeitraum-Auswahl im Dashboard.
+    min_jahr: int
+    aktuelles_jahr: int
 
 
 def _attrs(emp: PersonioEmployee) -> dict:
@@ -91,14 +101,63 @@ def _quartal_start(heute: date) -> date:
     return date(heute.year, ((heute.month - 1) // 3) * 3 + 1, 1)
 
 
-async def aggregiere_belegschaft(db: AsyncSession) -> BelegschaftKpi:
-    """Belegschafts-KPIs berechnen — von der Route UND vom Newsletter-Snapshot genutzt."""
-    aktive = (
-        (await db.execute(select(PersonioEmployee).where(PersonioEmployee.status == "active")))
-        .scalars()
-        .all()
-    )
-    q_start = _quartal_start(date.today())
+def _perioden_grenzen(jahr: int, quartal: int | None) -> tuple[date, date]:
+    """Start/Ende eines Jahres oder Quartals (quartal=None → Gesamtjahr)."""
+    if quartal is None:
+        return date(jahr, 1, 1), date(jahr, 12, 31)
+    if quartal not in (1, 2, 3, 4):
+        raise ValueError("Quartal muss 1–4 sein.")
+    start_monat = (quartal - 1) * 3 + 1
+    end_monat = start_monat + 2
+    letzter = calendar.monthrange(jahr, end_monat)[1]
+    return date(jahr, start_monat, 1), date(jahr, end_monat, letzter)
+
+
+async def aggregiere_belegschaft(
+    db: AsyncSession, *, jahr: int | None = None, quartal: int | None = None
+) -> BelegschaftKpi:
+    """Belegschafts-KPIs berechnen — von der Route UND vom Newsletter-Snapshot genutzt.
+
+    Ohne ``jahr``: aktuelle Belegschaft (statusbasiert ``active``), „neu" = Eintritt
+    im laufenden Quartal — unverändertes Verhalten (Newsletter-Snapshot).
+
+    Mit ``jahr`` (optional ``quartal``): **Stichtag am Periodenende** — Kopfzahl =
+    wer am Stichtag beschäftigt war (Eintritt ≤ Stichtag, noch nicht ausgetreten).
+    „neu" = Eintritt innerhalb der Periode. Läuft die Periode noch, ist der
+    Stichtag heute. Verteilungen nutzen die heutigen Stammdaten der damals
+    Beschäftigten (Personio liefert nur den aktuellen Stand).
+    """
+    stichtag: date | None = None
+    if jahr is None:
+        # Aktuell / statusbasiert (unverändert).
+        aktive = (
+            (await db.execute(select(PersonioEmployee).where(PersonioEmployee.status == "active")))
+            .scalars()
+            .all()
+        )
+        period_start = _quartal_start(date.today())
+        period_ende = date.today()
+    else:
+        period_start, period_ende = _perioden_grenzen(jahr, quartal)
+        stichtag = min(period_ende, date.today())
+        # Kopfzahl zum Stichtag über Eintritts-/Austrittsdatum.
+        aktive = (
+            (
+                await db.execute(
+                    select(PersonioEmployee).where(
+                        PersonioEmployee.hire_date.is_not(None),
+                        PersonioEmployee.hire_date <= stichtag,
+                        or_(
+                            PersonioEmployee.termination_date.is_(None),
+                            PersonioEmployee.termination_date > stichtag,
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        period_ende = stichtag  # „neu" nur bis zum Stichtag zählen
 
     g: dict[str, int] = {}
     b: dict[str, int] = {}
@@ -107,7 +166,11 @@ async def aggregiere_belegschaft(db: AsyncSession) -> BelegschaftKpi:
     for e in aktive:
         g[_geschlecht(e)] = g.get(_geschlecht(e), 0) + 1
         b[_beschaeftigung(e)] = b.get(_beschaeftigung(e), 0) + 1
-        if e.hire_date and e.hire_date >= q_start:
+        ist_neu = (
+            e.hire_date is not None
+            and period_start <= e.hire_date <= period_ende
+        )
+        if ist_neu:
             neu += 1
         else:
             bestand += 1
@@ -131,11 +194,32 @@ async def aggregiere_belegschaft(db: AsyncSession) -> BelegschaftKpi:
             AbteilungWert(name=n, wert=w)
             for n, w in sorted(abt.items(), key=lambda x: x[1], reverse=True)
         ],
+        stichtag=stichtag,
+    )
+
+
+@router.get("/belegschaft-kpi/meta", response_model=BelegschaftMeta)
+async def belegschaft_meta(
+    db: AsyncSession = Depends(get_async_db_session),
+) -> BelegschaftMeta:
+    """Jahresspanne für die Zeitraum-Auswahl (frühestes Eintrittsjahr … heute)."""
+    min_hire = (
+        await db.execute(select(func.min(PersonioEmployee.hire_date)))
+    ).scalar_one_or_none()
+    aktuell = date.today().year
+    return BelegschaftMeta(
+        min_jahr=min_hire.year if min_hire else aktuell,
+        aktuelles_jahr=aktuell,
     )
 
 
 @router.get("/belegschaft-kpi", response_model=BelegschaftKpi)
 async def belegschaft_kpi(
+    jahr: int | None = Query(None, ge=2000, le=2100),
+    quartal: int | None = Query(None, ge=1, le=4),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> BelegschaftKpi:
-    return await aggregiere_belegschaft(db)
+    try:
+        return await aggregiere_belegschaft(db, jahr=jahr, quartal=quartal)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
