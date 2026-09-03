@@ -36,6 +36,7 @@ import type {
   SignageScheduleCreate,
   SignageScheduleUpdate,
   SignageDeviceAnalytics,
+  SignageDeviceCommandResult,
 } from "./signageTypes";
 
 /**
@@ -634,6 +635,25 @@ export const signageApi = {
           method: "PATCH",
           body: JSON.stringify(body),
         },
+      );
+    } catch (e) { throw toApiError(e); }
+  },
+  // Remote commands (admin → device via the player SSE stream). Fire-and-
+  // forget: the backend answers 202 and `delivered` says how many live
+  // subscribers got the event — 0 = device not connected, nothing queued.
+  reloadDevice: async (id: string): Promise<SignageDeviceCommandResult> => {
+    try {
+      return await apiClient<SignageDeviceCommandResult>(
+        `/api/signage/devices/${id}/reload`,
+        { method: "POST" },
+      );
+    } catch (e) { throw toApiError(e); }
+  },
+  rebootDevice: async (id: string): Promise<SignageDeviceCommandResult> => {
+    try {
+      return await apiClient<SignageDeviceCommandResult>(
+        `/api/signage/devices/${id}/reboot`,
+        { method: "POST" },
       );
     } catch (e) { throw toApiError(e); }
   },

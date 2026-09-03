@@ -141,3 +141,72 @@ describe("useSseWithPollingFallback — calibration-changed dispatch", () => {
     expect(onCalibrationChanged).not.toHaveBeenCalled();
   });
 });
+
+describe("useSseWithPollingFallback — reload dispatch (admin remote command)", () => {
+  beforeEach(() => {
+    FakeEventSource.instances = [];
+    // @ts-expect-error — test-only global install
+    globalThis.EventSource = FakeEventSource;
+  });
+
+  afterEach(() => {
+    // @ts-expect-error — cleanup
+    delete globalThis.EventSource;
+    vi.restoreAllMocks();
+  });
+
+  it("dispatches onReload on a reload event and nothing else", () => {
+    const onPlaylistInvalidated = vi.fn();
+    const onCalibrationChanged = vi.fn();
+    const onReload = vi.fn();
+    const onUnauthorized = vi.fn();
+
+    renderHook(() =>
+      useSseWithPollingFallback({
+        token: "test-token",
+        streamUrl: "/api/signage/player/stream",
+        pollUrl: "/api/signage/player/playlist",
+        onPlaylistInvalidated,
+        onCalibrationChanged,
+        onReload,
+        onUnauthorized,
+      }),
+    );
+
+    const es = FakeEventSource.instances[0];
+    act(() => {
+      es.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({ event: "reload", device_id: "abc-123" }),
+        }),
+      );
+    });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onPlaylistInvalidated).not.toHaveBeenCalled();
+    expect(onCalibrationChanged).not.toHaveBeenCalled();
+  });
+
+  it("ignores a reboot event in the browser (sidecar-only command)", () => {
+    const onReload = vi.fn();
+    renderHook(() =>
+      useSseWithPollingFallback({
+        token: "test-token",
+        streamUrl: "/api/signage/player/stream",
+        pollUrl: "/api/signage/player/playlist",
+        onPlaylistInvalidated: vi.fn(),
+        onReload,
+        onUnauthorized: vi.fn(),
+      }),
+    );
+    const es = FakeEventSource.instances[0];
+    act(() => {
+      es.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({ event: "reboot", device_id: "abc-123" }),
+        }),
+      );
+    });
+    expect(onReload).not.toHaveBeenCalled();
+  });
+});

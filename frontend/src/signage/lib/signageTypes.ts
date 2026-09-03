@@ -154,3 +154,12 @@ export interface SignageDeviceAnalytics {
   missed_windows_24h: number;
   window_minutes: number;
 }
+
+/** Response of POST /api/signage/devices/{id}/{reload,reboot}. `delivered`
+ *  = live SSE subscribers (sidecar + kiosk browser) that got the event;
+ *  0 means the device is not connected and the command was dropped. */
+export interface SignageDeviceCommandResult {
+  event: "reload" | "reboot";
+  device_id: string;
+  delivered: number;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nextProvider } from "react-i18next";
 
@@ -17,6 +17,8 @@ vi.mock("@/signage/lib/signageApi", () => ({
       _id: id,
     })),
     revokeDevice: vi.fn(),
+    reloadDevice: vi.fn(),
+    rebootDevice: vi.fn(),
     updateDevice: vi.fn(),
     replaceDeviceTags: vi.fn(),
     listTags: vi.fn(async () => []),
@@ -28,7 +30,7 @@ vi.mock("@/signage/lib/signageApi", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock("wouter", () => ({
@@ -36,6 +38,7 @@ vi.mock("wouter", () => ({
 }));
 
 import { signageApi } from "@/signage/lib/signageApi";
+import { toast } from "sonner";
 
 const mkDevice = (overrides = {}) => ({
   id: "d1",
@@ -346,6 +349,56 @@ describe("Phase 53 analytics columns", () => {
         o.options.refetchOnWindowFocus === true,
     );
     expect(hasFocusRefetch).toBe(true);
+  });
+});
+
+describe("remote commands (reload / reboot)", () => {
+  type Mock = ReturnType<typeof vi.fn>;
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await i18n.changeLanguage("en");
+    (signageApi.listDevices as unknown as Mock).mockResolvedValue([mkDevice()]);
+    (signageApi.listDeviceAnalytics as unknown as Mock).mockResolvedValue([]);
+  });
+
+  it("Reload button posts reload for the row and toasts success when delivered", async () => {
+    (signageApi.reloadDevice as unknown as Mock).mockResolvedValue({
+      event: "reload",
+      device_id: "d1",
+      delivered: 2,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Reload player" }));
+    await waitFor(() => expect(signageApi.reloadDevice).toHaveBeenCalledWith("d1"));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it("delivered: 0 surfaces a 'not connected' warning instead of success", async () => {
+    (signageApi.reloadDevice as unknown as Mock).mockResolvedValue({
+      event: "reload",
+      device_id: "d1",
+      delivered: 0,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Reload player" }));
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("Reboot needs confirmation: row button opens the dialog, confirm posts reboot", async () => {
+    (signageApi.rebootDevice as unknown as Mock).mockResolvedValue({
+      event: "reboot",
+      device_id: "d1",
+      delivered: 1,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Reboot device" }));
+    expect(signageApi.rebootDevice).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Reboot "Lobby Screen" now\?/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reboot now" }));
+    await waitFor(() => expect(signageApi.rebootDevice).toHaveBeenCalledWith("d1"));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
   });
 });
 

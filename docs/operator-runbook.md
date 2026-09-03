@@ -684,6 +684,50 @@ Every kiosk will show a fresh `XXX-XXX` pairing code within one heartbeat cycle.
 
 ---
 
+### 9.11 Remote Reload / Reboot from the Admin UI
+
+The Devices table (`/signage/devices`) has two per-row buttons that need no SSH:
+
+- **Reload** (`POST /api/signage/devices/{id}/reload`) — pushes a `reload` event on the
+  device's player SSE stream; the kiosk browser runs `location.reload()`. Use it after a
+  player build or when the page looks stuck.
+- **Reboot** (`POST /api/signage/devices/{id}/reboot`, confirmation dialog) — pushes a
+  `reboot` event; the **sidecar** runs `systemctl reboot` through logind. The screen goes
+  black for roughly a minute.
+
+Both are fire-and-forget: the response carries `delivered` = number of live SSE subscribers
+(sidecar + browser). `delivered: 0` means the device is not connected right now and the
+command was dropped — nothing is queued for later.
+
+Reboot requires the polkit rule `/etc/polkit-1/rules.d/50-signage-reboot.rules`
+(`scripts/polkit/`), which `provision-pi.sh` installs via `deploy_polkit_rules`. Without it
+the sidecar logs `systemctl reboot failed ... Interactive authentication required`.
+
+**Upgrading a Pi provisioned before this feature** (sidecar + rule are not pulled in
+automatically). The fleet Pis cannot `git pull` — the GitHub repo is private and the Pis
+hold no credentials (`/opt/signage` is a stale clone owned by `signage`). Push the two
+files instead, from the app host (`acm@192.9.201.9` holds the SSH key for `acm@<pi>`,
+which has passwordless sudo). Files MUST have LF line endings — a CRLF `sidecar.py`
+pushed from a Windows checkout changes its checksum (run it through `tr -d '\r'` first).
+
+```bash
+# on your workstation, from a checkout of main (LF-normalised copies)
+tar -cf - pi-sidecar/sidecar.py scripts/polkit/50-signage-reboot.rules   | ssh acm@192.9.201.9 "ssh acm@<pi-ip> 'cat > /tmp/reload.tar       && sudo cp -a /opt/signage/pi-sidecar/sidecar.py /opt/signage/pi-sidecar/sidecar.py.bak       && sudo tar -C /opt/signage -xf /tmp/reload.tar       && sudo chown signage:signage /opt/signage/pi-sidecar/sidecar.py       && sudo install -m 0644 -o root -g root /opt/signage/scripts/polkit/50-signage-reboot.rules /etc/polkit-1/rules.d/       && sudo -u signage XDG_RUNTIME_DIR=/run/user/\$(id -u signage) systemctl --user restart signage-sidecar'"
+```
+
+Note: restarting the sidecar also restarts the kiosk browser (`signage-player` has
+`Requires=signage-sidecar`), so the screen blanks for a few seconds.
+
+Verify without actually rebooting — polkit must authorise the running sidecar process:
+
+```bash
+PID=$(sudo -u signage XDG_RUNTIME_DIR=/run/user/$(id -u signage) systemctl --user show -p MainPID --value signage-sidecar)
+sudo pkcheck --action-id org.freedesktop.login1.reboot --process $PID && echo AUTHORIZED
+```
+
+Rolled out 2026-09-02 to Production Front, Entrance and Production Back; Office and
+Production Sewing were offline at the time and still need it.
+
 ## 10. Fallback: Image-Only Playlist
 
 If a specific Pi hardware configuration cannot render PPTX or PDF items (e.g., conversion succeeded but slides do not display correctly due to font rendering issues), the operator can build an **image-only fallback playlist**:

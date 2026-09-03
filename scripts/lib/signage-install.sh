@@ -14,6 +14,7 @@
 #     - /opt/signage/pi-sidecar/.venv/ (identical package versions via requirements.txt)
 #     - /var/lib/signage/ and /var/lib/signage/media/ (mode 0700, owned by signage)
 #     - /var/lib/systemd/linger/signage (file present = linger enabled)
+#     - /etc/polkit-1/rules.d/50-signage-reboot.rules (remote reboot from admin UI)
 #     - signage user in groups video,audio,render,input
 #
 #   The only intentional difference: in the baked image, unit files contain the placeholder
@@ -120,6 +121,24 @@ deploy_systemd_units() {
     _info "  Deployed ${unit}"
   done
   chown -R signage:signage /home/signage/.config/systemd
+}
+
+deploy_polkit_rules() {
+  # Signature: deploy_polkit_rules()
+  # Installs scripts/polkit/50-signage-reboot.rules to /etc/polkit-1/rules.d/ so the
+  # sidecar (unprivileged `signage` user, NoNewPrivileges) may `systemctl reboot`
+  # via logind when the admin UI sends a `reboot` command. Idempotent (overwrites).
+  local src_dir
+  if [ "${SIGNAGE_BUILD_CONTEXT:-}" = "chroot" ]; then
+    src_dir="/opt/signage/scripts/polkit"
+  else
+    src_dir="${SCRIPT_DIR}/../scripts/polkit"
+  fi
+  local src="${src_dir}/50-signage-reboot.rules"
+  [ -f "${src}" ] || { _error "Polkit rule not found: ${src}"; exit 3; }
+  install -d -m 0755 /etc/polkit-1/rules.d
+  install -m 0644 -o root -g root "${src}" /etc/polkit-1/rules.d/50-signage-reboot.rules
+  _info "Deployed polkit rule 50-signage-reboot.rules (signage user may reboot via logind)"
 }
 
 setup_sidecar_venv() {

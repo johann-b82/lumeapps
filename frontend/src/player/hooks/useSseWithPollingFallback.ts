@@ -29,6 +29,9 @@ export interface UseSseWithPollingFallbackOpts {
   /** Phase 62 D-05: called on `calibration-changed` SSE event so the shell can
    *  refetch /api/signage/player/calibration and flip `<video muted>`. */
   onCalibrationChanged?: () => void;
+  /** Admin remote command: called on the `reload` SSE event so the shell can
+   *  `location.reload()` the kiosk page. */
+  onReload?: () => void;
 }
 
 export function useSseWithPollingFallback(
@@ -41,6 +44,7 @@ export function useSseWithPollingFallback(
     onPlaylistInvalidated,
     onUnauthorized,
     onCalibrationChanged,
+    onReload,
   } = opts;
 
   // Keep callbacks in a ref so the effect's identity only depends on
@@ -50,11 +54,13 @@ export function useSseWithPollingFallback(
     onPlaylistInvalidated,
     onUnauthorized,
     onCalibrationChanged,
+    onReload,
   });
   callbacksRef.current = {
     onPlaylistInvalidated,
     onUnauthorized,
     onCalibrationChanged,
+    onReload,
   };
 
   useEffect(() => {
@@ -129,6 +135,9 @@ export function useSseWithPollingFallback(
             // <video muted> to match audio_enabled. Payload is {event, device_id}
             // only; full state lives behind the GET per D-08.
             callbacksRef.current.onCalibrationChanged?.();
+          } else if (data.event === "reload") {
+            // Admin "Reload" button (POST /api/signage/devices/{id}/reload).
+            callbacksRef.current.onReload?.();
           }
         } catch {
           // Malformed payload — still treat as liveness signal.

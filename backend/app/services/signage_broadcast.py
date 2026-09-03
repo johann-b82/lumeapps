@@ -114,8 +114,13 @@ def unsubscribe(device_id: int, queue: asyncio.Queue) -> None:
         del _device_queues[device_id]
 
 
-def notify_device(device_id: int, payload: dict) -> None:
+def notify_device(device_id: int, payload: dict) -> int:
     """Enqueue ``payload`` for ALL of ``device_id``'s subscribers.
+
+    Returns the number of subscriber queues the payload was delivered to
+    (0 when the device has no live SSE connection). Admin device commands
+    (reload/reboot) surface this so the UI can tell "sent" from "nobody
+    was listening".
 
     Synchronous — uses ``put_nowait`` so admin mutation handlers in
     Plan 02 can call this inside a BackgroundTasks hook without await.
@@ -132,7 +137,7 @@ def notify_device(device_id: int, payload: dict) -> None:
     """
     queues = _device_queues.get(device_id)
     if not queues:
-        return
+        return 0
     for q in queues:
         try:
             q.put_nowait(payload)
@@ -150,6 +155,7 @@ def notify_device(device_id: int, payload: dict) -> None:
             except asyncio.QueueEmpty:
                 pass
             q.put_nowait(payload)
+    return len(queues)
 
 
 def subscribe_admin() -> asyncio.Queue:

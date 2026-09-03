@@ -168,6 +168,19 @@ class SignageCalibrationUpdate(BaseModel):
 # --------------------------------------------------------------------------
 
 
+class SignageDeviceCommandResult(BaseModel):
+    """Response of the admin device commands (POST .../reload, .../reboot).
+
+    ``delivered`` is the number of live SSE subscribers the event reached
+    (kiosk browser + Pi sidecar); 0 means the device is not connected and
+    the command was NOT queued — it is fire-and-forget by design.
+    """
+
+    event: Literal["reload", "reboot"]
+    device_id: uuid.UUID
+    delivered: int
+
+
 class SignagePairingRequestResponse(BaseModel):
     # "XXX-XXX" display, 6 raw chars (7 incl. hyphen).
     pairing_code: str = Field(..., min_length=6, max_length=7)

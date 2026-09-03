@@ -123,6 +123,9 @@ export function PlaybackShell() {
     onCalibrationChanged: () => {
       void refreshCalibration();
     },
+    // Admin "Reload" button: full page reload so the kiosk picks up a new
+    // player bundle / recovers from a wedged render.
+    onReload: () => window.location.reload(),
     onUnauthorized,
   });
 

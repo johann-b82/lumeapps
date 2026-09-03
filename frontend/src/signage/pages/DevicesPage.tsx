@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Pencil, ShieldOff } from "lucide-react";
+import { Pencil, Power, RefreshCw, ShieldOff } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { signageApi } from "@/signage/lib/signageApi";
 import type {
   SignageDevice,
   SignageDeviceAnalytics,
+  SignageDeviceCommandResult,
 } from "@/signage/lib/signageTypes";
 import { DeviceStatusChip } from "@/signage/components/DeviceStatusChip";
 import { DeviceEditDialog } from "@/signage/components/DeviceEditDialog";
@@ -44,7 +45,8 @@ import { UptimeBadge } from "@/signage/components/UptimeBadge";
  *
  * Live status: TanStack Query refetches signageApi.listDevices every 30_000 ms
  * (D-13 cadence), so DeviceStatusChip transitions green→amber→red within one
- * polling cycle. Edit + Revoke actions per row; Pair-new CTA navigates to
+ * polling cycle. Reload + Reboot (remote commands over the device SSE stream,
+ * reboot behind a confirm dialog) + Edit + Revoke actions per row; Pair-new CTA navigates to
  * /signage/pair (registered in Task 1). Empty state offers the same CTA.
  */
 export function DevicesPage() {
@@ -53,6 +55,7 @@ export function DevicesPage() {
   const queryClient = useQueryClient();
   const [editTarget, setEditTarget] = useState<SignageDevice | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<SignageDevice | null>(null);
+  const [rebootTarget, setRebootTarget] = useState<SignageDevice | null>(null);
 
   // Phase 70-04 (D-02, D-05): Directus row list. Resolved playlist + tag_ids
   // are fetched per-device via useQueries below and merged client-side.
@@ -130,6 +133,34 @@ export function DevicesPage() {
       const detail = err instanceof Error ? err.message : String(err);
       toast.error(t("signage.admin.device.revoke_error", { detail }));
     },
+  });
+
+  // Remote commands are fire-and-forget: `delivered` = live SSE subscribers
+  // (sidecar + kiosk browser). 0 means nobody was listening — say so instead
+  // of pretending the device will act later.
+  const reportCommand = (res: SignageDeviceCommandResult, name: string) => {
+    if (res.delivered === 0) {
+      toast.warning(t("signage.admin.device.command_not_connected", { name }));
+    } else {
+      toast.success(t(`signage.admin.device.${res.event}_sent`, { name }));
+    }
+  };
+  const onCommandError = (err: unknown) => {
+    const detail = err instanceof Error ? err.message : String(err);
+    toast.error(t("signage.admin.device.command_error", { detail }));
+  };
+  const reloadMutation = useMutation({
+    mutationFn: (d: SignageDevice) => signageApi.reloadDevice(d.id),
+    onSuccess: (res, d) => reportCommand(res, d.name),
+    onError: onCommandError,
+  });
+  const rebootMutation = useMutation({
+    mutationFn: (d: SignageDevice) => signageApi.rebootDevice(d.id),
+    onSuccess: (res, d) => {
+      reportCommand(res, d.name);
+      setRebootTarget(null);
+    },
+    onError: onCommandError,
   });
 
   // Empty state — only after first load returns zero rows.
@@ -246,6 +277,25 @@ export function DevicesPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      onClick={() => reloadMutation.mutate(d)}
+                      disabled={reloadMutation.isPending}
+                      aria-label={t("signage.admin.device.reload_title")}
+                      title={t("signage.admin.device.reload_title")}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setRebootTarget(d)}
+                      aria-label={t("signage.admin.device.reboot_title")}
+                      title={t("signage.admin.device.reboot_title")}
+                    >
+                      <Power className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => setEditTarget(d)}
                       aria-label={t("signage.admin.device.edit_title")}
                     >
@@ -316,6 +366,45 @@ export function DevicesPage() {
               disabled={revokeMutation.isPending}
             >
               {t("signage.admin.device.revoke_confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reboot-confirm dialog — a reboot blanks the screen for ~1 min. */}
+      <Dialog
+        open={rebootTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setRebootTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("signage.admin.device.reboot_title")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("signage.admin.device.reboot_confirm_body", {
+                name: rebootTarget?.name ?? "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRebootTarget(null)}
+              disabled={rebootMutation.isPending}
+            >
+              {t("signage.admin.device.reboot_cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (rebootTarget) rebootMutation.mutate(rebootTarget);
+              }}
+              disabled={rebootMutation.isPending}
+            >
+              {t("signage.admin.device.reboot_confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
