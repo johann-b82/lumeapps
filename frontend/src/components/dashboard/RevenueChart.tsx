@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
 import {
   ResponsiveContainer,
   BarChart,
@@ -118,7 +119,10 @@ export function RevenueChart({
 
   const Header = (
     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-      <p className="text-xl font-semibold">{t("dashboard.chart.title")}</p>
+      <p className="text-xl font-semibold flex items-center gap-1">
+        {t("dashboard.chart.title")}
+        <KpiInfoButton infoKey="sales.revenue_chart" label={t("dashboard.chart.title")} />
+      </p>
       <Toggle<ChartType>
         segments={[
           { value: CHART_TYPES[0], label: t(`dashboard.chart.type.${CHART_TYPES[0]}`) },

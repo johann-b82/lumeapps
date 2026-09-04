@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { KpiCard } from "./KpiCard";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { DeltaBadgeStack } from "./DeltaBadgeStack";
 import { computeDelta } from "@/lib/delta";
 import { fetchInspections } from "@/lib/api";
@@ -43,12 +44,13 @@ export function QualityInspectionCardGrid() {
     value: number | undefined,
     prevPeriod: number | null | undefined,
     prevYear: number | null | undefined,
+    infoKey: KpiInfoKey,
   ) {
     if (isLoading) {
       return <KpiCard label={label} isLoading={true} />;
     }
     if (value === undefined) {
-      return <KpiCard label={label} value={undefined} isLoading={false} />;
+      return <KpiCard label={label} value={undefined} isLoading={false} infoKey={infoKey} />;
     }
 
     const rawPrevPeriod = computeDelta(value, prevPeriod ?? null);
@@ -60,6 +62,7 @@ export function QualityInspectionCardGrid() {
     return (
       <KpiCard
         label={label}
+        infoKey={infoKey}
         subtitle={t("quality.inspection.unit")}
         value={formatCount(value)}
         isLoading={false}
@@ -97,12 +100,14 @@ export function QualityInspectionCardGrid() {
           data?.large_count,
           data?.previous_period_large ?? null,
           data?.previous_year_large ?? null,
+          "quality.inspection_large",
         )}
         {renderCard(
           t("quality.inspection.small.label"),
           data?.small_count,
           data?.previous_period_small ?? null,
           data?.previous_year_small ?? null,
+          "quality.inspection_small",
         )}
       </div>
     </div>

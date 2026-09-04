@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import { KpiCard } from "./KpiCard";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { DeltaBadgeStack } from "./DeltaBadgeStack";
 import { computeDelta } from "@/lib/delta";
 import { fetchHrKpis, type HrKpiValue } from "@/lib/api";
@@ -68,6 +69,7 @@ export function HrKpiCardGrid() {
     kpi: HrKpiValue | undefined,
     label: string,
     formatter: (n: number) => string,
+    infoKey: KpiInfoKey,
     subtitle?: string,
   ) {
     if (isLoading) {
@@ -75,7 +77,7 @@ export function HrKpiCardGrid() {
     }
 
     if (kpi === undefined) {
-      return <KpiCard label={label} subtitle={subtitle} value={undefined} isLoading={false} />;
+      return <KpiCard label={label} subtitle={subtitle} value={undefined} isLoading={false} infoKey={infoKey} />;
     }
 
     if (!kpi.is_configured) {
@@ -84,6 +86,7 @@ export function HrKpiCardGrid() {
           label={label}
           subtitle={subtitle}
           value={"—"}
+          infoKey={infoKey}
           isLoading={false}
           delta={
             <p className="text-xs text-muted-foreground">
@@ -113,6 +116,7 @@ export function HrKpiCardGrid() {
         label={label}
         subtitle={subtitle}
         value={kpi.value !== null ? formatter(kpi.value) : "\u2014"}
+        infoKey={infoKey}
         isLoading={false}
         delta={
           showBadges ? (
@@ -165,16 +169,19 @@ export function HrKpiCardGrid() {
           kpiData?.overtime_ratio,
           t("hr.kpi.overtimeRatio.label"),
           formatPercent,
+          "hr.overtime_ratio",
         )}
         {renderCard(
           kpiData?.sick_leave_ratio,
           t("hr.kpi.sickLeaveRatio.label"),
           formatPercent,
+          "hr.sick_leave_ratio",
         )}
         {renderCard(
           kpiData?.fluctuation,
           t("hr.kpi.fluctuation.label"),
           formatPercent,
+          "hr.fluctuation",
         )}
       </div>
 
@@ -184,11 +191,13 @@ export function HrKpiCardGrid() {
           kpiData?.skill_development,
           t("hr.kpi.skillDevelopment.label"),
           formatPercent,
+          "hr.skill_development",
         )}
         {renderCard(
           kpiData?.revenue_per_production_employee,
           t("hr.kpi.revenuePerProductionEmployee.label"),
           formatCurrency,
+          "hr.revenue_per_employee",
         )}
       </div>
     </div>

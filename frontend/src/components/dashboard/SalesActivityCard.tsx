@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import {
   Bar,
@@ -96,14 +98,15 @@ const DEFAULT_TARGETS = {
 const KPIS_BASE: {
   key: KpiKey;
   titleKey: string;
+  infoKey: KpiInfoKey;
   mode: KpiMode;
   bucketField?: keyof ContactsWeeklyEmployeeBucket;
 }[] = [
-  { key: "erstkontakte", titleKey: "sales.kpi.erstkontakte", mode: "per-rep-count", bucketField: "erstkontakte" },
-  { key: "interessenten", titleKey: "sales.kpi.interessenten", mode: "global-count" },
-  { key: "visits", titleKey: "sales.kpi.visits", mode: "besuche-stack" },
-  { key: "angebote", titleKey: "sales.kpi.angebote", mode: "per-rep-eur", bucketField: "angebote" },
-  { key: "orders_per_rep", titleKey: "sales.kpi.orders_per_rep", mode: "per-rep-eur", bucketField: "orders_eur" },
+  { key: "erstkontakte", titleKey: "sales.kpi.erstkontakte", infoKey: "sales.erstkontakte", mode: "per-rep-count", bucketField: "erstkontakte" },
+  { key: "interessenten", titleKey: "sales.kpi.interessenten", infoKey: "sales.interessenten", mode: "global-count" },
+  { key: "visits", titleKey: "sales.kpi.visits", infoKey: "sales.besuche", mode: "besuche-stack" },
+  { key: "angebote", titleKey: "sales.kpi.angebote", infoKey: "sales.angebote", mode: "per-rep-eur", bucketField: "angebote" },
+  { key: "orders_per_rep", titleKey: "sales.kpi.orders_per_rep", infoKey: "sales.orders_per_rep", mode: "per-rep-eur", bucketField: "orders_eur" },
 ];
 
 // Simple-row shape used for the non-stacked charts.
@@ -436,7 +439,10 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
             return (
               <div key={k.key} className="flex flex-col">
                 <div className="text-sm font-medium mb-2 flex items-center gap-4 flex-wrap">
-                  <span>{t(k.titleKey)}</span>
+                  <span className="flex items-center gap-1">
+                    {t(k.titleKey)}
+                    <KpiInfoButton infoKey={k.infoKey} label={t(k.titleKey)} />
+                  </span>
                   {targetLabel}
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
@@ -499,7 +505,10 @@ export function SalesActivityCard({ startDate, endDate }: Props) {
           return (
             <div key={k.key} className="flex flex-col">
               <div className="text-sm font-medium mb-2 flex items-center gap-4 flex-wrap">
-                <span>{t(k.titleKey)}</span>
+                <span className="flex items-center gap-1">
+                  {t(k.titleKey)}
+                  <KpiInfoButton infoKey={k.infoKey} label={t(k.titleKey)} />
+                </span>
                 {targetLabel}
                 {zoomControls}
               </div>

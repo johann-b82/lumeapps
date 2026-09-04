@@ -79,6 +79,7 @@ export function MaterialCostRatioCardGrid() {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <KpiCard
         label={t("finance.materialCostRatio.label")}
+        infoKey="finance.material_cost_ratio"
         subtitle={t("finance.materialCostRatio.subtitle")}
         value={
           isLoading
@@ -103,16 +104,19 @@ export function MaterialCostRatioCardGrid() {
       />
       <KpiCard
         label={t("finance.materialCost.label")}
+        infoKey="finance.material_cost"
         value={isLoading ? undefined : formatEur(data?.material_cost ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("finance.revenue.label")}
+        infoKey="finance.revenue"
         value={isLoading ? undefined : formatEur(data?.revenue ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("finance.unmatched.label")}
+        infoKey="finance.unmatched"
         subtitle={t("finance.unmatched.subtitle")}
         value={isLoading ? undefined : formatCount(data?.unmatched_articles ?? 0)}
         isLoading={isLoading}

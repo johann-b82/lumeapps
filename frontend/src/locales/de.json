@@ -1930,5 +1930,9 @@
   "onboarding.vorgang.zertLoeschen": "Löschen",
   "onboarding.vorgang.loeschen": "Vorgang löschen",
   "onboarding.vorgang.loeschenBestaetigen": "Vorgang von {{name}} endgültig löschen?",
-  "onboarding.vorgang.geloescht": "Vorgang gelöscht"
+  "onboarding.vorgang.geloescht": "Vorgang gelöscht",
+  "kpiInfo.button.aria": "Rechenweg anzeigen: {{kpi}}",
+  "kpiInfo.button.title": "Rechenweg",
+  "kpiInfo.dialog.title": "Rechenweg",
+  "kpiInfo.dialog.description": "So wird diese Kennzahl berechnet: Formel, Datenquelle, Filter und Sonderfälle. Aus dem Code abgeleitet."
 }

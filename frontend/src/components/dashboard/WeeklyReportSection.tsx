@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import {
@@ -67,7 +69,13 @@ export function WeeklyReportSection() {
     if (!reportRef.current) return;
     setExportLaeuft(true);
     try {
-      const url = await toPng(reportRef.current, { pixelRatio: 2, cacheBust: true });
+      const url = await toPng(reportRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+        // Keep the "i" buttons out of the exported image.
+        filter: (node: HTMLElement) =>
+          !(node instanceof HTMLElement && node.dataset.kpiInfoUi === "true"),
+      });
       const img = new Image();
       img.src = url;
       await img.decode();
@@ -163,6 +171,7 @@ export function WeeklyReportSection() {
         <div ref={reportRef} className="grid gap-4 md:grid-cols-2">
           <VergleichKachel
             titel={`${t("weekly.saldo")} · ${report.kw_label}`}
+            infoKey="hr.weekly_saldo"
             werte={report.saldo_mehrarbeit}
             prevLabel={report.kw_prev_label}
             curLabel={report.kw_label}
@@ -170,11 +179,13 @@ export function WeeklyReportSection() {
           />
           <PersonenKachel
             titel={`${t("weekly.ueberstunden")} · ${report.kw_label}`}
+            infoKey="hr.weekly_ueberstunden"
             personen={report.ueberstunden_top}
             leerText={t("weekly.keineDaten")}
           />
           <VergleichKachel
             titel={`${t(krankEinheit === "tage" ? "weekly.krankheit" : "weekly.krankheitStd")} · ${report.kw_label}`}
+            infoKey="hr.weekly_krankheit"
             werte={krankEinheit === "tage" ? report.krankheit_tage : report.krankheit_std}
             prevLabel={report.kw_prev_label}
             curLabel={report.kw_label}
@@ -183,6 +194,7 @@ export function WeeklyReportSection() {
           />
           <PersonenKachel
             titel={`${t(krankEinheit === "tage" ? "weekly.krankheitProPerson" : "weekly.krankheitProPersonStd")} · ${report.kw_label}`}
+            infoKey="hr.weekly_krankheit_personen"
             personen={[...report.krankheit_top]
               .map((p) => ({ name: p.name, stunden: krankEinheit === "tage" ? (p.tage ?? 0) : p.stunden }))
               .sort((a, b) => b.stunden - a.stunden)}
@@ -203,8 +215,10 @@ function VergleichKachel({
   farbeNegativ,
   einheit = "h",
   leerText,
+  infoKey,
 }: {
   titel: string;
+  infoKey?: KpiInfoKey;
   werte: WochenKennzahl;
   prevLabel: string;
   curLabel: string;
@@ -213,7 +227,7 @@ function VergleichKachel({
   leerText?: string;
 }) {
   if (werte.aktuell == null && werte.vorwoche == null) {
-    return <LeerKachel titel={titel} text={leerText} />;
+    return <LeerKachel titel={titel} text={leerText} infoKey={infoKey} />;
   }
   const data = [
     { kw: prevLabel, wert: werte.vorwoche ?? 0 },
@@ -221,7 +235,10 @@ function VergleichKachel({
   ];
   return (
     <Card className="p-4">
-      <div className="mb-2 text-sm font-medium">{titel}</div>
+      <div className="mb-2 text-sm font-medium flex items-center gap-1">
+        {titel}
+        {infoKey && <KachelInfo infoKey={infoKey} titel={titel} />}
+      </div>
       {/* Oberer Rand gibt dem Wert-Label über dem Balken Platz — die Y-Achse
           behält ihre runden Standard-Zahlen (keine krumme Domain). */}
       <ResponsiveContainer width="100%" height={220}>
@@ -260,16 +277,21 @@ function PersonenKachel({
   personen,
   einheit = "h",
   leerText,
+  infoKey,
 }: {
   titel: string;
+  infoKey?: KpiInfoKey;
   personen: WeeklyPerson[];
   einheit?: string;
   leerText?: string;
 }) {
-  if (!personen.length) return <LeerKachel titel={titel} text={leerText} />;
+  if (!personen.length) return <LeerKachel titel={titel} text={leerText} infoKey={infoKey} />;
   return (
     <Card className="p-4">
-      <div className="mb-2 text-sm font-medium">{titel}</div>
+      <div className="mb-2 text-sm font-medium flex items-center gap-1">
+        {titel}
+        {infoKey && <KachelInfo infoKey={infoKey} titel={titel} />}
+      </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart
           data={personen}
@@ -294,10 +316,22 @@ function PersonenKachel({
   );
 }
 
-function LeerKachel({ titel, text }: { titel: string; text?: string }) {
+/** Info button for the report tiles; tagged so the PNG/PDF export skips it. */
+function KachelInfo({ infoKey, titel }: { infoKey: KpiInfoKey; titel: string }) {
+  return (
+    <span data-kpi-info-ui="true">
+      <KpiInfoButton infoKey={infoKey} label={titel} />
+    </span>
+  );
+}
+
+function LeerKachel({ titel, text, infoKey }: { titel: string; text?: string; infoKey?: KpiInfoKey }) {
   return (
     <Card className="p-4">
-      <div className="mb-2 text-sm font-medium">{titel}</div>
+      <div className="mb-2 text-sm font-medium flex items-center gap-1">
+        {titel}
+        {infoKey && <KachelInfo infoKey={infoKey} titel={titel} />}
+      </div>
       <div className="flex h-[220px] items-center justify-center text-center text-xs text-muted-foreground">
         {text}
       </div>

@@ -1930,5 +1930,9 @@
   "onboarding.vorgang.zertLoeschen": "Delete",
   "onboarding.vorgang.loeschen": "Delete process",
   "onboarding.vorgang.loeschenBestaetigen": "Permanently delete the process for {{name}}?",
-  "onboarding.vorgang.geloescht": "Process deleted"
+  "onboarding.vorgang.geloescht": "Process deleted",
+  "kpiInfo.button.aria": "Show calculation: {{kpi}}",
+  "kpiInfo.button.title": "Calculation",
+  "kpiInfo.dialog.title": "Calculation",
+  "kpiInfo.dialog.description": "How this KPI is computed: formula, data source, filters and edge cases. Derived from the code."
 }

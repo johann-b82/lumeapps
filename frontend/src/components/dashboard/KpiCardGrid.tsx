@@ -128,6 +128,7 @@ export function KpiCardGrid({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <KpiCard
           label={t("dashboard.kpi.totalRevenue.label")}
+          infoKey="sales.revenue"
           value={data ? formatCurrency(Number(data.total_revenue)) : undefined}
           isLoading={isLoading}
           delta={
@@ -145,6 +146,7 @@ export function KpiCardGrid({
         />
         <KpiCard
           label={t("dashboard.kpi.averageOrderValue.label")}
+          infoKey="sales.avg_order_value"
           value={
             data ? formatCurrency(Number(data.avg_order_value)) : undefined
           }
@@ -164,6 +166,7 @@ export function KpiCardGrid({
         />
         <KpiCard
           label={t("dashboard.kpi.totalOrders.label")}
+          infoKey="sales.total_orders"
           value={data ? formatCount(Number(data.total_orders)) : undefined}
           isLoading={isLoading}
           delta={

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
 import { Search, ArrowUp, ArrowDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,10 @@ export function EmployeeTable() {
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <p className="text-xl font-semibold">{t("hr.table.title")}</p>
+          <p className="text-xl font-semibold flex items-center gap-1">
+            {t("hr.table.title")}
+            <KpiInfoButton infoKey="hr.employee_overtime" label={t("hr.table.title")} />
+          </p>
           {(() => {
             const segments = [
               { value: "overtime" as const, label: t("hr.table.showOvertime") },

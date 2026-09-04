@@ -8,6 +8,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { KpiCard } from "./KpiCard";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { DeltaBadgeStack } from "./DeltaBadgeStack";
 import { computeDelta } from "@/lib/delta";
 import {
@@ -50,12 +51,13 @@ export function QualityKpiCardGrid({ auditTypes }: QualityKpiCardGridProps) {
     value: number | undefined,
     prevPeriod: number | null | undefined,
     prevYear: number | null | undefined,
+    infoKey: KpiInfoKey,
   ) {
     if (isLoading) {
       return <KpiCard label={label} isLoading={true} />;
     }
     if (value === undefined) {
-      return <KpiCard label={label} value={undefined} isLoading={false} />;
+      return <KpiCard label={label} value={undefined} isLoading={false} infoKey={infoKey} />;
     }
 
     const rawPrevPeriod = computeDelta(value, prevPeriod ?? null);
@@ -70,6 +72,7 @@ export function QualityKpiCardGrid({ auditTypes }: QualityKpiCardGridProps) {
     return (
       <KpiCard
         label={label}
+        infoKey={infoKey}
         value={formatCount(value)}
         isLoading={false}
         delta={
@@ -106,12 +109,14 @@ export function QualityKpiCardGrid({ auditTypes }: QualityKpiCardGridProps) {
           data?.level_1,
           data?.previous_period_level_1 ?? null,
           data?.previous_year_level_1 ?? null,
+          "quality.audit_findings_l1",
         )}
         {renderCard(
           t("quality.kpi.auditFindingsLevel2.label"),
           data?.level_2,
           data?.previous_period_level_2 ?? null,
           data?.previous_year_level_2 ?? null,
+          "quality.audit_findings_l2",
         )}
       </div>
     </div>

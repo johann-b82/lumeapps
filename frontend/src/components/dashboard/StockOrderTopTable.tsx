@@ -8,6 +8,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
 import { Card } from "@/components/ui/card";
 import { fetchTopStockOrders } from "@/lib/api";
 import { procurementKeys } from "@/lib/queryKeys";
@@ -42,8 +43,9 @@ export function StockOrderTopTable() {
   return (
     <Card className="p-6">
       <div className="flex items-baseline justify-between mb-1 gap-4 flex-wrap">
-        <p className="text-xl font-semibold">
+        <p className="text-xl font-semibold flex items-center gap-1">
           {t("procurement.stockOrders.title")}
+          <KpiInfoButton infoKey="procurement.stock_orders" label={t("procurement.stockOrders.title")} />
         </p>
         {data && data.length > 0 && (
           <p className="text-sm text-muted-foreground">

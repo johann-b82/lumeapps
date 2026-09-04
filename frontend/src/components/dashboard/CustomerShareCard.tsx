@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -56,9 +57,16 @@ export function CustomerShareCard({
 
   return (
     <Card className={`p-6 h-full flex flex-col ${className ?? ""}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {t(titleKey)}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t(titleKey)}
+        </p>
+        <KpiInfoButton
+          infoKey={source === "auftraege" ? "sales.customer_share_auftraege" : "sales.customer_share_revenues"}
+          label={t(titleKey)}
+          className="-mt-1.5 -mr-1.5"
+        />
+      </div>
       {q.isLoading ? (
         <div className="mt-4 h-48 w-full bg-muted animate-pulse" />
       ) : (() => {
