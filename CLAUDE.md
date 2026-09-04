@@ -181,7 +181,7 @@ Auth dependencies live at the router (or `APIRouter` sub-package) level. Per-rou
 
 ## Architecture
 
-Agent-facing map. Read this before touching a domain so you know what already exists and what not to break. Detailed docs: [`docs/architecture.md`](docs/architecture.md) (topology, Caddy routing), [`docs/api.md`](docs/api.md) (full route matrix, Admin/Viewer/Device/Public), [`docs/adr/0001-directus-fastapi-split.md`](docs/adr/0001-directus-fastapi-split.md) (the core split), [`docs/setup.md`](docs/setup.md), [`docs/operator-runbook.md`](docs/operator-runbook.md) (Pi signage).
+Agent-facing map. Read this before touching a domain so you know what already exists and what not to break. Detailed docs: [`docs/architecture.md`](docs/architecture.md) (topology, Caddy routing), [`docs/api.md`](docs/api.md) (full route matrix, Admin/Viewer/Device/Public), [`docs/adr/0001-directus-fastapi-split.md`](docs/adr/0001-directus-fastapi-split.md) (the core split), [`docs/setup.md`](docs/setup.md), [`docs/operator-runbook.md`](docs/operator-runbook.md) (Pi signage), [`docs/kpi-rechenwege.md`](docs/kpi-rechenwege.md) (Rechenweg je KPI, aus dem Code abgeleitet).
 
 ### Runtime topology (Docker Compose)
 
