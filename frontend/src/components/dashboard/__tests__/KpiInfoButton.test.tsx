@@ -44,6 +44,10 @@ describe("kpiInfo content", () => {
       expect(de.length, `${key} de`).toBeGreaterThan(40);
       expect(en.length, `${key} en`).toBeGreaterThan(40);
       expect(de, `${key} de differs from en`).not.toBe(en);
+      // Footer names the source file and the backend code location.
+      expect(de, `${key} footer de`).toMatch(/\*\*Quelldatei:\*\* .+/);
+      expect(en, `${key} footer en`).toMatch(/\*\*Source file:\*\* .+/);
+      expect(de, `${key} code`).toMatch(/\*\*Code:\*\* `backend\//);
     }
   });
 

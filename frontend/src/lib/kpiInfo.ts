@@ -1305,10 +1305,77 @@ Overdue open orders enter with \`today − target\`, so the value grows daily. N
 
 export const KPI_INFO_KEYS = Object.keys(INFO) as KpiInfoKey[];
 
+
+/** Source file (upload export or sync) and backend code location per KPI,
+ *  rendered as a footer under the notes. Paths are repo-relative. */
+const META: Record<KpiInfoKey, { source: string; code: string }> = {
+  "sales.revenue": { source: "AswKpf_RG.txt (Upload Umsatz)", code: "backend/app/services/kpi_aggregation.py · aggregate_revenue_summary" },
+  "sales.avg_order_value": { source: "AswKpf_AUF.txt (Upload Aufträge)", code: "backend/app/services/kpi_aggregation.py · aggregate_kpi_summary" },
+  "sales.total_orders": { source: "AswKpf_AUF.txt (Upload Aufträge)", code: "backend/app/services/kpi_aggregation.py · aggregate_kpi_summary" },
+  "sales.revenue_chart": { source: "AswKpf_RG.txt (Upload Umsatz)", code: "backend/app/routers/kpis.py · get_kpi_chart" },
+  "sales.customer_share_auftraege": { source: "AswKpf_AUF.txt (Upload Aufträge)", code: "backend/app/services/sales_kpi_aggregation.py · compute_customer_share" },
+  "sales.customer_share_revenues": { source: "AswKpf_RG.txt (Upload Umsatz)", code: "backend/app/services/sales_kpi_aggregation.py · compute_customer_share" },
+  "sales.erstkontakte": { source: "Kontakte-Export (Upload Kontakte)", code: "backend/app/services/sales_kpi_aggregation.py · compute_contacts_weekly" },
+  "sales.interessenten": { source: "dev_excel_INT.txt (Upload Interessenten)", code: "backend/app/services/sales_kpi_aggregation.py · compute_contacts_weekly" },
+  "sales.besuche": { source: "Kontakte-Export (Upload Kontakte)", code: "backend/app/services/sales_kpi_aggregation.py · compute_contacts_weekly" },
+  "sales.angebote": { source: "AswKpf_ANG.txt (Upload Angebote)", code: "backend/app/services/sales_kpi_aggregation.py · compute_contacts_weekly" },
+  "sales.orders_per_rep": { source: "AswKpf_AUF.txt (Upload Aufträge)", code: "backend/app/services/sales_kpi_aggregation.py · compute_contacts_weekly" },
+  "hr.overtime_ratio": { source: "Personio-Sync (Anwesenheiten, Mitarbeiter)", code: "backend/app/services/hr_kpi_aggregation.py · _overtime_ratio" },
+  "hr.sick_leave_ratio": { source: "Personio-Sync (Abwesenheiten, Mitarbeiter)", code: "backend/app/services/hr_kpi_aggregation.py · _sick_leave_ratio" },
+  "hr.fluctuation": { source: "Personio-Sync (Mitarbeiter)", code: "backend/app/services/hr_kpi_aggregation.py · _fluctuation" },
+  "hr.skill_development": { source: "Personio-Sync (Mitarbeiter-Attribute)", code: "backend/app/services/hr_kpi_aggregation.py · _skill_development" },
+  "hr.revenue_per_employee": { source: "AswKpf_AUF.txt (Upload Aufträge) + Personio-Sync", code: "backend/app/services/hr_kpi_aggregation.py · _revenue_per_production_employee" },
+  "hr.employee_overtime": { source: "Personio-Sync (Anwesenheiten, Mitarbeiter)", code: "backend/app/routers/hr_overtime.py" },
+  "hr.weekly_saldo": { source: "Personio-Sync (Anwesenheiten, Abwesenheiten, Arbeitszeitmodell)", code: "backend/app/routers/hr_weekly.py · _anwesenheit_woche" },
+  "hr.weekly_ueberstunden": { source: "Personio-Sync (Anwesenheiten, Abwesenheiten, Arbeitszeitmodell)", code: "backend/app/routers/hr_weekly.py · _anwesenheit_woche" },
+  "hr.weekly_krankheit": { source: "Personio-Sync (Abwesenheiten)", code: "backend/app/routers/hr_weekly.py · _krankheit_woche" },
+  "hr.weekly_krankheit_personen": { source: "Personio-Sync (Abwesenheiten)", code: "backend/app/routers/hr_weekly.py · _krankheit_woche" },
+  "hr.belegschaft_geschlecht": { source: "Personio-Sync (Mitarbeiter)", code: "backend/app/routers/hr_belegschaft.py · aggregiere_belegschaft" },
+  "hr.belegschaft_beschaeftigung": { source: "Personio-Sync (Mitarbeiter)", code: "backend/app/routers/hr_belegschaft.py · _beschaeftigung" },
+  "hr.belegschaft_eintritt": { source: "Personio-Sync (Mitarbeiter)", code: "backend/app/routers/hr_belegschaft.py · aggregiere_belegschaft" },
+  "hr.belegschaft_abteilungen": { source: "Personio-Sync (Mitarbeiter)", code: "backend/app/routers/hr_belegschaft.py · aggregiere_belegschaft" },
+  "quality.audit_findings_l1": { source: "8D.txt (Upload Qualität)", code: "backend/app/services/quality_kpi_aggregation.py" },
+  "quality.audit_findings_l2": { source: "8D.txt (Upload Qualität)", code: "backend/app/services/quality_kpi_aggregation.py" },
+  "quality.complaint_customer": { source: "8D.txt (Upload Qualität) + AswKpf_LS.xlsx (Upload Lieferscheine)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.complaint_internal": { source: "8D.txt (Upload Qualität) + AswKpf_LS.xlsx (Upload Lieferscheine)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.complaint_supplier": { source: "8D.txt (Upload Qualität) + AswKpf_WE (Upload Wareneingang)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.complaint_subcontractor": { source: "8D.txt (Upload Qualität) + AswKpf_WE (Upload Wareneingang)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.delivered_qty": { source: "AswKpf_LS.xlsx (Lieferscheine) bzw. AswKpf_WE (Wareneingang)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.complaint_qty": { source: "8D.txt (Upload Qualität)", code: "backend/app/services/complaint_rate_aggregation.py" },
+  "quality.inspection_large": { source: "AswQs2151.txt (Upload Prüfungen)", code: "backend/app/services/inspection_aggregation.py" },
+  "quality.inspection_small": { source: "AswQs2151.txt (Upload Prüfungen)", code: "backend/app/services/inspection_aggregation.py" },
+  "finance.material_cost_ratio": { source: "AswLagBew.txt (Materialbewegungen) + AswKpf_WE.txt (Preise) + AswKpf_RG.txt (Umsatz)", code: "backend/app/services/material_cost_aggregation.py" },
+  "finance.material_cost": { source: "AswLagBew.txt (Materialbewegungen) + AswKpf_WE.txt (Preise)", code: "backend/app/services/material_cost_aggregation.py" },
+  "finance.revenue": { source: "AswKpf_RG.txt (Upload Umsatz)", code: "backend/app/services/material_cost_aggregation.py / personnel_cost_aggregation.py" },
+  "finance.unmatched": { source: "AswLagBew.txt (Materialbewegungen) + AswKpf_WE.txt (Preise)", code: "backend/app/services/material_cost_aggregation.py" },
+  "finance.personnel_cost_ratio": { source: "Personio-Sync (Gehälter, Anwesenheiten) + AswKpf_RG.txt (Umsatz)", code: "backend/app/services/personnel_cost_aggregation.py" },
+  "finance.personnel_cost": { source: "Personio-Sync (Gehälter, Anwesenheiten)", code: "backend/app/services/personnel_cost_aggregation.py" },
+  "finance.headcount": { source: "Personio-Sync (Gehälter, Anwesenheiten)", code: "backend/app/services/personnel_cost_aggregation.py" },
+  "procurement.otd": { source: "dev_excel_Liefertreue_Einkauf.txt (Upload Liefertreue)", code: "backend/app/services/otd_aggregation.py" },
+  "procurement.punctual_count": { source: "dev_excel_Liefertreue_Einkauf.txt (Upload Liefertreue)", code: "backend/app/services/otd_aggregation.py" },
+  "procurement.total_count": { source: "dev_excel_Liefertreue_Einkauf.txt (Upload Liefertreue)", code: "backend/app/services/otd_aggregation.py" },
+  "procurement.avg_delay": { source: "dev_excel_Liefertreue_Einkauf.txt (Upload Liefertreue)", code: "backend/app/services/otd_aggregation.py" },
+  "procurement.stock_orders": { source: "AswLagBew.txt (Materialbewegungen) + AswLagBew-Preisliste (Upload Lagerpreise)", code: "backend/app/services/stock_order_aggregation.py" },
+  "production.verzug": { source: "AswKpf_AUF.txt (Upload Auftragspositionen) + AswKpf_LS.xlsx (Lieferscheine)", code: "backend/app/services/production_kpi_aggregation.py · compute_verzug" },
+  "production.in_verzug_count": { source: "AswKpf_AUF.txt (Upload Auftragspositionen) + AswKpf_LS.xlsx (Lieferscheine)", code: "backend/app/services/production_kpi_aggregation.py · _counts_for_window" },
+  "production.total_count": { source: "AswKpf_AUF.txt (Upload Auftragspositionen) + AswKpf_LS.xlsx (Lieferscheine)", code: "backend/app/services/production_kpi_aggregation.py · _counts_for_window" },
+  "production.avg_delay": { source: "AswKpf_AUF.txt (Upload Auftragspositionen) + AswKpf_LS.xlsx (Lieferscheine)", code: "backend/app/services/production_kpi_aggregation.py · _avg_delay" },
+};
+
+const FOOTER_LABELS = {
+  de: { source: "Quelldatei", code: "Code" },
+  en: { source: "Source file", code: "Code" },
+};
+
 /** Markdown body for a KPI in the given UI language ("de" or anything else → "en"). */
 export function getKpiInfo(key: KpiInfoKey, language: string): string {
   const entry = INFO[key];
   const lang: "de" | "en" = language.startsWith("de") ? "de" : "en";
-  const body = entry[lang];
-  return entry.period === "range" ? body + COMMON_RANGE[lang] : body;
+  const body = entry.period === "range" ? entry[lang] + COMMON_RANGE[lang] : entry[lang];
+  const meta = META[key];
+  const labels = FOOTER_LABELS[lang];
+  const footer =
+    `\n\n---\n**${labels.source}:** ${meta.source}  \n` +
+    `**${labels.code}:** \`${meta.code}\``;
+  return body + footer;
 }
