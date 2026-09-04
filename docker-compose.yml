@@ -1,6 +1,9 @@
 services:
   db:
     image: postgres:17-alpine
+    # No restart policy = Docker leaves the DB down after a host reboot and
+    # everything behind it (api, directus, frontend) stays broken. 2026-09-04.
+    restart: unless-stopped
     env_file: .env
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
@@ -74,6 +77,8 @@ services:
 
   frontend:
     build: ./frontend
+    # Same as db: come back on host reboot, otherwise Caddy answers 502.
+    restart: unless-stopped
     ports:
       - "5173:5173"
     # Bind-mounted node_modules starts empty on fresh checkouts — install if
@@ -88,6 +93,8 @@ services:
 
   directus:
     image: directus/directus:11.17.2
+    # Same as db: come back on host reboot (identity provider for every login).
+    restart: unless-stopped
     env_file: .env
     ports:
       - "127.0.0.1:8055:8055"
