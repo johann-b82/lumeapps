@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { KpiInfoButton } from "./KpiInfoButton";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { useQuery } from "@tanstack/react-query";
 import {
   ResponsiveContainer,
@@ -91,8 +93,10 @@ function PieKachel({
   prozent = true,
   compact = false,
   schmal = false,
+  infoKey,
 }: {
   titel: string;
+  infoKey?: KpiInfoKey;
   daten: LabelWert[];
   farben: Record<string, string>;
   i18nPrefix: string;
@@ -110,7 +114,10 @@ function PieKachel({
   }));
   return (
     <Card className={compact ? "p-2" : "p-4"}>
-      <div className={compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium"}>{titel}</div>
+      <div className={compact ? "mb-1 text-xs font-medium" : "mb-2 text-sm font-medium flex items-center gap-1"}>
+        {titel}
+        {!compact && infoKey && <KpiInfoButton infoKey={infoKey} label={titel} />}
+      </div>
       <ResponsiveContainer width="100%" height={schmal ? 128 : compact ? 150 : 220}>
         <PieChart>
           <Pie
@@ -185,14 +192,17 @@ export function BelegschaftKpiCharts({
     compact || schmal ? { fill: "var(--color-muted-foreground)", fontSize: schmal ? 8 : 9 } : axisProps.tick;
 
   const donutGeschlecht = (
-    <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" compact={compact} schmal={schmal} />
+    <PieKachel titel={t("belegschaft.geschlecht")} daten={data.geschlecht} farben={GESCHLECHT_FARBEN} i18nPrefix="belegschaft.g" compact={compact} schmal={schmal} infoKey="hr.belegschaft_geschlecht" />
   );
   const donutBesch = (
-    <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} compact={compact} schmal={schmal} />
+    <PieKachel titel={t("belegschaft.beschaeftigung")} daten={data.beschaeftigung} farben={BESCH_FARBEN} i18nPrefix="belegschaft.b" prozent={false} compact={compact} schmal={schmal} infoKey="hr.belegschaft_beschaeftigung" />
   );
   const cardEintritt = (
     <Card className={cardP}>
-      <div className={titelC}>{t("belegschaft.eintritt")}</div>
+      <div className={titelC + " flex items-center gap-1"}>
+        {t("belegschaft.eintritt")}
+        {!compact && <KpiInfoButton infoKey="hr.belegschaft_eintritt" label={t("belegschaft.eintritt")} />}
+      </div>
       <ResponsiveContainer width="100%" height={balkenH}>
         <BarChart
           data={data.eintritt.map((d) => ({ name: t(`belegschaft.e.${d.key}`, d.key), wert: d.wert, key: d.key }))}
@@ -213,7 +223,10 @@ export function BelegschaftKpiCharts({
   );
   const cardAbteilungen = (
     <Card className={cardP}>
-      <div className={titelC}>{t("belegschaft.abteilungen")}</div>
+      <div className={titelC + " flex items-center gap-1"}>
+        {t("belegschaft.abteilungen")}
+        {!compact && <KpiInfoButton infoKey="hr.belegschaft_abteilungen" label={t("belegschaft.abteilungen")} />}
+      </div>
       <ResponsiveContainer width="100%" height={abtH}>
         <BarChart data={abteilungen} layout="vertical" margin={{ top: 4, right: 32, left: 8, bottom: 4 }}>
           <CartesianGrid {...gridProps} horizontal={false} />

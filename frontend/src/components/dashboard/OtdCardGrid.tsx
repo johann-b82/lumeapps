@@ -75,6 +75,7 @@ export function OtdCardGrid() {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <KpiCard
         label={t("procurement.otd.label")}
+        infoKey="procurement.otd"
         subtitle={t("procurement.otd.subtitle")}
         value={
           isLoading
@@ -99,16 +100,19 @@ export function OtdCardGrid() {
       />
       <KpiCard
         label={t("procurement.punctualCount.label")}
+        infoKey="procurement.punctual_count"
         value={isLoading ? undefined : formatCount(data?.punctual_count ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("procurement.totalCount.label")}
+        infoKey="procurement.total_count"
         value={isLoading ? undefined : formatCount(data?.total_count ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("procurement.avgDelay.label")}
+        infoKey="procurement.avg_delay"
         subtitle={t("procurement.avgDelay.subtitle")}
         value={
           isLoading

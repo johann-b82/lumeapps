@@ -83,6 +83,7 @@ export function ProductionVerzugCardGrid() {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <KpiCard
         label={t("production.verzug.label")}
+        infoKey="production.verzug"
         subtitle={t("production.verzug.subtitle")}
         value={
           isLoading
@@ -107,16 +108,19 @@ export function ProductionVerzugCardGrid() {
       />
       <KpiCard
         label={t("production.inVerzugCount.label")}
+        infoKey="production.in_verzug_count"
         value={isLoading ? undefined : formatCount(data?.in_verzug_count ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("production.totalCount.label")}
+        infoKey="production.total_count"
         value={isLoading ? undefined : formatCount(data?.total_count ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("production.avgDelay.label")}
+        infoKey="production.avg_delay"
         subtitle={t("production.avgDelay.subtitle")}
         value={
           isLoading

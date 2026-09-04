@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
+import { KpiInfoButton } from "./KpiInfoButton";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 
 interface KpiCardProps {
   label: string;
@@ -7,9 +9,12 @@ interface KpiCardProps {
   value?: string;
   isLoading: boolean;
   delta?: ReactNode;
+  /** When set, renders an "i" button next to the label that opens the
+   *  calculation notes for this KPI (see `lib/kpiInfo.ts`). */
+  infoKey?: KpiInfoKey;
 }
 
-export function KpiCard({ label, subtitle, value, isLoading, delta }: KpiCardProps) {
+export function KpiCard({ label, subtitle, value, isLoading, delta, infoKey }: KpiCardProps) {
   if (isLoading) {
     return (
       <Card className="p-6">
@@ -20,9 +25,14 @@ export function KpiCard({ label, subtitle, value, isLoading, delta }: KpiCardPro
   }
   return (
     <Card className="p-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {infoKey && (
+          <KpiInfoButton infoKey={infoKey} label={label} className="-mt-1.5 -mr-1.5" />
+        )}
+      </div>
       <div className="mt-2 flex items-center justify-between gap-4">
         <p className="text-3xl font-semibold tabular-nums">{value ?? "—"}</p>
         {delta != null && (

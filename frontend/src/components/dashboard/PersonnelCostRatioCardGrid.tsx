@@ -77,6 +77,7 @@ export function PersonnelCostRatioCardGrid() {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       <KpiCard
         label={t("finance.personnelCostRatio.label")}
+        infoKey="finance.personnel_cost_ratio"
         subtitle={t("finance.personnelCostRatio.subtitle")}
         value={
           isLoading
@@ -101,16 +102,19 @@ export function PersonnelCostRatioCardGrid() {
       />
       <KpiCard
         label={t("finance.personnelCost.label")}
+        infoKey="finance.personnel_cost"
         value={isLoading ? undefined : formatEur(data?.personnel_cost ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("finance.revenue.label")}
+        infoKey="finance.revenue"
         value={isLoading ? undefined : formatEur(data?.revenue ?? 0)}
         isLoading={isLoading}
       />
       <KpiCard
         label={t("finance.headcount.label")}
+        infoKey="finance.headcount"
         subtitle={t("finance.headcount.subtitle")}
         value={isLoading ? undefined : formatCount(data?.headcount ?? 0)}
         isLoading={isLoading}

@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { KpiCard } from "./KpiCard";
+import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { DeltaBadgeStack } from "./DeltaBadgeStack";
 import { computeDelta } from "@/lib/delta";
 import {
@@ -117,6 +118,7 @@ export function ComplaintRateCardGrid({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <KpiCard
         label={t(`quality.onQuality.labelByType.${complaintType}`)}
+        infoKey={`quality.complaint_${complaintType}` as KpiInfoKey}
         subtitle={
           data?.rate != null
             ? t("quality.onQuality.subtitleFehler", {
@@ -147,6 +149,7 @@ export function ComplaintRateCardGrid({
       />
       <KpiCard
         label={t("quality.deliveredQty.label")}
+        infoKey="quality.delivered_qty"
         value={isLoading ? undefined : formatQty(data?.delivered_qty ?? 0)}
         isLoading={isLoading}
       />
@@ -156,6 +159,7 @@ export function ComplaintRateCardGrid({
             ? t("quality.acceptedComplaintQty.label")
             : t("quality.complaintQty.label")
         }
+        infoKey="quality.complaint_qty"
         value={isLoading ? undefined : formatQty(data?.complaint_qty ?? 0)}
         isLoading={isLoading}
       />
