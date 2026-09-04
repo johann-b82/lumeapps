@@ -51,7 +51,8 @@ HEARTBEAT_SWEEPER_JOB_ID = "signage_heartbeat_sweeper"  # NEW (v1.16 Phase 43-04
 ATR_SCAN_JOB_ID = "atr_scan"  # NEW (Phase C)
 
 # OQ-5 fixed retention; not admin-configurable in v1.15 (SEN-SCH-06 / SEN-FUTURE-01).
-SENSOR_RETENTION_DAYS = 90
+# Set to 3650 days (~10 years) so sensor history is retained long-term.
+SENSOR_RETENTION_DAYS = 3650
 
 # SGN-SCH-02: pairing sessions older than this cutoff get swept nightly.
 # 24h grace sits comfortably outside the 10-minute TTL a kiosk might still be
@@ -176,7 +177,7 @@ async def _run_scheduled_sensor_poll() -> None:
 
 
 async def _run_sensor_retention_cleanup() -> None:
-    """Daily delete of sensor_readings + sensor_poll_log older than 90 days.
+    """Daily delete of sensor_readings + sensor_poll_log older than 3650 days (~10 years).
 
     Fixed retention per OQ-5 / SEN-SCH-06. Not admin-configurable in v1.15.
     Runs at 03:00 UTC via CronTrigger (low-traffic window, parallels the
