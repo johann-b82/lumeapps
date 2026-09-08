@@ -49,10 +49,30 @@ def _rate(num: float, den: int) -> float:
     return round(float(num) / den, 1) if den else 0.0
 
 
+def _artikel_clause(artikel_filter: str):
+    """WHERE-Klausel für den Artikel-Filter über den Präfix „H".
+
+    - ``halbfertig``: nur Artikel mit „H" am Anfang (Halbfertigartikel, z. B.
+      Zwischenprüfungen).
+    - ``alle``: keine Einschränkung.
+    - sonst (Default ``fertig``): alle Artikel OHNE „H" am Anfang; NULL-Artikel
+      gelten als Fertigartikel.
+    """
+    if artikel_filter == "halbfertig":
+        return InspectionRecord.artikel.ilike("H%")
+    if artikel_filter == "alle":
+        return sa.true()
+    return sa.or_(
+        InspectionRecord.artikel.is_(None),
+        sa.not_(InspectionRecord.artikel.ilike("H%")),
+    )
+
+
 async def _class_metrics(
     db: AsyncSession,
     first: date,
     last: date,
+    artikel_filter: str = "fertig",
 ) -> dict[str, float | int | list[str]]:
     """All inspection metrics for the window, per class (large/small/total).
 
@@ -88,6 +108,7 @@ async def _class_metrics(
         InspectionRecord.pruef_datum <= last,
         InspectionRecord.rsc == RSC_INSPECTION,
         InspectionRecord.excluded.is_(False),
+        _artikel_clause(artikel_filter),
     )
     r = (await db.execute(stmt)).one()
 
@@ -111,14 +132,15 @@ async def compute_inspections(
     db: AsyncSession,
     first: date,
     last: date,
+    artikel_filter: str = "fertig",
 ) -> dict[str, float | None]:
-    cur = await _class_metrics(db, first, last)
+    cur = await _class_metrics(db, first, last, artikel_filter)
 
     prev_first, prev_last = prior_window_same_length(first, last)
-    prev = await _class_metrics(db, prev_first, prev_last)
+    prev = await _class_metrics(db, prev_first, prev_last, artikel_filter)
 
     ya_first, ya_last = same_window_prior_year(first, last)
-    ya = await _class_metrics(db, ya_first, ya_last)
+    ya = await _class_metrics(db, ya_first, ya_last, artikel_filter)
 
     out: dict[str, float | None] = dict(cur)
     # Deltas only on the *_per_person_day headline; None when the comparison
@@ -136,10 +158,11 @@ async def compute_inspections(
 async def compute_inspections_history(
     db: AsyncSession,
     buckets: list[tuple[str, date, date]],
+    artikel_filter: str = "fertig",
 ) -> list[dict[str, str | float | int]]:
     points: list[dict[str, str | float | int]] = []
     for label, b_first, b_last in buckets:
-        metrics = await _class_metrics(db, b_first, b_last)
+        metrics = await _class_metrics(db, b_first, b_last, artikel_filter)
         points.append({"month": label, **metrics})
     return points
 
@@ -148,6 +171,7 @@ async def list_inspections(
     db: AsyncSession,
     first: date,
     last: date,
+    artikel_filter: str = "fertig",
 ) -> list[dict[str, Any]]:
     """One aggregated row per (bezeichnung, size_class) in the window.
 
@@ -180,6 +204,7 @@ async def list_inspections(
             InspectionRecord.pruef_datum <= last,
             InspectionRecord.rsc == RSC_INSPECTION,
             InspectionRecord.excluded.is_(False),
+            _artikel_clause(artikel_filter),
         )
         .group_by(InspectionRecord.bezeichnung, InspectionRecord.size_class)
         .order_by(sa.func.sum(InspectionRecord.buchungs_menge).desc().nulls_last())
@@ -210,6 +235,7 @@ async def list_inspection_bookings(
     db: AsyncSession,
     first: date,
     last: date,
+    artikel_filter: str = "fertig",
 ) -> list[dict[str, Any]]:
     """One row per real Qualitätsprüfung booking in the window.
 
@@ -238,6 +264,7 @@ async def list_inspection_bookings(
             InspectionRecord.pruef_datum >= first,
             InspectionRecord.pruef_datum <= last,
             InspectionRecord.rsc == RSC_INSPECTION,
+            _artikel_clause(artikel_filter),
         )
         .order_by(
             InspectionRecord.pruef_datum.desc(),

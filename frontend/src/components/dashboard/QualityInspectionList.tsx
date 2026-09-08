@@ -29,6 +29,7 @@ import {
   fetchInspectionBookings,
   updateInspectionBooking,
   type InspectionBookingRow,
+  type ArtikelFilter,
 } from "@/lib/api";
 import { qualityKeys } from "@/lib/queryKeys";
 import { useDateRange } from "@/contexts/DateRangeContext";
@@ -102,7 +103,7 @@ function SizeBadge({
 type BookingRow = InspectionBookingRow & Record<string, unknown>;
 type SizeFilter = "all" | "large" | "small";
 
-export function QualityInspectionList() {
+export function QualityInspectionList({ artikelFilter }: { artikelFilter: ArtikelFilter }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "de" ? "de-DE" : "en-US";
   const role = useRole();
@@ -115,10 +116,10 @@ export function QualityInspectionList() {
   const date_from = toApiDate(range.from);
   const date_to = toApiDate(range.to);
 
-  const bookingsKey = qualityKeys.inspectionsBookings(date_from, date_to);
+  const bookingsKey = qualityKeys.inspectionsBookings(date_from, date_to, artikelFilter);
   const { data, isLoading } = useQuery({
     queryKey: bookingsKey,
-    queryFn: () => fetchInspectionBookings({ date_from, date_to }),
+    queryFn: () => fetchInspectionBookings({ date_from, date_to, artikel_filter: artikelFilter }),
   });
 
   const mutation = useMutation({

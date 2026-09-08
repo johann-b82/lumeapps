@@ -154,14 +154,14 @@ export const qualityKeys = {
     ] as const,
   complaintsList: (from?: string, to?: string, complaintType?: string) =>
     ["quality", "complaints", "list", { from, to, complaintType }] as const,
-  inspections: (from?: string, to?: string) =>
-    ["quality", "inspections", { from, to }] as const,
-  inspectionsHistory: (from?: string, to?: string, granularity?: string) =>
-    ["quality", "inspections", "history", { from, to, granularity }] as const,
-  inspectionsList: (from?: string, to?: string) =>
-    ["quality", "inspections", "list", { from, to }] as const,
-  inspectionsBookings: (from?: string, to?: string) =>
-    ["quality", "inspections", "bookings", { from, to }] as const,
+  inspections: (from?: string, to?: string, artikelFilter?: string) =>
+    ["quality", "inspections", { from, to, artikelFilter }] as const,
+  inspectionsHistory: (from?: string, to?: string, granularity?: string, artikelFilter?: string) =>
+    ["quality", "inspections", "history", { from, to, granularity, artikelFilter }] as const,
+  inspectionsList: (from?: string, to?: string, artikelFilter?: string) =>
+    ["quality", "inspections", "list", { from, to, artikelFilter }] as const,
+  inspectionsBookings: (from?: string, to?: string, artikelFilter?: string) =>
+    ["quality", "inspections", "bookings", { from, to, artikelFilter }] as const,
 };
 
 // v1.60 — Einkauf (procurement): Liefertermintreue / OTD.

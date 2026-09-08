@@ -285,6 +285,7 @@ async def get_complaints_list(
 async def get_inspections(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
+    artikel_filter: str = Query("fertig"),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> InspectionsValue:
     """Qualitätsprüfung — Tagesraten je Klasse (large / small / total).
@@ -297,7 +298,7 @@ async def get_inspections(
     if date_from is None:
         today = date.today()
         date_from, date_to = _month_bounds(today.year, today.month)
-    payload = await compute_inspections(db, date_from, date_to)
+    payload = await compute_inspections(db, date_from, date_to, artikel_filter)
     return InspectionsValue(**payload)
 
 
@@ -309,6 +310,7 @@ async def get_inspections_history(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     granularity: str | None = Query(None),
+    artikel_filter: str = Query("fertig"),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[InspectionsHistoryPoint]:
     _validate_range(date_from, date_to)
@@ -316,7 +318,7 @@ async def get_inspections_history(
         today = date.today()
         date_from, date_to = _month_bounds(today.year, today.month)
     buckets = _bucket_windows(date_from, date_to, granularity)
-    points = await compute_inspections_history(db, buckets)
+    points = await compute_inspections_history(db, buckets, artikel_filter)
     return [InspectionsHistoryPoint(**p) for p in points]
 
 
@@ -327,6 +329,7 @@ async def get_inspections_history(
 async def get_inspections_list(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
+    artikel_filter: str = Query("fertig"),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[InspectionListRow]:
     """Verification table for the Qualitätsprüfung view.
@@ -339,7 +342,7 @@ async def get_inspections_list(
     if date_from is None:
         today = date.today()
         date_from, date_to = _month_bounds(today.year, today.month)
-    rows = await list_inspections(db, date_from, date_to)
+    rows = await list_inspections(db, date_from, date_to, artikel_filter)
     return [InspectionListRow(**r) for r in rows]
 
 
@@ -350,6 +353,7 @@ async def get_inspections_list(
 async def get_inspection_bookings(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
+    artikel_filter: str = Query("fertig"),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> list[InspectionBookingRow]:
     """Raw AswQs2151 bookings in the window (v1.80).
@@ -361,7 +365,7 @@ async def get_inspection_bookings(
     if date_from is None:
         today = date.today()
         date_from, date_to = _month_bounds(today.year, today.month)
-    rows = await list_inspection_bookings(db, date_from, date_to)
+    rows = await list_inspection_bookings(db, date_from, date_to, artikel_filter)
     return [InspectionBookingRow(**r) for r in rows]
 
 

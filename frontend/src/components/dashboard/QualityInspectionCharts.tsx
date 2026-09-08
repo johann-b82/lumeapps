@@ -33,6 +33,7 @@ import {
 import {
   fetchInspectionsHistory,
   type BucketGranularity,
+  type ArtikelFilter,
 } from "@/lib/api";
 import {
   deriveHrBuckets,
@@ -235,7 +236,7 @@ function InspectionPanel({
   );
 }
 
-export function QualityInspectionCharts() {
+export function QualityInspectionCharts({ artikelFilter }: { artikelFilter: ArtikelFilter }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "de" ? "de-DE" : "en-US";
   const shortLocale: "de" | "en" = i18n.language === "de" ? "de" : "en";
@@ -272,9 +273,9 @@ export function QualityInspectionCharts() {
   const { data: settings } = useSettings();
 
   const { data, isLoading } = useQuery({
-    queryKey: qualityKeys.inspectionsHistory(date_from, date_to, granularity),
+    queryKey: qualityKeys.inspectionsHistory(date_from, date_to, granularity, artikelFilter),
     queryFn: () =>
-      fetchInspectionsHistory({ date_from, date_to, granularity }),
+      fetchInspectionsHistory({ date_from, date_to, granularity, artikel_filter: artikelFilter }),
   });
 
   if (isLoading) {

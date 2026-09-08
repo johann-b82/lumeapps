@@ -10,13 +10,13 @@ import { KpiCard } from "./KpiCard";
 import type { KpiInfoKey } from "@/lib/kpiInfo";
 import { DeltaBadgeStack } from "./DeltaBadgeStack";
 import { computeDelta } from "@/lib/delta";
-import { fetchInspections } from "@/lib/api";
+import { fetchInspections, type ArtikelFilter } from "@/lib/api";
 import { qualityKeys } from "@/lib/queryKeys";
 import { formatPrevPeriodDeltaLabels } from "@/lib/periodLabels";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { toApiDate } from "@/lib/dateUtils";
 
-export function QualityInspectionCardGrid() {
+export function QualityInspectionCardGrid({ artikelFilter }: { artikelFilter: ArtikelFilter }) {
   const { t, i18n } = useTranslation();
   const shortLocale: "de" | "en" = i18n.language === "de" ? "de" : "en";
   const locale = i18n.language === "de" ? "de-DE" : "en-US";
@@ -31,8 +31,8 @@ export function QualityInspectionCardGrid() {
   const showBadges = prevPeriodLabel !== null;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: qualityKeys.inspections(date_from, date_to),
-    queryFn: () => fetchInspections({ date_from, date_to }),
+    queryKey: qualityKeys.inspections(date_from, date_to, artikelFilter),
+    queryFn: () => fetchInspections({ date_from, date_to, artikel_filter: artikelFilter }),
   });
 
   const nf1 = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });

@@ -1084,15 +1084,21 @@ export interface InspectionsHistoryPoint extends InspectionClassMetrics {
   month: string;
 }
 
+/** Artikel-Filter für die Qualitätsprüfung: Fertig (ohne „H"), Halbfertig (mit
+ *  „H"), oder alle. Default „fertig". */
+export type ArtikelFilter = "fertig" | "halbfertig" | "alle";
+
 function _buildInspectionsQuery(params?: {
   date_from?: string;
   date_to?: string;
   granularity?: BucketGranularity;
+  artikel_filter?: ArtikelFilter;
 }): string {
   const q = new URLSearchParams();
   if (params?.date_from) q.set("date_from", params.date_from);
   if (params?.date_to) q.set("date_to", params.date_to);
   if (params?.granularity) q.set("granularity", params.granularity);
+  if (params?.artikel_filter) q.set("artikel_filter", params.artikel_filter);
   const qs = q.toString();
   return qs ? `?${qs}` : "";
 }
@@ -1100,6 +1106,7 @@ function _buildInspectionsQuery(params?: {
 export async function fetchInspections(params?: {
   date_from?: string;
   date_to?: string;
+  artikel_filter?: ArtikelFilter;
 }): Promise<InspectionsValue> {
   return apiClient<InspectionsValue>(
     `/api/quality/inspections${_buildInspectionsQuery(params)}`,
@@ -1110,6 +1117,7 @@ export async function fetchInspectionsHistory(params?: {
   date_from?: string;
   date_to?: string;
   granularity?: BucketGranularity;
+  artikel_filter?: ArtikelFilter;
 }): Promise<InspectionsHistoryPoint[]> {
   return apiClient<InspectionsHistoryPoint[]>(
     `/api/quality/inspections/history${_buildInspectionsQuery(params)}`,
@@ -1132,6 +1140,7 @@ export interface InspectionListRow {
 export async function fetchInspectionsList(params?: {
   date_from?: string;
   date_to?: string;
+  artikel_filter?: ArtikelFilter;
 }): Promise<InspectionListRow[]> {
   return apiClient<InspectionListRow[]>(
     `/api/quality/inspections/list${_buildInspectionsQuery(params)}`,
@@ -1157,6 +1166,7 @@ export interface InspectionBookingRow {
 export async function fetchInspectionBookings(params?: {
   date_from?: string;
   date_to?: string;
+  artikel_filter?: ArtikelFilter;
 }): Promise<InspectionBookingRow[]> {
   return apiClient<InspectionBookingRow[]>(
     `/api/quality/inspections/bookings${_buildInspectionsQuery(params)}`,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Toggle } from "@/components/ui/toggle";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import type { ArtikelFilter } from "@/lib/api";
 import { QualityKpiCardGrid } from "@/components/dashboard/QualityKpiCardGrid";
 import { QualityKpiCharts } from "@/components/dashboard/QualityKpiCharts";
 import { QualityFindingsTable } from "@/components/dashboard/QualityFindingsTable";
@@ -40,6 +41,9 @@ export function QualityPage() {
   // interne Reklamation) and which Mengen-Spalte (K vs L) the sum uses.
   const [qtyMode, setQtyMode] = useState<QtyMode>("total");
   const [complaintType, setComplaintType] = useState<ComplaintType>("customer");
+  // Qualitätsprüfung: Artikel-Filter über Präfix „H" (Halbfertig). Default:
+  // Fertigartikel — blendet Zwischenprüfungen (H-Artikel) aus.
+  const [artikelFilter, setArtikelFilter] = useState<ArtikelFilter>("fertig");
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-4 pb-8">
@@ -58,6 +62,18 @@ export function QualityPage() {
         />
         {view === "audits" && (
           <AuditTypeFilter selected={auditTypes} onChange={setAuditTypes} />
+        )}
+        {view === "inspections" && (
+          <SegmentedControl<ArtikelFilter>
+            segments={[
+              { value: "fertig", label: t("quality.artikelFilter.fertig") },
+              { value: "halbfertig", label: t("quality.artikelFilter.halbfertig") },
+              { value: "alle", label: t("quality.artikelFilter.alle") },
+            ]}
+            value={artikelFilter}
+            onChange={setArtikelFilter}
+            aria-label={t("quality.artikelFilter.toggleLabel")}
+          />
         )}
         {view === "complaints" && (
           <div className="flex flex-wrap items-center gap-3">
@@ -102,9 +118,9 @@ export function QualityPage() {
       )}
       {view === "inspections" && (
         <>
-          <QualityInspectionCardGrid />
-          <QualityInspectionCharts />
-          <QualityInspectionList />
+          <QualityInspectionCardGrid artikelFilter={artikelFilter} />
+          <QualityInspectionCharts artikelFilter={artikelFilter} />
+          <QualityInspectionList artikelFilter={artikelFilter} />
         </>
       )}
         </div>
