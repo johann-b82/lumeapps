@@ -1,6 +1,17 @@
+# Docker's default json-file log driver has NO size limit — Caddy's per-request
+# access log (Vite dev serves hundreds of module requests per page) grew a single
+# json.log to ~16-23 GB and filled the disk. Cap every long-running service to
+# 3x50 MB. See memory `prod-disk-full-192-9-201-9`.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:17-alpine
+    logging: *default-logging
     # No restart policy = Docker leaves the DB down after a host reboot and
     # everything behind it (api, directus, frontend) stays broken. 2026-09-04.
     restart: unless-stopped
@@ -36,6 +47,7 @@ services:
 
   api:
     build: ./backend
+    logging: *default-logging
     # APScheduler runs in-process with an in-memory jobstore — `--workers 1`
     # is mandatory. N workers would run every scheduled job N times (duplicate
     # Personio sync, duplicate sensor_poll ⇒ duplicate UDP/161 traffic + DB
@@ -77,6 +89,7 @@ services:
 
   frontend:
     build: ./frontend
+    logging: *default-logging
     # Same as db: come back on host reboot, otherwise Caddy answers 502.
     restart: unless-stopped
     ports:
@@ -93,6 +106,7 @@ services:
 
   directus:
     image: directus/directus:11.17.2
+    logging: *default-logging
     # Same as db: come back on host reboot (identity provider for every login).
     restart: unless-stopped
     env_file: .env
@@ -252,6 +266,7 @@ services:
     # Phase 64 D-01: Caddy 2 alpine — reverse proxy fronting the full stack on :80.
     # HTTP only (D-02). TLS + external domain handling is out of scope.
     image: caddy:2-alpine
+    logging: *default-logging
     ports:
       - "80:80"
     volumes:
@@ -277,6 +292,7 @@ services:
   backup:
     image: postgres:17-alpine
     container_name: kpi-backup
+    logging: *default-logging
     env_file: .env
     environment:
       PGHOST: db
