@@ -108,7 +108,7 @@ function InspectionTooltip({
   t,
 }: {
   active?: boolean;
-  payload?: Array<{ payload?: Record<string, string | number> }>;
+  payload?: Array<{ payload?: Record<string, unknown> }>;
   label?: string | number;
   cls: InspectionClass;
   granularity: BucketGranularity;
@@ -117,10 +117,11 @@ function InspectionTooltip({
   t: (k: string) => string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
-  const row = (payload[0]?.payload ?? {}) as Record<string, string | number>;
+  const row = (payload[0]?.payload ?? {}) as Record<string, unknown>;
   const nf1 = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const nf0 = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const num = (k: string) => Number(row[`${cls}_${k}`] ?? 0);
+  const names = (row[`${cls}_inspector_names`] as string[] | undefined) ?? [];
   const line = (labelKey: string, value: string) => (
     <div className="flex justify-between gap-4">
       <span className="text-muted-foreground">{t(labelKey)}</span>
@@ -138,6 +139,14 @@ function InspectionTooltip({
       {line("quality.inspection.tooltip.personDays", nf0.format(num("person_days")))}
       {line("quality.inspection.tooltip.inspectionDays", nf0.format(num("inspection_days")))}
       {line("quality.inspection.tooltip.inspectors", nf0.format(num("inspectors")))}
+      {names.length > 0 && (
+        <div className="pt-1 max-w-[220px]">
+          <span className="text-muted-foreground">
+            {t("quality.inspection.tooltip.inspectorNames")}:{" "}
+          </span>
+          <span className="font-medium break-words">{names.join(", ")}</span>
+        </div>
+      )}
     </div>
   );
 }

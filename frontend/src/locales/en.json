@@ -1052,6 +1052,7 @@
   "quality.inspection.tooltip.personDays": "Person-days",
   "quality.inspection.tooltip.inspectionDays": "Inspection days",
   "quality.inspection.tooltip.inspectors": "Inspectors",
+  "quality.inspection.tooltip.inspectorNames": "Inspector names",
   "quality.inspectionList.title": "Inspection bookings",
   "quality.inspectionList.search": "Search description, user, FA or article…",
   "quality.inspectionList.records": "bookings",

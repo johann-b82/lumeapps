@@ -1054,18 +1054,21 @@ export interface InspectionClassMetrics {
   large_person_days: number;
   large_inspection_days: number;
   large_inspectors: number;
+  large_inspector_names: string[];
   small_per_person_day: number;
   small_per_day: number;
   small_qty: number;
   small_person_days: number;
   small_inspection_days: number;
   small_inspectors: number;
+  small_inspector_names: string[];
   total_per_person_day: number;
   total_per_day: number;
   total_qty: number;
   total_person_days: number;
   total_inspection_days: number;
   total_inspectors: number;
+  total_inspector_names: string[];
 }
 
 export interface InspectionsValue extends InspectionClassMetrics {

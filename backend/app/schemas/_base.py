@@ -805,18 +805,21 @@ class InspectionsValue(BaseModel):
     large_person_days: int = 0
     large_inspection_days: int = 0
     large_inspectors: int = 0
+    large_inspector_names: list[str] = []
     small_per_person_day: float = 0.0
     small_per_day: float = 0.0
     small_qty: float = 0.0
     small_person_days: int = 0
     small_inspection_days: int = 0
     small_inspectors: int = 0
+    small_inspector_names: list[str] = []
     total_per_person_day: float = 0.0
     total_per_day: float = 0.0
     total_qty: float = 0.0
     total_person_days: int = 0
     total_inspection_days: int = 0
     total_inspectors: int = 0
+    total_inspector_names: list[str] = []
     previous_period_large_per_person_day: float | None = None
     previous_period_small_per_person_day: float | None = None
     previous_period_total_per_person_day: float | None = None
@@ -836,18 +839,21 @@ class InspectionsHistoryPoint(BaseModel):
     large_person_days: int = 0
     large_inspection_days: int = 0
     large_inspectors: int = 0
+    large_inspector_names: list[str] = []
     small_per_person_day: float = 0.0
     small_per_day: float = 0.0
     small_qty: float = 0.0
     small_person_days: int = 0
     small_inspection_days: int = 0
     small_inspectors: int = 0
+    small_inspector_names: list[str] = []
     total_per_person_day: float = 0.0
     total_per_day: float = 0.0
     total_qty: float = 0.0
     total_person_days: int = 0
     total_inspection_days: int = 0
     total_inspectors: int = 0
+    total_inspector_names: list[str] = []
 
 
 class InspectionBookingRow(BaseModel):

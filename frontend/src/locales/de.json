@@ -1048,6 +1048,7 @@
   "quality.inspection.tooltip.personDays": "Personen-Tage",
   "quality.inspection.tooltip.inspectionDays": "Prüftage",
   "quality.inspection.tooltip.inspectors": "Prüfer",
+  "quality.inspection.tooltip.inspectorNames": "Prüfer-Namen",
   "quality.inspectionList.title": "Prüfvorgänge",
   "quality.inspectionList.search": "Bezeichnung, Benutzer, FA oder Artikel suchen…",
   "quality.inspectionList.records": "Buchungen",

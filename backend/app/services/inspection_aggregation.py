@@ -53,7 +53,7 @@ async def _class_metrics(
     db: AsyncSession,
     first: date,
     last: date,
-) -> dict[str, float | int]:
+) -> dict[str, float | int | list[str]]:
     """All inspection metrics for the window, per class (large/small/total).
 
     One query: quantities via ``SUM(...) FILTER``, person-days via
@@ -80,6 +80,9 @@ async def _class_metrics(
         sa.func.count(sa.distinct(InspectionRecord.benutzer)).filter(large_f).label("ins_large"),
         sa.func.count(sa.distinct(InspectionRecord.benutzer)).filter(small_f).label("ins_small"),
         sa.func.count(sa.distinct(InspectionRecord.benutzer)).label("ins_total"),
+        sa.func.array_agg(sa.distinct(InspectionRecord.benutzer)).filter(large_f).label("names_large"),
+        sa.func.array_agg(sa.distinct(InspectionRecord.benutzer)).filter(small_f).label("names_small"),
+        sa.func.array_agg(sa.distinct(InspectionRecord.benutzer)).label("names_total"),
     ).where(
         InspectionRecord.pruef_datum >= first,
         InspectionRecord.pruef_datum <= last,
@@ -88,7 +91,7 @@ async def _class_metrics(
     )
     r = (await db.execute(stmt)).one()
 
-    out: dict[str, float | int] = {}
+    out: dict[str, float | int | list[str]] = {}
     for c in _CLASSES:
         q = float(getattr(r, f"qty_{c}") or 0)
         pd = int(getattr(r, f"pd_{c}") or 0)
@@ -97,6 +100,8 @@ async def _class_metrics(
         out[f"{c}_person_days"] = pd
         out[f"{c}_inspection_days"] = idd
         out[f"{c}_inspectors"] = int(getattr(r, f"ins_{c}") or 0)
+        names = getattr(r, f"names_{c}") or []
+        out[f"{c}_inspector_names"] = sorted(n for n in names if n)
         out[f"{c}_per_person_day"] = _rate(q, pd)
         out[f"{c}_per_day"] = _rate(q, idd)
     return out
