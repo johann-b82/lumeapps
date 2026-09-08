@@ -161,22 +161,75 @@ async def _avg_active_headcount_across_range(
 # ---------------------------------------------------------------------------
 
 
+# --- Arbeitszeit-Soll aus dem exakten Personio-``work_schedule`` ------------
+# Gleiches Tagessoll-Modell wie der Weekly Report (hr_weekly.py): Soll je
+# Wochentag als "HH:MM" aus dem Personio-Arbeitszeitmodell; Fallback
+# weekly_working_hours/5 (bzw. 8 h), falls kein Modell hinterlegt ist.
+_WOCHENTAGE = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _hhmm_std(v) -> float:
+    """"HH:MM" → Stunden (``08:45`` → 8.75). Ungültig/leer → 0.0."""
+    if not isinstance(v, str) or ":" not in v:
+        return 0.0
+    hh, _, mm = v.partition(":")
+    try:
+        return int(hh) + int(mm) / 60.0
+    except ValueError:
+        return 0.0
+
+
+def _tagessoll_aus_schedule(ws) -> dict[int, float] | None:
+    """Wochentags-Soll (weekday-Index → Stunden) aus dem Personio-Modell.
+    ``None``, wenn kein verwertbares Modell vorliegt (alle Tage 0/fehlen)."""
+    if not isinstance(ws, dict):
+        return None
+    soll = {i: _hhmm_std(ws.get(tag)) for i, tag in enumerate(_WOCHENTAGE)}
+    return soll if any(h > 0 for h in soll.values()) else None
+
+
+def _fallback_soll(weekly_working_hours) -> dict[int, float]:
+    """Ersatz-Tagessoll ohne Arbeitszeitmodell: Wochenstunden/5 (Fallback 8 h)."""
+    daily = float(weekly_working_hours) / 5.0 if weekly_working_hours else 8.0
+    return {i: daily for i in range(7)}
+
+
+def _worked_std(start_time, end_time, break_minutes) -> float:
+    """Ist-Stunden einer Buchung ``(Ende − Start − Pause)``; ≤0 → 0.0."""
+    if start_time is None or end_time is None:
+        return 0.0
+    s = start_time.hour * 60 + start_time.minute
+    e = end_time.hour * 60 + end_time.minute
+    w = (e - s - (break_minutes or 0)) / 60.0
+    return w if w > 0 else 0.0
+
+
 async def _overtime_ratio(
     session: AsyncSession,
     first_day: date,
     last_day: date,
 ) -> float | None:
-    """HRKPI-01: overtime hours / total hours from attendance records.
+    """HRKPI-01: Überstunden-Stunden / geleistete Stunden aus Anwesenheiten.
 
-    Overtime per record = max(0, worked_hours - daily_quota).
-    Daily quota = weekly_working_hours / 5.
+    Überstunden je Tag = ``max(0, Ist_Tag − Tagessoll)``. Das Tagessoll kommt aus
+    dem **exakten** Personio-Arbeitszeitmodell (``work_schedule``, Soll je
+    Wochentag) — gleiches Modell wie der Weekly Report; Fallback
+    weekly_working_hours/5. Ist-Stunden werden je (Mitarbeiter, Tag) summiert
+    (mehrere Buchungen pro Tag), dann gegen das Tagessoll verglichen.
+
+    (Vorher: flaches Tagessoll = weekly_working_hours/5 je EINZELner Buchung —
+    überzählte Überstunden bei aufgeteilten Tagen und ignorierte freie Tage.)
     """
+    _ws = PersonioEmployee.raw_json["attributes"]["work_schedule"]["value"]["attributes"]
     stmt = (
         select(
+            PersonioAttendance.employee_id,
+            PersonioAttendance.date,
             PersonioAttendance.start_time,
             PersonioAttendance.end_time,
             PersonioAttendance.break_minutes,
             PersonioEmployee.weekly_working_hours,
+            _ws.label("work_schedule"),
         )
         .join(
             PersonioEmployee,
@@ -191,23 +244,26 @@ async def _overtime_ratio(
     if not rows:
         return None
 
+    # Ist-Stunden je (Mitarbeiter, Tag) summieren; Tagessoll je Mitarbeiter einmal.
+    ist_tag: dict[tuple[int, date], float] = {}
+    soll: dict[int, dict[int, float]] = {}
+    for r in rows:
+        w = _worked_std(r.start_time, r.end_time, r.break_minutes)
+        if w <= 0:
+            continue
+        ist_tag[(r.employee_id, r.date)] = ist_tag.get((r.employee_id, r.date), 0.0) + w
+        if r.employee_id not in soll:
+            soll[r.employee_id] = (
+                _tagessoll_aus_schedule(r.work_schedule)
+                or _fallback_soll(r.weekly_working_hours)
+            )
+
     total_hours = 0.0
     overtime_hours = 0.0
-
-    for row in rows:
-        if row.start_time is None or row.end_time is None:
-            continue
-        start_minutes = row.start_time.hour * 60 + row.start_time.minute
-        end_minutes = row.end_time.hour * 60 + row.end_time.minute
-        worked = (end_minutes - start_minutes - (row.break_minutes or 0)) / 60.0
-        if worked <= 0:
-            continue
-
-        total_hours += worked
-
-        if row.weekly_working_hours is not None:
-            daily_quota = float(row.weekly_working_hours) / 5.0
-            overtime_hours += max(0.0, worked - daily_quota)
+    for (eid, d), worked_day in ist_tag.items():
+        total_hours += worked_day
+        soll_day = soll[eid].get(d.weekday(), 0.0)
+        overtime_hours += max(0.0, worked_day - soll_day)
 
     if total_hours == 0:
         return None
