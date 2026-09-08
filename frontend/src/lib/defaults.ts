@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   target_audit_findings_level2: null,
   target_inspection_large: null,
   target_inspection_small: null,
+  target_inspection_total: null,
   // v1.71 / v1.72 Finance targets (cost ratios)
   target_material_cost_ratio: null,
   target_personnel_cost_ratio: null,

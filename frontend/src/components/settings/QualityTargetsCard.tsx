@@ -62,6 +62,12 @@ const TARGET_FIELDS = [
     isPercent: false,
     isInteger: true,
   },
+  {
+    key: "target_inspection_total" as const,
+    labelKey: "settings.targets.quality.inspectionTotal",
+    isPercent: false,
+    isInteger: true,
+  },
 ];
 
 export function QualityTargetsCard({

@@ -1,9 +1,10 @@
 /**
- * QualityInspectionCharts — two side-by-side history panels (Große / Kleine).
+ * QualityInspectionCharts — three history panels (Große / Kleine / Gesamt).
  *
- * Structure mirrors QualityKpiCharts (Level 1 / Level 2 audits): shared
- * granularity + Y-cap zoom cluster above the grid, one BarChart per
- * product tier. Stub data (all 0s) until the aggregation logic ships.
+ * Shared granularity + Y-cap zoom cluster above the grid, one BarChart per
+ * class. Bar value = Teile pro Person und Tag (a daily rate, so buckets stay
+ * comparable across granularities). Tooltip surfaces the absolute quantity and
+ * both denominators. Target lines follow the NULL = no line convention.
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -27,8 +28,6 @@ import {
   axisProps,
   gridProps,
   tooltipCursorProps,
-  tooltipItemStyle,
-  tooltipLabelStyle,
   tooltipStyle,
 } from "@/lib/chartDefaults";
 import {
@@ -93,9 +92,58 @@ function formatBucketLabel(
   return shortLocale === "de" ? `${day}. ${month}` : `${month} ${day}`;
 }
 
+type InspectionClass = "large" | "small" | "total";
+
+/** Multi-line tooltip (§3.2). Passed as an element to <Tooltip content=…>;
+ *  Recharts injects active/payload/label at render (repo pattern, see
+ *  SalesActivityCard). */
+function InspectionTooltip({
+  active,
+  payload,
+  label,
+  cls,
+  granularity,
+  locale,
+  shortLocale,
+  t,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: Record<string, string | number> }>;
+  label?: string | number;
+  cls: InspectionClass;
+  granularity: BucketGranularity;
+  locale: string;
+  shortLocale: "de" | "en";
+  t: (k: string) => string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = (payload[0]?.payload ?? {}) as Record<string, string | number>;
+  const nf1 = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+  const nf0 = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  const num = (k: string) => Number(row[`${cls}_${k}`] ?? 0);
+  const line = (labelKey: string, value: string) => (
+    <div className="flex justify-between gap-4">
+      <span className="text-muted-foreground">{t(labelKey)}</span>
+      <span className="tabular-nums font-medium">{value}</span>
+    </div>
+  );
+  return (
+    <div style={tooltipStyle} className="rounded-md p-2 text-xs space-y-0.5">
+      <div className="font-semibold mb-1">
+        {formatBucketLabel(String(label), granularity, locale, shortLocale)}
+      </div>
+      {line("quality.inspection.tooltip.perPersonDay", nf1.format(num("per_person_day")))}
+      {line("quality.inspection.tooltip.perDay", nf1.format(num("per_day")))}
+      {line("quality.inspection.tooltip.qty", nf0.format(num("qty")))}
+      {line("quality.inspection.tooltip.personDays", nf0.format(num("person_days")))}
+      {line("quality.inspection.tooltip.inspectionDays", nf0.format(num("inspection_days")))}
+    </div>
+  );
+}
+
 function InspectionPanel({
   title,
-  dataKey,
+  cls,
   color,
   data,
   granularity,
@@ -105,9 +153,10 @@ function InspectionPanel({
   allowDataOverflow,
   target,
   targetLabel,
+  t,
 }: {
   title: string;
-  dataKey: "large_count" | "small_count";
+  cls: InspectionClass;
   color: string;
   data: Array<Record<string, string | number>>;
   granularity: BucketGranularity;
@@ -117,6 +166,7 @@ function InspectionPanel({
   allowDataOverflow: boolean;
   target: number | null;
   targetLabel: string;
+  t: (k: string) => string;
 }) {
   return (
     <Card className="p-4">
@@ -141,16 +191,19 @@ function InspectionPanel({
             allowDataOverflow={allowDataOverflow}
           />
           <Tooltip
-            contentStyle={tooltipStyle}
-            labelStyle={tooltipLabelStyle}
-            itemStyle={tooltipItemStyle}
             cursor={tooltipCursorProps}
-            labelFormatter={(label) =>
-              formatBucketLabel(String(label), granularity, locale, shortLocale)
+            content={
+              <InspectionTooltip
+                cls={cls}
+                granularity={granularity}
+                locale={locale}
+                shortLocale={shortLocale}
+                t={t}
+              />
             }
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey={dataKey} fill={color} name={title} />
+          <Bar dataKey={`${cls}_per_person_day`} fill={color} name={title} />
           {target != null && (
             <ReferenceLine
               y={target}
@@ -216,8 +269,8 @@ export function QualityInspectionCharts() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {[1, 2].map((i) => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
           <Card key={i} className="p-4">
             <div className="h-6 w-40 bg-muted rounded animate-pulse mb-3" />
             <div className="h-[260px] bg-muted rounded animate-pulse" />
@@ -232,13 +285,12 @@ export function QualityInspectionCharts() {
   const chartData = data as unknown as Array<Record<string, string | number>>;
   const granularityLabel = t(`quality.granularity.${granularity}`);
 
-  // Configurable targets — same fallback pattern as SalesActivityCard.
-  // NULL from settings → baked-in default (150 large / 400 small).
-  const DEFAULT_INSPECTION_TARGETS = { large: 150, small: 400 } as const;
-  const targetLarge =
-    settings?.target_inspection_large ?? DEFAULT_INSPECTION_TARGETS.large;
-  const targetSmall =
-    settings?.target_inspection_small ?? DEFAULT_INSPECTION_TARGETS.small;
+  // Target lines follow the NULL = no line convention — no baked-in default.
+  // The old 150/400 defaults were unreachable for the corrected daily rate;
+  // lines reappear only once Qualitätswesen configures real values.
+  const targetLarge = settings?.target_inspection_large ?? null;
+  const targetSmall = settings?.target_inspection_small ?? null;
+  const targetTotal = settings?.target_inspection_total ?? null;
   const targetLabel = t("quality.chart.target");
 
   return (
@@ -305,10 +357,10 @@ export function QualityInspectionCharts() {
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <InspectionPanel
           title={t("quality.inspection.large.chartTitle")}
-          dataKey="large_count"
+          cls="large"
           color="#2563eb"
           data={chartData}
           granularity={granularity}
@@ -318,10 +370,11 @@ export function QualityInspectionCharts() {
           allowDataOverflow={zoom.cap !== null}
           target={targetLarge}
           targetLabel={targetLabel}
+          t={t}
         />
         <InspectionPanel
           title={t("quality.inspection.small.chartTitle")}
-          dataKey="small_count"
+          cls="small"
           color="#0d9488"
           data={chartData}
           granularity={granularity}
@@ -331,6 +384,21 @@ export function QualityInspectionCharts() {
           allowDataOverflow={zoom.cap !== null}
           target={targetSmall}
           targetLabel={targetLabel}
+          t={t}
+        />
+        <InspectionPanel
+          title={t("quality.inspection.total.chartTitle")}
+          cls="total"
+          color="#7c3aed"
+          data={chartData}
+          granularity={granularity}
+          locale={locale}
+          shortLocale={shortLocale}
+          yDomain={yDomain}
+          allowDataOverflow={zoom.cap !== null}
+          target={targetTotal}
+          targetLabel={targetLabel}
+          t={t}
         />
       </div>
     </div>

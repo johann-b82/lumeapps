@@ -43,6 +43,7 @@ export type KpiInfoKey =
   | "quality.complaint_qty"
   | "quality.inspection_large"
   | "quality.inspection_small"
+  | "quality.inspection_total"
   | "finance.material_cost_ratio"
   | "finance.material_cost"
   | "finance.revenue"
@@ -896,44 +897,51 @@ No level or status filter. \`NULL\` quantities count as 0.`,
   "quality.inspection_large": {
     period: "range",
     de: `**Formel**
-Produkte pro Tag und Prüfer:
-\`round( SUM(buchungs_menge der großen Produkte) ÷ (Anzahl verschiedener Prüfer × Anzahl verschiedener Prüftage) )\`.
-Der Nenner ist **gemeinsam** für groß und klein, damit Prüfer, die beides prüfen, nicht doppelt zählen.
+Teile pro Person und Tag:
+\`SUM(buchungs_menge der großen Produkte) ÷ Anzahl (Prüfer, Prüftag)-Kombinationen\`.
+Zusätzlich Teile pro Tag gesamt: \`SUM(menge) ÷ Anzahl verschiedener Prüftage\`.
+Der Nenner wird **je Klasse getrennt** gebildet — „groß" + „klein" ergibt nicht „gesamt".
+
+**Einheit**
+Immer eine **Tagesrate**. Woche/Monat/Quartal/Jahr ändern nur, über wie viele Tage gemittelt wird — die Balken bleiben untereinander vergleichbar.
 
 **Daten**
-\`inspection_records\` aus dem Upload \`AswQs2151.txt\`. „Groß" = alles, was nicht als klein erkannt wird (klein: Produktgruppe DIEHL, Bezeichnung mit Literature Pocket, Strap, Lederriemen, Stowage Pouch, Aufbewahrungstasche oder Net/Netz).
+\`inspection_records\` aus dem Upload \`AswQs2151.txt\`. „Groß" = alles, was nicht als klein erkannt wird.
 
 **Filter**
-Nur Buchungen mit Kostenschlüssel \`RSC = 70000\` (echte Qualitätsprüfung) und ohne Admin-Ausschluss-Häkchen. Werkzeug-Buchungen (Typ WKZ) werden beim Upload verworfen.
+Nur \`RSC = 70000\` (echte Qualitätsprüfung), ohne Ausschluss-Häkchen. Werkzeug-Buchungen (WKZ) werden beim Upload verworfen.
 
 **Ziel**
-\`target_inspection_large\`, Standard 150.
+\`target_inspection_large\` — NULL = keine Linie. Die alten 150 waren für die korrigierte Tagesrate unerreichbar; neue Werte kommen vom Qualitätswesen.
 
 **Sonderfälle**
-Nenner 0 → **0** (nicht „—"). Rundung nach Banker's Rounding. Ein Re-Upload ersetzt alle Buchungen im Datumsbereich der Datei, gesetzte Ausschluss-Häkchen gehen dabei verloren.`,
+Nenner 0 → **0**. Ein Re-Upload ersetzt alle Buchungen im Datumsbereich der Datei.`,
     en: `**Formula**
-Products per day and inspector:
-\`round( SUM(booked quantity of large products) ÷ (number of distinct inspectors × number of distinct inspection days) )\`.
-The denominator is **shared** between large and small so inspectors who do both are not counted twice.
+Parts per person and day:
+\`SUM(booked quantity of large products) ÷ number of (inspector, day) combinations\`.
+Plus parts per day total: \`SUM(qty) ÷ number of distinct inspection days\`.
+The denominator is built **per class separately** — large + small ≠ total.
+
+**Unit**
+Always a **daily rate**. Week/month/quarter/year only change how many days are averaged — bars stay comparable.
 
 **Data**
-\`inspection_records\` from the \`AswQs2151.txt\` upload. "Large" = everything not recognised as small (small: product group DIEHL, description with Literature Pocket, Strap, Lederriemen, Stowage Pouch, Aufbewahrungstasche or Net/Netz).
+\`inspection_records\` from the \`AswQs2151.txt\` upload. "Large" = everything not recognised as small.
 
 **Filters**
-Only bookings with cost key \`RSC = 70000\` (real quality inspection) and without the admin exclusion checkbox. Tool bookings (type WKZ) are dropped on upload.
+Only \`RSC = 70000\`, without the exclusion checkbox. Tool bookings (WKZ) dropped on upload.
 
 **Target**
-\`target_inspection_large\`, default 150.
+\`target_inspection_large\` — NULL = no line. The old 150 was unreachable for the corrected daily rate; new values come from Quality.
 
 **Edge cases**
-Denominator 0 → **0** (not "—"). Banker's rounding. A re-upload replaces all bookings in the file's date range; exclusion checkboxes set there are lost.`,
+Denominator 0 → **0**. A re-upload replaces all bookings in the file's date range.`,
   },
   "quality.inspection_small": {
     period: "range",
     de: `**Formel**
-Produkte pro Tag und Prüfer:
-\`round( SUM(buchungs_menge der kleinen Produkte) ÷ (Anzahl verschiedener Prüfer × Anzahl verschiedener Prüftage) )\`.
-Derselbe gemeinsame Nenner wie bei „Große Produkte".
+Teile pro Person und Tag:
+\`SUM(buchungs_menge der kleinen Produkte) ÷ Anzahl (Prüfer, Prüftag)-Kombinationen\` — eigener Nenner nur über die Personen-Tage, an denen kleine Teile gebucht wurden.
 
 **Daten**
 \`inspection_records\`. „Klein" = Produktgruppe DIEHL oder Bezeichnung mit Literature Pocket, Strap, Lederriemen, Stowage Pouch, Aufbewahrungstasche oder Net/Netz.
@@ -942,14 +950,13 @@ Derselbe gemeinsame Nenner wie bei „Große Produkte".
 Nur \`RSC = 70000\`, keine ausgeschlossenen Buchungen.
 
 **Ziel**
-\`target_inspection_small\`, Standard 400.
+\`target_inspection_small\` — NULL = keine Linie.
 
 **Sonderfälle**
-Nenner 0 → 0. Banker's Rounding.`,
+Nenner 0 → 0. Sammel-/Losbuchungen verzerren „klein" stark (Häkchen zum Ausschließen nutzen). Auf Wochenebene wenig aussagekräftig — Monat ist die kleinste sinnvolle Granularität.`,
     en: `**Formula**
-Products per day and inspector:
-\`round( SUM(booked quantity of small products) ÷ (number of distinct inspectors × number of distinct inspection days) )\`.
-Same shared denominator as "Large products".
+Parts per person and day:
+\`SUM(booked quantity of small products) ÷ number of (inspector, day) combinations\` — its own denominator over only the person-days on which small parts were booked.
 
 **Data**
 \`inspection_records\`. "Small" = product group DIEHL or description with Literature Pocket, Strap, Lederriemen, Stowage Pouch, Aufbewahrungstasche or Net/Netz.
@@ -958,10 +965,39 @@ Same shared denominator as "Large products".
 Only \`RSC = 70000\`, no excluded bookings.
 
 **Target**
-\`target_inspection_small\`, default 400.
+\`target_inspection_small\` — NULL = no line.
 
 **Edge cases**
-Denominator 0 → 0. Banker's rounding.`,
+Denominator 0 → 0. Batch/lot bookings distort "small" heavily (use the exclusion checkbox). Not meaningful at weekly level — month is the smallest sensible granularity.`,
+  },
+  "quality.inspection_total": {
+    period: "range",
+    de: `**Formel**
+Teile pro Person und Tag über **alle** Prüfungen:
+\`SUM(buchungs_menge) ÷ Anzahl (Prüfer, Prüftag)-Kombinationen\`.
+Eigener Nenner über alle Zeilen — deshalb ergibt „groß" + „klein" **nicht** „gesamt".
+
+**Daten / Filter**
+\`inspection_records\`, nur \`RSC = 70000\`, ohne Ausschluss-Häkchen.
+
+**Ziel**
+\`target_inspection_total\` — NULL = keine Linie.
+
+**Sonderfälle**
+Nenner 0 → 0.`,
+    en: `**Formula**
+Parts per person and day across **all** inspections:
+\`SUM(booked quantity) ÷ number of (inspector, day) combinations\`.
+Its own denominator over all rows — so large + small do **not** sum to total.
+
+**Data / Filters**
+\`inspection_records\`, only \`RSC = 70000\`, without the exclusion checkbox.
+
+**Target**
+\`target_inspection_total\` — NULL = no line.
+
+**Edge cases**
+Denominator 0 → 0.`,
   },
 
   // ---------------------------------------------------------------- Finanzen
@@ -1344,6 +1380,7 @@ const META: Record<KpiInfoKey, { source: string; code: string }> = {
   "quality.complaint_qty": { source: "8D.txt (Upload Qualität)", code: "backend/app/services/complaint_rate_aggregation.py" },
   "quality.inspection_large": { source: "AswQs2151.txt (Upload Prüfungen)", code: "backend/app/services/inspection_aggregation.py" },
   "quality.inspection_small": { source: "AswQs2151.txt (Upload Prüfungen)", code: "backend/app/services/inspection_aggregation.py" },
+  "quality.inspection_total": { source: "AswQs2151.txt (Upload Prüfungen)", code: "backend/app/services/inspection_aggregation.py" },
   "finance.material_cost_ratio": { source: "AswLagBew.txt (Materialbewegungen) + AswKpf_WE.txt (Preise) + AswKpf_RG.txt (Umsatz)", code: "backend/app/services/material_cost_aggregation.py" },
   "finance.material_cost": { source: "AswLagBew.txt (Materialbewegungen) + AswKpf_WE.txt (Preise)", code: "backend/app/services/material_cost_aggregation.py" },
   "finance.revenue": { source: "AswKpf_RG.txt (Upload Umsatz)", code: "backend/app/services/material_cost_aggregation.py / personnel_cost_aggregation.py" },

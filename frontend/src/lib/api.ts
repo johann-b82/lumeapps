@@ -225,6 +225,7 @@ export interface Settings {
   target_audit_findings_level2: number | null;
   target_inspection_large: number | null;
   target_inspection_small: number | null;
+  target_inspection_total: number | null;
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio: number | null;
   target_personnel_cost_ratio: number | null;
@@ -322,6 +323,7 @@ export interface SettingsUpdatePayload {
   target_audit_findings_level2?: number | null;
   target_inspection_large?: number | null;
   target_inspection_small?: number | null;
+  target_inspection_total?: number | null;
   // v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
   target_material_cost_ratio?: number | null;
   target_personnel_cost_ratio?: number | null;
@@ -1045,19 +1047,35 @@ export async function fetchComplaintRateHistory(params?: {
 
 // v1.70 — Inspections (Qualitätsprüfung: Große / Kleine Produkte)
 
-export interface InspectionsValue {
-  large_count: number;
-  small_count: number;
-  previous_period_large: number | null;
-  previous_period_small: number | null;
-  previous_year_large: number | null;
-  previous_year_small: number | null;
+export interface InspectionClassMetrics {
+  large_per_person_day: number;
+  large_per_day: number;
+  large_qty: number;
+  large_person_days: number;
+  large_inspection_days: number;
+  small_per_person_day: number;
+  small_per_day: number;
+  small_qty: number;
+  small_person_days: number;
+  small_inspection_days: number;
+  total_per_person_day: number;
+  total_per_day: number;
+  total_qty: number;
+  total_person_days: number;
+  total_inspection_days: number;
 }
 
-export interface InspectionsHistoryPoint {
+export interface InspectionsValue extends InspectionClassMetrics {
+  previous_period_large_per_person_day: number | null;
+  previous_period_small_per_person_day: number | null;
+  previous_period_total_per_person_day: number | null;
+  previous_year_large_per_person_day: number | null;
+  previous_year_small_per_person_day: number | null;
+  previous_year_total_per_person_day: number | null;
+}
+
+export interface InspectionsHistoryPoint extends InspectionClassMetrics {
   month: string;
-  large_count: number;
-  small_count: number;
 }
 
 function _buildInspectionsQuery(params?: {

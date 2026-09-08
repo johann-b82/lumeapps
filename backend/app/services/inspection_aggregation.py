@@ -1,19 +1,25 @@
-"""Product-inspection aggregation (v1.79).
+"""Product-inspection aggregation.
 
-Fills the compute_inspections / compute_inspections_history stubs with the
-real SQL against ``inspection_records``. The KPI unit is
-``Produkte / Tag / Mitarbeiter``:
+Real SQL against ``inspection_records`` for the Qualitätsprüfung KPI. Two rates
+are computed per size class (large / small / total), always as a **daily rate**
+so a bucket stays comparable across granularities:
 
-    counted_products = SUM(buchungs_menge)
-    inspectors       = COUNT(DISTINCT benutzer)        WHERE …
-    inspection_days  = COUNT(DISTINCT pruef_datum)     WHERE …
-    kpi              = counted_products / (inspectors * inspection_days)
+    qty             = SUM(buchungs_menge)
+    person_days     = COUNT(DISTINCT (benutzer, pruef_datum))
+    inspection_days = COUNT(DISTINCT pruef_datum)
+    per_person_day  = qty / person_days      ("Teile pro Person und Tag")
+    per_day         = qty / inspection_days   ("Teile pro Tag gesamt")
 
-Zero denominators (nothing booked in the window) collapse to 0 rather
-than raising — the chart just shows a bar of height 0. All three
-metrics are computed twice per window (large / small) because they
-depend on which rows are in-scope: an inspector who only worked on
-Curtains does not count as an inspector for the small-product KPI.
+Filter for every metric: ``rsc == '70000' AND excluded == false`` and the date
+window. Each denominator is built **per class separately** — "small" only counts
+the person-days on which small parts were actually booked; "total" gets its own
+denominator over all rows. Consequence (intended): large + small ≠ total.
+
+Zero denominators (nothing booked) collapse to 0.0 rather than raising. Rates
+are rounded to one decimal (values around 11–120, integer rounding lost too
+much). Earlier versions used a cross-product denominator
+(``distinct inspectors × distinct days``) which under-counted by 3–6× and made
+the value shrink as the window grew — replaced here by real person-days.
 """
 from __future__ import annotations
 
@@ -35,98 +41,97 @@ from app.services.hr_kpi_aggregation import (
 RSC_INSPECTION = "70000"
 
 
-async def _per_class_counts(
+_CLASSES = ("large", "small", "total")
+
+
+def _rate(num: float, den: int) -> float:
+    """Daily rate rounded to one decimal; 0.0 when the denominator is 0."""
+    return round(float(num) / den, 1) if den else 0.0
+
+
+async def _class_metrics(
     db: AsyncSession,
     first: date,
     last: date,
-) -> tuple[int, int]:
-    """Return ``(large_count, small_count)`` for the window.
+) -> dict[str, float | int]:
+    """All inspection metrics for the window, per class (large/small/total).
 
-    Each count is normalised per inspector-day: totalled Buchungs-Menge
-    for the class divided by a **shared** ``(distinct Prüfer × distinct
-    Prüftage)`` denominator across the whole window. Grouping the
-    denominator per class would double-count inspectors who work on both
-    tiers and drop a class's KPI when only a subset of the workforce
-    booked it — the customer wants a single "how many products per
-    inspector-day" rate, so the head-count stays global.
+    One query: quantities via ``SUM(...) FILTER``, person-days via
+    ``COUNT(DISTINCT (benutzer, pruef_datum)) FILTER`` and inspection-days via
+    ``COUNT(DISTINCT pruef_datum) FILTER``. "total" is the unfiltered aggregate
+    (its own denominator over all rows), so large + small need not sum to it.
     """
-    # 1) Numerators — one sum per size class. Excluded bookings (per
-    # user's row-level opt-out flag, v1.80) are skipped so a fat-finger
-    # ERP booking doesn't wreck the KPI.
-    totals_stmt = (
-        sa.select(
-            InspectionRecord.size_class,
-            sa.func.coalesce(
-                sa.func.sum(InspectionRecord.buchungs_menge), 0
-            ).label("total"),
-        )
-        .where(
-            InspectionRecord.pruef_datum >= first,
-            InspectionRecord.pruef_datum <= last,
-            InspectionRecord.rsc == RSC_INSPECTION,
-            InspectionRecord.excluded.is_(False),
-        )
-        .group_by(InspectionRecord.size_class)
-    )
-    totals = {
-        row.size_class: float(row.total or 0)
-        for row in (await db.execute(totals_stmt)).all()
-    }
+    person_day = sa.tuple_(InspectionRecord.benutzer, InspectionRecord.pruef_datum)
+    large_f = InspectionRecord.size_class == "large"
+    small_f = InspectionRecord.size_class == "small"
+    qty = InspectionRecord.buchungs_menge
+    datum = InspectionRecord.pruef_datum
 
-    # 2) Shared denominator — distinct inspectors × distinct inspection
-    # days over the whole window, regardless of class. Also filters
-    # excluded bookings so a lone excluded row doesn't push its
-    # inspector into the head-count.
-    denom_stmt = sa.select(
-        sa.func.count(sa.func.distinct(InspectionRecord.benutzer)),
-        sa.func.count(sa.func.distinct(InspectionRecord.pruef_datum)),
+    stmt = sa.select(
+        sa.func.coalesce(sa.func.sum(qty).filter(large_f), 0).label("qty_large"),
+        sa.func.coalesce(sa.func.sum(qty).filter(small_f), 0).label("qty_small"),
+        sa.func.coalesce(sa.func.sum(qty), 0).label("qty_total"),
+        sa.func.count(sa.distinct(person_day)).filter(large_f).label("pd_large"),
+        sa.func.count(sa.distinct(person_day)).filter(small_f).label("pd_small"),
+        sa.func.count(sa.distinct(person_day)).label("pd_total"),
+        sa.func.count(sa.distinct(datum)).filter(large_f).label("id_large"),
+        sa.func.count(sa.distinct(datum)).filter(small_f).label("id_small"),
+        sa.func.count(sa.distinct(datum)).label("id_total"),
     ).where(
         InspectionRecord.pruef_datum >= first,
         InspectionRecord.pruef_datum <= last,
         InspectionRecord.rsc == RSC_INSPECTION,
         InspectionRecord.excluded.is_(False),
     )
-    inspectors, days = (await db.execute(denom_stmt)).one()
-    denom = (inspectors or 0) * (days or 0)
-    if denom <= 0:
-        return 0, 0
+    r = (await db.execute(stmt)).one()
 
-    large = round(totals.get("large", 0.0) / denom)
-    small = round(totals.get("small", 0.0) / denom)
-    return large, small
+    out: dict[str, float | int] = {}
+    for c in _CLASSES:
+        q = float(getattr(r, f"qty_{c}") or 0)
+        pd = int(getattr(r, f"pd_{c}") or 0)
+        idd = int(getattr(r, f"id_{c}") or 0)
+        out[f"{c}_qty"] = q
+        out[f"{c}_person_days"] = pd
+        out[f"{c}_inspection_days"] = idd
+        out[f"{c}_per_person_day"] = _rate(q, pd)
+        out[f"{c}_per_day"] = _rate(q, idd)
+    return out
 
 
 async def compute_inspections(
     db: AsyncSession,
     first: date,
     last: date,
-) -> dict[str, int | None]:
-    cur_large, cur_small = await _per_class_counts(db, first, last)
+) -> dict[str, float | None]:
+    cur = await _class_metrics(db, first, last)
 
     prev_first, prev_last = prior_window_same_length(first, last)
-    prev_large, prev_small = await _per_class_counts(db, prev_first, prev_last)
+    prev = await _class_metrics(db, prev_first, prev_last)
 
     ya_first, ya_last = same_window_prior_year(first, last)
-    ya_large, ya_small = await _per_class_counts(db, ya_first, ya_last)
+    ya = await _class_metrics(db, ya_first, ya_last)
 
-    return {
-        "large_count": cur_large,
-        "small_count": cur_small,
-        "previous_period_large": prev_large,
-        "previous_period_small": prev_small,
-        "previous_year_large": ya_large,
-        "previous_year_small": ya_small,
-    }
+    out: dict[str, float | None] = dict(cur)
+    # Deltas only on the *_per_person_day headline; None when the comparison
+    # window has no person-days (no basis for a delta).
+    for c in _CLASSES:
+        out[f"previous_period_{c}_per_person_day"] = (
+            prev[f"{c}_per_person_day"] if prev[f"{c}_person_days"] else None
+        )
+        out[f"previous_year_{c}_per_person_day"] = (
+            ya[f"{c}_per_person_day"] if ya[f"{c}_person_days"] else None
+        )
+    return out
 
 
 async def compute_inspections_history(
     db: AsyncSession,
     buckets: list[tuple[str, date, date]],
-) -> list[dict[str, str | int]]:
-    points: list[dict[str, str | int]] = []
+) -> list[dict[str, str | float | int]]:
+    points: list[dict[str, str | float | int]] = []
     for label, b_first, b_last in buckets:
-        large, small = await _per_class_counts(db, b_first, b_last)
-        points.append({"month": label, "large_count": large, "small_count": small})
+        metrics = await _class_metrics(db, b_first, b_last)
+        points.append({"month": label, **metrics})
     return points
 
 

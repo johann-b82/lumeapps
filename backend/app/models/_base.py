@@ -210,6 +210,10 @@ class AppSettings(Base):
     target_inspection_small: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )
+    # v1.12x: dritte Soll-Linie für die „Gesamt"-Qualitätsprüfung.
+    target_inspection_total: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
 
     # v1.71 / v1.72 — Finance KPI targets. Stored as fractions (0.15 = 15 %);
     # NULL hides the chart's reference line.

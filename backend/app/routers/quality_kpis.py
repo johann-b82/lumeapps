@@ -287,10 +287,11 @@ async def get_inspections(
     date_to: date | None = Query(None),
     db: AsyncSession = Depends(get_async_db_session),
 ) -> InspectionsValue:
-    """Anzahl geprüfter Produkte per size tier (large / small).
+    """Qualitätsprüfung — Tagesraten je Klasse (large / small / total).
 
-    STUB — the aggregation returns 0 counts until the input pipeline
-    is specified. Delta baselines mirror /audit-findings.
+    Liefert Teile pro Person und Tag + Teile pro Tag gesamt je Klasse samt
+    absoluter Menge und Nennern (für den Tooltip). Delta-Baselines wie
+    /audit-findings, aber nur auf den ``*_per_person_day``-Werten.
     """
     _validate_range(date_from, date_to)
     if date_from is None:

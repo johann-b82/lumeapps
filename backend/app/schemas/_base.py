@@ -163,6 +163,7 @@ class SettingsUpdate(BaseModel):
     target_audit_findings_level2: int | None = None
     target_inspection_large: int | None = None
     target_inspection_small: int | None = None
+    target_inspection_total: int | None = None
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
@@ -245,6 +246,7 @@ class SettingsRead(BaseModel):
     target_audit_findings_level2: int | None = None
     target_inspection_large: int | None = None
     target_inspection_small: int | None = None
+    target_inspection_total: int | None = None
     # v1.71 / v1.72 — Finance KPI targets (cost ratios as fractions)
     target_material_cost_ratio: float | None = None
     target_personnel_cost_ratio: float | None = None
@@ -788,25 +790,58 @@ class ComplaintRateValue(BaseModel):
 
 
 class InspectionsValue(BaseModel):
-    """Inspection counts for one window — large + small products.
+    """Inspection daily rates for one window, per class (large/small/total).
 
-    Stub schema (v1.70) — the aggregation returns 0 for both counts
-    until the input pipeline (upload file + derivation from existing
-    data) is specified. Delta baselines mirror the audit-findings shape.
+    Two rates per class: ``*_per_person_day`` (Teile pro Person und Tag,
+    headline) and ``*_per_day`` (Teile pro Tag gesamt), plus the absolute
+    ``*_qty`` and both denominators (``*_person_days``, ``*_inspection_days``)
+    for the tooltip. Each class carries its own denominators — large + small
+    do NOT sum to total. Deltas only on the ``*_per_person_day`` headline.
     """
 
-    large_count: int = 0
-    small_count: int = 0
-    previous_period_large: int | None = None
-    previous_period_small: int | None = None
-    previous_year_large: int | None = None
-    previous_year_small: int | None = None
+    large_per_person_day: float = 0.0
+    large_per_day: float = 0.0
+    large_qty: float = 0.0
+    large_person_days: int = 0
+    large_inspection_days: int = 0
+    small_per_person_day: float = 0.0
+    small_per_day: float = 0.0
+    small_qty: float = 0.0
+    small_person_days: int = 0
+    small_inspection_days: int = 0
+    total_per_person_day: float = 0.0
+    total_per_day: float = 0.0
+    total_qty: float = 0.0
+    total_person_days: int = 0
+    total_inspection_days: int = 0
+    previous_period_large_per_person_day: float | None = None
+    previous_period_small_per_person_day: float | None = None
+    previous_period_total_per_person_day: float | None = None
+    previous_year_large_per_person_day: float | None = None
+    previous_year_small_per_person_day: float | None = None
+    previous_year_total_per_person_day: float | None = None
 
 
 class InspectionsHistoryPoint(BaseModel):
+    """One history bucket — same per-class metrics as :class:`InspectionsValue`
+    (minus deltas). ``month`` is the bucket label (week/month/quarter/year)."""
+
     month: str
-    large_count: int = 0
-    small_count: int = 0
+    large_per_person_day: float = 0.0
+    large_per_day: float = 0.0
+    large_qty: float = 0.0
+    large_person_days: int = 0
+    large_inspection_days: int = 0
+    small_per_person_day: float = 0.0
+    small_per_day: float = 0.0
+    small_qty: float = 0.0
+    small_person_days: int = 0
+    small_inspection_days: int = 0
+    total_per_person_day: float = 0.0
+    total_per_day: float = 0.0
+    total_qty: float = 0.0
+    total_person_days: int = 0
+    total_inspection_days: int = 0
 
 
 class InspectionBookingRow(BaseModel):

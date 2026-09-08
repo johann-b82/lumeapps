@@ -1,10 +1,8 @@
 /**
- * QualityInspectionCardGrid — Anzahl geprüfter Produkte (Große / Kleine).
+ * QualityInspectionCardGrid — Teile pro Person und Tag (Große / Kleine / Gesamt).
  *
- * Mirrors the QualityKpiCardGrid layout (2-card grid + delta badges).
- * Backend returns 0/0 until the aggregation logic is defined; the UI
- * still renders — cards show "0" instead of the em-dash so the widget
- * is visibly present and testable end-to-end.
+ * Three-card grid: headline = per_person_day, subtitle = per_day (Teile/Tag
+ * gesamt). Delta badges on the per_person_day headline.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -37,11 +35,12 @@ export function QualityInspectionCardGrid() {
     queryFn: () => fetchInspections({ date_from, date_to }),
   });
 
-  const formatCount = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const nf1 = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
   function renderCard(
     label: string,
     value: number | undefined,
+    perDay: number | undefined,
     prevPeriod: number | null | undefined,
     prevYear: number | null | undefined,
     infoKey: KpiInfoKey,
@@ -59,12 +58,17 @@ export function QualityInspectionCardGrid() {
       preset === "thisYear" ? rawPrevYear : rawPrevPeriod;
     const prevYearDelta = preset === "thisYear" ? null : rawPrevYear;
 
+    const subtitle =
+      perDay !== undefined
+        ? t("quality.inspection.card.perDay", { value: nf1.format(perDay) })
+        : t("quality.inspection.unit");
+
     return (
       <KpiCard
         label={label}
         infoKey={infoKey}
-        subtitle={t("quality.inspection.unit")}
-        value={formatCount(value)}
+        subtitle={subtitle}
+        value={nf1.format(value)}
         isLoading={false}
         delta={
           showBadges ? (
@@ -94,20 +98,30 @@ export function QualityInspectionCardGrid() {
           </p>
         </div>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {renderCard(
           t("quality.inspection.large.label"),
-          data?.large_count,
-          data?.previous_period_large ?? null,
-          data?.previous_year_large ?? null,
+          data?.large_per_person_day,
+          data?.large_per_day,
+          data?.previous_period_large_per_person_day ?? null,
+          data?.previous_year_large_per_person_day ?? null,
           "quality.inspection_large",
         )}
         {renderCard(
           t("quality.inspection.small.label"),
-          data?.small_count,
-          data?.previous_period_small ?? null,
-          data?.previous_year_small ?? null,
+          data?.small_per_person_day,
+          data?.small_per_day,
+          data?.previous_period_small_per_person_day ?? null,
+          data?.previous_year_small_per_person_day ?? null,
           "quality.inspection_small",
+        )}
+        {renderCard(
+          t("quality.inspection.total.label"),
+          data?.total_per_person_day,
+          data?.total_per_day,
+          data?.previous_period_total_per_person_day ?? null,
+          data?.previous_year_total_per_person_day ?? null,
+          "quality.inspection_total",
         )}
       </div>
     </div>
