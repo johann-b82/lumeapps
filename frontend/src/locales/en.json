@@ -1051,6 +1051,7 @@
   "quality.inspection.tooltip.qty": "Parts absolute",
   "quality.inspection.tooltip.personDays": "Person-days",
   "quality.inspection.tooltip.inspectionDays": "Inspection days",
+  "quality.inspection.tooltip.inspectors": "Inspectors",
   "quality.inspectionList.title": "Inspection bookings",
   "quality.inspectionList.search": "Search description, user, FA or article…",
   "quality.inspectionList.records": "bookings",

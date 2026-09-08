@@ -77,6 +77,9 @@ async def _class_metrics(
         sa.func.count(sa.distinct(datum)).filter(large_f).label("id_large"),
         sa.func.count(sa.distinct(datum)).filter(small_f).label("id_small"),
         sa.func.count(sa.distinct(datum)).label("id_total"),
+        sa.func.count(sa.distinct(InspectionRecord.benutzer)).filter(large_f).label("ins_large"),
+        sa.func.count(sa.distinct(InspectionRecord.benutzer)).filter(small_f).label("ins_small"),
+        sa.func.count(sa.distinct(InspectionRecord.benutzer)).label("ins_total"),
     ).where(
         InspectionRecord.pruef_datum >= first,
         InspectionRecord.pruef_datum <= last,
@@ -93,6 +96,7 @@ async def _class_metrics(
         out[f"{c}_qty"] = q
         out[f"{c}_person_days"] = pd
         out[f"{c}_inspection_days"] = idd
+        out[f"{c}_inspectors"] = int(getattr(r, f"ins_{c}") or 0)
         out[f"{c}_per_person_day"] = _rate(q, pd)
         out[f"{c}_per_day"] = _rate(q, idd)
     return out

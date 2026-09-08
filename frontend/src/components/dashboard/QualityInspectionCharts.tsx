@@ -137,6 +137,7 @@ function InspectionTooltip({
       {line("quality.inspection.tooltip.qty", nf0.format(num("qty")))}
       {line("quality.inspection.tooltip.personDays", nf0.format(num("person_days")))}
       {line("quality.inspection.tooltip.inspectionDays", nf0.format(num("inspection_days")))}
+      {line("quality.inspection.tooltip.inspectors", nf0.format(num("inspectors")))}
     </div>
   );
 }
