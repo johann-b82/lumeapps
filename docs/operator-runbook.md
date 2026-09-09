@@ -1000,7 +1000,7 @@ Nightly dumps are written by the `kpi-backup` service (compose service `backup`,
 ./backups/kpi-YYYY-MM-DD.sql.gz
 ```
 
-The dump command (`backup/dump.sh`) is `pg_dump --clean --if-exists --no-owner --no-acl -Fp | gzip`, with 14-day retention. The `kpi-backup` container already carries `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env, so all `psql`/`pg_dump` commands below run inside it without extra flags.
+The dump command (`backup/dump.sh`) is `pg_dump --clean --if-exists --no-owner --no-acl -Fp -Z 6 -f <file>` (gzip-compressed plain SQL, no shell pipe so a failing `pg_dump` fails the job), with 14-day retention. The `kpi-backup` container already carries `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env, so all `psql`/`pg_dump` commands below run inside it without extra flags.
 
 **This procedure was executed successfully on 2026-06-11** to recover from a full production data wipe (see Section 18 for the cause).
 
@@ -1115,3 +1115,64 @@ Instead, bind each kiosk's pending pairing session directly to its **original** 
 **Act quickly after reading a code:** pairing sessions expire after 10 minutes, and the player proactively requests a fresh code 5 seconds before expiry (`frontend/src/player/PairingScreen.tsx`) — so the code on screen rotates roughly every 10 minutes. If `UPDATE 0` comes back, the code on the screen has already rotated; re-read it and retry.
 
 The original device row must not be revoked (`revoked_at IS NULL`), otherwise the kiosk's first authenticated request 401s and it falls straight back to pairing.
+
+## 20. Disk Full — Log Rotation and Growth Paths (incident 2026, 192.9.201.9)
+
+**What happened:** the host disk filled up. A single Docker `json.log` for the
+`caddy` container had grown to ~16–23 GB. Root cause was write volume, not a
+leak: Caddy's access log recorded every request, and the frontend container
+runs the Vite dev server, which serves hundreds of module requests per page
+load. Uvicorn's access log added ~13,000 lines per Pi per day (`/health` every
+10 s, playlist every 30 s, heartbeat every 60 s). Docker's default `json-file`
+driver has no size cap.
+
+**What is now in place (guarded by `scripts/ci/check_log_hygiene.sh`):**
+
+- Every compose service, including one-shots, carries `logging: *default-logging`
+  with `max-size: 10m`, `max-file: 3` (30 MB ceiling per container).
+- Caddy logs errors only (`level ERROR` in the `log` block).
+- Uvicorn runs with `--no-access-log --log-level warning` (api container and
+  Pi sidecar).
+- `sensor_poll_log` is pruned after 14 days (readings keep their 10-year
+  retention). Backup `.tmp` leftovers are cleaned on exit and by retention.
+- Pi kiosks: `/etc/systemd/journald.conf.d/50-signage.conf` caps the journal
+  at 200 MB / 7 days (installed by `provision-pi.sh`).
+
+**Time-based rotation on the app host (optional, one-time):** Docker's
+`json-file` driver rotates by size only. For a real time window, switch the
+host's Docker daemon to journald and let journald enforce the retention:
+
+```bash
+# /etc/docker/daemon.json
+{ "log-driver": "journald" }
+
+# /etc/systemd/journald.conf.d/50-docker.conf
+[Journal]
+SystemMaxUse=500M
+MaxRetentionSec=7day
+
+sudo systemctl restart systemd-journald && sudo systemctl restart docker
+```
+
+`docker compose logs` keeps working with the journald driver. Do this on the
+Linux app host only — macOS/Windows Docker Desktop has no journald, so the
+compose file itself stays on `json-file`.
+
+**Triage when the disk is full again:**
+
+```bash
+df -h /
+sudo du -sh /var/lib/docker/containers/*/*-json.log | sort -h | tail
+du -sh postgres_data directus_uploads backups backend/media frontend_node_modules
+docker container prune -f      # stopped one-shot containers keep their logs
+docker image prune -af         # old build layers
+```
+
+Do **not** run `docker system prune --volumes` here: the deployment uses bind
+mounts, but the flag also removes anonymous volumes and is a habit that will
+bite on another host.
+
+**Remaining growth paths (not yet bounded):** `directus_uploads/` is never
+shrunk — deleting signage media, maintenance files, FAIR drawings or Zeugnisse
+removes the DB row but keeps the file. `audit_trail_entries`,
+`personio_attendance` and the upload fact tables grow with history by design.

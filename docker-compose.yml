@@ -1,11 +1,15 @@
 # Docker's default json-file log driver has NO size limit — Caddy's per-request
 # access log (Vite dev serves hundreds of module requests per page) grew a single
-# json.log to ~16-23 GB and filled the disk. Cap every long-running service to
-# 3x50 MB. See memory `prod-disk-full-192-9-201-9`.
+# json.log to ~16-23 GB and filled the disk. Cap EVERY service (one-shots too:
+# each `compose up` creates a fresh container with its own json.log) to 3x10 MB.
+# Together with Caddy `level ERROR` and uvicorn `--no-access-log` the write
+# rate is low enough that 30 MB covers days, not minutes. Time-based rotation
+# is a host setting (journald), see docs/operator-runbook.md § 20.
+# Guarded by scripts/ci/check_log_hygiene.sh.
 x-logging: &default-logging
   driver: json-file
   options:
-    max-size: "50m"
+    max-size: "10m"
     max-file: "3"
 
 services:
@@ -30,6 +34,7 @@ services:
 
   migrate:
     build: ./backend
+    logging: *default-logging
     command: alembic upgrade head
     env_file: .env
     # Bind-mount the backend source so new Alembic revisions are picked up
@@ -54,7 +59,9 @@ services:
     # constraint contention on UNIQUE(sensor_id, recorded_at)). See SEN-SCH-05
     # and PITFALLS C-7. If horizontal scaling is ever required, extract the
     # scheduler into its own container first (see ops runbook).
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload
+    # --no-access-log: every Pi hits /health (10 s), /playlist (30 s) and
+    # /heartbeat (60 s) — ~13k lines/day/Pi of pure noise. Errors still log.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload --no-access-log --log-level warning
     # On host reboot, depends_on conditions are NOT honored — the API can start
     # before the DB finishes WAL recovery and fail. unless-stopped makes Docker
     # keep retrying until the DB is reachable. See ops: reboot startup race.
@@ -181,6 +188,7 @@ services:
     # BEFORE directus-bootstrap-roles so permission rows can reference the
     # registered collections.
     image: directus/directus:11.17.2
+    logging: *default-logging
     env_file: .env
     environment:
       DB_CLIENT: pg
@@ -222,6 +230,7 @@ services:
     # rejected by /permissions writes (403 FORBIDDEN). They are inserted via
     # SQL by directus-bootstrap-permissions instead. See bootstrap-permissions.sql.
     image: curlimages/curl:8.10.1
+    logging: *default-logging
     env_file: .env
     environment:
       DIRECTUS_URL: http://directus:8055
@@ -243,6 +252,7 @@ services:
     # POST /permissions returns 403 even for an admin_access:true session.
     # Idempotent (ON CONFLICT DO NOTHING).
     image: postgres:17-alpine
+    logging: *default-logging
     env_file: .env
     environment:
       PGHOST: db

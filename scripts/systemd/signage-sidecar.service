@@ -14,10 +14,13 @@ Restart=always
 RestartSec=5
 
 # Sidecar runs from the venv; single worker — serves exactly one device.
+# --no-access-log: the kiosk browser polls this proxy continuously; on a
+# 16 GB SD card that access log is pure journald churn.
 ExecStart=/opt/signage/pi-sidecar/.venv/bin/uvicorn sidecar:app \
     --host 127.0.0.1 \
     --port 8080 \
-    --workers 1
+    --workers 1 \
+    --no-access-log
 
 WorkingDirectory=/opt/signage/pi-sidecar
 

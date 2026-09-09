@@ -94,6 +94,23 @@ create_signage_directories() {
   _info "Directories created."
 }
 
+configure_journald_limits() {
+  # Signature: configure_journald_limits()
+  # Caps the system journal on the Pi. Sidecar (INFO) + Chromium kiosk log into
+  # journald on a 16 GB SD card with no bound; a crash loop (Restart=always,
+  # RestartSec=5) writes at full speed. Time- and size-based, idempotent.
+  _info "Configuring journald limits..."
+  install -d -m 0755 /etc/systemd/journald.conf.d
+  cat > /etc/systemd/journald.conf.d/50-signage.conf <<'EOF'
+# Installed by scripts/lib/signage-install.sh — keep the kiosk journal bounded.
+[Journal]
+SystemMaxUse=200M
+RuntimeMaxUse=50M
+MaxRetentionSec=7day
+EOF
+  _info "journald limits written to /etc/systemd/journald.conf.d/50-signage.conf"
+}
+
 deploy_systemd_units() {
   # Signature: deploy_systemd_units <api_url> <signage_uid>
   # Copies scripts/systemd/*.service to /home/signage/.config/systemd/user/

@@ -459,6 +459,12 @@ jobs:
         run: bash scripts/ci/check_workers_one_invariant.sh
 
       # -----------------------------------------------------------------------
+      # Step 13: Guard E — Log-Hygiene (Platte-voll-Vorfall 2026)
+      # -----------------------------------------------------------------------
+      - name: "Guard E — Log-Hygiene"
+        run: bash scripts/ci/check_log_hygiene.sh
+
+      # -----------------------------------------------------------------------
       # NOTE (v1.26 CI cleanup):
       #
       # The previous "SSE integration tests (500 ms ceiling, SSE-04)" and
