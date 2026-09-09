@@ -118,3 +118,75 @@ async def test_real_health_endpoint_no_auth():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/health")
         assert r.status_code == 200
+
+
+# --- Token-Herkunft und Ablauf (Befund 3) ---
+#
+# Die Prüfung akzeptierte jedes mit DIRECTUS_SECRET signierte Token, das eine
+# bekannte Rollen-UUID trug: ohne Ausstellerprüfung und ohne Pflicht-`exp`.
+# Die Payload-Form unten ist gegen Directus 11.17.2 abgeglichen (Login-Modus
+# JSON und Session; beide tragen id, role, iat, exp, iss="directus").
+
+async def test_fremder_aussteller_wird_abgelehnt(client):
+    token = _mint(ADMIN_UUID, extra={"iss": "jemand-anderes"})
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+async def test_token_ohne_aussteller_wird_abgelehnt(client):
+    import jwt as _jwt
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    token = _jwt.encode(
+        {
+            "id": USER_UUID,
+            "role": ADMIN_UUID,
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(minutes=15)).timestamp()),
+        },
+        DIRECTUS_SECRET,
+        algorithm="HS256",
+    )
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+async def test_token_ohne_ablauf_wird_abgelehnt(client):
+    """Vorher unbegrenzt gültig."""
+    import jwt as _jwt
+    from datetime import datetime, timezone
+
+    token = _jwt.encode(
+        {
+            "id": USER_UUID,
+            "role": ADMIN_UUID,
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "iss": "directus",
+        },
+        DIRECTUS_SECRET,
+        algorithm="HS256",
+    )
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+async def test_freigabe_token_wird_abgelehnt(client):
+    """Directus signiert Freigabe-Links mit demselben Schlüssel."""
+    token = _mint(ADMIN_UUID, extra={"share": "a1b2c3", "share_scope": {}})
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+async def test_zurueckgesetztes_passwort_token_wird_abgelehnt(client):
+    token = _mint(ADMIN_UUID, extra={"scope": "password-reset"})
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+async def test_echtes_directus_token_geht_weiterhin_durch(client):
+    """Form wie von Directus 11.17.2 ausgestellt, Session-Modus."""
+    token = _mint(ADMIN_UUID, extra={"app_access": True, "admin_access": True, "session": "abc"})
+    r = await client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["role"] == "admin"
