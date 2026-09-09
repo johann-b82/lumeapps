@@ -30,6 +30,7 @@ import asyncio
 import logging
 import shutil
 import uuid as _uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -240,6 +241,14 @@ async def convert_pptx(media_id: _uuid.UUID) -> None:
                 await _set_failed(media_id, "invalid_pptx")
                 return
 
+            if not _is_pptx(tempdir / "input.pptx"):
+                log.warning(
+                    "signage_pptx: media_id=%s is not a PPTX; skipping soffice",
+                    media_id,
+                )
+                await _set_failed(media_id, "invalid_pptx")
+                return
+
             try:
                 await asyncio.wait_for(
                     _run_pipeline(tempdir, lo_profile, media_id),
@@ -270,6 +279,21 @@ async def convert_pptx(media_id: _uuid.UUID) -> None:
 # Directus fetch helper (internal — distinct from the upload helper in
 # services.directus_uploads because this is a pure download path).
 # ---------------------------------------------------------------------------
+
+
+def _is_pptx(pfad: Path) -> bool:
+    """Ist die Datei wirklich eine PPTX?
+
+    soffice konvertiert auch alles andere: eine in ``.pptx`` umbenannte
+    Textdatei wird klaglos zu einer PDF und landet als Folie auf den
+    Bildschirmen. Eine PPTX ist ein ZIP mit ``ppt/presentation.xml`` —
+    das prueft diese Funktion, bevor soffice ueberhaupt startet.
+    """
+    try:
+        with zipfile.ZipFile(pfad) as archiv:
+            return "ppt/presentation.xml" in archiv.namelist()
+    except (zipfile.BadZipFile, OSError):
+        return False
 
 
 async def _download_pptx_from_directus(
