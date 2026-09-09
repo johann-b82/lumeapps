@@ -134,6 +134,43 @@ Step by step. Every command is copy-paste-ready against a clean clone.
 
 ---
 
+## Betrieb: Produktions-Overlay
+
+Die Basisdatei `docker-compose.yml` ist auf Entwicklung eingestellt. Auf einem erreichbaren Host sind vier Dinge daran offene Türen (Befunde 1 und 2 der Sicherheitsanalyse, `acm-plattform/docs/security-findings.md`):
+
+| In der Entwicklung | Auf dem Server |
+|---|---|
+| Vite-Dev-Server auf `0.0.0.0:5173` | gebaute Oberfläche, direkt von Caddy ausgeliefert |
+| API mit `--reload` | ohne — der Reloader kappt bei jeder Dateiänderung alle Player-Streams |
+| API auf `0.0.0.0:8000` | kein Host-Port, nur über Caddy erreichbar |
+| Quellcode schreibbar nach `/app` gemountet | kein Mount, der Code steckt im Bild |
+| Prozess als `root` | `uid 10001` |
+
+Deshalb gibt es `docker-compose.prod.yml`. Ablauf:
+
+```bash
+# 1. Oberfläche bauen — sonst hat Caddy nichts auszuliefern
+docker compose run --rm --no-deps --entrypoint sh frontend -c 'npm run build'
+
+# 2. Stack im Produktionsmodus starten
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+`npm run build` erzeugt beides: die Admin-Oberfläche nach `frontend/dist` und das Player-Bundle nach `frontend/dist/player`. Nach jeder Frontend-Änderung wiederholen — sonst liefert Caddy den alten Stand aus.
+
+**Prüfen, dass das Overlay wirklich greift:**
+
+```bash
+docker compose ps --format '{{.Service}}\t{{.Ports}}'   # nur caddy auf :80, kein 5173, kein 8000
+docker compose exec api id                               # uid=10001
+```
+
+Verifiziert am 2026-09-09 lokal gegen den vollständigen Stack: keine Host-Ports außer `:80` und Directus auf `127.0.0.1:8055`, API als `uid 10001`, kein `--reload`, gebaute Oberfläche unter `/`, Client-Routen fallen auf `index.html` zurück, `/player/*` und `/directus/*` unverändert, PPTX-Umwandlung (LibreOffice und pdftoppm) läuft unter der neuen Kennung.
+
+### Zurück auf Entwicklung
+
+Das Overlay einfach weglassen: `docker compose up -d`. Dabei wird der `frontend`-Container wieder gestartet und die API bekommt ihren Host-Port zurück.
+
 ## First Admin (verify bootstrap)
 
 - Log in to the Directus admin UI at `http://localhost:8055` (direct loopback) or `http://localhost/directus/admin` (via the Caddy proxy, v1.21+). You should land on the **Content** module. Confirm the user-menu avatar in the bottom-left shows the email you set in `.env`.

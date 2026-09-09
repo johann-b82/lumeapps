@@ -25,6 +25,11 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.yml"
 DOCKERFILE="backend/Dockerfile"
 CADDYFILE="caddy/Caddyfile"
+# Das Produktions-Overlay bringt eine eigene Caddy-Konfiguration und ein
+# eigenes uvicorn-Kommando mit. Ohne diese Zeilen liefe der Guard an genau der
+# Datei vorbei, die auf dem Server gilt.
+CADDYFILE_PROD="caddy/Caddyfile.prod"
+COMPOSE_PROD="docker-compose.prod.yml"
 SIDECAR_UNIT="scripts/systemd/signage-sidecar.service"
 
 failures=()
@@ -68,8 +73,23 @@ if ! grep -qE '"--no-access-log"' "$DOCKERFILE"; then
 fi
 
 # --- 5. Caddy: nur Fehler loggen ---------------------------------------------
-if ! awk '/^[[:space:]]*log \{/,/^[[:space:]]*\}/' "$CADDYFILE" | grep -qE '^[[:space:]]*level ERROR'; then
-  failures+=("$CADDYFILE: log-Block ohne 'level ERROR'")
+for cf in "$CADDYFILE" "$CADDYFILE_PROD"; do
+  [ -f "$cf" ] || continue
+  if ! awk '/^[[:space:]]*log \{/,/^[[:space:]]*\}/' "$cf" | grep -qE '^[[:space:]]*level ERROR'; then
+    failures+=("$cf: log-Block ohne 'level ERROR'")
+  fi
+done
+
+# --- 5b. Produktions-Overlay: uvicorn ohne Access-Log, ohne --reload ---------
+if [ -f "$COMPOSE_PROD" ]; then
+  if grep -qE '^[[:space:]]*command:.*uvicorn' "$COMPOSE_PROD"; then
+    if ! grep -E '^[[:space:]]*command:.*uvicorn' "$COMPOSE_PROD" | grep -q -- '--no-access-log'; then
+      failures+=("$COMPOSE_PROD: uvicorn ohne --no-access-log")
+    fi
+    if grep -E '^[[:space:]]*command:.*uvicorn' "$COMPOSE_PROD" | grep -q -- '--reload'; then
+      failures+=("$COMPOSE_PROD: uvicorn mit --reload (kappt im Betrieb jeden Player-Stream)")
+    fi
+  fi
 fi
 
 # --- 6. Pi-Sidecar ohne Access-Log -------------------------------------------
