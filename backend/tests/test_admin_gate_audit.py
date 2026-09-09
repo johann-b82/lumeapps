@@ -126,6 +126,7 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/newsletter/eintrag-bild/{bild_id}", frozenset({"GET"})),
     # Belegschafts-KPI dashboard read — viewer role.
     ("/api/hr/belegschaft-kpi", frozenset({"GET"})),
+    ("/api/hr/belegschaft-kpi/meta", frozenset({"GET"})),
 }
 
 

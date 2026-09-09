@@ -54,6 +54,7 @@
   "/api/finance/personnel-cost-ratio/history",
   "/api/finance/personnel-cost-ratio/list",
   "/api/hr/belegschaft-kpi",
+  "/api/hr/belegschaft-kpi/meta",
   "/api/hr/birthdays/this-week",
   "/api/hr/einarbeitung/abteilungen",
   "/api/hr/einarbeitung/ansprechpartner",
