@@ -1,0 +1,56 @@
+# Produktions-Overlay. Aufruf:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Die Basisdatei ist auf Entwicklung eingestellt: Vite-Dev-Server, `--reload`,
+# der Quellcode schreibbar ins Bild gemountet, API und Dev-Server mit eigenem
+# Host-Port. Auf dem Server ist jedes dieser vier Dinge ein offener Weg nach
+# innen (Befunde 1 und 2 der Sicherheitsanalyse in
+# acm-plattform/docs/security-findings.md).
+#
+# Vor dem ersten Start das Frontend bauen — sonst hat Caddy nichts auszuliefern:
+#
+#   docker compose run --rm --no-deps frontend npm run build
+#
+# `npm run build` erzeugt beides: die Admin-Oberflaeche nach frontend/dist und
+# das Player-Bundle nach frontend/dist/player. Nach jeder Frontend-Aenderung
+# wiederholen.
+services:
+  api:
+    # Ohne `--reload`: der Reloader beobachtet den Quellbaum, startet den
+    # Prozess bei jeder Dateiaenderung neu und kappt dabei jeden offenen
+    # SSE-Stream — im Betrieb also jeden Bildschirm.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log --log-level warning
+    # Kein Host-Port: die API ist nur ueber Caddy erreichbar.
+    ports: !reset []
+    # Nicht als root. LibreOffice und pdftoppm laufen unter dieser Kennung
+    # nachweislich (mit -env:UserInstallation in /tmp, siehe signage_pptx.py).
+    user: "10001:10001"
+    volumes: !override
+      # Player-Bundle und Directus-Dateien bleiben, beide nur lesend.
+      - ./frontend/dist:/app/frontend/dist:ro
+      - ./directus_uploads:/directus/uploads:ro
+      # Die abgeleiteten PPTX-Folien liegen unter /app/media. In der Basisdatei
+      # blieben sie durch den Quellcode-Mount erhalten; ohne ihn braucht es
+      # diesen eigenen Mount, sonst verschwinden sie bei jedem Neubau.
+      - ./backend/media:/app/media
+    # Kein `- ./backend:/app`: der Quellcode steckt im Bild (COPY . .), ein
+    # schreibbarer Mount waere ein Weg, den laufenden Dienst zu veraendern.
+
+  frontend:
+    # Der Vite-Dev-Server hoert im Betrieb nichts verloren. Das Profil sorgt
+    # dafuer, dass `up` ihn nicht startet; gebaut wird ueber `run --rm`.
+    profiles: ["nur-entwicklung"]
+
+  caddy:
+    volumes: !override
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ./caddy_data:/data
+      - ./caddy_config:/config
+      # Die gebaute Oberflaeche wird direkt von Caddy ausgeliefert.
+      - ./frontend/dist:/srv/www:ro
+    depends_on: !override
+      api:
+        condition: service_healthy
+      directus:
+        condition: service_healthy

@@ -1,0 +1,50 @@
+{
+	# Wie in der Basisdatei: HTTP, kein Zertifikatsmanagement. TLS liegt beim
+	# vorgelagerten Netz bzw. kommt in Phase 5.
+	auto_https off
+	admin off
+}
+
+:80 {
+	# --- /api/* → FastAPI (SSE muss durchkommen) -------------------------------
+	# Unveraendert gegenueber der Entwicklungsfassung: flush_interval -1 und
+	# lange Timeouts, sonst kappt Caddy die Player-Streams.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 24h
+				write_timeout 24h
+				dial_timeout 10s
+			}
+		}
+	}
+
+	# --- /directus/* → Directus (Praefix wird entfernt) ------------------------
+	handle_path /directus/* {
+		reverse_proxy directus:8055
+	}
+
+	# --- /player/* → FastAPI (Kiosk-Bundle) ------------------------------------
+	# Bleibt bei FastAPI: dort haengt der StaticFiles-Mount, und die Pis
+	# erwarten genau diesen Weg.
+	handle /player/* {
+		reverse_proxy api:8000
+	}
+
+	# --- / (alles Uebrige) → gebaute Oberflaeche -------------------------------
+	# Der einzige echte Unterschied zur Entwicklungsfassung: statt eines
+	# Reverse-Proxy auf den Vite-Dev-Server liefert Caddy die gebauten Dateien
+	# selbst aus. try_files faengt die Client-Routen der Single-Page-App ab.
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+		level ERROR
+	}
+}
