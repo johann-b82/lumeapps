@@ -208,6 +208,7 @@ preflight_checks "${@}"
 install_signage_packages
 create_signage_user
 create_signage_directories
+configure_journald_limits
 
 # Runtime path: clone/update repo (build-time path uses pi-gen prerun.sh)
 setup_repo_at_opt_signage

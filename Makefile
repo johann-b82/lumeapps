@@ -9,11 +9,12 @@ help:
 	@echo "  schema-fixture-update  Regenerate directus/fixtures/schema-hash.txt"
 	@echo "                         Run after intentional DDL changes (alembic upgrade head first)"
 	@echo ""
-	@echo "  ci-guards              Run all 4 CI guards locally (requires docker compose up -d)"
+	@echo "  ci-guards              Run all 5 CI guards locally (requires docker compose up -d)"
 	@echo "    Guard A: DDL hash matches fixture"
 	@echo "    Guard B: Directus snapshot diff"
 	@echo "    Guard C: DB_EXCLUDE_TABLES superset"
 	@echo "    Guard D: --workers 1 invariant"
+	@echo "    Guard E: Log-Hygiene (Rotation, Access-Logs, Caddy-Level)"
 	@echo ""
 	@echo "  test-sse               Run SSE-04 integration tests (requires docker compose up -d)"
 	@echo "  test-authz             Run AUTHZ-05 Viewer permission tests (requires docker compose up -d)"
@@ -64,6 +65,7 @@ ci-guards:
 	@bash scripts/ci/check_directus_snapshot_diff.sh
 	@bash scripts/ci/check_db_exclude_tables_superset.sh
 	@bash scripts/ci/check_workers_one_invariant.sh
+	@bash scripts/ci/check_log_hygiene.sh
 
 # ---------------------------------------------------------------------------
 # Test targets

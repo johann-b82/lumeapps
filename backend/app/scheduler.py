@@ -51,8 +51,12 @@ HEARTBEAT_SWEEPER_JOB_ID = "signage_heartbeat_sweeper"  # NEW (v1.16 Phase 43-04
 ATR_SCAN_JOB_ID = "atr_scan"  # NEW (Phase C)
 
 # OQ-5 fixed retention; not admin-configurable in v1.15 (SEN-SCH-06 / SEN-FUTURE-01).
-# Set to 3650 days (~10 years) so sensor history is retained long-term.
+# Readings: 3650 days (~10 years) so sensor history is retained long-term.
 SENSOR_RETENTION_DAYS = 3650
+# Poll log: one row per poll ATTEMPT (success and failure) — pure liveness data
+# for the /status endpoint, ~1,440 rows/sensor/day at the 60 s default. Nothing
+# reads it past a few days; keeping it for years only grows postgres_data.
+SENSOR_POLL_LOG_RETENTION_DAYS = 14
 
 # SGN-SCH-02: pairing sessions older than this cutoff get swept nightly.
 # 24h grace sits comfortably outside the 10-minute TTL a kiosk might still be
@@ -177,27 +181,31 @@ async def _run_scheduled_sensor_poll() -> None:
 
 
 async def _run_sensor_retention_cleanup() -> None:
-    """Daily delete of sensor_readings + sensor_poll_log older than 3650 days (~10 years).
+    """Daily delete of sensor_readings older than 3650 days (~10 years) and
+    sensor_poll_log older than 14 days.
 
     Fixed retention per OQ-5 / SEN-SCH-06. Not admin-configurable in v1.15.
     Runs at 03:00 UTC via CronTrigger (low-traffic window, parallels the
     nightly pg_dump sidecar).
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=SENSOR_RETENTION_DAYS)
+    now = datetime.now(timezone.utc)
+    readings_cutoff = now - timedelta(days=SENSOR_RETENTION_DAYS)
+    poll_log_cutoff = now - timedelta(days=SENSOR_POLL_LOG_RETENTION_DAYS)
     async with AsyncSessionLocal() as session:
         try:
             readings_del = await session.execute(
-                delete(SensorReading).where(SensorReading.recorded_at < cutoff)
+                delete(SensorReading).where(SensorReading.recorded_at < readings_cutoff)
             )
             poll_log_del = await session.execute(
-                delete(SensorPollLog).where(SensorPollLog.attempted_at < cutoff)
+                delete(SensorPollLog).where(SensorPollLog.attempted_at < poll_log_cutoff)
             )
             await session.commit()
             log.info(
-                "sensor_retention_cleanup: deleted readings=%d poll_log=%d cutoff=%s",
+                "sensor_retention_cleanup: deleted readings=%d (cutoff=%s) poll_log=%d (cutoff=%s)",
                 readings_del.rowcount,
+                readings_cutoff.isoformat(),
                 poll_log_del.rowcount,
-                cutoff.isoformat(),
+                poll_log_cutoff.isoformat(),
             )
         except Exception:
             log.exception("sensor_retention_cleanup failed")
@@ -281,11 +289,14 @@ async def _run_signage_heartbeat_sweeper() -> None:
                 timeout=20,
             )
             await session.commit()
-            log.info(
-                "signage_heartbeat_sweeper: flipped devices=%d pruned_events=%d",
-                result.rowcount,
-                prune_result.rowcount,
-            )
+            # Runs every minute — only log when something actually changed,
+            # otherwise this is 1,440 identical lines per day.
+            if result.rowcount or prune_result.rowcount:
+                log.info(
+                    "signage_heartbeat_sweeper: flipped devices=%d pruned_events=%d",
+                    result.rowcount,
+                    prune_result.rowcount,
+                )
         except Exception:
             log.exception("signage_heartbeat_sweeper failed")
             await session.rollback()

@@ -49,9 +49,13 @@
 		reverse_proxy frontend:5173
 	}
 
-	# Basic access log to stdout for `docker compose logs caddy`.
+	# Errors only. The per-request access log (Vite dev = hundreds of module
+	# requests per page load, plus every Pi probe) grew one json.log to ~20 GB
+	# and filled the disk. Successful requests are not logged; 5xx and proxy
+	# errors still are. Guarded by scripts/ci/check_log_hygiene.sh.
 	log {
 		output stdout
 		format console
+		level ERROR
 	}
 }
