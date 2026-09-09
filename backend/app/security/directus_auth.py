@@ -47,8 +47,22 @@ async def get_current_user(
             token,
             settings.DIRECTUS_SECRET,
             algorithms=["HS256"],
+            # Directus 11 setzt `iss: "directus"` in jedem Token — geprüft
+            # gegen 11.17.2, Login-Modus JSON wie Session. Ohne diese Prüfung
+            # galt jedes mit DIRECTUS_SECRET signierte Token, egal wer es
+            # ausgestellt hat.
+            issuer="directus",
+            # Ohne `require` akzeptierte pyjwt ein Token ganz ohne `exp`: es
+            # wäre unbegrenzt gültig gewesen.
+            options={"require": ["exp", "iat"]},
         )
     except jwt.PyJWTError:
+        raise _UNAUTHORIZED
+
+    # Directus stellt mit demselben Schlüssel auch Token für Freigabe-Links,
+    # Einladungen und Passwort-Zurücksetzung aus. Die tragen keine `id`, würden
+    # also unten ohnehin scheitern — hier scheitern sie mit klarer Absicht.
+    if payload.get("share") is not None or payload.get("scope") is not None:
         raise _UNAUTHORIZED
 
     user_id_str = payload.get("id")

@@ -43,3 +43,6 @@ frontend/public/tesseract/
 .superpowers/
 stirling_data/
 openproject_data/
+
+# TLS-Material gehoert nicht ins Repo (Befund 12)
+certs/
