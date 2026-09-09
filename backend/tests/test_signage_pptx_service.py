@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import uuid
+import zipfile
+from pathlib import Path
 from typing import Any
 
 import asyncpg
@@ -25,6 +28,8 @@ import pytest
 import pytest_asyncio
 
 from app.database import AsyncSessionLocal, engine
+
+_FIXTURES = Path(__file__).parent / "fixtures" / "signage"
 
 
 def _pg_dsn() -> str | None:
@@ -211,10 +216,46 @@ async def test_convert_pptx_timeout_sets_failed_timeout(dsn, monkeypatch):
     assert row["conversion_error"] == "timeout"
 
 
-async def _no_directus(*args, **kwargs):
+class TestIsPptx:
+    """A .pptx that isn't a PPTX must never reach soffice.
+
+    soffice converts almost anything — a text file renamed to .pptx becomes a
+    PDF and then a slide on the screens. The check runs before soffice starts.
+    """
+
+    def test_valid_pptx(self):
+        from app.services.signage_pptx import _is_pptx
+
+        assert _is_pptx(_FIXTURES / "tiny-valid.pptx") is True
+
+    def test_plain_text_named_pptx(self):
+        from app.services.signage_pptx import _is_pptx
+
+        assert _is_pptx(_FIXTURES / "corrupt.pptx") is False
+
+    def test_zip_without_presentation_part(self, tmp_path):
+        from app.services.signage_pptx import _is_pptx
+
+        pfad = tmp_path / "fake.pptx"
+        with zipfile.ZipFile(pfad, "w") as archiv:
+            archiv.writestr("hallo.txt", "kein Foliensatz")
+        assert _is_pptx(pfad) is False
+
+    def test_missing_file(self, tmp_path):
+        from app.services.signage_pptx import _is_pptx
+
+        assert _is_pptx(tmp_path / "gibtsnicht.pptx") is False
+
+
+async def _no_directus(tempdir, *args, **kwargs):
     # Signature mirrors the private helper: (tempdir, directus_uuid) -> None.
-    # Tests don't need an actual PPTX on disk because _run_pipeline is mocked.
-    return None
+    # _run_pipeline is mocked, but convert_pptx checks the staged file before
+    # it runs — so the stub has to leave a real PPTX behind, like the download
+    # would.
+    shutil.copy(
+        _FIXTURES / "tiny-valid.pptx",
+        Path(tempdir) / "input.pptx",
+    )
 
 
 # ----------------------------------------------------------------------------
