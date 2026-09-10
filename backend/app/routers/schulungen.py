@@ -63,6 +63,7 @@ from app.services.schulung_import import (
 )
 from app.services import schulungsbericht_import as bericht_import
 from app.parsing.schulungsbericht_parser import SchulungsberichtError
+from app.security.dateien import auslieferung
 
 router = APIRouter(
     prefix="/api/hr/schulungen",
@@ -95,10 +96,6 @@ _UNTERLAGE_TYPEN = {
 def _unterlage_ext(dateiname: str) -> str:
     punkt = dateiname.rfind(".")
     return dateiname[punkt:].lower() if punkt >= 0 else ""
-
-
-def _sicherer_dateiname(name: str) -> str:
-    return name.replace('"', "").replace("\\", "").replace("/", "").strip() or "datei"
 
 
 class NichtZugeordnetRead(BaseModel):
@@ -1521,13 +1518,11 @@ async def unterlage_download(
     if u is None:
         raise HTTPException(status_code=404, detail="Unterlage nicht gefunden.")
     content, content_type = await fetch_directus_asset(u.directus_file_uuid)
+    media_type, kopfzeilen = auslieferung(u.dateiname, u.mime or content_type)
     return Response(
         content=content,
-        media_type=u.mime or content_type,
-        headers={
-            "Content-Disposition": f'inline; filename="{_sicherer_dateiname(u.dateiname)}"',
-            "Cache-Control": "private, max-age=3600",
-        },
+        media_type=media_type,
+        headers={**kopfzeilen, "Cache-Control": "private, max-age=3600"},
     )
 
 
@@ -1825,11 +1820,8 @@ async def schulung_dokument_scan(
         raise HTTPException(status_code=404, detail="Kein Scan hinterlegt.")
     daten = await datei_laden(d.scan_uuid)
     mime, ext = _mime_von_bytes(daten)
-    return Response(
-        content=daten,
-        media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="scan_{d.doc_uid}.{ext}"'},
-    )
+    media_type, kopfzeilen = auslieferung(f"scan_{d.doc_uid}.{ext}", mime)
+    return Response(content=daten, media_type=media_type, headers=kopfzeilen)
 
 
 @router.patch("/dokument/{dok_id}/status")
@@ -1940,11 +1932,8 @@ async def schulung_zertifikat_datei(
         raise HTTPException(status_code=404, detail="Zertifikat nicht gefunden.")
     daten = await datei_laden(z.datei_uuid)
     mime, _ = _mime_von_bytes(daten)
-    return Response(
-        content=daten,
-        media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="{z.dateiname}"'},
-    )
+    media_type, kopfzeilen = auslieferung(z.dateiname, mime, ersatz="zertifikat")
+    return Response(content=daten, media_type=media_type, headers=kopfzeilen)
 
 
 @router.delete("/zertifikat/{zert_id}")

@@ -46,6 +46,7 @@ from app.services.schulungsuebersicht_pdf import (
     dateiname,
     erzeuge_schulungsuebersicht_pdf,
 )
+from app.security.dateien import auslieferung
 
 router = APIRouter(
     prefix="/api/hr/onboarding",
@@ -702,7 +703,7 @@ async def dokument_laden(
     return Response(
         content=inhalt,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{dok.dateiname}"'},
+        headers=auslieferung(dok.dateiname, "application/pdf", inline=False)[1],
     )
 
 

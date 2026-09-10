@@ -248,7 +248,7 @@ One router-level admin gate in `backend/app/routers/signage_admin/__init__.py` (
 
 | Method | Path                                       | Auth   | Notes |
 |--------|--------------------------------------------|--------|-------|
-| GET    | /health                                    | public | DB ping; 503 if unavailable |
+| GET    | /health                                    | public | DB ping; 503 mit nacktem `database unavailable` — der Grund steht im Container-Log, nicht in der Antwort (Befund 14) |
 | GET    | /docs                                      | public | OpenAPI UI (no auth) |
 | GET    | /openapi.json                              | public | OpenAPI schema (no auth) |
 | GET    | /api/auth/forward                          | public | Caddy `forward_auth` target (v1.48). Validates `directus_session_token` cookie locally with PyJWT; on success returns `X-Remote-User: <email>`. Public by design — IS the auth gate for embedded apps. Hidden from the OpenAPI schema. |

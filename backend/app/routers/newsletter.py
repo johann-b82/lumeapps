@@ -44,6 +44,7 @@ from app.models import Newsletter, NewsletterEintrag, NewsletterEintragBild, Per
 from app.models.newsletter import NEWSLETTER_RUBRIKEN, NEWSLETTER_STATUS
 from app.routers.hr_belegschaft import aggregiere_belegschaft
 from app.security.directus_auth import get_current_user, require_admin, require_dashboard_read
+from app.security.dateien import auslieferung
 
 router = APIRouter(
     prefix="/api/newsletter",
@@ -375,14 +376,16 @@ async def bild(eintrag_id: int, db: AsyncSession = Depends(get_async_db_session)
     e = await _hole_eintrag(db, eintrag_id)
     if e.bild_data is None:
         raise HTTPException(status_code=404, detail="Kein Bild.")
-    return Response(content=e.bild_data, media_type=e.bild_mime or "image/png")
+    media_type, kopfzeilen = auslieferung(f"eintrag_{eintrag_id}", e.bild_mime or "image/png")
+    return Response(content=e.bild_data, media_type=media_type, headers=kopfzeilen)
 
 
 @router.get("/eintrag-bild/{bild_id}")
 async def eintrag_bild(bild_id: int, db: AsyncSession = Depends(get_async_db_session)) -> Response:
     """Ein Puzzle-Bild eines Eintrags (inline)."""
     b = await _hole_eintrag_bild(db, bild_id)
-    return Response(content=b.bild_data, media_type=b.bild_mime or "image/png")
+    media_type, kopfzeilen = auslieferung(f"bild_{bild_id}", b.bild_mime or "image/png")
+    return Response(content=b.bild_data, media_type=media_type, headers=kopfzeilen)
 
 
 @router.get("/{ausgabe_id}/cover")

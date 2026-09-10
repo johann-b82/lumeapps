@@ -58,6 +58,7 @@ from app.services.maintenance_files import (
     upload_maintenance_file_to_directus,
 )
 from app.services.maintenance_pdf import generate_maintenance_pdf
+from app.security.dateien import auslieferung
 
 router = APIRouter(
     prefix="/api/maintenance",
@@ -273,13 +274,13 @@ async def download_file(
     if mf is None:
         raise HTTPException(status_code=404, detail="file not found")
     content, content_type = await fetch_directus_asset(mf.directus_file_uuid)
+    media_type, kopfzeilen = auslieferung(
+        mf.filename, mf.mime_type or content_type, ersatz="Wartungsnachweis"
+    )
     return Response(
         content=content,
-        media_type=mf.mime_type or content_type,
-        headers={
-            "Content-Disposition": f'inline; filename="{_safe_filename(mf.filename)}"',
-            "Cache-Control": "private, max-age=3600",
-        },
+        media_type=media_type,
+        headers={**kopfzeilen, "Cache-Control": "private, max-age=3600"},
     )
 
 

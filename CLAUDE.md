@@ -175,6 +175,16 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Conventions
 
+### Auslieferung gespeicherter Nutzerdateien
+
+Bytes, die ein Nutzer hochgeladen hat, verlassen das Haus über
+`app.security.dateien.auslieferung(dateiname, mime)`. Der Helfer entscheidet
+`inline` vs. `attachment`, normalisiert den MIME-Typ und setzt `nosniff` und
+einen bereinigten Dateinamen. Kein Router baut `Content-Disposition` für eine
+gespeicherte Nutzerdatei mehr selbst — sonst läuft eine als `text/html`
+abgelegte Datei wieder im Ursprung der Anwendung. Selbst erzeugte PDFs
+(Berichte, Zeugnisse) dürfen ihre Kopfzeile weiterhin direkt setzen.
+
 ### Auth gate placement
 
 Auth dependencies live at the router (or `APIRouter` sub-package) level. Per-route `Depends(require_admin)` is permitted only when a router mixes viewer-readable and admin-only endpoints, and the module docstring must declare which endpoints are admin-only. See `backend/tests/test_admin_gate_audit.py` for the CI guard.
