@@ -16,7 +16,27 @@
 # das Player-Bundle nach frontend/dist/player. Nach jeder Frontend-Aenderung
 # wiederholen.
 services:
+  migrate:
+    # Wie die api: das Bild ohne Entwicklungswerkzeuge und ohne Testsuite.
+    build:
+      context: ./backend
+      target: produktion
+    # Eigener Bildname: sonst ueberschreiben sich Entwicklungs- und
+    # Produktionsbild gegenseitig, und ein `docker compose build` ohne
+    # Overlay setzt unbemerkt das Entwicklungsbild in den Betrieb.
+    image: lumeapps-migrate-prod
+    # Kein `- ./backend:/app`: die Migrationen stecken im Bild. Damit gilt
+    # auch hier, dass ein Neubau der einzige Weg ist, Code auszutauschen.
+    volumes: !override []
+
   api:
+    # Bild ohne Entwicklungswerkzeuge und ohne Testsuite (Befund 20). Der
+    # letzte Bauabschnitt in backend/Dockerfile heisst `entwicklung` und ist
+    # die Vorgabe; im Betrieb wollen wir den davor.
+    build:
+      context: ./backend
+      target: produktion
+    image: lumeapps-api-prod
     # Ohne `--reload`: der Reloader beobachtet den Quellbaum, startet den
     # Prozess bei jeder Dateiaenderung neu und kappt dabei jeden offenen
     # SSE-Stream — im Betrieb also jeden Bildschirm.

@@ -161,6 +161,18 @@ services:
       # --- Public URL for email/oauth redirects (operator-only for v1.11) ---
       PUBLIC_URL: http://127.0.0.1:8055
 
+      # --- Lebensdauer der Sitzung (Befund 8) ---
+      # In session mode IST das Cookie das Token, und FastAPI prueft es nur
+      # kryptografisch — es fragt Directus nicht, ob der Nutzer noch existiert
+      # oder welche Rolle er inzwischen hat. Mit der Vorgabe von 1 Tag wirkte
+      # eine Sperrung oder ein Rollenwechsel also bis zu 24 Stunden nicht.
+      # 8 Stunden = ein Arbeitstag; die Oberflaeche erneuert die Sitzung
+      # stillschweigend (apiClient.trySilentRefresh), der Nutzer merkt nichts.
+      # Nur diese eine Stellschraube: die Oberflaeche meldet sich im
+      # session mode an, damit ist das Cookie das Token. REFRESH_TOKEN_TTL
+      # betrifft die JSON-Modi, die hier niemand benutzt.
+      SESSION_COOKIE_TTL: 8h
+
       # Phase 64 D-04: CORS env removed entirely. The admin SPA reaches Directus
       # same-origin via Caddy's /directus/* route (prefix stripped), so no
       # cross-origin preflight happens on normal flows. If a direct-to-Directus
