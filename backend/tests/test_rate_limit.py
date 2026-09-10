@@ -92,3 +92,63 @@ async def test_window_resets_after_elapse(client, monkeypatch):
     # Jump past the window — 5 pruned → new call allowed.
     fake_now["t"] += 61.0
     assert (await client.post("/_test/rate-limited")).status_code == 200
+
+
+# --- Befund 6: echte Absender-IP hinter Caddy -------------------------------
+
+
+async def test_hinter_vertrauenswuerdigem_proxy_zaehlt_die_letzte_xff_adresse(app):
+    """Caddy hängt den echten Peer hinten an — genau der bekommt seinen Eimer.
+
+    Ohne das teilten sich alle Clients hinter Caddy ein einziges Fenster: das
+    Limit war faktisch global.
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("172.18.0.5", 5000)),
+        base_url="http://test",
+    ) as c:
+        for _ in range(5):
+            r = await c.post("/_test/rate-limited", headers={"X-Forwarded-For": "10.9.0.1"})
+            assert r.status_code == 200
+        assert (
+            await c.post("/_test/rate-limited", headers={"X-Forwarded-For": "10.9.0.1"})
+        ).status_code == 429
+        # Anderer Absender, gleicher Proxy → eigenes Fenster.
+        assert (
+            await c.post("/_test/rate-limited", headers={"X-Forwarded-For": "10.9.0.2"})
+        ).status_code == 200
+
+
+async def test_selbst_gesetztes_xff_kann_das_fenster_nicht_wechseln(app):
+    """Ein Client, der selbst X-Forwarded-For schickt, hängt hinter Caddy immer
+    noch am Ende der Liste — nur der letzte Eintrag zählt."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("172.18.0.5", 5000)),
+        base_url="http://test",
+    ) as c:
+        for i in range(5):
+            r = await c.post(
+                "/_test/rate-limited",
+                headers={"X-Forwarded-For": f"203.0.113.{i}, 10.9.0.7"},
+            )
+            assert r.status_code == 200
+        r = await c.post(
+            "/_test/rate-limited",
+            headers={"X-Forwarded-For": "203.0.113.99, 10.9.0.7"},
+        )
+        assert r.status_code == 429
+
+
+async def test_ohne_vertrauenswuerdigen_peer_wird_xff_ignoriert(app):
+    """Direkt aus dem Internet angesprochen ist der Header wertlos."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("198.51.100.7", 4000)),
+        base_url="http://test",
+    ) as c:
+        for i in range(5):
+            r = await c.post(
+                "/_test/rate-limited", headers={"X-Forwarded-For": f"10.9.0.{i}"}
+            )
+            assert r.status_code == 200
+        r = await c.post("/_test/rate-limited", headers={"X-Forwarded-For": "10.9.0.99"})
+        assert r.status_code == 429
