@@ -3,6 +3,9 @@
 # Env (from compose): PGHOST, PGUSER, PGPASSWORD, PGDATABASE.
 # BACKUP_DIR is overridable for tests only (compose mounts /backups).
 set -eu
+# Befund 18: die Sicherungen lagen mit 0644 im Verzeichnis — jeder Benutzer
+# auf dem Host las die ganze Datenbank. 077 macht daraus 0600.
+umask 077
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 DATE=$(date +%F)
 OUT="${BACKUP_DIR}/kpi-${DATE}.sql.gz"

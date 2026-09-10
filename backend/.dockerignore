@@ -1,0 +1,12 @@
+# Die Testsuite gehört nicht ins Produktionsbild (Befund 20). In Entwicklung
+# und CI kommt sie über den Quellcode-Mount (`./backend:/app`) ins Bild — dort
+# fehlt sie also nicht.
+tests/
+pytest.ini
+
+# Nichts davon wird im Bild gebraucht.
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+media/slides/

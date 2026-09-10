@@ -465,6 +465,12 @@ jobs:
         run: bash scripts/ci/check_log_hygiene.sh
 
       # -----------------------------------------------------------------------
+      # Step 13b: Guard F — Produktionsbild (Befund 20)
+      # -----------------------------------------------------------------------
+      - name: "Guard F — Produktionsbild"
+        run: bash scripts/ci/check_prod_image.sh
+
+      # -----------------------------------------------------------------------
       # NOTE (v1.26 CI cleanup):
       #
       # The previous "SSE integration tests (500 ms ceiling, SSE-04)" and
