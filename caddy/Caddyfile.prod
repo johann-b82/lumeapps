@@ -6,6 +6,30 @@
 }
 
 :80 {
+	# --- Rumpfgrenze (Befund 10) -----------------------------------------------
+	# 64 MB deckt den groessten echten Weg ab (50 MB Signage-PPTX plus
+	# multipart-Rahmen). Alles darueber wird an der Kante abgewiesen, statt in
+	# pandas/openpyxl im Speicher zu landen.
+	request_body {
+		max_size 64MB
+	}
+
+	# --- Sicherheits-Kopfzeilen (Befund 5) -------------------------------------
+	# Bewusst nur Kopfzeilen, die nichts laden koennen: nosniff, Herkunft und
+	# Einbettung. Eine vollstaendige Content-Security-Policy mit default-src
+	# fehlt noch — die will erst unter dem gebauten Bundle durchgeklickt sein,
+	# sonst bricht sie im Betrieb Bilder oder Skripte weg.
+	# Strict-Transport-Security kommt mit TLS dazu; ueber HTTP waere sie wirkungslos.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		# Nur der eigene Ursprung darf einbetten — der Signage-Player holt seine
+		# /embed/*-Seiten von genau hier.
+		Content-Security-Policy "frame-ancestors 'self'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		-Server
+	}
+
 	# --- /api/* → FastAPI (SSE muss durchkommen) -------------------------------
 	# Unveraendert gegenueber der Entwicklungsfassung: flush_interval -1 und
 	# lange Timeouts, sonst kappt Caddy die Player-Streams.
