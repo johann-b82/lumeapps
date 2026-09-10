@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import jwt
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.config import settings
@@ -29,8 +29,42 @@ _UNAUTHORIZED = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+# Kopfzeile, die die Oberfläche an jede Anfrage hängt (frontend/src/lib/
+# apiClient.ts). Ein HTML-Formular auf einer fremden Seite kann sie nicht
+# setzen, und ein fetch mit eigener Kopfzeile löst eine Vorabanfrage aus,
+# die mangels CORS scheitert. Siehe _pruefe_csrf.
+CSRF_KOPFZEILE = "x-lumeapps-request"
+
+_SICHERE_METHODEN = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+_CSRF = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail=f"missing {CSRF_KOPFZEILE} header",
+)
+
+
+def _pruefe_csrf(request: Request | None) -> None:
+    """Cookie-Anmeldung plus verändernde Methode? Dann Kopfzeile verlangen.
+
+    Befund 9: die Sitzung steckt in einem Cookie, das der Browser bei jeder
+    Anfrage an diesen Ursprung mitschickt — auch bei einer, die eine fremde
+    Seite ausgelöst hat. ``SameSite=Lax`` fängt den geläufigen Fall ab, ist
+    aber eine Einstellung, die Directus setzt, und kein Riegel, den wir
+    selbst in der Hand haben. Diese Kopfzeile ist einer: sie lässt sich
+    ursprungsübergreifend nicht setzen, ohne dass der Browser vorher
+    nachfragt — und diese Nachfrage scheitert, weil hier kein CORS steht.
+
+    Wer sich mit ``Authorization`` anmeldet (Dienste, Pi-Beiwagen, Tests),
+    ist nicht betroffen: dieses Token schickt kein Browser von allein mit.
+    """
+    if request is None or request.method in _SICHERE_METHODEN:
+        return
+    if not request.headers.get(CSRF_KOPFZEILE):
+        raise _CSRF
+
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     directus_session_token: str | None = Cookie(default=None),
 ) -> CurrentUser:
@@ -39,9 +73,12 @@ async def get_current_user(
     # set by Directus 11 in session mode (frontend/src/lib/directusClient.ts
     # uses authentication("session", ...) so the SDK never returns an
     # access_token to the SPA — only the cookie is set).
-    token = credentials.credentials if credentials and credentials.credentials else directus_session_token
+    aus_kopfzeile = bool(credentials and credentials.credentials)
+    token = credentials.credentials if aus_kopfzeile else directus_session_token
     if not token:
         raise _UNAUTHORIZED
+    if not aus_kopfzeile:
+        _pruefe_csrf(request)
     try:
         payload = jwt.decode(
             token,

@@ -83,6 +83,8 @@ interface ErrorBody {
 
 /**
  * Thin fetch wrapper that:
+ *   0. Sends `X-LumeApps-Request: 1` on every call — the backend requires it
+ *      for cookie-authenticated mutations (CSRF).
  *   1. Attaches `Authorization: Bearer <token>` when a token is set.
  *   2. Leaves FormData bodies untouched (no forced Content-Type) so multipart
  *      uploads keep working — see frontend/src/lib/api.ts uploadFile/uploadLogo.
@@ -121,6 +123,11 @@ async function _doRequest<T>(
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+  // Ohne diese Kopfzeile weist das Backend jede verändernde Anfrage ab, die
+  // sich über das Sitzungs-Cookie ausweist. Ein Formular auf einer fremden
+  // Seite kann sie nicht setzen — das ist der Punkt. Siehe
+  // backend/app/security/directus_auth.py::_pruefe_csrf.
+  headers["X-LumeApps-Request"] = "1";
 
   const res = await fetch(path, { ...init, headers });
 
