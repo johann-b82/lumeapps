@@ -28,6 +28,7 @@ from app.services.pdf_logo import lade_logo
 from app.services.einarbeitung_pdf import dateiname, erzeuge_einarbeitung_pdf
 from app.services.einarbeitung_query import zeilen_fuer_abteilungen
 from app.services.verantwortlicher_sync import person_fuer_name, sync_person_nach_name
+from app.security.dateien import auslieferung
 
 router = APIRouter(
     prefix="/api/hr/einarbeitung",
@@ -500,11 +501,8 @@ async def dokument_scan(
         mime, ext = "image/jpeg", "jpg"
     else:
         mime, ext = "application/octet-stream", "bin"
-    return Response(
-        content=daten,
-        media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="scan_{d.doc_uid}.{ext}"'},
-    )
+    media_type, kopfzeilen = auslieferung(f"scan_{d.doc_uid}.{ext}", mime)
+    return Response(content=daten, media_type=media_type, headers=kopfzeilen)
 
 
 @router.patch("/dokument/{dok_id}/status")

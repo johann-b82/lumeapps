@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -41,6 +42,8 @@ from app.routers.hr_weekly import router as hr_weekly_router
 from app.routers.newsletter import router as newsletter_router
 from app.routers.hr_belegschaft import router as hr_belegschaft_router
 from app.scheduler import lifespan
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
 
@@ -142,9 +145,16 @@ if PLAYER_DIST.exists():
 
 @app.get("/health")
 async def health():
+    """Nackte Auskunft: erreicht die Anwendung ihre Datenbank?
+
+    Der Fehlertext bleibt hier — er nannte sonst Host, Port und Benutzer
+    der Datenbank, und /health ist unauthentifiziert (Befund 14). Für die
+    Fehlersuche steht der Grund im Log des Containers.
+    """
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return {"status": "ok"}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"DB unavailable: {exc}") from exc
+        logger.warning("Health-Prüfung fehlgeschlagen: %s", exc)
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
