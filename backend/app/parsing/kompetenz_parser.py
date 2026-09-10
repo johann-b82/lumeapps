@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from openpyxl import load_workbook
+from app.security.limits import pruefe_archivgroesse
 
 #: Erste Spalte mit Personendaten (I).
 ERSTE_PERSONENSPALTE = 9
@@ -167,6 +168,7 @@ def parse_qualifikationsmatrix(data: bytes, dateiname: str) -> ParsedDatei:
     Das Blatt "Qualifikationsdiagramm" enthält nur Formelverweise und wird
     übersprungen.
     """
+    pruefe_archivgroesse(data)
     wb = load_workbook(io.BytesIO(data), data_only=True)
     ergebnis = ParsedDatei(dateiname=dateiname, matrizen=[])
 

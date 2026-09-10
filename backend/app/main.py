@@ -41,8 +41,13 @@ from app.routers.hr_weekly import router as hr_weekly_router
 from app.routers.newsletter import router as newsletter_router
 from app.routers.hr_belegschaft import router as hr_belegschaft_router
 from app.scheduler import lifespan
+from app.security.limits import BodySizeLimitMiddleware
 
 app = FastAPI(title="KPI Dashboard", lifespan=lifespan)
+
+# Deckelt den Anfragerumpf, bevor Starlette ihn puffert. Caddy hat vorne
+# dieselbe Grenze; diese hier greift, wenn jemand die api direkt anspricht.
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.include_router(uploads_admin_router)
 app.include_router(kpis_router)

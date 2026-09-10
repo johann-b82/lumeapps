@@ -21,6 +21,7 @@ from typing import Any
 import openpyxl
 
 from app.services.tippspiel_teams import to_feed_name
+from app.security.limits import pruefe_archivgroesse
 
 WM_YEAR = 2026
 SHEET_NAME = "WM 2026 Tipps"
@@ -57,6 +58,7 @@ def parse_tippspiel_file(
     contents: bytes, filename: str
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Parse the Tipps workbook. Returns ``(rows, errors, departments)``."""
+    pruefe_archivgroesse(contents)
     try:
         wb = openpyxl.load_workbook(
             io.BytesIO(contents), data_only=True, read_only=True

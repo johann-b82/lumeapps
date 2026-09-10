@@ -24,6 +24,7 @@ from datetime import date, datetime
 from io import BytesIO
 
 import openpyxl
+from app.security.limits import pruefe_archivgroesse
 
 #: Turnus-Text → Periode in Monaten. Bewusst konservativ: Spannen
 #: ("alle 3 - 5 Jahre") und "bei Bedarf" ergeben KEINE berechenbare Frist.
@@ -138,6 +139,7 @@ def _mitarbeiter_spalten(ws) -> tuple[dict[int, tuple[str, str | None, str | Non
 def parse_schulungsuebersicht(data: bytes) -> ParseResult:
     """``Schulungsübersicht.xlsx`` einlesen; wirft nicht, sondern sammelt Warnungen."""
     result = ParseResult()
+    pruefe_archivgroesse(data)
     wb = openpyxl.load_workbook(BytesIO(data), data_only=True)
 
     for ws in wb.worksheets:

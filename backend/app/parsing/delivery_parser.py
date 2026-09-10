@@ -28,6 +28,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pandas as pd
+from app.security.limits import pruefe_archivgroesse
 
 REQUIRED_COLUMNS = ("Vorgang Nr.", "Pos", "Menge")
 
@@ -94,6 +95,7 @@ def parse_delivery_file(
     column names (minus ``id`` / ``upload_batch_id``) and is ready for
     the upsert path.
     """
+    pruefe_archivgroesse(contents)
     try:
         df = pd.read_excel(
             io.BytesIO(contents),

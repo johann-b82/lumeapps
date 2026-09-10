@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 from openpyxl import load_workbook
+from app.security.limits import pruefe_archivgroesse
 
 
 @dataclass
@@ -84,6 +85,7 @@ def _to_int(v, default: int = 1) -> int:
 
 
 def parse_workbook(file_bytes: bytes, source_filename: str) -> ParsedWorkbook:
+    pruefe_archivgroesse(file_bytes)
     wb = load_workbook(BytesIO(file_bytes), data_only=True)
     visible = [ws for ws in wb.worksheets if ws.sheet_state == "visible"]
     if len(visible) != 1:
