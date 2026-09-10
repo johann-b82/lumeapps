@@ -1,64 +1,114 @@
-"""CI guard: every /api/* route is admin-gated unless explicitly allowlisted.
+"""CI-Wächter: jede /api/*-Route ist admin-gesichert oder ausdrücklich gelistet.
 
 Generalization of test_sensors_admin_gate.py per Phase B of
 docs/superpowers/specs/2026-04-28-backend-router-compute-crud-cleanup-design.md.
 
-The allowlist is a literal set in this file so additions are reviewed.
+Die Listen stehen als Literale in dieser Datei, damit jede Ergänzung durch
+eine Prüfung geht.
+
+Befund 11 der Sicherheitsanalyse: vorher gab es *eine* Liste, und ein
+Eintrag darin hieß „nicht weiter hinsehen". Eine Route konnte ihre
+Authentifizierung verlieren, ohne dass hier etwas rot wurde. Jetzt sagt
+jeder Eintrag, *welche* Sicherung die Route trägt, und der Wächter prüft
+genau die:
+
+  * ``OEFFENTLICH``  — gar keine Sicherung, mit Begründung je Eintrag
+  * ``GERAET``       — Geräte-JWT (Signage-Player), keine Nutzerrolle
+  * ``ANGEMELDET``   — angemeldeter Nutzer, aber nicht zwingend Admin
+
+Dazu wird je Methode geprüft: eine Route mit ``methods={"GET", "POST"}``
+muss für jede ihrer Methoden gelistet sein. Vorher genügte ein Eintrag für
+eine davon, und die andere fiel still durch.
 """
 from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
 from app.main import app
-from app.security.directus_auth import require_admin, require_atr_fair
+from app.security.device_auth import get_current_device
+from app.security.directus_auth import get_current_user, require_admin, require_atr_fair
 
 
-# (path, frozenset(methods)) — viewer-readable or public endpoints.
-# Adding to this set requires reviewer sign-off; keep it small and justified.
-ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
-    # Viewer-readable settings GETs (mixed-gate router; see settings.py docstring).
+# --- Öffentlich: bewusst ohne jede Sicherung --------------------------------
+# Jeder Eintrag braucht einen Grund, warum hier niemand angemeldet sein kann.
+OEFFENTLICH: set[tuple[str, frozenset[str]]] = {
+    # Logo für Anmeldeseite und Kiosk — vor der Anmeldung sichtbar.
+    ("/api/settings/logo/public", frozenset({"GET"})),
+    # HR-Kiosk-Einbettungen: ein Bildschirm im Flur hat keine Sitzung. Die
+    # Nutzlast trägt nur, was das Board malt — kein Geburtsdatum, kein Alter,
+    # und der Foto-Weg antwortet nur für gerade gezeigte Personen.
+    # Siehe routers/hr_embed.py.
+    ("/api/hr/embed/birthdays/this-week", frozenset({"GET"})),
+    ("/api/hr/embed/joiners/recent", frozenset({"GET"})),
+    ("/api/hr/embed/employees/{employee_id}/photo", frozenset({"GET"})),
+    # WM-Kiosk-Einbettungen, gleiche Begründung. Der football-data.org-
+    # Schlüssel verlässt den Server nicht. Siehe routers/worldcup.py.
+    ("/api/worldcup/embed/today", frozenset({"GET"})),
+    ("/api/worldcup/embed/standings", frozenset({"GET"})),
+    ("/api/worldcup/embed/matches", frozenset({"GET"})),
+    ("/api/worldcup/embed/knockout", frozenset({"GET"})),
+    ("/api/worldcup/embed/scorers", frozenset({"GET"})),
+    ("/api/worldcup/embed/tippspiel", frozenset({"GET"})),
+    # Ein ungekoppelter Bildschirm hat noch kein Token vorzuzeigen.
+    ("/api/signage/pair/request", frozenset({"POST"})),
+    ("/api/signage/pair/status", frozenset({"GET"})),
+    # Caddys `forward_auth`-Ziel — dieser Endpunkt IST die Authentifizierung,
+    # Caddy ruft ihn mit dem eingehenden Cookie. Seit v1.84 ungenutzt.
+    # Siehe app/routers/auth_forward.py.
+    ("/api/auth/forward", frozenset({"GET"})),
+    # Einmalhelfer, der abgelaufene Directus-Cookies verfallen lässt. Genau
+    # dann aufgerufen, wenn niemand angemeldet ist; einzige Wirkung Set-Cookie.
+    ("/api/auth/clear-cookies", frozenset({"GET"})),
+}
+
+# --- Geräte-JWT: Signage-Player, keine Nutzerrolle --------------------------
+GERAET: set[tuple[str, frozenset[str]]] = {
+    ("/api/signage/player/playlist", frozenset({"GET"})),
+    ("/api/signage/player/heartbeat", frozenset({"POST"})),
+    ("/api/signage/player/stream", frozenset({"GET"})),
+    ("/api/signage/player/asset/{media_id}", frozenset({"GET"})),
+    ("/api/signage/player/asset/{media_id}/slide/{idx}", frozenset({"GET"})),
+    ("/api/signage/player/calibration", frozenset({"GET"})),
+}
+
+# --- Angemeldet, aber nicht zwingend Admin ----------------------------------
+# Lesewege der Dashboards. Jeder Eintrag muss `get_current_user` tragen —
+# fällt die Sicherung weg, wird dieser Wächter rot.
+ANGEMELDET: set[tuple[str, frozenset[str]]] = {
+    # Einstellungen: Lesen für Viewer, Schreiben admin-gesichert
+    # (mixed-gate-Router; siehe settings.py-Docstring).
     ("/api/settings", frozenset({"GET"})),
     ("/api/settings/logo", frozenset({"GET"})),
-    # Viewer-readable settings reads (mixed-gate; see settings.py docstring).
     ("/api/settings/personio-options", frozenset({"GET"})),
-    # Public logo endpoint (no auth — public_router).
-    ("/api/settings/logo/public", frozenset({"GET"})),
-    # KPI dashboard reads — viewer role.
+    # KPI-Dashboard.
     ("/api/kpis", frozenset({"GET"})),
     ("/api/kpis/chart", frozenset({"GET"})),
     ("/api/kpis/latest-upload", frozenset({"GET"})),
-    # HR KPI dashboard reads — viewer role.
+    # HR-KPIs.
     ("/api/hr/kpis", frozenset({"GET"})),
     ("/api/hr/kpis/history", frozenset({"GET"})),
     ("/api/data/employees/overtime", frozenset({"GET"})),
-    # HR launcher + Organigramm reads — viewer role (hr_kpis.py router-level
-    # get_current_user gate).
+    # HR-Startseite und Organigramm.
     ("/api/hr/birthdays/this-week", frozenset({"GET"})),
     ("/api/hr/joiners/recent", frozenset({"GET"})),
     ("/api/hr/employees/{employee_id}/photo", frozenset({"GET"})),
     ("/api/hr/org-chart", frozenset({"GET"})),
-    # HR signage embeds — public by design (kiosks without a session),
-    # mirrors the worldcup/embed rationale. See routers/hr_embed.py docstring.
-    ("/api/hr/embed/birthdays/this-week", frozenset({"GET"})),
-    ("/api/hr/embed/joiners/recent", frozenset({"GET"})),
-    ("/api/hr/embed/employees/{employee_id}/photo", frozenset({"GET"})),
-    # v1.41 sales-activity dashboard reads — viewer role.
+    # Vertriebsaktivität (v1.41).
     ("/api/data/sales/contacts-weekly", frozenset({"GET"})),
     ("/api/data/sales/orders-distribution", frozenset({"GET"})),
     ("/api/data/sales/customer-share", frozenset({"GET"})),
-    # Einkauf / OTD dashboard reads — viewer role (v1.60).
+    # Einkauf / OTD (v1.60).
     ("/api/procurement/otd", frozenset({"GET"})),
     ("/api/procurement/otd/history", frozenset({"GET"})),
     ("/api/procurement/otd/list", frozenset({"GET"})),
-    # Bestellung auf Lager — Top-N Ladenhüter (v1.106), viewer-readable KPI.
+    # Ladenhüter (v1.106).
     ("/api/procurement/stock-orders/top", frozenset({"GET"})),
-    # Produktion / Aufträge in Verzug dashboard reads — viewer role (v1.76).
+    # Produktion / Aufträge in Verzug (v1.76).
     ("/api/production/verzug", frozenset({"GET"})),
     ("/api/production/verzug/history", frozenset({"GET"})),
     ("/api/production/verzug/list", frozenset({"GET"})),
     ("/api/production/verzug/overdue", frozenset({"GET"})),
-    # Qualität dashboard reads — viewer role (quality_kpis.py router-level
-    # get_current_user gate; PATCH bookings/{id} stays admin per docstring).
+    # Qualität (PATCH bookings/{id} bleibt Admin, siehe Docstring).
     ("/api/quality/audit-findings", frozenset({"GET"})),
     ("/api/quality/audit-findings/list", frozenset({"GET"})),
     ("/api/quality/audit-findings/history", frozenset({"GET"})),
@@ -69,54 +119,24 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/quality/inspections/history", frozenset({"GET"})),
     ("/api/quality/inspections/list", frozenset({"GET"})),
     ("/api/quality/inspections/bookings", frozenset({"GET"})),
-    # Finanzperspektive dashboard reads — viewer role (finance_kpis.py
-    # router-level get_current_user gate).
+    # Finanzperspektive.
     ("/api/finance/material-cost-ratio", frozenset({"GET"})),
     ("/api/finance/material-cost-ratio/history", frozenset({"GET"})),
     ("/api/finance/material-cost-ratio/list", frozenset({"GET"})),
     ("/api/finance/personnel-cost-ratio", frozenset({"GET"})),
     ("/api/finance/personnel-cost-ratio/history", frozenset({"GET"})),
     ("/api/finance/personnel-cost-ratio/list", frozenset({"GET"})),
-    # Viewer-readable sync freshness (mixed-gate; see sync.py docstring).
+    # Aktualität der Synchronisierung (mixed-gate; siehe sync.py-Docstring).
     ("/api/sync/meta", frozenset({"GET"})),
-    # Signage pair/player endpoints use device-token auth, not user/admin auth.
-    # They are out of scope for the user-role admin gate.
-    ("/api/signage/pair/request", frozenset({"POST"})),
-    ("/api/signage/pair/status", frozenset({"GET"})),
-    ("/api/signage/player/playlist", frozenset({"GET"})),
-    ("/api/signage/player/heartbeat", frozenset({"POST"})),
-    ("/api/signage/player/stream", frozenset({"GET"})),
-    ("/api/signage/player/asset/{media_id}", frozenset({"GET"})),
-    ("/api/signage/player/asset/{media_id}/slide/{idx}", frozenset({"GET"})),
-    ("/api/signage/player/calibration", frozenset({"GET"})),
-    # Caddy `forward_auth` gate for /paperless, /pdf, /op. Intentionally
-    # public — this endpoint IS the authentication, called by Caddy with
-    # the inbound Cookie. See app/routers/auth_forward.py docstring.
-    ("/api/auth/forward", frozenset({"GET"})),
-    # One-shot helper to expire stale Directus cookies during the
-    # cookie-mode -> session-mode migration. Public by design (the user
-    # might be unauth at that moment); only effect is Set-Cookie expiry.
-    ("/api/auth/clear-cookies", frozenset({"GET"})),
-    # KPI-Bewertung & Maßnahmen — viewer-readable reads (dashboards are
-    # viewer-visible); all writes carry require_admin. See routers/kpi_review.py.
+    # KPI-Bewertung und Maßnahmen — Lesen für Dashboard-Leser, Schreiben Admin.
     ("/api/kpi-review/registry", frozenset({"GET"})),
     ("/api/kpi-review/summary", frozenset({"GET"})),
     ("/api/kpi-review/comments", frozenset({"GET"})),
     ("/api/kpi-review/measures", frozenset({"GET"})),
-    # Seiten-Feedback — submitting a report is open to every authenticated
-    # role (Viewer/QS/Admin); listing/screenshot/patch/delete stay admin-only
-    # (require_admin per route). See routers/feedback.py docstring.
+    # Seiten-Feedback abgeben darf jede angemeldete Rolle; Liste, Screenshot,
+    # Änderung und Löschen bleiben Admin. Siehe routers/feedback.py.
     ("/api/feedback", frozenset({"POST"})),
-    # World Cup signage embed — public by design, mirrors the hr_embed
-    # rationale (kiosks without a session). See routers/worldcup.py docstring.
-    ("/api/worldcup/embed/today", frozenset({"GET"})),
-    ("/api/worldcup/embed/standings", frozenset({"GET"})),
-    ("/api/worldcup/embed/matches", frozenset({"GET"})),
-    ("/api/worldcup/embed/knockout", frozenset({"GET"})),
-    ("/api/worldcup/embed/scorers", frozenset({"GET"})),
-    ("/api/worldcup/embed/tippspiel", frozenset({"GET"})),
-    # Newsletter reads — viewer role (mixed-gate router; writes carry
-    # require_admin). See routers/newsletter.py docstring.
+    # Newsletter lesen (mixed-gate-Router; Schreibwege tragen require_admin).
     ("/api/newsletter", frozenset({"GET"})),
     ("/api/newsletter/rubriken", frozenset({"GET"})),
     ("/api/newsletter/{ausgabe_id}", frozenset({"GET"})),
@@ -124,10 +144,13 @@ ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = {
     ("/api/newsletter/{ausgabe_id}/rueckseite", frozenset({"GET"})),
     ("/api/newsletter/eintrag/{eintrag_id}/bild", frozenset({"GET"})),
     ("/api/newsletter/eintrag-bild/{bild_id}", frozenset({"GET"})),
-    # Belegschafts-KPI dashboard read — viewer role.
+    # Belegschafts-KPI.
     ("/api/hr/belegschaft-kpi", frozenset({"GET"})),
     ("/api/hr/belegschaft-kpi/meta", frozenset({"GET"})),
 }
+
+#: Nur für ältere Verweise — die Vereinigung aller drei Listen.
+ADMIN_GATE_ALLOWLIST: set[tuple[str, frozenset[str]]] = OEFFENTLICH | GERAET | ANGEMELDET
 
 
 def _walk_deps(deps):
@@ -138,34 +161,102 @@ def _walk_deps(deps):
     return out
 
 
-def test_every_api_route_is_admin_gated_or_allowlisted():
-    api_routes = [
+def _api_routen() -> list[APIRoute]:
+    routen = [
         r for r in app.routes
         if isinstance(r, APIRoute) and r.path.startswith("/api/")
     ]
-    assert api_routes, "no /api/* routes registered — include_router missing?"
+    assert routen, "keine /api/*-Route registriert — fehlt ein include_router?"
+    return routen
+
+
+def _eintraege(route: APIRoute) -> set[tuple[str, frozenset[str]]]:
+    """Je Methode ein Eintrag — eine Route mit zwei Methoden braucht zwei."""
+    return {(route.path, frozenset({m})) for m in route.methods if m != "HEAD"}
+
+
+def test_every_api_route_is_admin_gated_or_allowlisted():
+    """Jede Methode jeder Route ist admin-gesichert oder ausdrücklich gelistet."""
+    gelistet = {
+        (pfad, frozenset({m}))
+        for pfad, methoden in ADMIN_GATE_ALLOWLIST
+        for m in methoden
+    }
 
     violations: list[str] = []
-    for route in api_routes:
-        methods = frozenset(m for m in route.methods if m != "HEAD")
-        if (route.path, methods) in ADMIN_GATE_ALLOWLIST:
-            continue
-        # Also accept partial-method allowlist (e.g. only GET allowlisted on a multi-method route).
-        if any((route.path, frozenset({m})) in ADMIN_GATE_ALLOWLIST for m in methods):
-            # Fine-grained: only the allowlisted method is exempt; assert require_admin
-            # is present anyway (mixed-gate routers should still depend on require_admin
-            # for their write endpoints, which is what we are checking here for the
-            # remaining methods). We approximate by skipping; per-method dep walking
-            # is unsupported by FastAPI's APIRoute. Document in spec.
-            continue
+    for route in _api_routen():
         all_calls = _walk_deps(route.dependant.dependencies)
-        # ATR + FAIR carry require_atr_fair (Admin + interim QS role) instead of
-        # require_admin; both gates block Viewer, so either satisfies the "no
-        # ungated /api route" invariant.
-        if require_admin not in all_calls and require_atr_fair not in all_calls:
-            violations.append(f"{sorted(methods)} {route.path}")
+        # ATR + FAIR tragen require_atr_fair (Admin + Übergangsrolle QS)
+        # statt require_admin; beide sperren Viewer aus.
+        if require_admin in all_calls or require_atr_fair in all_calls:
+            continue
+        for eintrag in _eintraege(route) - gelistet:
+            violations.append(f"{sorted(eintrag[1])} {eintrag[0]}")
 
     assert not violations, (
-        "the following /api/* routes are not admin-gated and not in "
-        "ADMIN_GATE_ALLOWLIST:\n  - " + "\n  - ".join(violations)
+        "diese /api/*-Methoden sind weder admin-gesichert noch gelistet:\n  - "
+        + "\n  - ".join(sorted(violations))
     )
+
+
+def test_gelistete_routen_tragen_die_sicherung_die_ihre_liste_verspricht():
+    """Befund 11: ein Eintrag sagt, *welche* Sicherung gilt — und die wird geprüft."""
+    nach_eintrag = {}
+    for route in _api_routen():
+        for eintrag in _eintraege(route):
+            nach_eintrag[eintrag] = _walk_deps(route.dependant.dependencies)
+
+    fehler: list[str] = []
+
+    def _je_methode(liste):
+        return {(p, frozenset({m})) for p, methoden in liste for m in methoden}
+
+    for eintrag in _je_methode(OEFFENTLICH):
+        calls = nach_eintrag.get(eintrag)
+        if calls is None:
+            continue
+        for gate in (get_current_user, get_current_device, require_admin, require_atr_fair):
+            if gate in calls:
+                fehler.append(
+                    f"OEFFENTLICH {eintrag[0]} trägt {gate.__name__} — "
+                    "Eintrag in die passende Liste verschieben"
+                )
+
+    for eintrag in _je_methode(GERAET):
+        calls = nach_eintrag.get(eintrag)
+        if calls is None:
+            continue
+        if get_current_device not in calls:
+            fehler.append(f"GERAET {eintrag[0]} ohne get_current_device")
+
+    for eintrag in _je_methode(ANGEMELDET):
+        calls = nach_eintrag.get(eintrag)
+        if calls is None:
+            continue
+        if not any(g in calls for g in (get_current_user, require_admin, require_atr_fair)):
+            fehler.append(f"ANGEMELDET {eintrag[0]} ohne get_current_user")
+
+    assert not fehler, "\n  - " + "\n  - ".join(sorted(fehler))
+
+
+def test_keine_liste_enthaelt_eine_verschwundene_route():
+    """Ein Eintrag ohne Route ist toter Ballast — und verdeckt beim nächsten
+    gleichnamigen Pfad die Prüfung."""
+    vorhanden = set()
+    for route in _api_routen():
+        vorhanden |= _eintraege(route)
+
+    verwaist = sorted(
+        f"{sorted(m)} {p}"
+        for p, methoden in ADMIN_GATE_ALLOWLIST
+        for m in [methoden]
+        if not {(p, frozenset({x})) for x in methoden} & vorhanden
+    )
+    assert not verwaist, "gelistet, aber nicht registriert:\n  - " + "\n  - ".join(verwaist)
+
+
+def test_die_listen_ueberschneiden_sich_nicht():
+    """Eine Route gehört in genau eine Klasse."""
+    assert not (OEFFENTLICH & GERAET)
+    assert not (OEFFENTLICH & ANGEMELDET)
+    assert not (GERAET & ANGEMELDET)

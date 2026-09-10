@@ -58,9 +58,22 @@ def smb_credentials_from_settings(row) -> SmbConfig | None:
 
 
 def _unc(host: str, share: str, *parts: str) -> str:
+    """UNC-Pfad zusammensetzen — und dabei nicht aus der Freigabe herausfallen.
+
+    Befund 17: die Bestandteile kommen teils aus der Einstellungsmaske
+    (``input_path``, ``output_path``), teils sind es Dateinamen vom
+    Dateiserver selbst. Ein ``..`` darin führte aus der Freigabe heraus;
+    der Schutz lag allein bei den Aufrufern. Jetzt lehnt der Erbauer ab —
+    das ist die Stelle, die jeder Aufrufer passiert.
+    """
     segs: list[str] = []
     for p in parts:
-        segs.extend(s for s in p.replace("/", "\\").split("\\") if s)
+        for s in p.replace("/", "\\").split("\\"):
+            if not s or s == ".":
+                continue
+            if s == "..":
+                raise AtrFileserverError(f"unzulässiger Pfadbestandteil: {p!r}")
+            segs.append(s)
     tail = "\\".join(segs)
     return rf"\\{host}\{share}" + (("\\" + tail) if tail else "")
 

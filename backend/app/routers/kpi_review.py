@@ -48,13 +48,20 @@ from app.schemas import (
     KpiRegistryItem,
     KpiSummaryItem,
 )
-from app.security.directus_auth import get_current_user, require_admin
+from app.security.directus_auth import (
+    get_current_user,
+    require_admin,
+    require_dashboard_read,
+)
 from app.services.kpi_registry import KPI_REGISTRY
 
 router = APIRouter(
     prefix="/api/kpi-review",
     tags=["kpi-review"],
-    dependencies=[Depends(get_current_user)],
+    # Befund 21: vorher genügte "irgendwie angemeldet". Damit las auch die
+    # modulbeschränkte QS-Rolle (FAIR + ATR) die Bewertungen und Maßnahmen
+    # der Dashboards, die sie selbst nicht sehen darf.
+    dependencies=[Depends(require_dashboard_read)],
 )
 
 _OPEN_STATES = ("open", "in_progress")

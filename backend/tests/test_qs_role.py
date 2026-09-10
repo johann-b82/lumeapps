@@ -32,6 +32,13 @@ async def test_qs_allowed_on_fair_and_atr(client, path):
 # --- QS is blocked on the viewer dashboards (require_dashboard_read) ---
 QS_BLOCKED_DASHBOARDS = [
     "/api/kpis",
+    # Befund 21: die Bewertungen und Maßnahmen zu genau diesen Dashboards
+    # standen der QS-Rolle offen, weil der Router nur "irgendwie angemeldet"
+    # verlangte.
+    "/api/kpi-review/registry",
+    "/api/kpi-review/summary",
+    "/api/kpi-review/comments",
+    "/api/kpi-review/measures",
     "/api/hr/kpis",
     "/api/hr/org-chart",
     "/api/finance/material-cost-ratio",
@@ -80,6 +87,13 @@ async def test_viewer_still_blocked_on_atr_fair(client):
 async def test_viewer_still_allowed_on_dashboards(client):
     r = await client.get("/api/kpis", headers=_auth(VIEWER_UUID))
     assert r.status_code != 403, "Viewer must still read the KPI dashboard"
+
+
+async def test_viewer_still_allowed_on_kpi_review(client):
+    """Gegenprobe zu Befund 21: der Viewer liest die Bewertungen weiter."""
+    for path in ("/api/kpi-review/registry", "/api/kpi-review/summary"):
+        r = await client.get(path, headers=_auth(VIEWER_UUID))
+        assert r.status_code != 403, f"Viewer muss {path} weiter lesen dürfen"
 
 
 async def test_admin_allowed_on_atr_fair_and_dashboards(client):
