@@ -14,7 +14,7 @@ import { Cake } from "lucide-react";
 import {
   fetchBirthdaysThisWeek,
   fetchBirthdaysThisWeekPublic,
-  type BirthdayEntry,
+  type EmbedBirthdayEntry,
 } from "@/lib/api";
 import { hrKpiKeys } from "@/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
@@ -39,12 +39,12 @@ const WEEKDAY_KEYS = [
   "common.weekday.sunday",
 ] as const;
 
-function displayName(e: BirthdayEntry): string {
+function displayName(e: EmbedBirthdayEntry): string {
   const parts = [e.first_name, e.last_name].filter((p): p is string => !!p);
   return parts.length ? parts.join(" ") : `#${e.employee_id}`;
 }
 
-function initials(e: BirthdayEntry): string {
+function initials(e: EmbedBirthdayEntry): string {
   const f = (e.first_name ?? "").trim()[0] ?? "";
   const l = (e.last_name ?? "").trim()[0] ?? "";
   const combined = (f + l).toUpperCase();
@@ -55,7 +55,7 @@ function initials(e: BirthdayEntry): string {
  *  Uses a state flag rather than direct DOM manipulation so React can swap
  *  cleanly when the <img> 404s (Personio sometimes drops a photo between
  *  list-time and view-time). */
-function Avatar({ entry, embed }: { entry: BirthdayEntry; embed: boolean }) {
+function Avatar({ entry, embed }: { entry: EmbedBirthdayEntry; embed: boolean }) {
   const [failed, setFailed] = useState(false);
   const showImage = entry.has_photo && !failed;
   const photoUrl = embed

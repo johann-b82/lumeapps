@@ -558,13 +558,17 @@ export async function fetchBirthdaysThisWeek(): Promise<BirthdayEntry[]> {
   return apiClient<BirthdayEntry[]>("/api/hr/birthdays/this-week");
 }
 
-// Unauthenticated mirror for the /embed/birthdays signage view. Same shape as
-// the auth'd endpoint but skips apiClient's 401-retry/silent-refresh dance,
-// which we don't want firing on a kiosk that never had a Directus session.
-export async function fetchBirthdaysThisWeekPublic(): Promise<BirthdayEntry[]> {
+// Unauthenticated mirror for the /embed/birthdays signage view. Narrower shape
+// than the auth'd endpoint: the kiosk payload carries no date of birth and no
+// age (see backend/app/routers/hr_embed.py). Also skips apiClient's 401-retry/
+// silent-refresh dance, which we don't want firing on a kiosk that never had a
+// Directus session.
+export type EmbedBirthdayEntry = Omit<BirthdayEntry, "birthday" | "age_turning">;
+
+export async function fetchBirthdaysThisWeekPublic(): Promise<EmbedBirthdayEntry[]> {
   const r = await fetch("/api/hr/embed/birthdays/this-week", { credentials: "omit" });
   if (!r.ok) throw new Error(`birthdays embed fetch failed: ${r.status}`);
-  return (await r.json()) as BirthdayEntry[];
+  return (await r.json()) as EmbedBirthdayEntry[];
 }
 
 // v1.51 — Joiners of the last 2 weeks (active employees only).
