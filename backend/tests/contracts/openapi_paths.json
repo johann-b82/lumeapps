@@ -64,6 +64,7 @@
   "/api/hr/einarbeitung/dokument/{dok_id}/scan",
   "/api/hr/einarbeitung/dokument/{dok_id}/status",
   "/api/hr/einarbeitung/dokumente",
+  "/api/hr/einarbeitung/freigabe/pdf",
   "/api/hr/einarbeitung/katalog",
   "/api/hr/einarbeitung/katalog/{katalog_id}",
   "/api/hr/einarbeitung/pflicht",

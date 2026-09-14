@@ -30,6 +30,7 @@ import {
   fetchEinarbeitungPflicht,
   fetchVorgaenge,
   legeKatalogAn,
+  oeffneFreigabeDokument,
   setzeEinarbeitungPflicht,
   vorgangAnlegen,
   type EinarbeitungKatalog,
@@ -517,9 +518,21 @@ function EinarbeitungKatalogPanel() {
         offenStart={false}
       >
         <div className="space-y-4 px-4 py-3">
-          <p className="text-xs text-muted-foreground">
-            {t("onboarding.einarbeitung.katalogHinweis")}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {t("onboarding.einarbeitung.katalogHinweis")}
+            </p>
+            <button
+              type="button"
+              onClick={() => oeffneFreigabeDokument().catch((e: Error) => toast.error(e.message))}
+              className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-xs
+                         hover:bg-muted focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-ring"
+            >
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("onboarding.einarbeitung.freigabe")}
+            </button>
+          </div>
 
           <div className="flex flex-wrap items-end gap-2">
             <input

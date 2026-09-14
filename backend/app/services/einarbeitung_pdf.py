@@ -45,13 +45,10 @@ REV_ERSTELLER = "M. Brose (QM/CMM)"
 #: Dauer der Einarbeitung ab Tätigkeitsbeginn (für das vorausgefüllte "bis:").
 EINARBEITUNG_DAUER = timedelta(days=28)  # 4 Wochen
 
-#: Freigabe-Fußzeile am Formblatt (Platzhalter, wird je Ausdruck ausgefüllt).
-FORM_ROLLEN = [
-    ("Erstellt durch:", "[Name] (QM/CMM)"),
-    ("Geprüft durch:", "[Name] (TBL)"),
-    ("Freigegeben durch:", "[Name] (QM/CMM)"),
-]
-#: Freigabe-Fußzeile auf dem eigenständigen Freigabe-Dokument (mit Klarnamen).
+#: Datum der Freigabe dieser Revision (fest, wandert nicht mit dem Ausdruck).
+FREIGABE_DATUM = "14.09.2026"
+
+#: Freigabe-Fußzeile — am Formblatt und auf dem Freigabe-Dokument (Rev. C freigegeben).
 FREIGABE_ROLLEN = [
     ("Erstellt durch:", "M. Brose (QM/CMM)"),
     ("Geprüft durch:", "F. Gomes (TBL)"),
@@ -467,14 +464,14 @@ def _schulungsbedarf(ws, r: int, felder: list | None = None) -> int:
 def _freigabe_fuss(ws, r: int, rollen: list[tuple[str, str]], mit_unterschrift: bool) -> int:
     """Freigabe-Fußzeile (Erstellt/Geprüft/Freigegeben) als drei Zellen.
 
-    ``mit_unterschrift`` ergänzt je Zelle die Felder ``Datum:`` und
+    ``mit_unterschrift`` ergänzt je Zelle ``Datum:`` (mit dem Freigabedatum) und
     ``Unterschrift:`` (für das eigenständige Freigabe-Dokument).
     """
     zeilen_je_spalte = []
     for rolle, name in rollen:
         lines = [(rolle, True), (name, False)]
         if mit_unterschrift:
-            lines += [("Datum:", False), ("Unterschrift:", False)]
+            lines += [(f"Datum: {FREIGABE_DATUM}", False), ("Unterschrift:", False)]
         zeilen_je_spalte.append(lines)
 
     n = len(zeilen_je_spalte[0])
@@ -623,7 +620,7 @@ def fuelle_blatt(
     r = _schulungsbedarf(ws, r, felder)
     r += 1
     r = _fuss_ans_seitenende(ws, r, _freigabe_hoehe(mit_unterschrift=False))
-    r = _freigabe_fuss(ws, r, FORM_ROLLEN, mit_unterschrift=False)
+    r = _freigabe_fuss(ws, r, FREIGABE_ROLLEN, mit_unterschrift=False)
 
     fuss_letzte = r - 1  # letzte Zeile der Freigabe-Fußzeile (für die untere Marke)
     if doc_uid:
