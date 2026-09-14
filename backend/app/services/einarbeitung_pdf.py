@@ -30,10 +30,10 @@ from app.services.pdf_logo import LogoBild, bild_einsetzen
 FORMBLATT = "Einarbeitungsplan"
 
 #: Kopfzeilentabelle (ACM-Standard). Bei einer neuen Revision hier anpassen.
-KOPF_FBL = "Fbl. 28 Einarbeitungsplan Rev. C vom 14.08.2026"
+KOPF_FBL = "Fbl. 28 Einarbeitungsplan Rev. C vom 14.09.2026"
 KOPF_TITEL = "Einarbeitungsplan"
 REV_INDEX = "C"
-REV_STAND = "14.08.2026"
+REV_STAND = "14.09.2026"
 
 #: Änderungsbeschreibung der aktuellen Revision (Revisionshistorie im Freigabe-Dok.).
 REV_BESCHREIBUNG = (
