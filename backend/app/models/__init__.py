@@ -125,6 +125,17 @@ from app.models.newsletter import (  # noqa: F401
     NewsletterEintragBild,
 )
 
+# Produktions-Priorisierung (v1.126)
+from app.models.produktion_prio import (  # noqa: F401
+    PrioArtikel,
+    PrioAuftragPosition,
+    PrioImport,
+    PrioListe,
+    PrioListeEintrag,
+    PrioManuell,
+    PrioPlanPosition,
+)
+
 __all__ = [
     "Base",
     # Legacy
@@ -158,6 +169,9 @@ __all__ = [
     "FairProject", "FairBalloon",
     # Maschinen-Wartung
     "Machine", "MaintenanceTask", "MaintenanceFile",
+    # Produktions-Priorisierung
+    "PrioArtikel", "PrioAuftragPosition", "PrioImport", "PrioListe", "PrioListeEintrag",
+    "PrioManuell", "PrioPlanPosition",
     # Audit-Modul
     "AuditNormReference", "AuditPhaseTemplate", "AuditPhaseTemplateStep",
     "Audit", "AuditNormLink", "AuditCategoryLink", "AuditPhase", "AuditTrailEntry",

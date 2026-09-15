@@ -102,6 +102,13 @@ export const BREADCRUMB_ROUTES: ReadonlyArray<{
     ],
   },
   {
+    pattern: "/production/prio",
+    trail: [
+      { labelKey: "launcher.section.production", href: "/production/home" },
+      { labelKey: "prio.tile", href: "/production/prio" },
+    ],
+  },
+  {
     pattern: "/production/home",
     trail: [{ labelKey: "launcher.section.production", href: "/production/home" }],
   },

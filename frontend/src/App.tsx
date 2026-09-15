@@ -29,6 +29,7 @@ import { ProductionPage } from "./pages/ProductionPage";
 import { ProductionHomePage } from "./pages/ProductionHomePage";
 import { MaintenanceMachinesPage } from "./pages/MaintenanceMachinesPage";
 import { MaintenanceMachineDetailPage } from "./pages/MaintenanceMachineDetailPage";
+import { ProductionPrioPage } from "./pages/ProductionPrioPage";
 import { FinancePage } from "./pages/FinancePage";
 import { SensorsPage } from "./pages/SensorsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -177,6 +178,9 @@ function AppShell() {
           </Route>
           <Route path="/production/maintenance">
             <AdminOnly><MaintenanceMachinesPage /></AdminOnly>
+          </Route>
+          <Route path="/production/prio">
+            <AdminOnly><ProductionPrioPage /></AdminOnly>
           </Route>
           <Route path="/production/home">
             <AdminOnly><ProductionHomePage /></AdminOnly>

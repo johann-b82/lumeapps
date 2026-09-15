@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { Wrench } from "lucide-react";
+import { ListOrdered, Wrench } from "lucide-react";
 
 /**
  * Produktion hub (/production/home). Landing page reached from the "Produktion"
@@ -38,6 +38,25 @@ export function ProductionHomePage() {
           </button>
           <span className="text-xs text-muted-foreground text-center">
             {t("maintenance.tile")}
+          </span>
+        </div>
+        {/* Priorisierung tile → /production/prio */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocation("/production/prio")}
+            aria-label={t("prio.tile")}
+            className="w-[120px] h-[120px] rounded-2xl
+                       bg-gradient-to-br from-amber-500 to-orange-700
+                       shadow-md hover:shadow-xl hover:scale-[1.03]
+                       flex items-center justify-center p-4
+                       cursor-pointer transition-all
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ListOrdered className="w-12 h-12 text-white drop-shadow" aria-hidden="true" />
+          </button>
+          <span className="text-xs text-muted-foreground text-center">
+            {t("prio.tile")}
           </span>
         </div>
       </div>
