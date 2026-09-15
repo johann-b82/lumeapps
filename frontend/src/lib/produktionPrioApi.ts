@@ -37,25 +37,32 @@ export interface ImportErgebnis {
   warnungen_anzahl: number;
 }
 
-export interface GesamtZeile {
-  rang: number;
-  schluessel: string;
-  vorgang_nr: string;
+export interface PositionZeile {
   pos: number;
   upos: number;
   artikelnr: string | null;
   bezeichnung: string | null;
   menge: string | null;
   einheit: string | null;
-  kunde: string | null;
   lieferdatum: string | null;
   termin: string | null;
   liste: string | null;
   listen_rang: number | null;
   kommentar: string | null;
   gesperrt: boolean;
-  manuell: boolean;
   ohne_plan: boolean;
+}
+
+/** Ein BA der Gesamtliste; seine Positionen (FAs) laufen mit. */
+export interface BaZeile {
+  rang: number;
+  vorgang_nr: string;
+  kunde: string | null;
+  termin: string | null;
+  listen_rang: number | null;
+  gesperrt: boolean;
+  manuell: boolean;
+  positionen: PositionZeile[];
 }
 
 export interface Bereich {
@@ -100,7 +107,8 @@ export const prioApi = {
   importQuelle: (quelle: ImportQuelle, file: File) => upload(`/import/${quelle}`, file),
   importListe: (file: File) => upload("/import/liste", file),
   deleteListe: (id: number) => apiClient<void>(`${BASE}/listen/${id}`, { method: "DELETE" }),
-  gesamt: () => apiClient<GesamtZeile[]>(`${BASE}/gesamt`),
+  gesamt: () => apiClient<BaZeile[]>(`${BASE}/gesamt`),
+  /** BA-Nummern in der gewünschten Reihenfolge. */
   saveManuell: (reihenfolge: string[]) =>
     apiClient<void>(`${BASE}/manuell`, { method: "PUT", body: JSON.stringify({ reihenfolge }) }),
   resetManuell: () => apiClient<void>(`${BASE}/manuell`, { method: "DELETE" }),

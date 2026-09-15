@@ -31,14 +31,20 @@ aufgelöste Form desselben Ressourcenplans (Zeiten zu 98–99 % identisch).
 
 **Gesamtliste** (`services/produktion_prio.py`)
 
-1. Grundreihenfolge nach **Termin**, danach **Listenrang**, danach **BA/Pos/UPos**.
-   Als Termin gilt der Termin der gewinnenden Prioliste (Diehl: „ACM Liefertermin“),
-   sonst das Lieferdatum aus AswKpf. Positionen ohne Rang sortieren sich ebenfalls nach Termin.
-2. Steht eine Position in mehreren Listen, gewinnt die Liste mit dem **jüngsten Stand**.
-3. Die **manuelle Reihenfolge** (Drag & Drop oder Platz eintragen, dann „Reihenfolge speichern“)
-   geht vor. Manuell sortierte Positionen behalten untereinander ihre Reihenfolge und belegen
-   die Plätze, die sie automatisch hätten. Neue Positionen aus einem späteren Import landen
-   an ihrem automatischen Platz. „Manuelle Sortierung zurücksetzen“ verwirft alles.
+Priorisiert wird auf **BA-Ebene** (BA = Auftrag/Vorgang aus AswKpf). Die Positionen des BA,
+also die FAs der Fertigartikel samt ihrer Halbzeug-FAs, laufen mit.
+
+1. Je Position gilt als Termin der Termin der gewinnenden Prioliste (Diehl: „ACM Liefertermin“),
+   sonst das Lieferdatum aus AswKpf, dazu der Listenrang. Steht eine Position in mehreren
+   Listen, gewinnt die Liste mit dem **jüngsten Stand**.
+2. Ein BA sortiert nach seinem **frühesten Positionstermin**, dann nach dem **besten
+   (kleinsten) Listenrang** seiner Positionen, dann nach BA-Nummer. BAs ohne Rang sortieren sich
+   ebenfalls nach Termin.
+3. Die **manuelle BA-Reihenfolge** (Drag & Drop oder Platz eintragen, dann „Reihenfolge speichern“)
+   geht vor. Manuell sortierte BAs behalten untereinander ihre Reihenfolge und belegen die Plätze,
+   die sie automatisch hätten. Neue BAs aus einem späteren Import landen an ihrem automatischen
+   Platz. „Manuelle Sortierung zurücksetzen“ verwirft alles.
+4. Innerhalb eines BA: Termin, Rang, Pos, UPos.
 
 Positionen mit `Sperre manuell = J` bleiben in der Liste und sind als „gesperrt“ markiert.
 „kein Ressourcenplan“ markiert Artikel ohne Eintrag im Ressourcenplan.
@@ -50,7 +56,8 @@ Positionen mit `Sperre manuell = J` bleiben in der Liste und sind als „gesperr
   15 Ebenen begrenzt, Selbst- und Kreisbezüge werden übersprungen.
 - Menge = Positionsmenge × Stücklistenmengen entlang des Pfads.
 - Minuten = Rüstzeit + Operativzeit × Menge. Annahme: Minuten, Operativzeit je Stück.
-- Jede Tätigkeit erbt Platz (Prio), Termin, Kunde, Sperre und Kommentar ihrer BA-Position.
+- Jede Tätigkeit erbt den Platz ihres BA (Prio) sowie Termin, Sperre und Kommentar ihrer
+  Position. Die Liste ist nach BA-Platz, Position und Arbeitsgangfolge sortiert.
   Halbzeuge haben keinen eigenen Vorlauf.
 
 **Bereiche** (Zuordnung über die Ressourcennummer, `BEREICHE` im Service)

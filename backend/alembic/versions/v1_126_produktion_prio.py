@@ -83,8 +83,6 @@ def upgrade() -> None:
     op.create_table(
         "prio_manuell",
         sa.Column("vorgang_nr", sa.String(length=32), primary_key=True),
-        sa.Column("pos", sa.Integer(), primary_key=True),
-        sa.Column("upos", sa.Integer(), primary_key=True),
         sa.Column("reihenfolge", sa.Integer(), nullable=False),
     )
     op.create_table(

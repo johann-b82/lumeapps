@@ -19,7 +19,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Download, GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,8 +28,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import {
   exportBereich,
   prioApi,
+  type BaZeile,
   type BereichsZeile,
-  type GesamtZeile,
   type ImportQuelle,
 } from "@/lib/produktionPrioApi";
 
@@ -93,23 +93,34 @@ function GesamtTab() {
   const [suche, setSuche] = useState("");
   const [sichtbar, setSichtbar] = useState(SEITE);
 
-  const serverReihenfolge = useMemo(() => (data ?? []).map((z) => z.schluessel), [data]);
+  const [offen, setOffen] = useState<Set<string>>(new Set());
+
+  // Sortiert werden BAs; ihre Positionen (FAs) laufen mit.
+  const serverReihenfolge = useMemo(() => (data ?? []).map((b) => b.vorgang_nr), [data]);
   const reihenfolge = entwurf ?? serverReihenfolge;
   const dirty = entwurf != null;
 
-  const zeilen = useMemo(() => new Map((data ?? []).map((z) => [z.schluessel, z])), [data]);
+  const zeilen = useMemo(() => new Map((data ?? []).map((b) => [b.vorgang_nr, b])), [data]);
 
   const q = suche.trim().toLowerCase();
   const gefiltert = useMemo(
     () =>
       reihenfolge.filter((k) => {
         if (!q) return true;
-        const z = zeilen.get(k);
-        return [z?.vorgang_nr, z?.artikelnr, z?.bezeichnung, z?.kunde, z?.liste]
+        const b = zeilen.get(k);
+        return [b?.vorgang_nr, b?.kunde, ...(b?.positionen ?? []).flatMap((p) => [p.artikelnr, p.bezeichnung, p.liste])]
           .some((v) => (v ?? "").toLowerCase().includes(q));
       }),
     [reihenfolge, zeilen, q],
   );
+
+  const umschalten = (k: string) =>
+    setOffen((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
   const anzeige = gefiltert.slice(0, sichtbar);
   const platz = useMemo(() => new Map(reihenfolge.map((k, i) => [k, i + 1])), [reihenfolge]);
 
@@ -179,10 +190,8 @@ function GesamtTab() {
               <th className="px-2 py-2 w-8" />
               <th className="px-2 py-2 w-20">{t("prio.col.rang")}</th>
               <th className="px-2 py-2">{t("prio.col.ba")}</th>
-              <th className="px-2 py-2">{t("prio.col.artikel")}</th>
-              <th className="px-2 py-2">{t("prio.col.bezeichnung")}</th>
-              <th className="px-2 py-2 text-right">{t("prio.col.menge")}</th>
               <th className="px-2 py-2">{t("prio.col.kunde")}</th>
+              <th className="px-2 py-2">{t("prio.col.positionen")}</th>
               <th className="px-2 py-2">{t("prio.col.termin")}</th>
               <th className="px-2 py-2">{t("prio.col.liste")}</th>
               <th className="px-2 py-2">{t("prio.col.hinweis")}</th>
@@ -190,20 +199,20 @@ function GesamtTab() {
           </thead>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={anzeige} strategy={verticalListSortingStrategy}>
-              <tbody>
-                {anzeige.map((k) => {
-                  const z = zeilen.get(k);
-                  return z ? (
-                    <GesamtRow
-                      key={k}
-                      z={z}
-                      platz={platz.get(k) ?? 0}
-                      max={reihenfolge.length}
-                      onPlatz={(n) => verschiebe(reihenfolge.indexOf(k), n - 1)}
-                    />
-                  ) : null;
-                })}
-              </tbody>
+              {anzeige.map((k) => {
+                const b = zeilen.get(k);
+                return b ? (
+                  <BaGruppe
+                    key={k}
+                    b={b}
+                    platz={platz.get(k) ?? 0}
+                    max={reihenfolge.length}
+                    offen={offen.has(k)}
+                    onToggle={() => umschalten(k)}
+                    onPlatz={(n) => verschiebe(reihenfolge.indexOf(k), n - 1)}
+                  />
+                ) : null;
+              })}
             </SortableContext>
           </DndContext>
         </table>
@@ -217,15 +226,18 @@ function GesamtTab() {
   );
 }
 
-function GesamtRow({ z, platz, max, onPlatz }: {
-  z: GesamtZeile;
+/** Ein BA als eigene, ziehbare <tbody>-Gruppe — die Positionen wandern mit. */
+function BaGruppe({ b, platz, max, offen, onToggle, onPlatz }: {
+  b: BaZeile;
   platz: number;
   max: number;
+  offen: boolean;
+  onToggle: () => void;
   onPlatz: (n: number) => void;
 }) {
   const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: z.schluessel });
+    useSortable({ id: b.vorgang_nr });
   // Nur während der Eingabe gesetzt; sonst zeigt das Feld den aktuellen Platz.
   const [eingabe, setEingabe] = useState<string | null>(null);
 
@@ -235,12 +247,15 @@ function GesamtRow({ z, platz, max, onPlatz }: {
     setEingabe(null);
   };
 
+  const hatKommentar = b.positionen.some((p) => p.kommentar);
+  const ohnePlan = b.positionen.filter((p) => p.ohne_plan).length;
+
   return (
-    <tr
+    <tbody
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}
-      className={`border-t hover:bg-muted/30 ${z.gesperrt ? "bg-red-50 dark:bg-red-950/20" : ""}`}
     >
+    <tr className={`border-t hover:bg-muted/30 ${b.gesperrt ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
       <td className="px-2 py-1">
         <button type="button" className="cursor-grab text-muted-foreground" aria-label="drag" {...attributes} {...listeners}>
           <GripVertical className="w-4 h-4" />
@@ -255,24 +270,46 @@ function GesamtRow({ z, platz, max, onPlatz }: {
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         />
       </td>
-      <td className="px-2 py-1 font-mono text-xs whitespace-nowrap">
-        {z.vorgang_nr} / {z.pos}{z.upos ? `.${z.upos}` : ""}
+      <td className="px-2 py-1 font-mono text-xs font-semibold whitespace-nowrap">{b.vorgang_nr}</td>
+      <td className="px-2 py-1">{b.kunde ?? "—"}</td>
+      <td className="px-2 py-1">
+        <button type="button" onClick={onToggle} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+          {offen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {b.positionen.length}
+        </button>
       </td>
-      <td className="px-2 py-1 font-mono text-xs">{z.artikelnr ?? "—"}</td>
-      <td className="px-2 py-1">{z.bezeichnung ?? "—"}</td>
-      <td className="px-2 py-1 text-right whitespace-nowrap">{zahl(z.menge, 2)} {z.einheit ?? ""}</td>
-      <td className="px-2 py-1">{z.kunde ?? "—"}</td>
-      <td className="px-2 py-1 whitespace-nowrap">{datum(z.termin)}</td>
-      <td className="px-2 py-1 whitespace-nowrap">
-        {z.liste ? `${z.liste}${z.listen_rang != null ? ` · ${z.listen_rang}` : ""}` : "—"}
-      </td>
+      <td className="px-2 py-1 whitespace-nowrap">{datum(b.termin)}</td>
+      <td className="px-2 py-1 whitespace-nowrap">{b.listen_rang ?? "—"}</td>
       <td className="px-2 py-1 text-xs space-x-1">
-        {z.gesperrt && <span className="text-red-600">{t("prio.flag.gesperrt")}</span>}
-        {z.manuell && <span className="text-blue-600">{t("prio.flag.manuell")}</span>}
-        {z.ohne_plan && <span className="text-amber-600">{t("prio.flag.ohnePlan")}</span>}
-        {z.kommentar && <span className="text-muted-foreground">{z.kommentar}</span>}
+        {b.gesperrt && <span className="text-red-600">{t("prio.flag.gesperrt")}</span>}
+        {b.manuell && <span className="text-blue-600">{t("prio.flag.manuell")}</span>}
+        {ohnePlan > 0 && <span className="text-amber-600">{t("prio.flag.ohnePlan")} ({ohnePlan})</span>}
+        {hatKommentar && !offen && <span className="text-muted-foreground">…</span>}
       </td>
     </tr>
+    {offen && b.positionen.map((p) => (
+      <tr key={`${p.pos}.${p.upos}`} className={`text-xs bg-muted/20 ${p.gesperrt ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+        <td colSpan={2} />
+        <td className="px-2 py-1 font-mono whitespace-nowrap pl-6">
+          {t("prio.col.pos")} {p.pos}{p.upos ? `.${p.upos}` : ""}
+        </td>
+        <td className="px-2 py-1">
+          <span className="font-mono">{p.artikelnr ?? "—"}</span>{" "}
+          <span className="text-muted-foreground">{p.bezeichnung ?? ""}</span>
+        </td>
+        <td className="px-2 py-1 whitespace-nowrap">{zahl(p.menge, 2)} {p.einheit ?? ""}</td>
+        <td className="px-2 py-1 whitespace-nowrap">{datum(p.termin)}</td>
+        <td className="px-2 py-1 whitespace-nowrap">
+          {p.liste ? `${p.liste}${p.listen_rang != null ? ` · ${p.listen_rang}` : ""}` : "—"}
+        </td>
+        <td className="px-2 py-1 space-x-1">
+          {p.gesperrt && <span className="text-red-600">{t("prio.flag.gesperrt")}</span>}
+          {p.ohne_plan && <span className="text-amber-600">{t("prio.flag.ohnePlan")}</span>}
+          {p.kommentar && <span className="text-muted-foreground">{p.kommentar}</span>}
+        </td>
+      </tr>
+    ))}
+    </tbody>
   );
 }
 
@@ -301,7 +338,7 @@ function BereicheTab() {
 
   const columns: DataTableColumn<BereichsRow>[] = [
     { key: "prio", header: t("prio.col.rang"), align: "right" },
-    { key: "ba", header: t("prio.col.ba"), className: "font-mono text-xs whitespace-nowrap",
+    { key: "ba", header: t("prio.col.baPos"), className: "font-mono text-xs whitespace-nowrap",
       cell: (z) => `${z.vorgang_nr} / ${z.pos}${z.upos ? `.${z.upos}` : ""}` },
     { key: "termin", header: t("prio.col.termin"), className: "whitespace-nowrap", cell: (z) => datum(z.termin) },
     { key: "endartikel", header: t("prio.col.endartikel"),

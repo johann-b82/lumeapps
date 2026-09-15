@@ -11,7 +11,7 @@ keiner anderen Tabelle, damit es sich später herauslösen lässt.
   - ``prio_liste`` / ``prio_liste_eintrag``
                               importierte Prioritätslisten (z. B. Diehl) mit Rang
                               und Termin je BA-Position.
-  - ``prio_manuell``          die per Drag & Drop gespeicherte Reihenfolge.
+  - ``prio_manuell``          die per Drag & Drop gespeicherte BA-Reihenfolge.
   - ``prio_import``           Stand des letzten Stammdaten-Imports je Quelle.
 """
 from datetime import date, datetime
@@ -116,11 +116,11 @@ class PrioListeEintrag(Base):
 
 
 class PrioManuell(Base):
+    """Manuelle Reihenfolge je BA (Positionen/FAs laufen mit)."""
+
     __tablename__ = "prio_manuell"
 
     vorgang_nr: Mapped[str] = mapped_column(String(32), primary_key=True)
-    pos: Mapped[int] = mapped_column(Integer, primary_key=True)
-    upos: Mapped[int] = mapped_column(Integer, primary_key=True)
     reihenfolge: Mapped[int] = mapped_column(Integer, nullable=False)
 
 

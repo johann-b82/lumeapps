@@ -9,9 +9,9 @@ wie das übrige Produktion-Hub (Wartung). Routes:
     POST   /api/production/prio/import/auftraege          AswKpf.txt ersetzen
     POST   /api/production/prio/import/liste              Prioliste anlegen (Diehl)
     DELETE /api/production/prio/listen/{liste_id}         Prioliste löschen
-    GET    /api/production/prio/gesamt                    Gesamtpriorisierung
-    PUT    /api/production/prio/manuell                   manuelle Reihenfolge speichern
-    DELETE /api/production/prio/manuell                   manuelle Reihenfolge verwerfen
+    GET    /api/production/prio/gesamt                    Gesamtpriorisierung je BA (+ Positionen)
+    PUT    /api/production/prio/manuell                   manuelle BA-Reihenfolge speichern
+    DELETE /api/production/prio/manuell                   manuelle BA-Reihenfolge verwerfen
     GET    /api/production/prio/bereiche                  Bereiche + Anzahl Tätigkeiten
     GET    /api/production/prio/bereiche/{bereich}        Tätigkeitsliste eines Bereichs
     GET    /api/production/prio/bereiche/{bereich}/export.xlsx
@@ -58,7 +58,6 @@ from app.services.produktion_prio import (
     bereich_xlsx,
     lade_bereiche,
     lade_gesamtliste,
-    text_schluessel,
 )
 
 router = APIRouter(
@@ -100,29 +99,35 @@ class ImportErgebnisRead(BaseModel):
     warnungen_anzahl: int
 
 
-class GesamtZeileRead(BaseModel):
-    rang: int
-    schluessel: str
-    vorgang_nr: str
+class PositionRead(BaseModel):
     pos: int
     upos: int
     artikelnr: str | None
     bezeichnung: str | None
     menge: Decimal | None
     einheit: str | None
-    kunde: str | None
     lieferdatum: date | None
     termin: date | None
     liste: str | None
     listen_rang: int | None
     kommentar: str | None
     gesperrt: bool
-    manuell: bool
     ohne_plan: bool
 
 
+class BaRead(BaseModel):
+    rang: int
+    vorgang_nr: str
+    kunde: str | None
+    termin: date | None
+    listen_rang: int | None
+    gesperrt: bool
+    manuell: bool
+    positionen: list[PositionRead]
+
+
 class ManuellIn(BaseModel):
-    #: Schlüssel ``vorgang|pos|upos`` in der gewünschten Reihenfolge.
+    #: BA-Nummern in der gewünschten Reihenfolge.
     reihenfolge: list[str]
 
 
@@ -273,21 +278,18 @@ async def delete_liste(liste_id: int, db: AsyncSession = Depends(get_async_db_se
     return Response(status_code=204)
 
 
-@router.get("/gesamt", response_model=list[GesamtZeileRead])
-async def gesamt(db: AsyncSession = Depends(get_async_db_session)) -> list[GesamtZeileRead]:
-    return [GesamtZeileRead.model_validate(z, from_attributes=True) for z in await lade_gesamtliste(db)]
+@router.get("/gesamt", response_model=list[BaRead])
+async def gesamt(db: AsyncSession = Depends(get_async_db_session)) -> list[BaRead]:
+    return [BaRead.model_validate(z, from_attributes=True) for z in await lade_gesamtliste(db)]
 
 
 @router.put("/manuell", status_code=204)
 async def save_manuell(payload: ManuellIn, db: AsyncSession = Depends(get_async_db_session)) -> Response:
-    try:
-        schluessel = [text_schluessel(s) for s in payload.reihenfolge]
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Ungültiger Positionsschlüssel.") from exc
-    if len(set(schluessel)) != len(schluessel):
-        raise HTTPException(status_code=400, detail="Position doppelt in der Reihenfolge.")
+    bas = [b.strip()[:32] for b in payload.reihenfolge]
+    if len(set(bas)) != len(bas) or not all(bas):
+        raise HTTPException(status_code=400, detail="BA leer oder doppelt in der Reihenfolge.")
     await db.execute(delete(PrioManuell))
-    werte = [{"vorgang_nr": v, "pos": p, "upos": u, "reihenfolge": i} for i, (v, p, u) in enumerate(schluessel)]
+    werte = [{"vorgang_nr": v, "reihenfolge": i} for i, v in enumerate(bas)]
     for i in range(0, len(werte), _BLOCK):
         await db.execute(insert(PrioManuell), werte[i:i + _BLOCK])
     await db.commit()

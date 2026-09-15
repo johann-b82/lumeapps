@@ -5,9 +5,10 @@ from decimal import Decimal
 from app.services.produktion_prio import (
     ListenTreffer,
     PlanZeile,
-    automatische_reihenfolge,
+    ba_reihenfolge,
     bereich_fuer,
     loese_auf,
+    positions_reihenfolge,
     waehle_treffer,
     wende_manuell_an,
 )
@@ -24,23 +25,36 @@ def test_neueste_liste_gewinnt():
     assert waehle_treffer([]) is None
 
 
-def test_automatisch_nach_termin_dann_rang_dann_ba():
-    a, b, c, d = ("1024906", 1, 0), ("1024900", 2, 0), ("1024800", 1, 0), ("1024700", 1, 0)
-    positionen = {a: date(2026, 9, 1), b: date(2026, 9, 1), c: date(2026, 8, 1), d: None}
-    treffer = {
-        a: _t(1, date(2026, 9, 14), rang=2),
-        b: _t(1, date(2026, 9, 14), rang=5),
-        # Listen-Termin ersetzt das Lieferdatum
-        c: _t(1, date(2026, 9, 14), termin=date(2026, 9, 1)),
+def test_ba_nach_fruehestem_termin_dann_bestem_rang():
+    positionen = {
+        # BA 100: eine Position früh, eine spät → frühester Termin zählt
+        ("100", 1, 0): date(2026, 12, 1),
+        ("100", 2, 0): date(2026, 9, 1),
+        # BA 200: gleicher Termin wie 100, aber besserer Rang
+        ("200", 1, 0): date(2026, 9, 1),
+        # BA 300: Listen-Termin ersetzt das Lieferdatum
+        ("300", 1, 0): date(2026, 8, 1),
+        # BA 050: ohne Termin → ans Ende
+        ("050", 1, 0): None,
     }
-    assert automatische_reihenfolge(positionen, treffer) == [a, b, c, d]
+    treffer = {
+        ("100", 1, 0): _t(1, date(2026, 9, 14), rang=5),
+        ("200", 1, 0): _t(1, date(2026, 9, 14), rang=2),
+        ("300", 1, 0): _t(1, date(2026, 9, 14), termin=date(2026, 9, 1)),
+    }
+    assert ba_reihenfolge(positionen, treffer) == ["200", "100", "300", "050"]
+
+
+def test_positionen_innerhalb_des_ba():
+    positionen = {("100", 1, 0): date(2026, 12, 1), ("100", 2, 0): date(2026, 9, 1), ("100", 3, 0): date(2026, 9, 1)}
+    treffer = {("100", 3, 0): _t(1, date(2026, 9, 14), rang=1)}
+    assert positions_reihenfolge(positionen, treffer) == [("100", 3, 0), ("100", 2, 0), ("100", 1, 0)]
 
 
 def test_manuell_belegt_eigene_plaetze_neue_bleiben_automatisch():
-    a, b, c, neu = ("1", 1, 0), ("2", 1, 0), ("3", 1, 0), ("4", 1, 0)
-    auto = [a, neu, b, c]
-    manuell = {c: 0, a: 1, b: 2}
-    assert wende_manuell_an(auto, manuell) == [c, neu, a, b]
+    auto = ["1", "4", "2", "3"]
+    manuell = {"3": 0, "1": 1, "2": 2}
+    assert wende_manuell_an(auto, manuell) == ["3", "4", "1", "2"]
 
 
 def test_bereich_zuordnung():

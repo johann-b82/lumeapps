@@ -1,19 +1,23 @@
 """Produktions-Priorisierung — Rechenkern (v1.126).
 
-Reihenfolge der Gesamtliste:
-  1. Grundreihenfolge nach Termin (Termin der gewinnenden Prioliste, sonst
-     Lieferdatum aus dem Auftrag), bei gleichem Termin nach Listenrang, dann
-     nach BA/Pos.
-  2. Steht eine Position in mehreren Listen, gewinnt die Liste mit dem
-     jüngsten Stand.
-  3. Die gespeicherte manuelle Reihenfolge geht vor: die manuell sortierten
-     Positionen behalten untereinander ihre Reihenfolge und belegen die Plätze,
-     die sie in der automatischen Reihenfolge hätten. Neue Positionen landen
-     so an ihrem automatischen Platz.
+Priorisiert wird auf **BA-Ebene** (Betriebsauftrag = Auftrag/Vorgang). Die
+Positionen eines BA — die FAs der Fertigartikel samt ihrer Halbzeug-FAs —
+laufen mit.
 
-Bereichslisten lösen jede BA-Position über den Ressourcenplan in Tätigkeiten
-auf (Komponenten rekursiv, in Positionsreihenfolge — so steht ein Halbzeug vor
-dem Arbeitsgang, der es verbaut) und filtern sie nach Bereich. Zeiten sind in
+Reihenfolge der Gesamtliste:
+  1. Je Position gilt der Termin der gewinnenden Prioliste, sonst das
+     Lieferdatum aus dem Auftrag, und der Listenrang. Steht eine Position in
+     mehreren Listen, gewinnt die Liste mit dem jüngsten Stand.
+  2. Ein BA sortiert nach seinem frühesten Positionstermin, dann nach seinem
+     besten (kleinsten) Listenrang, dann nach BA-Nummer.
+  3. Die gespeicherte manuelle BA-Reihenfolge geht vor: manuell sortierte BAs
+     behalten untereinander ihre Reihenfolge und belegen die Plätze, die sie
+     automatisch hätten. Neue BAs landen so an ihrem automatischen Platz.
+  4. Innerhalb eines BA: Termin, Rang, Pos, UPos.
+
+Bereichslisten lösen jede Position über den Ressourcenplan in Tätigkeiten auf
+(Komponenten rekursiv, in Positionsreihenfolge — so steht ein Halbzeug vor dem
+Arbeitsgang, der es verbaut) und filtern sie nach Bereich. Zeiten sind in
 Minuten: Rüstzeit einmal, Operativzeit je Stück.
 """
 from __future__ import annotations
@@ -40,6 +44,7 @@ from app.models import (
 
 MAX_TIEFE = 15
 _DREI = Decimal("0.001")
+_OHNE_RANG = 10**9
 
 # Bereich → Ressourcen (Apollo RES-Nummern). Varianten wie 10000MA01 zählen
 # zur Stammressource; alle 1xx000 sind Fremdvergabe.
@@ -75,15 +80,6 @@ def bereich_fuer(ressource: str) -> str:
 Schluessel = tuple[str, int, int]
 
 
-def schluessel_text(k: Schluessel) -> str:
-    return f"{k[0]}|{k[1]}|{k[2]}"
-
-
-def text_schluessel(s: str) -> Schluessel:
-    v, p, u = s.split("|")
-    return (v, int(p), int(u))
-
-
 @dataclass
 class ListenTreffer:
     liste_id: int
@@ -103,20 +99,33 @@ def _vorgang_sortwert(v: str) -> tuple[int, str]:
     return (int(v), "") if v.isdigit() else (10**12, v)
 
 
-def automatische_reihenfolge(
+def _termin_rang(lieferdatum: date | None, t: ListenTreffer | None) -> tuple[date, int]:
+    termin = (t.termin if t and t.termin else None) or lieferdatum
+    return (termin or date.max, t.rang if t and t.rang is not None else _OHNE_RANG)
+
+
+def ba_reihenfolge(
+    positionen: dict[Schluessel, date | None],
+    treffer: dict[Schluessel, ListenTreffer],
+) -> list[str]:
+    """Automatische BA-Reihenfolge: frühester Termin, bester Rang, BA-Nummer."""
+    wert: dict[str, tuple[date, int]] = {}
+    for k, lieferdatum in positionen.items():
+        termin, rang = _termin_rang(lieferdatum, treffer.get(k))
+        alt = wert.get(k[0])
+        wert[k[0]] = (min(alt[0], termin), min(alt[1], rang)) if alt else (termin, rang)
+    return sorted(wert, key=lambda v: (*wert[v], _vorgang_sortwert(v)))
+
+
+def positions_reihenfolge(
     positionen: dict[Schluessel, date | None],
     treffer: dict[Schluessel, ListenTreffer],
 ) -> list[Schluessel]:
-    def sortwert(k: Schluessel):
-        t = treffer.get(k)
-        termin = (t.termin if t and t.termin else None) or positionen[k]
-        rang = t.rang if t and t.rang is not None else 10**9
-        return (termin or date.max, rang, _vorgang_sortwert(k[0]), k[1], k[2])
-
-    return sorted(positionen, key=sortwert)
+    """Reihenfolge innerhalb eines BA: Termin, Rang, Pos, UPos."""
+    return sorted(positionen, key=lambda k: (*_termin_rang(positionen[k], treffer.get(k)), k[1], k[2]))
 
 
-def wende_manuell_an(auto: list[Schluessel], manuell: dict[Schluessel, int]) -> list[Schluessel]:
+def wende_manuell_an(auto: list[str], manuell: dict[str, int]) -> list[str]:
     manuelle = sorted((k for k in auto if k in manuell), key=lambda k: manuell[k])
     it = iter(manuelle)
     return [next(it) if k in manuell else k for k in auto]
@@ -174,28 +183,35 @@ def loese_auf(artikelnr: str, plan: dict[str, list[PlanZeile]], menge: Decimal =
 
 
 @dataclass
-class GesamtZeile:
-    rang: int
-    schluessel: str
-    vorgang_nr: str
+class PositionsZeile:
     pos: int
     upos: int
     artikelnr: str | None
     bezeichnung: str | None
     menge: Decimal | None
     einheit: str | None
-    kunde: str | None
     lieferdatum: date | None
     termin: date | None
     liste: str | None
     listen_rang: int | None
     kommentar: str | None
     gesperrt: bool
+    ohne_plan: bool
+
+
+@dataclass
+class BaZeile:
+    rang: int
+    vorgang_nr: str
+    kunde: str | None
+    termin: date | None
+    listen_rang: int | None
+    gesperrt: bool
     manuell: bool
-    ohne_plan: bool = False
+    positionen: list[PositionsZeile]
 
 
-async def lade_gesamtliste(db: AsyncSession) -> list[GesamtZeile]:
+async def lade_gesamtliste(db: AsyncSession) -> list[BaZeile]:
     positionen = {
         (p.vorgang_nr, p.pos, p.upos): p
         for p in (await db.execute(select(PrioAuftragPosition))).scalars()
@@ -210,24 +226,34 @@ async def lade_gesamtliste(db: AsyncSession) -> list[GesamtZeile]:
             rang=e.rang, termin=e.termin, kommentar=e.kommentar,
         ))
     treffer = {k: t for k, ts in alle_treffer.items() if (t := waehle_treffer(ts))}
-    manuell = {
-        (m.vorgang_nr, m.pos, m.upos): m.reihenfolge
-        for m in (await db.execute(select(PrioManuell))).scalars()
-    }
+    manuell = {m.vorgang_nr: m.reihenfolge for m in (await db.execute(select(PrioManuell))).scalars()}
     geplant = set((await db.execute(select(PrioPlanPosition.artikelnr).distinct())).scalars())
 
-    auto = automatische_reihenfolge({k: p.lieferdatum for k, p in positionen.items()}, treffer)
-    zeilen: list[GesamtZeile] = []
-    for i, k in enumerate(wende_manuell_an(auto, manuell), start=1):
-        p, t = positionen[k], treffer.get(k)
-        zeilen.append(GesamtZeile(
-            rang=i, schluessel=schluessel_text(k), vorgang_nr=k[0], pos=k[1], upos=k[2],
-            artikelnr=p.artikelnr, bezeichnung=p.bezeichnung, menge=p.menge, einheit=p.einheit,
-            kunde=p.kunde, lieferdatum=p.lieferdatum,
-            termin=(t.termin if t and t.termin else p.lieferdatum),
-            liste=t.liste_name if t else None, listen_rang=t.rang if t else None,
-            kommentar=t.kommentar if t else None, gesperrt=p.gesperrt, manuell=k in manuell,
-            ohne_plan=bool(p.artikelnr) and p.artikelnr not in geplant,
+    lieferdaten = {k: p.lieferdatum for k, p in positionen.items()}
+    je_ba: dict[str, dict[Schluessel, date | None]] = {}
+    for k, d in lieferdaten.items():
+        je_ba.setdefault(k[0], {})[k] = d
+
+    zeilen: list[BaZeile] = []
+    for i, ba in enumerate(wende_manuell_an(ba_reihenfolge(lieferdaten, treffer), manuell), start=1):
+        pos_zeilen: list[PositionsZeile] = []
+        for k in positions_reihenfolge(je_ba[ba], treffer):
+            p, t = positionen[k], treffer.get(k)
+            pos_zeilen.append(PositionsZeile(
+                pos=k[1], upos=k[2], artikelnr=p.artikelnr, bezeichnung=p.bezeichnung,
+                menge=p.menge, einheit=p.einheit, lieferdatum=p.lieferdatum,
+                termin=(t.termin if t and t.termin else p.lieferdatum),
+                liste=t.liste_name if t else None, listen_rang=t.rang if t else None,
+                kommentar=t.kommentar if t else None, gesperrt=p.gesperrt,
+                ohne_plan=bool(p.artikelnr) and p.artikelnr not in geplant,
+            ))
+        termine = [z.termin for z in pos_zeilen if z.termin]
+        raenge = [z.listen_rang for z in pos_zeilen if z.listen_rang is not None]
+        zeilen.append(BaZeile(
+            rang=i, vorgang_nr=ba, kunde=positionen[next(iter(je_ba[ba]))].kunde,
+            termin=min(termine, default=None), listen_rang=min(raenge, default=None),
+            gesperrt=any(z.gesperrt for z in pos_zeilen), manuell=ba in manuell,
+            positionen=pos_zeilen,
         ))
     return zeilen
 
@@ -277,24 +303,25 @@ async def lade_bereiche(db: AsyncSession, nur: str | None = None) -> Bereichsdat
     namen = dict((await db.execute(select(PrioArtikel.artikelnr, PrioArtikel.bezeichnung))).all())
     cache: dict[str, list[Taetigkeit]] = {}
     daten = Bereichsdaten(zeilen={key: [] for key, _, _ in BEREICHE})
-    for g in gesamt:
-        if not g.artikelnr:
-            continue
-        if g.artikelnr not in cache:
-            cache[g.artikelnr] = loese_auf(g.artikelnr, plan)
-        menge = g.menge if g.menge is not None else Decimal(1)
-        for t in cache[g.artikelnr]:
-            if nur and t.bereich != nur:
+    for ba in gesamt:
+        for p in ba.positionen:
+            if not p.artikelnr:
                 continue
-            m = (t.menge * menge).quantize(_DREI)
-            daten.zeilen[t.bereich].append(BereichsZeile(
-                prio=g.rang, vorgang_nr=g.vorgang_nr, pos=g.pos, upos=g.upos, termin=g.termin,
-                kunde=g.kunde, endartikel=g.artikelnr, endartikel_bez=g.bezeichnung,
-                ebene=t.ebene, pfad=t.pfad, artikelnr=t.artikelnr, artikel_bez=namen.get(t.artikelnr),
-                ressource=t.ressource, kostenstelle=t.kostenstelle, taetigkeit=t.text,
-                menge=m, minuten=(t.ruestzeit + t.operativzeit * m).quantize(_DREI),
-                gesperrt=g.gesperrt, kommentar=g.kommentar,
-            ))
+            if p.artikelnr not in cache:
+                cache[p.artikelnr] = loese_auf(p.artikelnr, plan)
+            menge = p.menge if p.menge is not None else Decimal(1)
+            for t in cache[p.artikelnr]:
+                if nur and t.bereich != nur:
+                    continue
+                m = (t.menge * menge).quantize(_DREI)
+                daten.zeilen[t.bereich].append(BereichsZeile(
+                    prio=ba.rang, vorgang_nr=ba.vorgang_nr, pos=p.pos, upos=p.upos, termin=p.termin,
+                    kunde=ba.kunde, endartikel=p.artikelnr, endartikel_bez=p.bezeichnung,
+                    ebene=t.ebene, pfad=t.pfad, artikelnr=t.artikelnr, artikel_bez=namen.get(t.artikelnr),
+                    ressource=t.ressource, kostenstelle=t.kostenstelle, taetigkeit=t.text,
+                    menge=m, minuten=(t.ruestzeit + t.operativzeit * m).quantize(_DREI),
+                    gesperrt=p.gesperrt, kommentar=p.kommentar,
+                ))
     return daten
 
 
