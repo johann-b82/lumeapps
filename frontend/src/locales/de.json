@@ -1312,6 +1312,7 @@
   "onboarding.einarbeitung.katalogTitle": "Einarbeitungen (Liste)",
   "onboarding.einarbeitung.katalogHinweis": "Alle Einarbeitungen mit Ansprechpartner. Welche für welche Abteilung nötig sind, wird in der Matrix darunter gewählt.",
   "onboarding.einarbeitung.katalogLeer": "Noch keine Einarbeitung angelegt.",
+  "onboarding.einarbeitung.freigabe": "Freigabe Fbl. 28 (PDF)",
   "onboarding.einarbeitung.matrixTitle": "Einarbeitungsmatrix",
   "onboarding.einarbeitung.matrixHinweis": "Ankreuzen, welche Einarbeitung für welche Abteilung nötig ist. Der Einarbeitungsbogen einer Person setzt sich daraus über ihre Abteilung(en) zusammen.",
   "onboarding.einarbeitung.matrixLeer": "Erst Einarbeitungen anlegen und Abteilungen müssen vorhanden sein.",

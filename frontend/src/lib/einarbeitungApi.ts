@@ -95,6 +95,11 @@ export async function ladeEinarbeitungsplan(
   openBlob(blob, `${stand}_${name.split(" ").join("_")}_Einarbeitungsplan.pdf`);
 }
 
+/** Freigabe-Dokument des Formblatts Fbl. 28 (Rev. C) im neuen Tab öffnen. */
+export async function oeffneFreigabeDokument(): Promise<void> {
+  openBlob(await fetchBlob("/api/hr/einarbeitung/freigabe/pdf"));
+}
+
 /** Aktive Personio-Mitarbeiter als Vorschläge für den Ansprechpartner. */
 export function fetchAnsprechpartner(): Promise<string[]> {
   return apiClient<string[]>("/api/hr/einarbeitung/ansprechpartner");

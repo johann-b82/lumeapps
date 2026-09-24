@@ -25,7 +25,11 @@ from app.security.directus_auth import get_current_user, require_admin
 from app.services.directus_files import datei_laden
 from app.services.einarbeitung_dokument import scan_verarbeiten, vorgang_anlegen
 from app.services.pdf_logo import lade_logo
-from app.services.einarbeitung_pdf import dateiname, erzeuge_einarbeitung_pdf
+from app.services.einarbeitung_pdf import (
+    dateiname,
+    erzeuge_einarbeitung_pdf,
+    erzeuge_freigabe_pdf,
+)
 from app.services.einarbeitung_query import zeilen_fuer_abteilungen
 from app.services.verantwortlicher_sync import person_fuer_name, sync_person_nach_name
 from app.security.dateien import auslieferung
@@ -323,6 +327,19 @@ async def plan_pdf(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{datei}.pdf"'},
+    )
+
+
+@router.get("/freigabe/pdf")
+async def freigabe_pdf(db: AsyncSession = Depends(get_async_db_session)) -> Response:
+    """Freigabe-Dokument des Formblatts Fbl. 28 Einarbeitungsplan (aktuelle Revision)."""
+    pdf = await erzeuge_freigabe_pdf(logo=await lade_logo(db))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="Fbl_28_Einarbeitungsplan_Freigabe.pdf"'
+        },
     )
 
 

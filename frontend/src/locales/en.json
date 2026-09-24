@@ -1316,6 +1316,7 @@
   "onboarding.einarbeitung.katalogTitle": "Onboarding items (list)",
   "onboarding.einarbeitung.katalogHinweis": "All onboarding items with a contact person. Which are needed per department is chosen in the matrix below.",
   "onboarding.einarbeitung.katalogLeer": "No onboarding item yet.",
+  "onboarding.einarbeitung.freigabe": "Release Fbl. 28 (PDF)",
   "onboarding.einarbeitung.matrixTitle": "Onboarding matrix",
   "onboarding.einarbeitung.matrixHinweis": "Tick which onboarding item is needed for which department. An employee's sheet is assembled from this via their department(s).",
   "onboarding.einarbeitung.matrixLeer": "Add onboarding items first, and departments must exist.",
