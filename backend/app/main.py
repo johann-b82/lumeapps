@@ -29,6 +29,7 @@ from app.routers.atr import router as atr_router
 from app.routers.atr_delivery import router as atr_delivery_router
 from app.routers.fair import router as fair_router
 from app.routers.maintenance import router as maintenance_router
+from app.routers.produktion_prio import router as produktion_prio_router
 from app.routers.email import router as email_router
 from app.routers.audit import router as audit_router
 from app.routers.schulungen import router as schulungen_router
@@ -76,6 +77,7 @@ app.include_router(atr_delivery_router)
 app.include_router(atr_fileserver_router)
 app.include_router(fair_router)
 app.include_router(maintenance_router)
+app.include_router(produktion_prio_router)
 app.include_router(email_router)
 app.include_router(audit_router)
 app.include_router(schulungen_router)

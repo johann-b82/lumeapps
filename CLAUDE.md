@@ -214,6 +214,7 @@ Caddy (`:80`) fronts everything on one origin. Upstreams: `frontend:5173` (SPA +
 | Finance | `finance_kpis.py` | `/api/finance` | Viewer-read |
 | Procurement | `procurement_kpis.py` | `/api/procurement` | Viewer-read |
 | Production | `production_kpis.py` | `/api/production` | Viewer-read |
+| Produktions-Priorisierung | `produktion_prio.py` (Tabellen `prio_*`) | `/api/production/prio` | Admin-only |
 | Uploads | `uploads.py` | `/api/upload*`, `/api/uploads` | Admin-only |
 | Settings/Sync | `settings.py`, `sync.py` | `/api/settings`, `/api/sync` | GET viewer / mutations admin |
 | Sensors | `sensors.py` | `/api/sensors` | Admin-only (incl. reads) |

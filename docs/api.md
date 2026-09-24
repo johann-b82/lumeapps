@@ -66,6 +66,13 @@ FastAPI keeps only compute-justified routes (file parsing, cascade deletes, SSE 
 | GET    | /api/production/verzug/history         |   ✓    |   ✓   | Verzug time series |
 | GET    | /api/production/verzug/list            |   ✓    |   ✓   | Verzug per-order listing |
 | GET    | /api/production/verzug/overdue         |   ✓    |   ✓   | Currently overdue orders |
+| GET    | /api/production/prio/status            |   ✓    |   ✗   | Priorisierung: Import-Stand + Prioritätslisten |
+| POST   | /api/production/prio/import/{artikelstamm,ressourcenplan,auftraege} | ✓ | ✗ | Apollo-Export ersetzen (TXT) |
+| POST   | /api/production/prio/import/liste      |   ✓    |   ✗   | Kunden-Prioliste (Diehl .xlsx) anlegen |
+| DELETE | /api/production/prio/listen/{liste_id} |   ✓    |   ✗   | Prioliste löschen |
+| GET    | /api/production/prio/gesamt            |   ✓    |   ✗   | Gesamtpriorisierung der BA-Positionen |
+| PUT/DELETE | /api/production/prio/manuell       |   ✓    |   ✗   | Manuelle Reihenfolge speichern / verwerfen |
+| GET    | /api/production/prio/bereiche[/{bereich}[/export.xlsx]] | ✓ | ✗ | Tätigkeitslisten je Bereich (+ Excel) |
 | GET    | /api/settings                         |   ✓    |   ✓   | Read settings (colors, app name) |
 | GET    | /api/settings/personio-options        |   ✓    |   ✓   | Live Personio metadata — read-only |
 | GET    | /api/settings/logo                    |   ✓    |   ✓   | Serves raw logo bytes |
