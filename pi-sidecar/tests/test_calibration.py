@@ -155,6 +155,22 @@ class TestApplyCalibration:
         assert sc._calibration_last_error is None
         assert sc._calibration_last_applied_at is not None
 
+    def test_apply_calibration_rotation_zero_uses_normal(self, tmp_path, monkeypatch):
+        """rotation=0 must map to the wlr-randr keyword `normal`, not "0"
+        (which wlr-randr rejects) — otherwise a reset to 0° never applies."""
+        sc, _ = _fresh_sidecar(tmp_path, monkeypatch)
+        fake_exec, calls = _make_exec_recorder(returncode=0, stdout=_WLR_JSON_OUTPUT)
+        monkeypatch.setattr(sc.asyncio, "create_subprocess_exec", fake_exec)
+
+        asyncio.run(sc._apply_calibration({"rotation": 0, "hdmi_mode": None, "audio_enabled": None}))
+
+        argvs = [list(c) for c in calls]
+        assert any(a[:2] == ["wlr-randr", "--output"]
+                   and "--transform" in a
+                   and a[a.index("--transform") + 1] == "normal"
+                   for a in argvs)
+        assert sc._calibration_last_error is None
+
     def test_apply_calibration_hdmi_mode_invokes_wlr_randr_mode(self, tmp_path, monkeypatch):
         sc, _ = _fresh_sidecar(tmp_path, monkeypatch)
         fake_exec, calls = _make_exec_recorder(returncode=0, stdout=_WLR_JSON_OUTPUT)
@@ -375,6 +391,73 @@ class TestSseCalibrationLoop:
 
         # Mock the GET /calibration fetch
         calibration_payload = {"rotation": 270, "hdmi_mode": "1280x720@60", "audio_enabled": True}
+
+        class _FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return calibration_payload
+
+        class _FakeClient:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url, headers=None, timeout=None):
+                return _FakeResponse()
+
+        monkeypatch.setattr(sc.httpx, "AsyncClient", _FakeClient)
+
+        async def drive():
+            try:
+                await asyncio.wait_for(sc._calibration_sse_loop(), timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+
+        asyncio.run(drive())
+        # Two applies: the connect-time reconcile, then the calibration-changed
+        # event. Both fetch the same authoritative state.
+        assert applied == [calibration_payload, calibration_payload]
+
+    def test_sse_loop_reconciles_calibration_on_connect(self, tmp_path, monkeypatch):
+        """On (re)connect the loop fetches and applies the current calibration
+        even when NO calibration-changed event arrives. This is the missed-event
+        recovery path: the stream sends no snapshot on connect, so an event
+        emitted while the device was disconnected is recovered here."""
+        sc, _ = _fresh_sidecar(tmp_path, monkeypatch)
+        sc._device_token = "dev.jwt.token"
+        sc._online = True
+
+        applied: list[dict] = []
+
+        async def fake_apply(cal):
+            applied.append(cal)
+
+        monkeypatch.setattr(sc, "_apply_calibration", fake_apply)
+
+        # SSE connects, yields NO events, then cancels — a quiet stream that
+        # never carries a calibration-changed event.
+        class _SseCtx:
+            async def __aenter__(self):
+                class _SseConn:
+                    async def aiter_sse(self_inner):
+                        if False:  # pragma: no cover - forces async-generator type
+                            yield
+                        raise asyncio.CancelledError()
+
+                return _SseConn()
+
+            async def __aexit__(self, *args):
+                return False
+
+        monkeypatch.setattr(sc, "aconnect_sse", lambda *a, **k: _SseCtx())
+
+        calibration_payload = {"rotation": 90, "hdmi_mode": None, "audio_enabled": False}
 
         class _FakeResponse:
             status_code = 200
