@@ -327,8 +327,11 @@ async def _apply_calibration(cal: dict) -> None:
             return
 
     if rotation in (0, 90, 180, 270):
+        # wlr-randr expects the keyword `normal` for the unrotated state, not
+        # `0`; passing "0" errors out and a reset-to-0° would never apply.
+        transform = "normal" if rotation == 0 else str(rotation)
         rc, _, stderr = await _run_async(
-            "wlr-randr", "--output", output_name, "--transform", str(rotation),
+            "wlr-randr", "--output", output_name, "--transform", transform,
             timeout=5.0,
         )
         touched = True
@@ -608,10 +611,41 @@ async def _reboot_device() -> None:
         )
 
 
+async def _fetch_and_apply_calibration(base: str, token: str) -> None:
+    """Fetch the authoritative calibration state (GET /player/calibration) and
+    apply it. A missing/non-200 response is logged, not raised.
+
+    Used in two places (D-08): on each live ``calibration-changed`` event, and
+    once whenever the SSE stream (re)connects. The connect-time reconcile is
+    what closes the missed-event gap — the stream replays no snapshot on
+    connect and the broadcast is fire-and-forget, so an event emitted while
+    this device was disconnected (platform restart, network blip, reboot) would
+    otherwise never reach the sidecar and the display would stay uncalibrated.
+    """
+    try:
+        async with httpx.AsyncClient() as fetch_client:
+            r = await fetch_client.get(
+                f"{base}/api/signage/player/calibration",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+        if r.status_code == 200:
+            await _apply_calibration(r.json())
+        else:
+            logger.warning("Calibration fetch returned %s", r.status_code)
+    except httpx.HTTPError as exc:
+        logger.warning("Calibration fetch failed: %s", exc)
+
+
 async def _calibration_sse_loop() -> None:
     """Subscribe to /api/signage/player/stream; on `calibration-changed` event,
     fetch full calibration state and apply it (D-04, D-08). On `reboot`
     (admin remote command) run ``_reboot_device``.
+
+    On every (re)connect, reconcile the current calibration once before entering
+    the event loop — the stream sends no snapshot on connect, so this is the
+    only path that recovers a `calibration-changed` event missed while
+    disconnected.
 
     Reuses the existing device JWT (same token the player uses).
     On any disconnect or error, sleep 5s and retry — matches the
@@ -629,6 +663,9 @@ async def _calibration_sse_loop() -> None:
                 async with aconnect_sse(
                     client, "GET", f"{base}/api/signage/player/stream", headers=headers,
                 ) as event_source:
+                    # Reconcile on (re)connect — recovers any event missed while
+                    # this device was not subscribed.
+                    await _fetch_and_apply_calibration(base, token)
                     async for sse in event_source.aiter_sse():
                         try:
                             payload = sse.json()
@@ -640,22 +677,7 @@ async def _calibration_sse_loop() -> None:
                             continue
                         if event != "calibration-changed":
                             continue
-                        # Fetch full calibration state per D-08
-                        try:
-                            async with httpx.AsyncClient() as fetch_client:
-                                r = await fetch_client.get(
-                                    f"{base}/api/signage/player/calibration",
-                                    headers={"Authorization": f"Bearer {token}"},
-                                    timeout=10.0,
-                                )
-                            if r.status_code == 200:
-                                await _apply_calibration(r.json())
-                            else:
-                                logger.warning(
-                                    "Calibration fetch returned %s", r.status_code,
-                                )
-                        except httpx.HTTPError as exc:
-                            logger.warning("Calibration fetch failed: %s", exc)
+                        await _fetch_and_apply_calibration(base, token)
         except asyncio.CancelledError:
             raise
         except (httpx.HTTPError, Exception) as exc:
